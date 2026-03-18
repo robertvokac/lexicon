@@ -75,14 +75,14 @@ void TermEditDialog::setupUi() {
     rootLayout->addLayout(formLayout);
 
     auto* listsLayout = new QGridLayout();
-    listsLayout->addWidget(buildListEditor("Aliases", m_aliasList, this,
-                                           SLOT(addAlias()), SLOT(editAlias()), SLOT(removeAlias())),
-                           0, 0);
     listsLayout->addWidget(buildListEditor("Tags", m_tagList, this,
                                            SLOT(addTag()), SLOT(editTag()), SLOT(removeTag())),
-                           0, 1);
+                           0, 0);
     listsLayout->addWidget(buildListEditor("Flags", m_flagList, this,
                                            SLOT(addFlag()), SLOT(editFlag()), SLOT(removeFlag())),
+                           0, 1);
+    listsLayout->addWidget(buildListEditor("Aliases", m_aliasList, this,
+                                           SLOT(addAlias()), SLOT(editAlias()), SLOT(removeAlias())),
                            0, 2);
 
     rootLayout->addLayout(listsLayout);

@@ -76,7 +76,7 @@ void MainWindow::setupUi() {
 
     m_tableView = new QTableView(central);
     m_model = new QStandardItemModel(this);
-    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Obsidian", "Aliases", "Tags", "Flags"});
+    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Obsidian", "Tags", "Flags", "Aliases"});
     m_tableView->setModel(m_model);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -271,9 +271,9 @@ void MainWindow::refreshTerms() {
             << new QStandardItem(term.title)
             << new QStandardItem(term.disambiguation)
             << new QStandardItem(term.obsidian ? "Yes" : "No")
-            << new QStandardItem(term.aliases.join(", "))
             << new QStandardItem(term.tags.join(", "))
-            << new QStandardItem(term.flags.join(", "));
+            << new QStandardItem(term.flags.join(", "))
+            << new QStandardItem(term.aliases.join(", "));
         m_model->appendRow(row);
     }
 
