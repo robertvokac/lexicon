@@ -1,0 +1,12 @@
+#files to ignore
+
+*.metadata/**
+*.recommenders/**
+*build/**
+*.idea/**
+*.iml
+
+/nbproject/
+*nbactions.xml
+
+cmake-build-debug/*
