@@ -187,7 +187,7 @@ bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, QString* errorMessage) {
+QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, QString* errorMessage) {
     QList<TermRecord> terms;
 
     QString sql =
@@ -201,6 +201,12 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
 
     if (mapId > 0) {
         sql += "AND t.map_id = ? ";
+    }
+    if (!tagFilter.trimmed().isEmpty()) {
+        sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
+    }
+    if (!flagFilter.trimmed().isEmpty()) {
+        sql += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND fg.name = ?) ";
     }
     if (!searchText.trimmed().isEmpty()) {
         sql +=
@@ -216,6 +222,12 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     query.prepare(sql);
     if (mapId > 0) {
         query.addBindValue(mapId);
+    }
+    if (!tagFilter.trimmed().isEmpty()) {
+        query.addBindValue(tagFilter.trimmed());
+    }
+    if (!flagFilter.trimmed().isEmpty()) {
+        query.addBindValue(flagFilter.trimmed());
     }
     if (!searchText.trimmed().isEmpty()) {
         const QString like = QString("%%%1%").arg(searchText.trimmed().toLower());

@@ -45,6 +45,8 @@ void MainWindow::setupUi() {
 
     auto* filterLayout = new QHBoxLayout();
     m_mapFilter = new QComboBox(central);
+    m_tagFilter = new QComboBox(central);
+    m_flagFilter = new QComboBox(central);
     m_searchEdit = new QLineEdit(central);
     m_searchEdit->setPlaceholderText("Search title, disambiguation, alias, tag, or flag...");
 
@@ -56,6 +58,10 @@ void MainWindow::setupUi() {
 
     filterLayout->addWidget(new QLabel("Map:", central));
     filterLayout->addWidget(m_mapFilter);
+    filterLayout->addWidget(new QLabel("Tag:", central));
+    filterLayout->addWidget(m_tagFilter);
+    filterLayout->addWidget(new QLabel("Flag:", central));
+    filterLayout->addWidget(m_flagFilter);
     filterLayout->addWidget(new QLabel("Search:", central));
     filterLayout->addWidget(m_searchEdit, 1);
     filterLayout->addWidget(addButton);
@@ -88,6 +94,8 @@ void MainWindow::setupUi() {
     m_searchEdit->setCompleter(m_completer);
 
     connect(m_mapFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
+    connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
+    connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::refreshTerms);
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addTerm);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedTerm);
@@ -125,6 +133,8 @@ void MainWindow::setupMenus() {
 
 void MainWindow::refreshAll() {
     refreshMaps();
+    refreshTags();
+    refreshFlags();
     refreshSuggestions();
     refreshTerms();
     updateActions();
@@ -153,10 +163,56 @@ void MainWindow::refreshMaps() {
     m_mapFilter->blockSignals(false);
 }
 
+void MainWindow::refreshTags() {
+    QString error;
+    auto tags = DatabaseManager::loadTagUsage(&error);
+    if (!error.isEmpty()) {
+        showError(error);
+        return;
+    }
+
+    const QString currentTag = m_tagFilter->currentText();
+    m_tagFilter->blockSignals(true);
+    m_tagFilter->clear();
+    m_tagFilter->addItem("All tags");
+    for (const auto& tag : tags) {
+        m_tagFilter->addItem(tag.value);
+    }
+    const int idx = m_tagFilter->findText(currentTag);
+    if (idx >= 0) {
+        m_tagFilter->setCurrentIndex(idx);
+    }
+    m_tagFilter->blockSignals(false);
+}
+
+void MainWindow::refreshFlags() {
+    QString error;
+    auto flags = DatabaseManager::loadFlagUsage(&error);
+    if (!error.isEmpty()) {
+        showError(error);
+        return;
+    }
+
+    const QString currentFlag = m_flagFilter->currentText();
+    m_flagFilter->blockSignals(true);
+    m_flagFilter->clear();
+    m_flagFilter->addItem("All flags");
+    for (const auto& flag : flags) {
+        m_flagFilter->addItem(flag.value);
+    }
+    const int idx = m_flagFilter->findText(currentFlag);
+    if (idx >= 0) {
+        m_flagFilter->setCurrentIndex(idx);
+    }
+    m_flagFilter->blockSignals(false);
+}
+
 void MainWindow::refreshTerms() {
     QString error;
     const int mapId = m_mapFilter->currentData().toInt();
-    const auto terms = DatabaseManager::loadTerms(mapId, m_searchEdit->text(), &error);
+    const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
+    const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
+    const auto terms = DatabaseManager::loadTerms(mapId, m_searchEdit->text(), tagFilter, flagFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;

@@ -22,6 +22,8 @@ private slots:
 
     void refreshAll();
     void refreshMaps();
+    void refreshTags();
+    void refreshFlags();
     void refreshTerms();
     void refreshSuggestions();
 
@@ -47,6 +49,8 @@ private:
     void showError(const QString& message);
 
     QComboBox* m_mapFilter = nullptr;
+    QComboBox* m_tagFilter = nullptr;
+    QComboBox* m_flagFilter = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;

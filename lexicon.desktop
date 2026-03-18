@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Lexicon
+Comment=Knowledge dictionary manager
+Exec=Lexicon
+Icon=appicon
+Terminal=false
+Categories=Office;Education;
+StartupWMClass=Lexicon
+Keywords=dictionary;lexicon;sqlite;
