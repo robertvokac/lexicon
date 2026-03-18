@@ -30,10 +30,12 @@
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
+    loadSettings();
     applySavedTheme();
     setupUi();
     setupMenus();
     refreshAll();
+    updateActions();
 }
 
 void MainWindow::setupUi() {
@@ -87,6 +89,24 @@ void MainWindow::setupUi() {
     m_tableView->horizontalHeader()->setSortIndicatorShown(true);
     rootLayout->addWidget(m_tableView, 1);
 
+    auto* paginationLayout = new QHBoxLayout();
+    m_prevButton = new QPushButton("< Prev", central);
+    m_nextButton = new QPushButton("Next >", central);
+    m_pageLabel = new QLabel("Page 1", central);
+    m_pageSizeCombo = new QComboBox(central);
+    m_pageSizeCombo->addItems({"10", "20", "50", "100"});
+    int sizeIdx = m_pageSizeCombo->findText(QString::number(m_pageSize));
+    if (sizeIdx >= 0) m_pageSizeCombo->setCurrentIndex(sizeIdx);
+
+    paginationLayout->addWidget(m_prevButton);
+    paginationLayout->addWidget(m_pageLabel);
+    paginationLayout->addWidget(m_nextButton);
+    paginationLayout->addStretch();
+    paginationLayout->addWidget(new QLabel("Page size:", central));
+    paginationLayout->addWidget(m_pageSizeCombo);
+
+    rootLayout->addLayout(paginationLayout);
+
     setCentralWidget(central);
 
     auto* completerModel = new QStringListModel(this);
@@ -95,10 +115,17 @@ void MainWindow::setupUi() {
     m_completer->setFilterMode(Qt::MatchContains);
     m_searchEdit->setCompleter(m_completer);
 
-    connect(m_mapFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
-    connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
-    connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
-    connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::refreshTerms);
+    connect(m_mapFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_prevButton, &QPushButton::clicked, this, &MainWindow::prevPage);
+    connect(m_nextButton, &QPushButton::clicked, this, &MainWindow::nextPage);
+    connect(m_pageSizeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+        m_pageSize = m_pageSizeCombo->itemText(index).toInt();
+        saveSettings();
+        resetPaginationAndRefresh();
+    });
     connect(quickAddButton, &QPushButton::clicked, this, &MainWindow::quickAdd);
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addTerm);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedTerm);
@@ -216,7 +243,18 @@ void MainWindow::refreshTerms() {
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     const QString searchText = m_searchEdit->text().trimmed();
-    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, &error);
+    
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, &error);
+    if (!error.isEmpty()) {
+        showError(error);
+        return;
+    }
+
+    int totalPages = std::max(1, (totalCount + m_pageSize - 1) / m_pageSize);
+    if (m_currentPage >= totalPages) m_currentPage = totalPages - 1;
+    if (m_currentPage < 0) m_currentPage = 0;
+
+    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, m_pageSize, m_currentPage * m_pageSize, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -246,7 +284,29 @@ void MainWindow::refreshTerms() {
     if (sortSection >= 0) {
         m_tableView->sortByColumn(sortSection, sortOrder);
     }
+
+    m_pageLabel->setText(QString("Page %1 of %2 (%3 total)").arg(m_currentPage + 1).arg(totalPages).arg(totalCount));
+    m_prevButton->setEnabled(m_currentPage > 0);
+    m_nextButton->setEnabled(m_currentPage < totalPages - 1);
+
     updateActions();
+}
+
+void MainWindow::resetPaginationAndRefresh() {
+    m_currentPage = 0;
+    refreshTerms();
+}
+
+void MainWindow::prevPage() {
+    if (m_currentPage > 0) {
+        m_currentPage--;
+        refreshTerms();
+    }
+}
+
+void MainWindow::nextPage() {
+    m_currentPage++;
+    refreshTerms();
 }
 
 void MainWindow::refreshSuggestions() {
@@ -498,5 +558,15 @@ void MainWindow::setDarkTheme() {
 }
 
 void MainWindow::showError(const QString& message) {
-    QMessageBox::critical(this, "CoreLex", message);
+    QMessageBox::critical(this, "Lexicon", message);
+}
+
+void MainWindow::saveSettings() {
+    QSettings settings;
+    settings.setValue("pagination/pageSize", m_pageSize);
+}
+
+void MainWindow::loadSettings() {
+    QSettings settings;
+    m_pageSize = settings.value("pagination/pageSize", 20).toInt();
 }

@@ -2,7 +2,9 @@
 
 #include "DatabaseManager.h"
 
+#include <QLabel>
 #include <QMainWindow>
+#include <QPushButton>
 
 class QComboBox;
 class QCompleter;
@@ -25,6 +27,9 @@ private slots:
     void refreshTags();
     void refreshFlags();
     void refreshTerms();
+    void resetPaginationAndRefresh();
+    void prevPage();
+    void nextPage();
     void refreshSuggestions();
 
     void addTerm();
@@ -42,6 +47,8 @@ private slots:
 private:
     void applySavedTheme();
     void applyTheme(const QString& themeName);
+    void saveSettings();
+    void loadSettings();
 
     void setupUi();
     void setupMenus();
@@ -57,6 +64,13 @@ private:
     QStandardItemModel* m_model = nullptr;
     QCompleter* m_completer = nullptr;
 
+    QPushButton* m_prevButton = nullptr;
+    QPushButton* m_nextButton = nullptr;
+    QLabel* m_pageLabel = nullptr;
+    QComboBox* m_pageSizeCombo = nullptr;
+
+    int m_currentPage = 0;
+    int m_pageSize = 20;
 
     QList<MapRecord> m_maps;
 };

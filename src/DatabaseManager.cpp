@@ -237,7 +237,7 @@ bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, QString* errorMessage) {
+QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int limit, int offset, QString* errorMessage) {
     QList<TermRecord> terms;
 
     QString sql =
@@ -249,24 +249,32 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
         "JOIN map m ON m.id = t.map_id "
         "WHERE 1 = 1 ";
 
+    QString filters;
     if (mapId > 0) {
-        sql += "AND t.map_id = ? ";
+        filters += "AND t.map_id = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
-        sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
+        filters += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
     }
     if (!flagFilter.trimmed().isEmpty()) {
-        sql += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND fg.name = ?) ";
+        filters += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND fg.name = ?) ";
     }
     if (!searchText.trimmed().isEmpty()) {
-        sql +=
+        filters +=
             "AND (LOWER(t.title) LIKE ? "
             " OR LOWER(COALESCE(t.disambiguation, '')) LIKE ? "
             " OR EXISTS (SELECT 1 FROM alias a WHERE a.term_id = t.id AND LOWER(a.alias) LIKE ?) "
             " OR EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND LOWER(tg.name) LIKE ?) "
             " OR EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND LOWER(fg.name) LIKE ?)) ";
     }
-    sql += "ORDER BY t.title COLLATE NOCASE, COALESCE(t.disambiguation, '') COLLATE NOCASE;";
+
+    sql += filters;
+    sql += "ORDER BY t.title COLLATE NOCASE, COALESCE(t.disambiguation, '') COLLATE NOCASE ";
+    
+    if (limit > 0) {
+        sql += "LIMIT ? OFFSET ? ";
+    }
+    sql += ";";
 
     QSqlQuery query(database());
     query.prepare(sql);
@@ -285,6 +293,10 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
         for (int i = 0; i < 5; ++i) {
             query.addBindValue(like);
         }
+    }
+    if (limit > 0) {
+        query.addBindValue(limit);
+        query.addBindValue(offset);
     }
 
     if (!query.exec()) {
@@ -307,6 +319,57 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     }
 
     return terms;
+}
+
+int DatabaseManager::countTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, QString* errorMessage) {
+    QString sql = "SELECT COUNT(*) FROM term t WHERE 1 = 1 ";
+
+    if (mapId > 0) {
+        sql += "AND t.map_id = ? ";
+    }
+    if (!tagFilter.trimmed().isEmpty()) {
+        sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
+    }
+    if (!flagFilter.trimmed().isEmpty()) {
+        sql += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND fg.name = ?) ";
+    }
+    if (!searchText.trimmed().isEmpty()) {
+        sql +=
+            "AND (LOWER(t.title) LIKE ? "
+            " OR LOWER(COALESCE(t.disambiguation, '')) LIKE ? "
+            " OR EXISTS (SELECT 1 FROM alias a WHERE a.term_id = t.id AND LOWER(a.alias) LIKE ?) "
+            " OR EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND LOWER(tg.name) LIKE ?) "
+            " OR EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND LOWER(fg.name) LIKE ?)) ";
+    }
+
+    QSqlQuery query(database());
+    query.prepare(sql);
+    if (mapId > 0) {
+        query.addBindValue(mapId);
+    }
+    if (!tagFilter.trimmed().isEmpty()) {
+        query.addBindValue(tagFilter.trimmed());
+    }
+    if (!flagFilter.trimmed().isEmpty()) {
+        query.addBindValue(flagFilter.trimmed());
+    }
+    if (!searchText.trimmed().isEmpty()) {
+        const QString trimmedSearch = searchText.trimmed();
+        const QString like = QString("%%%1%").arg(trimmedSearch.toLower());
+        for (int i = 0; i < 5; ++i) {
+            query.addBindValue(like);
+        }
+    }
+
+    if (!query.exec()) {
+        setError(errorMessage, query.lastError().text());
+        return 0;
+    }
+
+    if (query.next()) {
+        return query.value(0).toInt();
+    }
+    return 0;
 }
 
 bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMessage) {
