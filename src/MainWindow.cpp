@@ -225,7 +225,8 @@ void MainWindow::refreshTerms() {
     m_model->removeRows(0, m_model->rowCount());
     for (const auto& term : terms) {
         QList<QStandardItem*> row;
-        auto* idItem = new QStandardItem(QString::number(term.id));
+        auto* idItem = new QStandardItem();
+        idItem->setData(term.id, Qt::DisplayRole);
         idItem->setData(term.id, Qt::UserRole);
         row << idItem
             << new QStandardItem(term.mapName)
@@ -238,7 +239,7 @@ void MainWindow::refreshTerms() {
         m_model->appendRow(row);
     }
 
-    m_tableView->setColumnHidden(0, true);
+    m_tableView->setColumnHidden(0, false);
     m_tableView->resizeColumnsToContents();
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
