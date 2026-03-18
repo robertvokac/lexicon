@@ -14,11 +14,14 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
+#include <QSettings>
+#include <QPalette>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QStandardItem>
 #include <QStandardItemModel>
 #include <QStringListModel>
+#include <QStyle>
 #include <QTableView>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -27,6 +30,7 @@
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
+    applySavedTheme();
     setupUi();
     setupMenus();
     refreshAll();
@@ -62,7 +66,7 @@ void MainWindow::setupUi() {
 
     m_tableView = new QTableView(central);
     m_model = new QStandardItemModel(this);
-    m_model->setHorizontalHeaderLabels({"Id", "Title", "Disambiguation", "Map", "Obsidian", "Aliases", "Tags", "Flags"});
+    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Obsidian", "Aliases", "Tags", "Flags"});
     m_tableView->setModel(m_model);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -70,7 +74,9 @@ void MainWindow::setupUi() {
     m_tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableView->horizontalHeader()->setStretchLastSection(true);
     m_tableView->verticalHeader()->setVisible(false);
-    m_tableView->setSortingEnabled(false);
+    m_tableView->setSortingEnabled(true);
+    m_tableView->horizontalHeader()->setSectionsClickable(true);
+    m_tableView->horizontalHeader()->setSortIndicatorShown(true);
     rootLayout->addWidget(m_tableView, 1);
 
     setCentralWidget(central);
@@ -107,9 +113,14 @@ void MainWindow::setupMenus() {
     auto* tagsAction = viewMenu->addAction("All tags...");
     auto* flagsAction = viewMenu->addAction("All flags...");
     auto* aliasesAction = viewMenu->addAction("All aliases...");
+    viewMenu->addSeparator();
+    auto* lightThemeAction = viewMenu->addAction("Light mode");
+    auto* darkThemeAction = viewMenu->addAction("Dark mode");
     connect(tagsAction, &QAction::triggered, this, &MainWindow::showTagsOverview);
     connect(flagsAction, &QAction::triggered, this, &MainWindow::showFlagsOverview);
     connect(aliasesAction, &QAction::triggered, this, &MainWindow::showAliasesOverview);
+    connect(lightThemeAction, &QAction::triggered, this, &MainWindow::setLightTheme);
+    connect(darkThemeAction, &QAction::triggered, this, &MainWindow::setDarkTheme);
 }
 
 void MainWindow::refreshAll() {
@@ -157,9 +168,9 @@ void MainWindow::refreshTerms() {
         auto* idItem = new QStandardItem(QString::number(term.id));
         idItem->setData(term.id, Qt::UserRole);
         row << idItem
+            << new QStandardItem(term.mapName)
             << new QStandardItem(term.title)
             << new QStandardItem(term.disambiguation)
-            << new QStandardItem(term.mapName)
             << new QStandardItem(term.obsidian ? "Yes" : "No")
             << new QStandardItem(term.aliases.join(", "))
             << new QStandardItem(term.tags.join(", "))
@@ -169,6 +180,11 @@ void MainWindow::refreshTerms() {
 
     m_tableView->setColumnHidden(0, true);
     m_tableView->resizeColumnsToContents();
+    const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
+    const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
+    if (sortSection >= 0) {
+        m_tableView->sortByColumn(sortSection, sortOrder);
+    }
     updateActions();
 }
 
@@ -209,11 +225,12 @@ void MainWindow::addTerm() {
 
     TermEditDialog dialog(this);
     dialog.setMaps(m_maps);
+    TermRecord draft;
     if (m_mapFilter->currentData().toInt() > 0) {
-        TermRecord draft;
         draft.mapId = m_mapFilter->currentData().toInt();
-        dialog.setTerm(draft);
     }
+    draft.title = m_searchEdit->text().trimmed();
+    dialog.setTerm(draft);
 
     if (dialog.exec() != QDialog::Accepted) {
         return;
@@ -261,7 +278,7 @@ void MainWindow::deleteSelectedTerm() {
     }
 
     const int row = m_tableView->selectionModel()->selectedRows().first().row();
-    const QString title = m_model->item(row, 1)->text();
+    const QString title = m_model->item(row, 2)->text();
     const auto answer = QMessageBox::question(this, "Delete term", QString("Delete term '%1'?").arg(title));
     if (answer != QMessageBox::Yes) {
         return;
@@ -329,6 +346,54 @@ void MainWindow::updateActions() {
             button->setEnabled(hasSelection);
         }
     }
+}
+
+
+void MainWindow::applySavedTheme() {
+    QSettings settings;
+    applyTheme(settings.value("appearance/theme", "dark").toString());
+}
+
+void MainWindow::applyTheme(const QString& themeName) {
+    auto* app = qApp;
+    app->setStyleSheet(QString());
+    if (themeName.compare("light", Qt::CaseInsensitive) == 0) {
+        app->setPalette(app->style()->standardPalette());
+    } else {
+        QPalette palette;
+        palette.setColor(QPalette::Window, QColor(45, 45, 48));
+        palette.setColor(QPalette::WindowText, QColor(230, 230, 230));
+        palette.setColor(QPalette::Base, QColor(30, 30, 30));
+        palette.setColor(QPalette::AlternateBase, QColor(45, 45, 48));
+        palette.setColor(QPalette::ToolTipBase, QColor(45, 45, 48));
+        palette.setColor(QPalette::ToolTipText, QColor(230, 230, 230));
+        palette.setColor(QPalette::Text, QColor(230, 230, 230));
+        palette.setColor(QPalette::Button, QColor(53, 53, 53));
+        palette.setColor(QPalette::ButtonText, QColor(230, 230, 230));
+        palette.setColor(QPalette::BrightText, Qt::red);
+        palette.setColor(QPalette::Link, QColor(42, 130, 218));
+        palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
+        palette.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
+        palette.setColor(QPalette::PlaceholderText, QColor(150, 150, 150));
+        app->setPalette(palette);
+        app->setStyleSheet(
+            "QToolTip { color: #e6e6e6; background-color: #2d2d30; border: 1px solid #555; }"
+            "QTableView { gridline-color: #555; }"
+            "QHeaderView::section { background-color: #353535; color: #e6e6e6; padding: 4px; border: 1px solid #555; }"
+        );
+    }
+}
+
+void MainWindow::setLightTheme() {
+    QSettings settings;
+    settings.setValue("appearance/theme", "light");
+    applyTheme("light");
+}
+
+void MainWindow::setDarkTheme() {
+    QSettings settings;
+    settings.setValue("appearance/theme", "dark");
+    applyTheme("dark");
 }
 
 void MainWindow::showError(const QString& message) {

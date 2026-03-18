@@ -35,6 +35,9 @@ private slots:
 
     void validateAndAccept();
 
+protected:
+    void showEvent(QShowEvent* event) override;
+
 private:
     void setupUi();
     void connectSignals();

@@ -42,10 +42,16 @@ cmake --build build
 ### Run
 
 ```bash
-./build/lexicon
+./build/Lexicon
 ```
 
 ## Notes
 
 - The application stores data in `lexicon.db` next to the executable by default.
 - The UI is intentionally code-only, without `.ui` files, to keep the project portable and easy to review.
+
+
+## Recent update
+
+- term table now supports sorting by clicking column headers
+- `New term` now prefills `Title` from the current `Search` text

@@ -13,6 +13,7 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 namespace {
@@ -96,6 +97,15 @@ void TermEditDialog::setupUi() {
 
 void TermEditDialog::connectSignals() {
 }
+
+void TermEditDialog::showEvent(QShowEvent* event) {
+    QDialog::showEvent(event);
+    if (m_titleEdit) {
+        m_titleEdit->setFocus();
+        m_titleEdit->selectAll();
+    }
+}
+
 
 void TermEditDialog::setMaps(const QList<MapRecord>& maps) {
     m_mapCombo->clear();

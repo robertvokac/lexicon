@@ -17,6 +17,9 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
 
 private slots:
+    void setLightTheme();
+    void setDarkTheme();
+
     void refreshAll();
     void refreshMaps();
     void refreshTerms();
@@ -34,6 +37,9 @@ private slots:
     void updateActions();
 
 private:
+    void applySavedTheme();
+    void applyTheme(const QString& themeName);
+
     void setupUi();
     void setupMenus();
     int selectedTermId() const;
