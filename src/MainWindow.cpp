@@ -215,7 +215,8 @@ void MainWindow::refreshTerms() {
     const int mapId = m_mapFilter->currentData().toInt();
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
-    const auto terms = DatabaseManager::loadTerms(mapId, m_searchEdit->text(), tagFilter, flagFilter, &error);
+    const QString searchText = m_searchEdit->text().trimmed();
+    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;

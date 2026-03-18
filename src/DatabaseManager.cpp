@@ -160,14 +160,17 @@ QList<MapRecord> DatabaseManager::loadMaps(QString* errorMessage) {
 
 bool DatabaseManager::upsertMap(const MapRecord& map, QString* errorMessage) {
     QSqlQuery query(database());
+    const QString trimmedName = map.name.trimmed();
+    const QString trimmedDescription = map.description.trimmed();
+
     if (map.id < 0) {
         query.prepare("INSERT INTO map(name, description) VALUES(?, ?);");
-        query.addBindValue(map.name.trimmed());
-        query.addBindValue(map.description);
+        query.addBindValue(trimmedName);
+        query.addBindValue(trimmedDescription);
     } else {
         query.prepare("UPDATE map SET name = ?, description = ? WHERE id = ?;");
-        query.addBindValue(map.name.trimmed());
-        query.addBindValue(map.description);
+        query.addBindValue(trimmedName);
+        query.addBindValue(trimmedDescription);
         query.addBindValue(map.id);
     }
 
@@ -230,7 +233,8 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
         query.addBindValue(flagFilter.trimmed());
     }
     if (!searchText.trimmed().isEmpty()) {
-        const QString like = QString("%%%1%").arg(searchText.trimmed().toLower());
+        const QString trimmedSearch = searchText.trimmed();
+        const QString like = QString("%%%1%").arg(trimmedSearch.toLower());
         for (int i = 0; i < 5; ++i) {
             query.addBindValue(like);
         }

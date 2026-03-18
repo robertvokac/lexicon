@@ -91,7 +91,7 @@ bool MapManagerDialog::promptForMap(MapRecord& map, bool isEdit) {
         return false;
     }
     map.name = nameEdit->text().trimmed();
-    map.description = descEdit->toPlainText();
+    map.description = descEdit->toPlainText().trimmed();
     return true;
 }
 
