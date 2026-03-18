@@ -28,6 +28,7 @@ private slots:
     void refreshSuggestions();
 
     void addTerm();
+    void quickAdd();
     void editSelectedTerm();
     void deleteSelectedTerm();
 

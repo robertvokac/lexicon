@@ -50,7 +50,8 @@ void MainWindow::setupUi() {
     m_searchEdit = new QLineEdit(central);
     m_searchEdit->setPlaceholderText("Search title, disambiguation, alias, tag, or flag...");
 
-    auto* addButton = new QPushButton("New term", central);
+    auto* quickAddButton = new QPushButton("Add", central);
+    auto* addButton = new QPushButton("Add ...", central);
     auto* editButton = new QPushButton("Edit", central);
     auto* deleteButton = new QPushButton("Delete", central);
     editButton->setObjectName("editButton");
@@ -64,6 +65,7 @@ void MainWindow::setupUi() {
     filterLayout->addWidget(m_flagFilter);
     filterLayout->addWidget(new QLabel("Search:", central));
     filterLayout->addWidget(m_searchEdit, 1);
+    filterLayout->addWidget(quickAddButton);
     filterLayout->addWidget(addButton);
     filterLayout->addWidget(editButton);
     filterLayout->addWidget(deleteButton);
@@ -97,6 +99,7 @@ void MainWindow::setupUi() {
     connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
     connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::refreshTerms);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::refreshTerms);
+    connect(quickAddButton, &QPushButton::clicked, this, &MainWindow::quickAdd);
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addTerm);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedTerm);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedTerm);
@@ -272,7 +275,7 @@ QList<MapRecord> MainWindow::maps() const {
 
 void MainWindow::addTerm() {
     if (m_maps.isEmpty()) {
-        QMessageBox::information(this, "CoreLex", "Create a map first.");
+        QMessageBox::information(this, "Lexicon", "Create a map first.");
         openMapManager();
         if (m_maps.isEmpty()) {
             return;
@@ -297,6 +300,46 @@ void MainWindow::addTerm() {
         showError(error);
         return;
     }
+    refreshAll();
+}
+
+void MainWindow::quickAdd() {
+    const QString text = m_searchEdit->text().trimmed();
+    if (text.isEmpty()) {
+        return;
+    }
+
+    if (m_maps.isEmpty()) {
+        QMessageBox::information(this, "Lexicon", "Create a map first.");
+        openMapManager();
+        if (m_maps.isEmpty()) {
+            return;
+        }
+    }
+
+    TermRecord term;
+    term.title = text;
+    
+    // Choose map: current filter or first available
+    int mapId = m_mapFilter->currentData().toInt();
+    if (mapId <= 0 && !m_maps.isEmpty()) {
+        mapId = m_maps.first().id;
+    }
+    
+    if (mapId <= 0) {
+         QMessageBox::warning(this, "Lexicon", "No map available for quick add.");
+         return;
+    }
+    
+    term.mapId = mapId;
+
+    QString error;
+    if (!DatabaseManager::saveTerm(term, &error)) {
+        showError(error);
+        return;
+    }
+
+    m_searchEdit->clear();
     refreshAll();
 }
 
