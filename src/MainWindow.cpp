@@ -39,7 +39,7 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::setupUi() {
-    setWindowTitle("CoreLex");
+    setWindowTitle("Lexicon");
     resize(1200, 720);
 
     auto* central = new QWidget(this);
