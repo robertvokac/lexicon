@@ -237,7 +237,7 @@ bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int limit, int offset, QString* errorMessage) {
+QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
     QList<TermRecord> terms;
 
     QString sql =
@@ -269,8 +269,32 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     }
 
     sql += filters;
-    sql += "ORDER BY t.title COLLATE NOCASE, COALESCE(t.disambiguation, '') COLLATE NOCASE ";
+
+    // Mapping columns: 0:Id, 1:Map, 2:Title, 3:Disambiguation, 4:Obsidian, 5:Tags, 6:Flags, 7:Aliases
+    QString orderClause;
+    switch (sortColumn) {
+        case 0: orderClause = "t.id"; break;
+        case 1: orderClause = "m.name COLLATE NOCASE"; break;
+        case 2: orderClause = "t.title COLLATE NOCASE"; break;
+        case 3: orderClause = "COALESCE(t.disambiguation, '') COLLATE NOCASE"; break;
+        case 4: orderClause = "t.obsidian"; break;
+        case 5: orderClause = "tags COLLATE NOCASE"; break;
+        case 6: orderClause = "flags COLLATE NOCASE"; break;
+        case 7: orderClause = "aliases COLLATE NOCASE"; break;
+        default: orderClause = "t.title COLLATE NOCASE"; break;
+    }
+
+    sql += "ORDER BY " + orderClause + (sortOrder == Qt::AscendingOrder ? " ASC " : " DESC ");
     
+    // Secondary sort for stability
+    if (sortColumn != 2) {
+        sql += ", t.title COLLATE NOCASE";
+    }
+    if (sortColumn != 3) {
+        sql += ", COALESCE(t.disambiguation, '') COLLATE NOCASE";
+    }
+    sql += ", t.id ASC ";
+
     if (limit > 0) {
         sql += "LIMIT ? OFFSET ? ";
     }

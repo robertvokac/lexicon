@@ -87,6 +87,7 @@ void MainWindow::setupUi() {
     m_tableView->setSortingEnabled(true);
     m_tableView->horizontalHeader()->setSectionsClickable(true);
     m_tableView->horizontalHeader()->setSortIndicatorShown(true);
+    connect(m_tableView->horizontalHeader(), &QHeaderView::sortIndicatorChanged, this, &MainWindow::resetPaginationAndRefresh);
     rootLayout->addWidget(m_tableView, 1);
 
     auto* paginationLayout = new QHBoxLayout();
@@ -254,13 +255,17 @@ void MainWindow::refreshTerms() {
     if (m_currentPage >= totalPages) m_currentPage = totalPages - 1;
     if (m_currentPage < 0) m_currentPage = 0;
 
-    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, m_pageSize, m_currentPage * m_pageSize, &error);
+    const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
+    const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
+
+    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
     }
 
     m_model->removeRows(0, m_model->rowCount());
+    m_model->setRowCount(0); // Ensure it's clean
     for (const auto& term : terms) {
         QList<QStandardItem*> row;
         auto* idItem = new QStandardItem();
@@ -279,11 +284,6 @@ void MainWindow::refreshTerms() {
 
     m_tableView->setColumnHidden(0, false);
     m_tableView->resizeColumnsToContents();
-    const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
-    const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
-    if (sortSection >= 0) {
-        m_tableView->sortByColumn(sortSection, sortOrder);
-    }
 
     m_pageLabel->setText(QString("Page %1 of %2 (%3 total)").arg(m_currentPage + 1).arg(totalPages).arg(totalCount));
     m_prevButton->setEnabled(m_currentPage > 0);

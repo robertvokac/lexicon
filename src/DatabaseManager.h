@@ -39,7 +39,7 @@ public:
     static bool upsertMap(const MapRecord& map, QString* errorMessage = nullptr);
     static bool deleteMap(int mapId, QString* errorMessage = nullptr);
 
-    static QList<TermRecord> loadTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int limit = -1, int offset = 0, QString* errorMessage = nullptr);
+    static QList<TermRecord> loadTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int limit = -1, int offset = 0, int sortColumn = 2, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
     static int countTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), QString* errorMessage = nullptr);
     static bool loadTerm(int termId, TermRecord& outTerm, QString* errorMessage = nullptr);
     static bool saveTerm(const TermRecord& term, QString* errorMessage = nullptr);
