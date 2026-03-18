@@ -50,7 +50,7 @@ public:
     static QList<UsageValueRecord> loadAliasUsage(QString* errorMessage = nullptr);
 
 private:
-    static bool createSchema(QString* errorMessage = nullptr);
+    static bool applyMigrations(QString* errorMessage = nullptr);
     static bool execStatements(const QStringList& statements, QString* errorMessage);
     static bool replaceStringValues(const QString& tableName, int termId, const QStringList& values, QString* errorMessage);
     static QList<UsageValueRecord> loadUsageTable(const QString& sql, QString* errorMessage);

@@ -62,70 +62,117 @@ bool DatabaseManager::initialize(const QString& dbPath, QString* errorMessage) {
         return setError(errorMessage, QString("Cannot enable foreign keys: %1").arg(pragmaQuery.lastError().text()));
     }
 
-    return createSchema(errorMessage);
+    return applyMigrations(errorMessage);
 }
 
 QSqlDatabase DatabaseManager::database() {
     return QSqlDatabase::database(kConnectionName);
 }
 
-bool DatabaseManager::createSchema(QString* errorMessage) {
-    const QStringList statements = {
-        "CREATE TABLE IF NOT EXISTS map ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " name TEXT NOT NULL,"
-        " description TEXT NOT NULL DEFAULT ''"
-        ");",
+bool DatabaseManager::applyMigrations(QString* errorMessage) {
+    QSqlDatabase db = database();
 
-        "CREATE UNIQUE INDEX IF NOT EXISTS map_name_unique ON map(name);",
+    // 1. Create version table if not exists
+    QSqlQuery query(db);
+    if (!query.exec("CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);")) {
+        return setError(errorMessage, "Failed to create version table: " + query.lastError().text());
+    }
 
-        "CREATE TABLE IF NOT EXISTS term ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " map_id INTEGER NOT NULL,"
-        " title TEXT NOT NULL,"
-        " disambiguation TEXT,"
-        " obsidian INTEGER NOT NULL DEFAULT 0,"
-        " FOREIGN KEY(map_id) REFERENCES map(id) ON DELETE CASCADE"
-        ");",
+    // 2. Get current version
+    int currentVersion = 0;
+    if (query.exec("SELECT version FROM db_version LIMIT 1;") && query.next()) {
+        currentVersion = query.value(0).toInt();
+    } else {
+        // Initial insert if table is empty
+        QSqlQuery insertVersion(db);
+        insertVersion.exec("INSERT INTO db_version (version) VALUES (0);");
+    }
 
-        "CREATE UNIQUE INDEX IF NOT EXISTS term_unique "
-        "ON term(map_id, title, COALESCE(disambiguation, ''));",
-
-        "CREATE TABLE IF NOT EXISTS alias ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " term_id INTEGER NOT NULL,"
-        " alias TEXT NOT NULL,"
-        " UNIQUE(term_id, alias),"
-        " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
-        ");",
-
-        "CREATE TABLE IF NOT EXISTS flag ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " term_id INTEGER NOT NULL,"
-        " name TEXT NOT NULL,"
-        " UNIQUE(term_id, name),"
-        " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
-        ");",
-
-        "CREATE TABLE IF NOT EXISTS tag ("
-        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " term_id INTEGER NOT NULL,"
-        " name TEXT NOT NULL,"
-        " UNIQUE(term_id, name),"
-        " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
-        ");",
-
-        "CREATE INDEX IF NOT EXISTS idx_term_map_id ON term(map_id);",
-        "CREATE INDEX IF NOT EXISTS idx_alias_term_id ON alias(term_id);",
-        "CREATE INDEX IF NOT EXISTS idx_tag_term_id ON tag(term_id);",
-        "CREATE INDEX IF NOT EXISTS idx_flag_term_id ON flag(term_id);",
-        "CREATE INDEX IF NOT EXISTS idx_term_title ON term(title);",
-        "CREATE INDEX IF NOT EXISTS idx_alias_alias ON alias(alias);",
-        "CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);",
-        "CREATE INDEX IF NOT EXISTS idx_flag_name ON flag(name);"
+    // 3. Define migrations
+    struct Migration {
+        int version;
+        QStringList statements;
     };
 
-    return execStatements(statements, errorMessage);
+    QList<Migration> migrations = {
+        {1, {
+            "CREATE TABLE IF NOT EXISTS map ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " name TEXT NOT NULL,"
+            " description TEXT NOT NULL DEFAULT ''"
+            ");",
+            "CREATE UNIQUE INDEX IF NOT EXISTS map_name_unique ON map(name);",
+            "CREATE TABLE IF NOT EXISTS term ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " map_id INTEGER NOT NULL,"
+            " title TEXT NOT NULL,"
+            " disambiguation TEXT,"
+            " obsidian INTEGER NOT NULL DEFAULT 0,"
+            " FOREIGN KEY(map_id) REFERENCES map(id) ON DELETE CASCADE"
+            ");",
+            "CREATE UNIQUE INDEX IF NOT EXISTS term_unique "
+            "ON term(map_id, title, COALESCE(disambiguation, ''));",
+            "CREATE TABLE IF NOT EXISTS alias ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " term_id INTEGER NOT NULL,"
+            " alias TEXT NOT NULL,"
+            " UNIQUE(term_id, alias),"
+            " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
+            ");",
+            "CREATE TABLE IF NOT EXISTS flag ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " term_id INTEGER NOT NULL,"
+            " name TEXT NOT NULL,"
+            " UNIQUE(term_id, name),"
+            " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
+            ");",
+            "CREATE TABLE IF NOT EXISTS tag ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " term_id INTEGER NOT NULL,"
+            " name TEXT NOT NULL,"
+            " UNIQUE(term_id, name),"
+            " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
+            ");",
+            "CREATE INDEX IF NOT EXISTS idx_term_map_id ON term(map_id);",
+            "CREATE INDEX IF NOT EXISTS idx_alias_term_id ON alias(term_id);",
+            "CREATE INDEX IF NOT EXISTS idx_tag_term_id ON tag(term_id);",
+            "CREATE INDEX IF NOT EXISTS idx_flag_term_id ON flag(term_id);",
+            "CREATE INDEX IF NOT EXISTS idx_term_title ON term(title);",
+            "CREATE INDEX IF NOT EXISTS idx_alias_alias ON alias(alias);",
+            "CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);",
+            "CREATE INDEX IF NOT EXISTS idx_flag_name ON flag(name);"
+        }}
+    };
+
+    // 4. Apply migrations
+    for (const auto& migration : migrations) {
+        if (migration.version > currentVersion) {
+            if (!db.transaction()) {
+                return setError(errorMessage, "Failed to start migration transaction: " + db.lastError().text());
+            }
+
+            if (!execStatements(migration.statements, errorMessage)) {
+                db.rollback();
+                return false;
+            }
+
+            QSqlQuery updateVersion(db);
+            updateVersion.prepare("UPDATE db_version SET version = ?;");
+            updateVersion.addBindValue(migration.version);
+            if (!updateVersion.exec()) {
+                db.rollback();
+                return setError(errorMessage, "Failed to update database version: " + updateVersion.lastError().text());
+            }
+
+            if (!db.commit()) {
+                db.rollback();
+                return setError(errorMessage, "Failed to commit migration: " + db.lastError().text());
+            }
+            currentVersion = migration.version;
+        }
+    }
+
+    return true;
 }
 
 bool DatabaseManager::execStatements(const QStringList& statements, QString* errorMessage) {
