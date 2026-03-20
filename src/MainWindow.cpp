@@ -91,17 +91,21 @@ void MainWindow::setupUi() {
     rootLayout->addWidget(m_tableView, 1);
 
     auto* paginationLayout = new QHBoxLayout();
+    m_firstButton = new QPushButton("<< First", central);
     m_prevButton = new QPushButton("< Prev", central);
     m_nextButton = new QPushButton("Next >", central);
+    m_lastButton = new QPushButton("Last >>", central);
     m_pageLabel = new QLabel("Page 1", central);
     m_pageSizeCombo = new QComboBox(central);
     m_pageSizeCombo->addItems({"10", "20", "50", "100"});
     int sizeIdx = m_pageSizeCombo->findText(QString::number(m_pageSize));
     if (sizeIdx >= 0) m_pageSizeCombo->setCurrentIndex(sizeIdx);
 
+    paginationLayout->addWidget(m_firstButton);
     paginationLayout->addWidget(m_prevButton);
     paginationLayout->addWidget(m_pageLabel);
     paginationLayout->addWidget(m_nextButton);
+    paginationLayout->addWidget(m_lastButton);
     paginationLayout->addStretch();
     paginationLayout->addWidget(new QLabel("Page size:", central));
     paginationLayout->addWidget(m_pageSizeCombo);
@@ -120,8 +124,10 @@ void MainWindow::setupUi() {
     connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_firstButton, &QPushButton::clicked, this, &MainWindow::firstPage);
     connect(m_prevButton, &QPushButton::clicked, this, &MainWindow::prevPage);
     connect(m_nextButton, &QPushButton::clicked, this, &MainWindow::nextPage);
+    connect(m_lastButton, &QPushButton::clicked, this, &MainWindow::lastPage);
     connect(m_pageSizeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
         m_pageSize = m_pageSizeCombo->itemText(index).toInt();
         saveSettings();
@@ -286,8 +292,10 @@ void MainWindow::refreshTerms() {
     m_tableView->resizeColumnsToContents();
 
     m_pageLabel->setText(QString("Page %1 of %2 (%3 total)").arg(m_currentPage + 1).arg(totalPages).arg(totalCount));
+    m_firstButton->setEnabled(m_currentPage > 0);
     m_prevButton->setEnabled(m_currentPage > 0);
     m_nextButton->setEnabled(m_currentPage < totalPages - 1);
+    m_lastButton->setEnabled(m_currentPage < totalPages - 1);
 
     updateActions();
 }
@@ -295,6 +303,13 @@ void MainWindow::refreshTerms() {
 void MainWindow::resetPaginationAndRefresh() {
     m_currentPage = 0;
     refreshTerms();
+}
+
+void MainWindow::firstPage() {
+    if (m_currentPage > 0) {
+        m_currentPage = 0;
+        refreshTerms();
+    }
 }
 
 void MainWindow::prevPage() {
@@ -307,6 +322,26 @@ void MainWindow::prevPage() {
 void MainWindow::nextPage() {
     m_currentPage++;
     refreshTerms();
+}
+
+void MainWindow::lastPage() {
+    QString error;
+    const int mapId = m_mapFilter->currentData().toInt();
+    const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
+    const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
+    const QString searchText = m_searchEdit->text().trimmed();
+
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, &error);
+    if (!error.isEmpty()) {
+        showError(error);
+        return;
+    }
+
+    int totalPages = std::max(1, (totalCount + m_pageSize - 1) / m_pageSize);
+    if (m_currentPage < totalPages - 1) {
+        m_currentPage = totalPages - 1;
+        refreshTerms();
+    }
 }
 
 void MainWindow::refreshSuggestions() {

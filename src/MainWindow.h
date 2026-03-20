@@ -28,8 +28,10 @@ private slots:
     void refreshFlags();
     void refreshTerms();
     void resetPaginationAndRefresh();
+    void firstPage();
     void prevPage();
     void nextPage();
+    void lastPage();
     void refreshSuggestions();
 
     void addTerm();
@@ -64,8 +66,10 @@ private:
     QStandardItemModel* m_model = nullptr;
     QCompleter* m_completer = nullptr;
 
+    QPushButton* m_firstButton = nullptr;
     QPushButton* m_prevButton = nullptr;
     QPushButton* m_nextButton = nullptr;
+    QPushButton* m_lastButton = nullptr;
     QLabel* m_pageLabel = nullptr;
     QComboBox* m_pageSizeCombo = nullptr;
 

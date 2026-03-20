@@ -55,3 +55,7 @@ cmake --build build
 
 - term table now supports sorting by clicking column headers
 - `New term` now prefills `Title` from the current `Search` text
+
+## Todo
+
+- export to CSV/JSON
