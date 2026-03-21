@@ -25,6 +25,7 @@
 #include <QStyle>
 #include <QTableView>
 #include <QTextEdit>
+#include <QTextBrowser>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -149,11 +150,19 @@ void MainWindow::setupUi() {
     m_termContentView->setReadOnly(true);
     m_highlighter = new CodeHighlighter(m_termContentView->document());
     m_termContentView->setPlaceholderText("Select a term to view content...");
-    m_termContentView->setMaximumHeight(200);
+    m_termContentView->setMinimumHeight(150);
+
+    m_linksView = new QTextBrowser(centralWidget);
+    m_linksView->setReadOnly(true);
+    m_linksView->setOpenLinks(false);
+    m_linksView->setMaximumHeight(100);
+    m_linksHighlighter = new CodeHighlighter(m_linksView->document());
+    connect(m_linksView, &QTextBrowser::anchorClicked, this, &MainWindow::onLinkActivated);
 
     updateMarkdownStyles();
 
-    rootLayout->addWidget(m_termContentView);
+    rootLayout->addWidget(m_termContentView, 1);
+    rootLayout->addWidget(m_linksView, 0);
 
     setCentralWidget(centralWidget);
 
@@ -624,6 +633,7 @@ void MainWindow::updateActions() {
 void MainWindow::showTermContent(const QModelIndex& index) {
     if (!index.isValid()) {
         m_termContentView->clear();
+        m_linksView->clear();
         return;
     }
 
@@ -632,8 +642,10 @@ void MainWindow::showTermContent(const QModelIndex& index) {
     QString error;
     if (DatabaseManager::loadTerm(termId, term, &error)) {
         m_termContentView->setHtml(MarkdownConverter::toHtml(term.content));
+        updateLinksDisplay(termId);
     } else {
         m_termContentView->setPlainText("Error loading content: " + error);
+        m_linksView->clear();
     }
 }
 
@@ -685,12 +697,14 @@ void MainWindow::updateMarkdownStyles() {
     QString borderColor = pal.color(QPalette::Text).name(); // Use Text color for borders for maximum visibility
     QString headerBgColor = pal.color(QPalette::AlternateBase).name();
     QString codeBgColor = pal.color(QPalette::AlternateBase).name();
+    QString linkColor = pal.color(QPalette::Link).name();
     if (pal.color(QPalette::Window).lightness() < 128) {
         // In dark theme, use pure black for code blocks
         codeBgColor = "#000000";
     }
 
     m_termContentView->setStyleSheet(QString("QTextEdit[readOnly=\"true\"] { background-color: %1; color: %2; }").arg(bgColor, textColor));
+    m_linksView->setStyleSheet(QString("QTextEdit[readOnly=\"true\"] { background-color: %1; color: %2; }").arg(bgColor, textColor));
     
     QString style = QString(
         "table { border: 1px solid %2; margin-top: 10px; margin-bottom: 10px; border-collapse: collapse; } "
@@ -700,13 +714,96 @@ void MainWindow::updateMarkdownStyles() {
         "pre[syntax=\"cpp\"] { -qt-user-property-1: \"cpp\"; } "
         "code { background-color: %4; font-family: 'Courier New', monospace; }"
         "body { color: %1; }"
-    ).arg(textColor, borderColor, headerBgColor, codeBgColor);
+        "a { color: %5; }"
+    ).arg(textColor, borderColor, headerBgColor, codeBgColor, linkColor);
 
     m_termContentView->document()->setDefaultStyleSheet(style);
+    m_linksView->document()->setDefaultStyleSheet(style);
     
     // Force re-render of current content
     if (m_tableView->selectionModel()->hasSelection()) {
         showTermContent(m_tableView->currentIndex());
+    }
+}
+
+void MainWindow::updateLinksDisplay(int termId) {
+    if (termId == -1) {
+        m_linksView->clear();
+        return;
+    }
+
+    QString error;
+    QList<LinkRecord> links = DatabaseManager::loadLinks(termId, &error);
+    QList<LinkRecord> backlinks = DatabaseManager::loadBacklinks(termId, &error);
+
+    auto linkTypeToString = [](LinkType type) -> QString {
+        switch (type) {
+            case LinkType::IsA: return "Is A";
+            case LinkType::PartOf: return "Part Of";
+            case LinkType::Uses: return "Uses";
+            case LinkType::DependsOn: return "Depends On";
+            case LinkType::Implements: return "Implements";
+            case LinkType::Related: return "Related";
+            case LinkType::Contrasts: return "Contrasts";
+            case LinkType::AlternativeTo: return "Alternative To";
+            default: return "Link";
+        }
+    };
+
+    QString html = "<b>Links:</b> ";
+    if (links.isEmpty()) {
+        html += "None";
+    } else {
+        for (int i = 0; i < links.size(); ++i) {
+            if (i > 0) html += ", ";
+            html += QString("<a href=\"%1\">%2 (%3)</a>")
+                        .arg(QUrl::toPercentEncoding(links[i].toTermTitle), links[i].toTermTitle, linkTypeToString(links[i].linkType));
+        }
+    }
+
+    html += "<br><b>Backlinks:</b> ";
+    if (backlinks.isEmpty()) {
+        html += "None";
+    } else {
+        for (int i = 0; i < backlinks.size(); ++i) {
+            if (i > 0) html += ", ";
+            html += QString("<a href=\"%1\">%2 (%3)</a>")
+                        .arg(QUrl::toPercentEncoding(backlinks[i].fromTermTitle), backlinks[i].fromTermTitle, linkTypeToString(backlinks[i].linkType));
+        }
+    }
+
+    m_linksView->setHtml(html);
+}
+
+void MainWindow::onLinkActivated(const QUrl& link) {
+    QString termTitle = QUrl::fromPercentEncoding(link.toString().toUtf8());
+
+    m_mapFilter->blockSignals(true);
+    m_tagFilter->blockSignals(true);
+    m_flagFilter->blockSignals(true);
+    m_statusFilter->blockSignals(true);
+    m_understandingFilter->blockSignals(true);
+    m_searchEdit->blockSignals(true);
+
+    m_mapFilter->setCurrentIndex(0);
+    m_tagFilter->setCurrentIndex(0);
+    m_flagFilter->setCurrentIndex(0);
+    m_statusFilter->setCurrentIndex(0);
+    m_understandingFilter->setCurrentIndex(0);
+    m_searchEdit->setText(termTitle);
+
+    m_mapFilter->blockSignals(false);
+    m_tagFilter->blockSignals(false);
+    m_flagFilter->blockSignals(false);
+    m_statusFilter->blockSignals(false);
+    m_understandingFilter->blockSignals(false);
+    m_searchEdit->blockSignals(false);
+
+    resetPaginationAndRefresh();
+
+    if (m_model->rowCount() > 0) {
+        m_tableView->selectRow(0);
+        m_tableView->setFocus();
     }
 }
 

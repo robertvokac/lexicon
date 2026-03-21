@@ -21,10 +21,33 @@ enum class UnderstandingLevel {
     Mastered = 4      // Fully internalized, can teach or innovate
 };
 
+enum class LinkType {
+    None = 0,
+    IsA = 1,
+    PartOf = 2,
+    Uses = 3,
+    DependsOn = 4,
+    Implements = 5,
+    Related = 6,
+    Contrasts = 7,
+    AlternativeTo = 8
+};
+
 struct MapRecord {
     int id = -1;
     QString name;
     QString description;
+};
+
+struct LinkRecord {
+    int id = -1;
+    int fromTermId = -1;
+    int toTermId = -1;
+    LinkType linkType = LinkType::None;
+
+    // Optional for UI:
+    QString fromTermTitle;
+    QString toTermTitle;
 };
 
 struct TermRecord {
@@ -62,7 +85,13 @@ public:
     static bool saveTerm(const TermRecord& term, QString* errorMessage = nullptr);
     static bool deleteTerm(int termId, QString* errorMessage = nullptr);
 
+    static QList<LinkRecord> loadLinks(int termId, QString* errorMessage = nullptr);
+    static QList<LinkRecord> loadBacklinks(int termId, QString* errorMessage = nullptr);
+    static bool saveLink(const LinkRecord& link, QString* errorMessage = nullptr);
+    static bool deleteLink(int linkId, QString* errorMessage = nullptr);
+
     static QStringList loadSuggestions(QString* errorMessage = nullptr);
+    static QStringList loadTermTitles(QString* errorMessage = nullptr);
     static QList<UsageValueRecord> loadTagUsage(QString* errorMessage = nullptr);
     static QList<UsageValueRecord> loadFlagUsage(QString* errorMessage = nullptr);
     static QList<UsageValueRecord> loadAliasUsage(QString* errorMessage = nullptr);

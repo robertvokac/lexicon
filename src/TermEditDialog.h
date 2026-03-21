@@ -54,6 +54,13 @@ private slots:
     void formatHorizontalLine();
     void updatePreview();
 
+    void addLink();
+    void editLink();
+    void removeLink();
+    void addBacklink();
+    void editBacklink();
+    void removeBacklink();
+
     void validateAndAccept();
 
 protected:
@@ -61,6 +68,7 @@ protected:
 
 private:
     void updateMarkdownStyles();
+    void updateLinksList();
     void setupUi();
     void connectSignals();
     void addValue(QListWidget* list, const QString& title);
@@ -88,6 +96,11 @@ private:
     QListWidget* m_aliasList = nullptr;
     QListWidget* m_tagList = nullptr;
     QListWidget* m_flagList = nullptr;
+
+    QListWidget* m_linksList = nullptr;
+    QListWidget* m_backlinksList = nullptr;
+    QList<LinkRecord> m_currentLinks;
+    QList<LinkRecord> m_currentBacklinks;
 
     QPushButton* m_saveButton = nullptr;
 };

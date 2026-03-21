@@ -12,6 +12,7 @@ class QLineEdit;
 class QStandardItemModel;
 class QTableView;
 class QTextEdit;
+class QTextBrowser;
 
 #include <QSyntaxHighlighter>
 #include <QRegularExpression>
@@ -155,6 +156,7 @@ private slots:
 
     void updateActions();
     void showTermContent(const QModelIndex& index);
+    void onLinkActivated(const QUrl& link);
 
 private:
     void applySavedTheme();
@@ -163,6 +165,7 @@ private:
     void loadSettings();
 
     void updateMarkdownStyles();
+    void updateLinksDisplay(int termId);
     void setupUi();
     void setupMenus();
     int selectedTermId() const;
@@ -186,7 +189,9 @@ private:
     QLabel* m_pageLabel = nullptr;
     QComboBox* m_pageSizeCombo = nullptr;
     QTextEdit* m_termContentView = nullptr;
+    QTextBrowser* m_linksView = nullptr;
     CodeHighlighter* m_highlighter = nullptr;
+    CodeHighlighter* m_linksHighlighter = nullptr;
 
     int m_currentPage = 0;
     int m_pageSize = 20;

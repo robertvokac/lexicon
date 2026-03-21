@@ -166,6 +166,18 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }},
         {6, {
             "ALTER TABLE term ADD COLUMN content TEXT;"
+        }},
+        {7, {
+            "CREATE TABLE IF NOT EXISTS link ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " from_term_id INTEGER NOT NULL,"
+            " to_term_id INTEGER NOT NULL,"
+            " link_type INTEGER NOT NULL DEFAULT 0,"
+            " FOREIGN KEY(from_term_id) REFERENCES term(id) ON DELETE CASCADE,"
+            " FOREIGN KEY(to_term_id) REFERENCES term(id) ON DELETE CASCADE"
+            ");",
+            "CREATE INDEX IF NOT EXISTS idx_link_from_term_id ON link(from_term_id);",
+            "CREATE INDEX IF NOT EXISTS idx_link_to_term_id ON link(to_term_id);"
         }}
     };
 
@@ -653,6 +665,133 @@ bool DatabaseManager::logOperation(const QString& tableName, int recordId, int l
     return true;
 }
 
+QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) {
+    QList<LinkRecord> result;
+    QSqlDatabase db = database();
+    QSqlQuery query(db);
+    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, t.title "
+                  "FROM link l "
+                  "JOIN term t ON l.to_term_id = t.id "
+                  "WHERE l.from_term_id = ?;");
+    query.addBindValue(termId);
+
+    if (!query.exec()) {
+        setError(errorMessage, "Failed to load links: " + query.lastError().text());
+        return result;
+    }
+
+    while (query.next()) {
+        LinkRecord link;
+        link.id = query.value(0).toInt();
+        link.fromTermId = query.value(1).toInt();
+        link.toTermId = query.value(2).toInt();
+        link.linkType = static_cast<LinkType>(query.value(3).toInt());
+        link.toTermTitle = query.value(4).toString();
+        result.push_back(link);
+    }
+    return result;
+}
+
+QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessage) {
+    QList<LinkRecord> result;
+    QSqlDatabase db = database();
+    QSqlQuery query(db);
+    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, t.title "
+                  "FROM link l "
+                  "JOIN term t ON l.from_term_id = t.id "
+                  "WHERE l.to_term_id = ?;");
+    query.addBindValue(termId);
+
+    if (!query.exec()) {
+        setError(errorMessage, "Failed to load backlinks: " + query.lastError().text());
+        return result;
+    }
+
+    while (query.next()) {
+        LinkRecord link;
+        link.id = query.value(0).toInt();
+        link.fromTermId = query.value(1).toInt();
+        link.toTermId = query.value(2).toInt();
+        link.linkType = static_cast<LinkType>(query.value(3).toInt());
+        link.fromTermTitle = query.value(4).toString();
+        result.push_back(link);
+    }
+    return result;
+}
+
+bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
+    QSqlDatabase db = database();
+    if (!db.transaction()) {
+        return setError(errorMessage, "Failed to start transaction: " + db.lastError().text());
+    }
+
+    QSqlQuery query(db);
+    int logType = 2; // updated
+    if (link.id == -1) {
+        query.prepare("INSERT INTO link (from_term_id, to_term_id, link_type) VALUES (?, ?, ?);");
+        query.addBindValue(link.fromTermId);
+        query.addBindValue(link.toTermId);
+        query.addBindValue(static_cast<int>(link.linkType));
+        logType = 1; // created
+    } else {
+        query.prepare("UPDATE link SET from_term_id = ?, to_term_id = ?, link_type = ? WHERE id = ?;");
+        query.addBindValue(link.fromTermId);
+        query.addBindValue(link.toTermId);
+        query.addBindValue(static_cast<int>(link.linkType));
+        query.addBindValue(link.id);
+    }
+
+    if (!query.exec()) {
+        db.rollback();
+        return setError(errorMessage, "Failed to save link: " + query.lastError().text());
+    }
+
+    int recordId = link.id;
+    if (recordId == -1) {
+        recordId = query.lastInsertId().toInt();
+    }
+
+    if (!logOperation("link", recordId, logType, errorMessage)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        db.rollback();
+        return setError(errorMessage, "Failed to commit transaction: " + db.lastError().text());
+    }
+
+    return true;
+}
+
+bool DatabaseManager::deleteLink(int linkId, QString* errorMessage) {
+    QSqlDatabase db = database();
+    if (!db.transaction()) {
+        return setError(errorMessage, "Failed to start transaction: " + db.lastError().text());
+    }
+
+    if (!logOperation("link", linkId, 3, errorMessage)) { // 3 = deleted
+        db.rollback();
+        return false;
+    }
+
+    QSqlQuery query(db);
+    query.prepare("DELETE FROM link WHERE id = ?;");
+    query.addBindValue(linkId);
+
+    if (!query.exec()) {
+        db.rollback();
+        return setError(errorMessage, "Failed to delete link: " + query.lastError().text());
+    }
+
+    if (!db.commit()) {
+        db.rollback();
+        return setError(errorMessage, "Failed to commit transaction: " + db.lastError().text());
+    }
+
+    return true;
+}
+
 QStringList DatabaseManager::loadSuggestions(QString* errorMessage) {
     QStringList values;
     QSet<QString> seen;
@@ -674,6 +813,20 @@ QStringList DatabaseManager::loadSuggestions(QString* errorMessage) {
         }
         seen.insert(key);
         values.push_back(value);
+    }
+    return values;
+}
+
+QStringList DatabaseManager::loadTermTitles(QString* errorMessage) {
+    QStringList values;
+    QSqlQuery query(database());
+    if (!query.exec("SELECT title FROM term ORDER BY title COLLATE NOCASE;")) {
+        setError(errorMessage, query.lastError().text());
+        return values;
+    }
+
+    while (query.next()) {
+        values.push_back(query.value(0).toString());
     }
     return values;
 }

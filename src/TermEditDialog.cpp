@@ -3,6 +3,7 @@
 #include "MarkdownConverter.h"
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCompleter>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -15,6 +16,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QShowEvent>
+#include <QSqlQuery>
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolBar>
@@ -150,7 +152,17 @@ void TermEditDialog::setupUi() {
     contentLayout->addLayout(editorSplitter);
     m_tabWidget->addTab(contentTab, "Content");
 
-    // --- Tab 3: Additional ---
+    // --- Tab 3: Links ---
+    auto* linksTab = buildListEditor("Outgoing Links", m_linksList, this,
+                                     SLOT(addLink()), SLOT(editLink()), SLOT(removeLink()));
+    m_tabWidget->addTab(linksTab, "Links");
+
+    // --- Tab 4: Backlinks ---
+    auto* backlinksTab = buildListEditor("Incoming Links", m_backlinksList, this,
+                                         SLOT(addBacklink()), SLOT(editBacklink()), SLOT(removeBacklink()));
+    m_tabWidget->addTab(backlinksTab, "Backlinks");
+
+    // --- Tab 5: Additional ---
     auto* additionalTab = new QWidget();
     auto* additionalLayout = new QVBoxLayout(additionalTab);
     auto* listsLayout = new QGridLayout();
@@ -225,6 +237,12 @@ void TermEditDialog::setTerm(const TermRecord& term) {
     setListValues(m_aliasList, term.aliases);
     setListValues(m_tagList, term.tags);
     setListValues(m_flagList, term.flags);
+
+    if (m_termId != -1) {
+        m_currentLinks = DatabaseManager::loadLinks(m_termId);
+        m_currentBacklinks = DatabaseManager::loadBacklinks(m_termId);
+        updateLinksList();
+    }
 }
 
 TermRecord TermEditDialog::term() const {
@@ -395,6 +413,191 @@ void TermEditDialog::addFlag() { addValue(m_flagList, "Add flag"); }
 void TermEditDialog::editFlag() { editValue(m_flagList, "Edit flag"); }
 void TermEditDialog::removeFlag() { removeValue(m_flagList, "Remove flag"); }
 
+void TermEditDialog::updateLinksList() {
+    m_linksList->clear();
+    auto typeToString = [](LinkType type) -> QString {
+        switch (type) {
+            case LinkType::IsA: return "Is A";
+            case LinkType::PartOf: return "Part Of";
+            case LinkType::Uses: return "Uses";
+            case LinkType::DependsOn: return "Depends On";
+            case LinkType::Implements: return "Implements";
+            case LinkType::Related: return "Related";
+            case LinkType::Contrasts: return "Contrasts";
+            case LinkType::AlternativeTo: return "Alternative To";
+            default: return "Link";
+        }
+    };
+
+    for (const auto& link : m_currentLinks) {
+        m_linksList->addItem(QString("%1 (%2)").arg(link.toTermTitle, typeToString(link.linkType)));
+    }
+
+    m_backlinksList->clear();
+    for (const auto& link : m_currentBacklinks) {
+        m_backlinksList->addItem(QString("%1 (%2)").arg(link.fromTermTitle, typeToString(link.linkType)));
+    }
+}
+
+namespace {
+    struct LinkData {
+        QString term;
+        LinkType type;
+        bool accepted;
+    };
+
+    LinkData getLinkDetails(QWidget* parent, const QString& title, const QString& label, const QString& initialTerm, LinkType initialType) {
+        QDialog dialog(parent);
+        dialog.setWindowTitle(title);
+        auto* layout = new QVBoxLayout(&dialog);
+        auto* form = new QFormLayout();
+
+        auto* termEdit = new QLineEdit(&dialog);
+        termEdit->setText(initialTerm);
+        QStringList titles = DatabaseManager::loadTermTitles();
+        auto* completer = new QCompleter(titles, &dialog);
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        completer->setFilterMode(Qt::MatchContains);
+        termEdit->setCompleter(completer);
+
+        auto* typeCombo = new QComboBox(&dialog);
+        typeCombo->addItem("Is A", static_cast<int>(LinkType::IsA));
+        typeCombo->addItem("Part Of", static_cast<int>(LinkType::PartOf));
+        typeCombo->addItem("Uses", static_cast<int>(LinkType::Uses));
+        typeCombo->addItem("Depends On", static_cast<int>(LinkType::DependsOn));
+        typeCombo->addItem("Implements", static_cast<int>(LinkType::Implements));
+        typeCombo->addItem("Related", static_cast<int>(LinkType::Related));
+        typeCombo->addItem("Contrasts", static_cast<int>(LinkType::Contrasts));
+        typeCombo->addItem("Alternative To", static_cast<int>(LinkType::AlternativeTo));
+
+        for (int i = 0; i < typeCombo->count(); ++i) {
+            if (typeCombo->itemData(i).toInt() == static_cast<int>(initialType)) {
+                typeCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+
+        form->addRow(label, termEdit);
+        form->addRow("Link Type:", typeCombo);
+        layout->addLayout(form);
+
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        layout->addWidget(buttons);
+
+        QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+        if (dialog.exec() == QDialog::Accepted) {
+            return {termEdit->text().trimmed(), static_cast<LinkType>(typeCombo->currentData().toInt()), true};
+        }
+        return {"", LinkType::None, false};
+    }
+}
+
+void TermEditDialog::addLink() {
+    LinkData data = getLinkDetails(this, "Add Link", "Target term:", "", LinkType::Related);
+    if (!data.accepted || data.term.isEmpty()) return;
+
+    QSqlDatabase db = DatabaseManager::database();
+    QSqlQuery query(db);
+    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
+    query.addBindValue(data.term);
+    if (query.exec() && query.next()) {
+        int toId = query.value(0).toInt();
+        LinkRecord link;
+        link.fromTermId = m_termId;
+        link.toTermId = toId;
+        link.toTermTitle = data.term;
+        link.linkType = data.type;
+        m_currentLinks.append(link);
+        updateLinksList();
+    } else {
+        QMessageBox::warning(this, "Add Link", "Target term not found.");
+    }
+}
+
+void TermEditDialog::editLink() {
+    int row = m_linksList->currentRow();
+    if (row < 0 || row >= m_currentLinks.size()) return;
+
+    LinkRecord& link = m_currentLinks[row];
+    LinkData data = getLinkDetails(this, "Edit Link", "Target term:", link.toTermTitle, link.linkType);
+    if (!data.accepted || data.term.isEmpty()) return;
+
+    QSqlDatabase db = DatabaseManager::database();
+    QSqlQuery query(db);
+    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
+    query.addBindValue(data.term);
+    if (query.exec() && query.next()) {
+        link.toTermId = query.value(0).toInt();
+        link.toTermTitle = data.term;
+        link.linkType = data.type;
+        updateLinksList();
+    } else {
+        QMessageBox::warning(this, "Edit Link", "Target term not found.");
+    }
+}
+
+void TermEditDialog::removeLink() {
+    int row = m_linksList->currentRow();
+    if (row >= 0) {
+        m_currentLinks.removeAt(row);
+        updateLinksList();
+    }
+}
+
+void TermEditDialog::addBacklink() {
+    LinkData data = getLinkDetails(this, "Add Backlink", "Source term:", "", LinkType::Related);
+    if (!data.accepted || data.term.isEmpty()) return;
+
+    QSqlDatabase db = DatabaseManager::database();
+    QSqlQuery query(db);
+    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
+    query.addBindValue(data.term);
+    if (query.exec() && query.next()) {
+        int fromId = query.value(0).toInt();
+        LinkRecord link;
+        link.fromTermId = fromId;
+        link.toTermId = m_termId;
+        link.fromTermTitle = data.term;
+        link.linkType = data.type;
+        m_currentBacklinks.append(link);
+        updateLinksList();
+    } else {
+        QMessageBox::warning(this, "Add Backlink", "Source term not found.");
+    }
+}
+
+void TermEditDialog::editBacklink() {
+    int row = m_backlinksList->currentRow();
+    if (row < 0 || row >= m_currentBacklinks.size()) return;
+
+    LinkRecord& link = m_currentBacklinks[row];
+    LinkData data = getLinkDetails(this, "Edit Backlink", "Source term:", link.fromTermTitle, link.linkType);
+    if (!data.accepted || data.term.isEmpty()) return;
+
+    QSqlDatabase db = DatabaseManager::database();
+    QSqlQuery query(db);
+    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
+    query.addBindValue(data.term);
+    if (query.exec() && query.next()) {
+        link.fromTermId = query.value(0).toInt();
+        link.fromTermTitle = data.term;
+        link.linkType = data.type;
+        updateLinksList();
+    } else {
+        QMessageBox::warning(this, "Edit Backlink", "Source term not found.");
+    }
+}
+
+void TermEditDialog::removeBacklink() {
+    int row = m_backlinksList->currentRow();
+    if (row >= 0) {
+        m_currentBacklinks.removeAt(row);
+        updateLinksList();
+    }
+}
+
 void TermEditDialog::validateAndAccept() {
     if (m_mapCombo->currentIndex() < 0) {
         QMessageBox::warning(this, "Validation", "Create at least one map first.");
@@ -405,5 +608,57 @@ void TermEditDialog::validateAndAccept() {
         m_titleEdit->setFocus();
         return;
     }
+
+    // Save term first to get an ID if it's new
+    TermRecord t = term();
+    QString error;
+    if (!DatabaseManager::saveTerm(t, &error)) {
+        QMessageBox::critical(this, "Error", "Failed to save term: " + error);
+        return;
+    }
+
+    // If it was a new term, we need to load its ID (it might have been -1)
+    if (m_termId == -1) {
+        // Find the term by map and title
+        QSqlDatabase db = DatabaseManager::database();
+        QSqlQuery query(db);
+        query.prepare("SELECT id FROM term WHERE map_id = ? AND title = ?;");
+        query.addBindValue(t.mapId);
+        query.addBindValue(t.title);
+        if (query.exec() && query.next()) {
+            m_termId = query.value(0).toInt();
+        }
+    }
+
+    if (m_termId != -1) {
+        // Sync links
+        QList<LinkRecord> oldLinks = DatabaseManager::loadLinks(m_termId);
+        for (const auto& old : oldLinks) {
+            bool found = false;
+            for (const auto& cur : m_currentLinks) {
+                if (cur.id == old.id) { found = true; break; }
+            }
+            if (!found) DatabaseManager::deleteLink(old.id);
+        }
+        for (auto& cur : m_currentLinks) {
+            cur.fromTermId = m_termId;
+            DatabaseManager::saveLink(cur);
+        }
+
+        // Sync backlinks
+        QList<LinkRecord> oldBacklinks = DatabaseManager::loadBacklinks(m_termId);
+        for (const auto& old : oldBacklinks) {
+            bool found = false;
+            for (const auto& cur : m_currentBacklinks) {
+                if (cur.id == old.id) { found = true; break; }
+            }
+            if (!found) DatabaseManager::deleteLink(old.id);
+        }
+        for (auto& cur : m_currentBacklinks) {
+            cur.toTermId = m_termId;
+            DatabaseManager::saveLink(cur);
+        }
+    }
+
     accept();
 }
