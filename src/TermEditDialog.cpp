@@ -63,6 +63,11 @@ void TermEditDialog::setupUi() {
     auto* formLayout = new QFormLayout();
 
     m_mapCombo = new QComboBox(this);
+    m_statusCombo = new QComboBox(this);
+    m_statusCombo->addItem("None", static_cast<int>(TermStatus::None));
+    m_statusCombo->addItem("Draft", static_cast<int>(TermStatus::Draft));
+    m_statusCombo->addItem("Completed", static_cast<int>(TermStatus::Completed));
+
     m_understandingCombo = new QComboBox(this);
     m_understandingCombo->addItem("Unknown", static_cast<int>(UnderstandingLevel::Unknown));
     m_understandingCombo->addItem("Recognized", static_cast<int>(UnderstandingLevel::Recognized));
@@ -82,6 +87,7 @@ void TermEditDialog::setupUi() {
     formLayout->addRow("Map:", m_mapCombo);
     formLayout->addRow("Title:", m_titleEdit);
     formLayout->addRow("Disambiguation:", m_disambiguationEdit);
+    formLayout->addRow("Status:", m_statusCombo);
     formLayout->addRow("Understanding:", m_understandingCombo);
 
     rootLayout->addLayout(formLayout);
@@ -141,6 +147,11 @@ void TermEditDialog::setTerm(const TermRecord& term) {
         m_understandingCombo->setCurrentIndex(underIdx);
     }
 
+    const int statusIdx = m_statusCombo->findData(static_cast<int>(term.status));
+    if (statusIdx >= 0) {
+        m_statusCombo->setCurrentIndex(statusIdx);
+    }
+
     setListValues(m_aliasList, term.aliases);
     setListValues(m_tagList, term.tags);
     setListValues(m_flagList, term.flags);
@@ -153,6 +164,7 @@ TermRecord TermEditDialog::term() const {
     result.mapName = m_mapCombo->currentText();
     result.title = m_titleEdit->text().trimmed();
     result.disambiguation = m_disambiguationEdit->text().trimmed();
+    result.status = static_cast<TermStatus>(m_statusCombo->currentData().toInt());
     result.understanding = static_cast<UnderstandingLevel>(m_understandingCombo->currentData().toInt());
     result.aliases = valuesFromList(m_aliasList);
     result.tags = valuesFromList(m_tagList);

@@ -49,6 +49,12 @@ void MainWindow::setupUi() {
     m_mapFilter = new QComboBox(centralWidget);
     m_tagFilter = new QComboBox(centralWidget);
     m_flagFilter = new QComboBox(centralWidget);
+    m_statusFilter = new QComboBox(centralWidget);
+    m_statusFilter->addItem("All Statuses", -1);
+    m_statusFilter->addItem("None", static_cast<int>(TermStatus::None));
+    m_statusFilter->addItem("Draft", static_cast<int>(TermStatus::Draft));
+    m_statusFilter->addItem("Completed", static_cast<int>(TermStatus::Completed));
+
     m_understandingFilter = new QComboBox(centralWidget);
     m_understandingFilter->addItem("All Levels", -1);
     m_understandingFilter->addItem("Unknown", static_cast<int>(UnderstandingLevel::Unknown));
@@ -69,6 +75,8 @@ void MainWindow::setupUi() {
     filterRowLayout->addWidget(m_tagFilter);
     filterRowLayout->addWidget(new QLabel("Flag:", centralWidget));
     filterRowLayout->addWidget(m_flagFilter);
+    filterRowLayout->addWidget(new QLabel("Status:", centralWidget));
+    filterRowLayout->addWidget(m_statusFilter);
     filterRowLayout->addWidget(new QLabel("Understanding:", centralWidget));
     filterRowLayout->addWidget(m_understandingFilter);
     filterRowLayout->addStretch(1);
@@ -99,7 +107,7 @@ void MainWindow::setupUi() {
 
     m_tableView = new QTableView(centralWidget);
     m_model = new QStandardItemModel(this);
-    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Understanding"});
+    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding"});
     m_tableView->setModel(m_model);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -146,6 +154,7 @@ void MainWindow::setupUi() {
     connect(m_mapFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_statusFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_understandingFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
     connect(m_firstButton, &QPushButton::clicked, this, &MainWindow::firstPage);
@@ -274,9 +283,10 @@ void MainWindow::refreshTerms() {
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     const int understandingFilter = m_understandingFilter->currentData().toInt();
+    const int statusFilter = m_statusFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
     
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, &error);
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -289,7 +299,7 @@ void MainWindow::refreshTerms() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -310,6 +320,14 @@ void MainWindow::refreshTerms() {
             << new QStandardItem(term.flags.join(", "))
             << new QStandardItem(term.aliases.join(", "));
         
+        QString statusText;
+        switch (term.status) {
+            case TermStatus::Draft:     statusText = "Draft"; break;
+            case TermStatus::Completed: statusText = "Completed"; break;
+            default:                    statusText = "None"; break;
+        }
+        row << new QStandardItem(statusText);
+
         QString understandingText;
         switch (term.understanding) {
             case UnderstandingLevel::Recognized: understandingText = "Recognized"; break;
@@ -364,9 +382,10 @@ void MainWindow::lastPage() {
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     const int understandingFilter = m_understandingFilter->currentData().toInt();
+    const int statusFilter = m_statusFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, &error);
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
