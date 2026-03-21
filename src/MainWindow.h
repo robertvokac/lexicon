@@ -61,6 +61,7 @@ private:
     QComboBox* m_mapFilter = nullptr;
     QComboBox* m_tagFilter = nullptr;
     QComboBox* m_flagFilter = nullptr;
+    QComboBox* m_understandingFilter = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;

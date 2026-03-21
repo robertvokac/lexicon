@@ -63,14 +63,26 @@ void TermEditDialog::setupUi() {
     auto* formLayout = new QFormLayout();
 
     m_mapCombo = new QComboBox(this);
+    m_understandingCombo = new QComboBox(this);
+    m_understandingCombo->addItem("Unknown", static_cast<int>(UnderstandingLevel::Unknown));
+    m_understandingCombo->addItem("Recognized", static_cast<int>(UnderstandingLevel::Recognized));
+    m_understandingCombo->addItem("Understood", static_cast<int>(UnderstandingLevel::Understood));
+    m_understandingCombo->addItem("Practiced", static_cast<int>(UnderstandingLevel::Practiced));
+    m_understandingCombo->addItem("Mastered", static_cast<int>(UnderstandingLevel::Mastered));
+
+    m_understandingCombo->setItemData(0, "Never encountered", Qt::ToolTipRole);
+    m_understandingCombo->setItemData(1, "Seen before, can identify", Qt::ToolTipRole);
+    m_understandingCombo->setItemData(2, "Conceptually grasped", Qt::ToolTipRole);
+    m_understandingCombo->setItemData(3, "Can apply in real situations", Qt::ToolTipRole);
+    m_understandingCombo->setItemData(4, "Fully internalized, can teach or innovate", Qt::ToolTipRole);
+
     m_titleEdit = new QLineEdit(this);
     m_disambiguationEdit = new QLineEdit(this);
-    m_obsidianCheck = new QCheckBox("Obsidian", this);
 
     formLayout->addRow("Map:", m_mapCombo);
     formLayout->addRow("Title:", m_titleEdit);
     formLayout->addRow("Disambiguation:", m_disambiguationEdit);
-    formLayout->addRow(QString(), m_obsidianCheck);
+    formLayout->addRow("Understanding:", m_understandingCombo);
 
     rootLayout->addLayout(formLayout);
 
@@ -118,11 +130,15 @@ void TermEditDialog::setTerm(const TermRecord& term) {
     m_termId = term.id;
     m_titleEdit->setText(term.title);
     m_disambiguationEdit->setText(term.disambiguation);
-    m_obsidianCheck->setChecked(term.obsidian);
 
-    const int index = m_mapCombo->findData(term.mapId);
-    if (index >= 0) {
-        m_mapCombo->setCurrentIndex(index);
+    const int mapIdx = m_mapCombo->findData(term.mapId);
+    if (mapIdx >= 0) {
+        m_mapCombo->setCurrentIndex(mapIdx);
+    }
+
+    const int underIdx = m_understandingCombo->findData(static_cast<int>(term.understanding));
+    if (underIdx >= 0) {
+        m_understandingCombo->setCurrentIndex(underIdx);
     }
 
     setListValues(m_aliasList, term.aliases);
@@ -137,7 +153,7 @@ TermRecord TermEditDialog::term() const {
     result.mapName = m_mapCombo->currentText();
     result.title = m_titleEdit->text().trimmed();
     result.disambiguation = m_disambiguationEdit->text().trimmed();
-    result.obsidian = m_obsidianCheck->isChecked();
+    result.understanding = static_cast<UnderstandingLevel>(m_understandingCombo->currentData().toInt());
     result.aliases = valuesFromList(m_aliasList);
     result.tags = valuesFromList(m_tagList);
     result.flags = valuesFromList(m_flagList);

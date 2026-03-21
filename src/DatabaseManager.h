@@ -7,6 +7,14 @@
 #include <QList>
 #include <QMap>
 
+enum class UnderstandingLevel {
+    Unknown = 0,      // Never encountered
+    Recognized = 1,   // Seen before, can identify
+    Understood = 2,   // Conceptually grasped
+    Practiced = 3,    // Can apply in real situations
+    Mastered = 4      // Fully internalized, can teach or innovate
+};
+
 struct MapRecord {
     int id = -1;
     QString name;
@@ -19,10 +27,10 @@ struct TermRecord {
     QString mapName;
     QString title;
     QString disambiguation;
-    bool obsidian = false;
     QStringList aliases;
     QStringList tags;
     QStringList flags;
+    UnderstandingLevel understanding = UnderstandingLevel::Unknown;
 };
 
 struct UsageValueRecord {
@@ -39,8 +47,8 @@ public:
     static bool upsertMap(const MapRecord& map, QString* errorMessage = nullptr);
     static bool deleteMap(int mapId, QString* errorMessage = nullptr);
 
-    static QList<TermRecord> loadTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int limit = -1, int offset = 0, int sortColumn = 2, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
-    static int countTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), QString* errorMessage = nullptr);
+    static QList<TermRecord> loadTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int limit = -1, int offset = 0, int sortColumn = 2, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
+    static int countTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, QString* errorMessage = nullptr);
     static bool loadTerm(int termId, TermRecord& outTerm, QString* errorMessage = nullptr);
     static bool saveTerm(const TermRecord& term, QString* errorMessage = nullptr);
     static bool deleteTerm(int termId, QString* errorMessage = nullptr);

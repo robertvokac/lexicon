@@ -73,19 +73,24 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
     QSqlDatabase db = database();
 
     // 1. Create version table if not exists
-    QSqlQuery query(db);
-    if (!query.exec("CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);")) {
-        return setError(errorMessage, "Failed to create version table: " + query.lastError().text());
+    {
+        QSqlQuery query(db);
+        if (!query.exec("CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);")) {
+            return setError(errorMessage, "Failed to create version table: " + query.lastError().text());
+        }
     }
 
     // 2. Get current version
     int currentVersion = 0;
-    if (query.exec("SELECT version FROM db_version LIMIT 1;") && query.next()) {
-        currentVersion = query.value(0).toInt();
-    } else {
-        // Initial insert if table is empty
-        QSqlQuery insertVersion(db);
-        insertVersion.exec("INSERT INTO db_version (version) VALUES (0);");
+    {
+        QSqlQuery query(db);
+        if (query.exec("SELECT version FROM db_version LIMIT 1;") && query.next()) {
+            currentVersion = query.value(0).toInt();
+        } else {
+            // Initial insert if table is empty
+            QSqlQuery insertVersion(db);
+            insertVersion.exec("INSERT INTO db_version (version) VALUES (0);");
+        }
     }
 
     // 3. Define migrations
@@ -141,6 +146,29 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             "CREATE INDEX IF NOT EXISTS idx_alias_alias ON alias(alias);",
             "CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);",
             "CREATE INDEX IF NOT EXISTS idx_flag_name ON flag(name);"
+        }},
+        {2, {
+            "ALTER TABLE term ADD COLUMN understanding INTEGER NOT NULL DEFAULT 0;"
+        }},
+        {3, {
+            "PRAGMA foreign_keys = OFF;",
+            "CREATE TABLE term_new ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " map_id INTEGER NOT NULL,"
+            " title TEXT NOT NULL,"
+            " disambiguation TEXT,"
+            " understanding INTEGER NOT NULL DEFAULT 0,"
+            " FOREIGN KEY(map_id) REFERENCES map(id) ON DELETE CASCADE"
+            ");",
+            "INSERT INTO term_new (id, map_id, title, disambiguation, understanding) "
+            "SELECT id, map_id, title, disambiguation, understanding FROM term;",
+            "DROP TABLE term;",
+            "ALTER TABLE term_new RENAME TO term;",
+            "CREATE UNIQUE INDEX IF NOT EXISTS term_unique "
+            "ON term(map_id, title, COALESCE(disambiguation, ''));",
+            "CREATE INDEX IF NOT EXISTS idx_term_map_id ON term(map_id);",
+            "CREATE INDEX IF NOT EXISTS idx_term_title ON term(title);",
+            "PRAGMA foreign_keys = ON;"
         }}
     };
 
@@ -237,14 +265,15 @@ bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
+QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
     QList<TermRecord> terms;
 
     QString sql =
-        "SELECT t.id, m.name, t.map_id, t.title, t.disambiguation, t.obsidian, "
+        "SELECT t.id, m.name, t.map_id, t.title, t.disambiguation, "
         "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.term_id = t.id), '') AS aliases, "
         "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.term_id = t.id), '') AS tags, "
-        "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.term_id = t.id), '') AS flags "
+        "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.term_id = t.id), '') AS flags, "
+        "t.understanding "
         "FROM term t "
         "JOIN map m ON m.id = t.map_id "
         "WHERE 1 = 1 ";
@@ -252,6 +281,9 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     QString filters;
     if (mapId > 0) {
         filters += "AND t.map_id = ? ";
+    }
+    if (understandingFilter >= 0) {
+        filters += "AND t.understanding = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
         filters += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
@@ -270,17 +302,17 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
 
     sql += filters;
 
-    // Mapping columns: 0:Id, 1:Map, 2:Title, 3:Disambiguation, 4:Obsidian, 5:Tags, 6:Flags, 7:Aliases
+    // Mapping columns: 0:Id, 1:Map, 2:Title, 3:Disambiguation, 4:Tags, 5:Flags, 6:Aliases, 7:Understanding
     QString orderClause;
     switch (sortColumn) {
         case 0: orderClause = "t.id"; break;
         case 1: orderClause = "m.name COLLATE NOCASE"; break;
         case 2: orderClause = "t.title COLLATE NOCASE"; break;
         case 3: orderClause = "COALESCE(t.disambiguation, '') COLLATE NOCASE"; break;
-        case 4: orderClause = "t.obsidian"; break;
-        case 5: orderClause = "tags COLLATE NOCASE"; break;
-        case 6: orderClause = "flags COLLATE NOCASE"; break;
-        case 7: orderClause = "aliases COLLATE NOCASE"; break;
+        case 4: orderClause = "tags COLLATE NOCASE"; break;
+        case 5: orderClause = "flags COLLATE NOCASE"; break;
+        case 6: orderClause = "aliases COLLATE NOCASE"; break;
+        case 7: orderClause = "t.understanding"; break;
         default: orderClause = "t.title COLLATE NOCASE"; break;
     }
 
@@ -304,6 +336,9 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     query.prepare(sql);
     if (mapId > 0) {
         query.addBindValue(mapId);
+    }
+    if (understandingFilter >= 0) {
+        query.addBindValue(understandingFilter);
     }
     if (!tagFilter.trimmed().isEmpty()) {
         query.addBindValue(tagFilter.trimmed());
@@ -335,21 +370,24 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
         term.mapId = query.value(2).toInt();
         term.title = query.value(3).toString();
         term.disambiguation = query.value(4).toString();
-        term.obsidian = query.value(5).toInt() != 0;
-        term.aliases = query.value(6).toString().split(", ", Qt::SkipEmptyParts);
-        term.tags = query.value(7).toString().split(", ", Qt::SkipEmptyParts);
-        term.flags = query.value(8).toString().split(", ", Qt::SkipEmptyParts);
+        term.aliases = query.value(5).toString().split(", ", Qt::SkipEmptyParts);
+        term.tags = query.value(6).toString().split(", ", Qt::SkipEmptyParts);
+        term.flags = query.value(7).toString().split(", ", Qt::SkipEmptyParts);
+        term.understanding = static_cast<UnderstandingLevel>(query.value(8).toInt());
         terms.push_back(term);
     }
 
     return terms;
 }
 
-int DatabaseManager::countTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, QString* errorMessage) {
+int DatabaseManager::countTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, QString* errorMessage) {
     QString sql = "SELECT COUNT(*) FROM term t WHERE 1 = 1 ";
 
     if (mapId > 0) {
         sql += "AND t.map_id = ? ";
+    }
+    if (understandingFilter >= 0) {
+        sql += "AND t.understanding = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
         sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
@@ -370,6 +408,9 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
     query.prepare(sql);
     if (mapId > 0) {
         query.addBindValue(mapId);
+    }
+    if (understandingFilter >= 0) {
+        query.addBindValue(understandingFilter);
     }
     if (!tagFilter.trimmed().isEmpty()) {
         query.addBindValue(tagFilter.trimmed());
@@ -399,7 +440,7 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
 bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMessage) {
     QSqlQuery query(database());
     query.prepare(
-        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.obsidian "
+        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding "
         "FROM term t JOIN map m ON m.id = t.map_id WHERE t.id = ?;");
     query.addBindValue(termId);
 
@@ -415,7 +456,7 @@ bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMe
     outTerm.mapName = query.value(2).toString();
     outTerm.title = query.value(3).toString();
     outTerm.disambiguation = query.value(4).toString();
-    outTerm.obsidian = query.value(5).toInt() != 0;
+    outTerm.understanding = static_cast<UnderstandingLevel>(query.value(5).toInt());
 
     auto loadValues = [&](const QString& sql, QStringList& target) -> bool {
         QSqlQuery childQuery(database());
@@ -469,22 +510,22 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
     int termId = term.id;
     QSqlQuery query(db);
     if (term.id < 0) {
-        query.prepare("INSERT INTO term(map_id, title, disambiguation, obsidian) VALUES(?, ?, NULLIF(?, ''), ?);");
+        query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding) VALUES(?, ?, NULLIF(?, ''), ?);");
         query.addBindValue(term.mapId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
-        query.addBindValue(term.obsidian ? 1 : 0);
+        query.addBindValue(static_cast<int>(term.understanding));
         if (!query.exec()) {
             db.rollback();
             return setError(errorMessage, query.lastError().text());
         }
         termId = query.lastInsertId().toInt();
     } else {
-        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), obsidian = ? WHERE id = ?;");
+        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ? WHERE id = ?;");
         query.addBindValue(term.mapId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
-        query.addBindValue(term.obsidian ? 1 : 0);
+        query.addBindValue(static_cast<int>(term.understanding));
         query.addBindValue(term.id);
         if (!query.exec()) {
             db.rollback();

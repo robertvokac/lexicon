@@ -42,41 +42,64 @@ void MainWindow::setupUi() {
     setWindowTitle("Lexicon");
     resize(1200, 720);
 
-    auto* central = new QWidget(this);
-    auto* rootLayout = new QVBoxLayout(central);
+    auto* centralWidget = new QWidget(this);
+    auto* rootLayout = new QVBoxLayout(centralWidget);
 
-    auto* filterLayout = new QHBoxLayout();
-    m_mapFilter = new QComboBox(central);
-    m_tagFilter = new QComboBox(central);
-    m_flagFilter = new QComboBox(central);
-    m_searchEdit = new QLineEdit(central);
+    auto* filterRowLayout = new QHBoxLayout();
+    m_mapFilter = new QComboBox(centralWidget);
+    m_tagFilter = new QComboBox(centralWidget);
+    m_flagFilter = new QComboBox(centralWidget);
+    m_understandingFilter = new QComboBox(centralWidget);
+    m_understandingFilter->addItem("All Levels", -1);
+    m_understandingFilter->addItem("Unknown", static_cast<int>(UnderstandingLevel::Unknown));
+    m_understandingFilter->addItem("Recognized", static_cast<int>(UnderstandingLevel::Recognized));
+    m_understandingFilter->addItem("Understood", static_cast<int>(UnderstandingLevel::Understood));
+    m_understandingFilter->addItem("Practiced", static_cast<int>(UnderstandingLevel::Practiced));
+    m_understandingFilter->addItem("Mastered", static_cast<int>(UnderstandingLevel::Mastered));
+
+    m_understandingFilter->setItemData(1, "Never encountered", Qt::ToolTipRole);
+    m_understandingFilter->setItemData(2, "Seen before, can identify", Qt::ToolTipRole);
+    m_understandingFilter->setItemData(3, "Conceptually grasped", Qt::ToolTipRole);
+    m_understandingFilter->setItemData(4, "Can apply in real situations", Qt::ToolTipRole);
+    m_understandingFilter->setItemData(5, "Fully internalized, can teach or innovate", Qt::ToolTipRole);
+
+    filterRowLayout->addWidget(new QLabel("Map:", centralWidget));
+    filterRowLayout->addWidget(m_mapFilter);
+    filterRowLayout->addWidget(new QLabel("Tag:", centralWidget));
+    filterRowLayout->addWidget(m_tagFilter);
+    filterRowLayout->addWidget(new QLabel("Flag:", centralWidget));
+    filterRowLayout->addWidget(m_flagFilter);
+    filterRowLayout->addWidget(new QLabel("Understanding:", centralWidget));
+    filterRowLayout->addWidget(m_understandingFilter);
+    filterRowLayout->addStretch(1);
+
+    auto* searchRowLayout = new QHBoxLayout();
+    m_searchEdit = new QLineEdit(centralWidget);
     m_searchEdit->setPlaceholderText("Search title, disambiguation, alias, tag, or flag...");
 
-    auto* quickAddButton = new QPushButton("Add", central);
-    auto* addButton = new QPushButton("Add ...", central);
-    auto* editButton = new QPushButton("Edit", central);
-    auto* deleteButton = new QPushButton("Delete", central);
+    auto* quickAddButton = new QPushButton("Add", centralWidget);
+    auto* addButton = new QPushButton("Add ...", centralWidget);
+    auto* editButton = new QPushButton("Edit", centralWidget);
+    auto* deleteButton = new QPushButton("Delete", centralWidget);
     editButton->setObjectName("editButton");
     deleteButton->setObjectName("deleteButton");
 
-    filterLayout->addWidget(new QLabel("Map:", central));
-    filterLayout->addWidget(m_mapFilter);
-    filterLayout->addWidget(new QLabel("Tag:", central));
-    filterLayout->addWidget(m_tagFilter);
-    filterLayout->addWidget(new QLabel("Flag:", central));
-    filterLayout->addWidget(m_flagFilter);
-    filterLayout->addWidget(new QLabel("Search:", central));
-    filterLayout->addWidget(m_searchEdit, 1);
-    filterLayout->addWidget(quickAddButton);
-    filterLayout->addWidget(addButton);
-    filterLayout->addWidget(editButton);
-    filterLayout->addWidget(deleteButton);
+    searchRowLayout->addWidget(new QLabel("Search:", centralWidget));
+    searchRowLayout->addWidget(m_searchEdit);
+    m_searchEdit->setMinimumWidth(400);
+    m_searchEdit->setMaximumWidth(600);
+    searchRowLayout->addWidget(quickAddButton);
+    searchRowLayout->addWidget(addButton);
+    searchRowLayout->addWidget(editButton);
+    searchRowLayout->addWidget(deleteButton);
+    searchRowLayout->addStretch(1);
 
-    rootLayout->addLayout(filterLayout);
+    rootLayout->addLayout(filterRowLayout);
+    rootLayout->addLayout(searchRowLayout);
 
-    m_tableView = new QTableView(central);
+    m_tableView = new QTableView(centralWidget);
     m_model = new QStandardItemModel(this);
-    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Obsidian", "Tags", "Flags", "Aliases"});
+    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Understanding"});
     m_tableView->setModel(m_model);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -91,12 +114,12 @@ void MainWindow::setupUi() {
     rootLayout->addWidget(m_tableView, 1);
 
     auto* paginationLayout = new QHBoxLayout();
-    m_firstButton = new QPushButton("<< First", central);
-    m_prevButton = new QPushButton("< Prev", central);
-    m_nextButton = new QPushButton("Next >", central);
-    m_lastButton = new QPushButton("Last >>", central);
-    m_pageLabel = new QLabel("Page 1", central);
-    m_pageSizeCombo = new QComboBox(central);
+    m_firstButton = new QPushButton("<< First", centralWidget);
+    m_prevButton = new QPushButton("< Prev", centralWidget);
+    m_nextButton = new QPushButton("Next >", centralWidget);
+    m_lastButton = new QPushButton("Last >>", centralWidget);
+    m_pageLabel = new QLabel("Page 1", centralWidget);
+    m_pageSizeCombo = new QComboBox(centralWidget);
     m_pageSizeCombo->addItems({"10", "20", "50", "100"});
     int sizeIdx = m_pageSizeCombo->findText(QString::number(m_pageSize));
     if (sizeIdx >= 0) m_pageSizeCombo->setCurrentIndex(sizeIdx);
@@ -107,12 +130,12 @@ void MainWindow::setupUi() {
     paginationLayout->addWidget(m_nextButton);
     paginationLayout->addWidget(m_lastButton);
     paginationLayout->addStretch();
-    paginationLayout->addWidget(new QLabel("Page size:", central));
+    paginationLayout->addWidget(new QLabel("Page size:", centralWidget));
     paginationLayout->addWidget(m_pageSizeCombo);
 
     rootLayout->addLayout(paginationLayout);
 
-    setCentralWidget(central);
+    setCentralWidget(centralWidget);
 
     auto* completerModel = new QStringListModel(this);
     m_completer = new QCompleter(completerModel, this);
@@ -123,6 +146,7 @@ void MainWindow::setupUi() {
     connect(m_mapFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_understandingFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
     connect(m_firstButton, &QPushButton::clicked, this, &MainWindow::firstPage);
     connect(m_prevButton, &QPushButton::clicked, this, &MainWindow::prevPage);
@@ -249,9 +273,10 @@ void MainWindow::refreshTerms() {
     const int mapId = m_mapFilter->currentData().toInt();
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
+    const int understandingFilter = m_understandingFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
     
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, &error);
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -264,7 +289,7 @@ void MainWindow::refreshTerms() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -281,10 +306,19 @@ void MainWindow::refreshTerms() {
             << new QStandardItem(term.mapName)
             << new QStandardItem(term.title)
             << new QStandardItem(term.disambiguation)
-            << new QStandardItem(term.obsidian ? "Yes" : "No")
             << new QStandardItem(term.tags.join(", "))
             << new QStandardItem(term.flags.join(", "))
             << new QStandardItem(term.aliases.join(", "));
+        
+        QString understandingText;
+        switch (term.understanding) {
+            case UnderstandingLevel::Recognized: understandingText = "Recognized"; break;
+            case UnderstandingLevel::Understood: understandingText = "Understood"; break;
+            case UnderstandingLevel::Practiced:  understandingText = "Practiced"; break;
+            case UnderstandingLevel::Mastered:   understandingText = "Mastered"; break;
+            default:                             understandingText = "Unknown"; break;
+        }
+        row << new QStandardItem(understandingText);
         m_model->appendRow(row);
     }
 
@@ -329,9 +363,10 @@ void MainWindow::lastPage() {
     const int mapId = m_mapFilter->currentData().toInt();
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
+    const int understandingFilter = m_understandingFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, &error);
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
