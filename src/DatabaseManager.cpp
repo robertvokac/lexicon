@@ -154,6 +154,15 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }},
         {4, {
             "ALTER TABLE term ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;"
+        }},
+        {5, {
+            "CREATE TABLE log ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " table_name TEXT NOT NULL,"
+            " record_id INTEGER NOT NULL,"
+            " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted
+            " happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+            ");"
         }}
     };
 
@@ -219,14 +228,23 @@ QList<MapRecord> DatabaseManager::loadMaps(QString* errorMessage) {
 }
 
 bool DatabaseManager::upsertMap(const MapRecord& map, QString* errorMessage) {
-    QSqlQuery query(database());
+    QSqlDatabase db = database();
+    if (!db.transaction()) {
+        return setError(errorMessage, db.lastError().text());
+    }
+
+    QSqlQuery query(db);
     const QString trimmedName = map.name.trimmed();
     const QString trimmedDescription = map.description.trimmed();
+
+    int mapId = map.id;
+    int logType = 2; // updated
 
     if (map.id < 0) {
         query.prepare("INSERT INTO map(name, description) VALUES(?, ?);");
         query.addBindValue(trimmedName);
         query.addBindValue(trimmedDescription);
+        logType = 1; // created
     } else {
         query.prepare("UPDATE map SET name = ?, description = ? WHERE id = ?;");
         query.addBindValue(trimmedName);
@@ -235,17 +253,48 @@ bool DatabaseManager::upsertMap(const MapRecord& map, QString* errorMessage) {
     }
 
     if (!query.exec()) {
+        db.rollback();
         return setError(errorMessage, query.lastError().text());
+    }
+
+    if (map.id < 0) {
+        mapId = query.lastInsertId().toInt();
+    }
+
+    if (!logOperation("map", mapId, logType, errorMessage)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        db.rollback();
+        return setError(errorMessage, db.lastError().text());
     }
     return true;
 }
 
 bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
-    QSqlQuery query(database());
+    QSqlDatabase db = database();
+    if (!db.transaction()) {
+        return setError(errorMessage, db.lastError().text());
+    }
+
+    QSqlQuery query(db);
     query.prepare("DELETE FROM map WHERE id = ?;");
     query.addBindValue(mapId);
     if (!query.exec()) {
+        db.rollback();
         return setError(errorMessage, query.lastError().text());
+    }
+
+    if (!logOperation("map", mapId, 3, errorMessage)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        db.rollback();
+        return setError(errorMessage, db.lastError().text());
     }
     return true;
 }
@@ -510,6 +559,7 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
     }
 
     int termId = term.id;
+    int logType = 2; // updated
     QSqlQuery query(db);
     if (term.id < 0) {
         query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding, status, pinned) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?);");
@@ -524,6 +574,7 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
             return setError(errorMessage, query.lastError().text());
         }
         termId = query.lastInsertId().toInt();
+        logType = 1; // created
     } else {
         query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ? WHERE id = ?;");
         query.addBindValue(term.mapId);
@@ -546,6 +597,11 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
         return false;
     }
 
+    if (!logOperation("term", termId, logType, errorMessage)) {
+        db.rollback();
+        return false;
+    }
+
     if (!db.commit()) {
         db.rollback();
         return setError(errorMessage, db.lastError().text());
@@ -554,9 +610,37 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
 }
 
 bool DatabaseManager::deleteTerm(int termId, QString* errorMessage) {
-    QSqlQuery query(database());
+    QSqlDatabase db = database();
+    if (!db.transaction()) {
+        return setError(errorMessage, db.lastError().text());
+    }
+
+    QSqlQuery query(db);
     query.prepare("DELETE FROM term WHERE id = ?;");
     query.addBindValue(termId);
+    if (!query.exec()) {
+        db.rollback();
+        return setError(errorMessage, query.lastError().text());
+    }
+
+    if (!logOperation("term", termId, 3, errorMessage)) {
+        db.rollback();
+        return false;
+    }
+
+    if (!db.commit()) {
+        db.rollback();
+        return setError(errorMessage, db.lastError().text());
+    }
+    return true;
+}
+
+bool DatabaseManager::logOperation(const QString& tableName, int recordId, int logType, QString* errorMessage) {
+    QSqlQuery query(database());
+    query.prepare("INSERT INTO log(table_name, record_id, log_type) VALUES(?, ?, ?);");
+    query.addBindValue(tableName);
+    query.addBindValue(recordId);
+    query.addBindValue(logType);
     if (!query.exec()) {
         return setError(errorMessage, query.lastError().text());
     }
