@@ -112,7 +112,6 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             " map_id INTEGER NOT NULL,"
             " title TEXT NOT NULL,"
             " disambiguation TEXT,"
-            " obsidian INTEGER NOT NULL DEFAULT 0,"
             " FOREIGN KEY(map_id) REFERENCES map(id) ON DELETE CASCADE"
             ");",
             "CREATE UNIQUE INDEX IF NOT EXISTS term_unique "
@@ -147,8 +146,11 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             "CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);",
             "CREATE INDEX IF NOT EXISTS idx_flag_name ON flag(name);"
         }},
-        {4, {
+        {2, {
             "ALTER TABLE term ADD COLUMN status INTEGER NOT NULL DEFAULT 0;"
+        }},
+        {3, {
+            "ALTER TABLE term ADD COLUMN understanding INTEGER NOT NULL DEFAULT 0;"
         }}
     };
 
