@@ -163,6 +163,9 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted
             " happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ");"
+        }},
+        {6, {
+            "ALTER TABLE term ADD COLUMN content TEXT;"
         }}
     };
 
@@ -489,7 +492,7 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
 bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMessage) {
     QSqlQuery query(database());
     query.prepare(
-        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status, t.pinned "
+        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status, t.pinned, COALESCE(t.content, '') "
         "FROM term t JOIN map m ON m.id = t.map_id WHERE t.id = ?;");
     query.addBindValue(termId);
 
@@ -508,6 +511,7 @@ bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMe
     outTerm.understanding = static_cast<UnderstandingLevel>(query.value(5).toInt());
     outTerm.status = static_cast<TermStatus>(query.value(6).toInt());
     outTerm.pinned = query.value(7).toInt() != 0;
+    outTerm.content = query.value(8).toString();
 
     auto loadValues = [&](const QString& sql, QStringList& target) -> bool {
         QSqlQuery childQuery(database());
@@ -562,13 +566,14 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
     int logType = 2; // updated
     QSqlQuery query(db);
     if (term.id < 0) {
-        query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding, status, pinned) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?);");
+        query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding, status, pinned, content) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?);");
         query.addBindValue(term.mapId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
         query.addBindValue(static_cast<int>(term.understanding));
         query.addBindValue(static_cast<int>(term.status));
         query.addBindValue(term.pinned ? 1 : 0);
+        query.addBindValue(term.content);
         if (!query.exec()) {
             db.rollback();
             return setError(errorMessage, query.lastError().text());
@@ -576,13 +581,14 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
         termId = query.lastInsertId().toInt();
         logType = 1; // created
     } else {
-        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ? WHERE id = ?;");
+        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ?, content = ? WHERE id = ?;");
         query.addBindValue(term.mapId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
         query.addBindValue(static_cast<int>(term.understanding));
         query.addBindValue(static_cast<int>(term.status));
         query.addBindValue(term.pinned ? 1 : 0);
+        query.addBindValue(term.content);
         query.addBindValue(term.id);
         if (!query.exec()) {
             db.rollback();

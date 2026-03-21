@@ -9,6 +9,14 @@ class QComboBox;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
+class QTextEdit;
+class QToolBar;
+class QAction;
+class QTabWidget;
+class QLabel;
+class QTimer;
+
+#include "MainWindow.h" // Reuse CodeHighlighter
 
 class TermEditDialog : public QDialog {
     Q_OBJECT
@@ -33,17 +41,32 @@ private slots:
     void editFlag();
     void removeFlag();
 
+    void formatBold();
+    void formatItalic();
+    void formatLink();
+    void formatTable();
+    void formatList();
+    void formatOrderedList();
+    void formatHeader();
+    void formatQuote();
+    void formatCode();
+    void formatCodeBlock();
+    void formatHorizontalLine();
+    void updatePreview();
+
     void validateAndAccept();
 
 protected:
     void showEvent(QShowEvent* event) override;
 
 private:
+    void updateMarkdownStyles();
     void setupUi();
     void connectSignals();
     void addValue(QListWidget* list, const QString& title);
     void editValue(QListWidget* list, const QString& title);
     void removeValue(QListWidget* list, const QString& title);
+    void insertMarkdown(const QString& prefix, const QString& suffix = QString(), const QString& defaultText = QString());
     static QStringList valuesFromList(QListWidget* list);
     static void setListValues(QListWidget* list, const QStringList& values);
 
@@ -55,6 +78,12 @@ private:
     QCheckBox* m_pinnedCheck = nullptr;
     QLineEdit* m_titleEdit = nullptr;
     QLineEdit* m_disambiguationEdit = nullptr;
+    QTextEdit* m_contentEdit = nullptr;
+    QTextEdit* m_previewEdit = nullptr;
+    QTimer* m_previewTimer = nullptr;
+    CodeHighlighter* m_highlighter = nullptr;
+    QToolBar* m_contentToolbar = nullptr;
+    QTabWidget* m_tabWidget = nullptr;
 
     QListWidget* m_aliasList = nullptr;
     QListWidget* m_tagList = nullptr;

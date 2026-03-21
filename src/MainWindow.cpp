@@ -4,6 +4,7 @@
 #include "TermEditDialog.h"
 #include "ValueListDialog.h"
 
+#include "MarkdownConverter.h"
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
@@ -23,6 +24,7 @@
 #include <QStringListModel>
 #include <QStyle>
 #include <QTableView>
+#include <QTextEdit>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -143,6 +145,16 @@ void MainWindow::setupUi() {
 
     rootLayout->addLayout(paginationLayout);
 
+    m_termContentView = new QTextEdit(centralWidget);
+    m_termContentView->setReadOnly(true);
+    m_highlighter = new CodeHighlighter(m_termContentView->document());
+    m_termContentView->setPlaceholderText("Select a term to view content...");
+    m_termContentView->setMaximumHeight(200);
+
+    updateMarkdownStyles();
+
+    rootLayout->addWidget(m_termContentView);
+
     setCentralWidget(centralWidget);
 
     auto* completerModel = new QStringListModel(this);
@@ -170,7 +182,15 @@ void MainWindow::setupUi() {
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addTerm);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedTerm);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedTerm);
-    connect(m_tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MainWindow::updateActions);
+    connect(m_tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this](const QItemSelection&, const QItemSelection&) {
+        updateActions();
+        auto indexes = m_tableView->selectionModel()->selectedRows();
+        if (!indexes.isEmpty()) {
+            showTermContent(indexes.first());
+        } else {
+            m_termContentView->clear();
+        }
+    });
     connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex&) { editSelectedTerm(); });
 
 }
@@ -601,6 +621,22 @@ void MainWindow::updateActions() {
     }
 }
 
+void MainWindow::showTermContent(const QModelIndex& index) {
+    if (!index.isValid()) {
+        m_termContentView->clear();
+        return;
+    }
+
+    const int termId = m_model->data(m_model->index(index.row(), 0), Qt::UserRole).toInt();
+    TermRecord term;
+    QString error;
+    if (DatabaseManager::loadTerm(termId, term, &error)) {
+        m_termContentView->setHtml(MarkdownConverter::toHtml(term.content));
+    } else {
+        m_termContentView->setPlainText("Error loading content: " + error);
+    }
+}
+
 
 void MainWindow::applySavedTheme() {
     QSettings settings;
@@ -614,26 +650,63 @@ void MainWindow::applyTheme(const QString& themeName) {
         app->setPalette(app->style()->standardPalette());
     } else {
         QPalette palette;
-        palette.setColor(QPalette::Window, QColor(45, 45, 48));
+        palette.setColor(QPalette::Window, QColor(53, 53, 53));
         palette.setColor(QPalette::WindowText, QColor(230, 230, 230));
-        palette.setColor(QPalette::Base, QColor(30, 30, 30));
-        palette.setColor(QPalette::AlternateBase, QColor(45, 45, 48));
-        palette.setColor(QPalette::ToolTipBase, QColor(45, 45, 48));
+        palette.setColor(QPalette::Base, QColor(43, 43, 43));
+        palette.setColor(QPalette::AlternateBase, QColor(53, 53, 53));
+        palette.setColor(QPalette::ToolTipBase, QColor(53, 53, 53));
         palette.setColor(QPalette::ToolTipText, QColor(230, 230, 230));
         palette.setColor(QPalette::Text, QColor(230, 230, 230));
-        palette.setColor(QPalette::Button, QColor(53, 53, 53));
+        palette.setColor(QPalette::Button, QColor(63, 63, 63));
         palette.setColor(QPalette::ButtonText, QColor(230, 230, 230));
         palette.setColor(QPalette::BrightText, Qt::red);
         palette.setColor(QPalette::Link, QColor(42, 130, 218));
         palette.setColor(QPalette::Highlight, QColor(42, 130, 218));
         palette.setColor(QPalette::HighlightedText, QColor(255, 255, 255));
         palette.setColor(QPalette::PlaceholderText, QColor(150, 150, 150));
+        palette.setColor(QPalette::Mid, QColor(100, 100, 100));
+        palette.setColor(QPalette::Dark, QColor(120, 120, 120)); // Ensure it's lighter than Base in dark theme or at least visible
         app->setPalette(palette);
         app->setStyleSheet(
-            "QToolTip { color: #e6e6e6; background-color: #2d2d30; border: 1px solid #555; }"
+            "QToolTip { color: #e6e6e6; background-color: #353535; border: 1px solid #555; }"
             "QTableView { gridline-color: #555; }"
-            "QHeaderView::section { background-color: #353535; color: #e6e6e6; padding: 4px; border: 1px solid #555; }"
+            "QHeaderView::section { background-color: #3f3f3f; color: #e6e6e6; padding: 4px; border: 1px solid #555; }"
         );
+    }
+    updateMarkdownStyles();
+}
+
+void MainWindow::updateMarkdownStyles() {
+    if (!m_termContentView) return;
+
+    QPalette pal = palette();
+    QString bgColor = pal.color(QPalette::Base).name();
+    QString textColor = pal.color(QPalette::Text).name();
+    QString borderColor = pal.color(QPalette::Text).name(); // Use Text color for borders for maximum visibility
+    QString headerBgColor = pal.color(QPalette::AlternateBase).name();
+    QString codeBgColor = pal.color(QPalette::AlternateBase).name();
+    if (pal.color(QPalette::Window).lightness() < 128) {
+        // In dark theme, use pure black for code blocks
+        codeBgColor = "#000000";
+    }
+
+    m_termContentView->setStyleSheet(QString("QTextEdit[readOnly=\"true\"] { background-color: %1; color: %2; }").arg(bgColor, textColor));
+    
+    QString style = QString(
+        "table { border: 1px solid %2; margin-top: 10px; margin-bottom: 10px; border-collapse: collapse; } "
+        "th { background-color: %3; color: %1; font-weight: bold; border: 1px solid %2; padding: 4px; text-align: left; }"
+        "td { color: %1; border: 1px solid %2; padding: 4px; text-align: left; }"
+        "pre { background-color: %4; border: 1px solid %2; padding: 8px; border-radius: 4px; font-family: 'Courier New', monospace; white-space: pre; } "
+        "pre[syntax=\"cpp\"] { -qt-user-property-1: \"cpp\"; } "
+        "code { background-color: %4; font-family: 'Courier New', monospace; }"
+        "body { color: %1; }"
+    ).arg(textColor, borderColor, headerBgColor, codeBgColor);
+
+    m_termContentView->document()->setDefaultStyleSheet(style);
+    
+    // Force re-render of current content
+    if (m_tableView->selectionModel()->hasSelection()) {
+        showTermContent(m_tableView->currentIndex());
     }
 }
 

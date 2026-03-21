@@ -1,0 +1,123 @@
+# For most projects, this workflow file will not need changing; you simply need
+# to commit it to your repository.
+#
+# You may wish to alter this file to override the set of languages analyzed,
+# or to provide custom queries or build logic.
+name: "build"
+
+on: 
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [main]
+
+jobs:
+  linux:
+    name: linux
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        language: ['cpp']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+          
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.1'
+
+    - run: sudo apt update
+
+    - run: sudo apt install lcov
+
+    - name: Generate Makefiles
+      run: cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON  -S . -B .
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: |
+        export QT_QPA_PLATFORM=offscreen
+        ctest --output-on-failure --verbose
+
+    - name: Upload coverage info
+      run: |
+        lcov --directory . --capture --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        lcov --list coverage.info
+
+    - name: Codecov Upload
+      uses: codecov/codecov-action@v5
+      with:
+        fail_ci_if_error: true
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+  windows:
+    name: windows
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        language: ['cpp']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+          
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.1'
+
+    - name: Generate Makefiles
+      run: cmake -DCMAKE_BUILD_TYPE=Release -S . -B .
+
+    - name: Build
+      run: cmake --build . --config Debug
+
+    - name: Test
+      run: ctest --output-on-failure --verbose -C Debug
+
+  macos:
+    name: macos
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        language: ['cpp']
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.8.1'
+
+    - name: Generate Makefiles
+      run: cmake -DCMAKE_BUILD_TYPE=Release -S . -B .
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: |
+        export QT_QPA_PLATFORM=offscreen
+        export DYLD_FRAMEWORK_PATH=${{ github.workspace }}/../Qt/6.8.1/macos/lib:$DYLD_FRAMEWORK_PATH
+        ctest --output-on-failure --verbose
