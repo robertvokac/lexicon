@@ -172,6 +172,11 @@ private:
     QList<MapRecord> maps() const;
     void showError(const QString& message);
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
+private:
+
     QComboBox* m_mapFilter = nullptr;
     QComboBox* m_tagFilter = nullptr;
     QComboBox* m_flagFilter = nullptr;
@@ -195,6 +200,7 @@ private:
 
     int m_currentPage = 0;
     int m_pageSize = 20;
+    int m_lastTermId = -1;
 
     QList<MapRecord> m_maps;
 };

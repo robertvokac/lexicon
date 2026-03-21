@@ -15,6 +15,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
+#include <QCloseEvent>
 #include <QSettings>
 #include <QPalette>
 #include <QMessageBox>
@@ -308,12 +309,23 @@ void MainWindow::refreshFlags() {
 
 void MainWindow::refreshTerms() {
     QString error;
-    const int mapId = m_mapFilter->currentData().toInt();
-    const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
-    const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
-    const int understandingFilter = m_understandingFilter->currentData().toInt();
-    const int statusFilter = m_statusFilter->currentData().toInt();
-    const QString searchText = m_searchEdit->text().trimmed();
+    int mapId = m_mapFilter->currentData().toInt();
+    QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
+    QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
+    int understandingFilter = m_understandingFilter->currentData().toInt();
+    int statusFilter = m_statusFilter->currentData().toInt();
+    QString searchText = m_searchEdit->text().trimmed();
+
+    // If we're restoring the last term at startup
+    if (m_lastTermId != -1 && searchText.isEmpty()) {
+        TermRecord lastTerm;
+        if (DatabaseManager::loadTerm(m_lastTermId, lastTerm, &error)) {
+            m_searchEdit->blockSignals(true);
+            m_searchEdit->setText(lastTerm.title);
+            m_searchEdit->blockSignals(false);
+            searchText = lastTerm.title;
+        }
+    }
     
     int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, &error);
     if (!error.isEmpty()) {
@@ -336,7 +348,12 @@ void MainWindow::refreshTerms() {
 
     m_model->removeRows(0, m_model->rowCount());
     m_model->setRowCount(0); // Ensure it's clean
-    for (const auto& term : terms) {
+    int rowToSelect = -1;
+    for (int i = 0; i < terms.size(); ++i) {
+        const auto& term = terms[i];
+        if (m_lastTermId != -1 && term.id == m_lastTermId) {
+            rowToSelect = i;
+        }
         QList<QStandardItem*> row;
         auto* idItem = new QStandardItem();
         idItem->setData(term.id, Qt::DisplayRole);
@@ -380,6 +397,11 @@ void MainWindow::refreshTerms() {
     m_prevButton->setEnabled(m_currentPage > 0);
     m_nextButton->setEnabled(m_currentPage < totalPages - 1);
     m_lastButton->setEnabled(m_currentPage < totalPages - 1);
+
+    if (rowToSelect != -1) {
+        m_tableView->selectRow(rowToSelect);
+        m_lastTermId = -1; // Reset so it doesn't keep selecting on every refresh
+    }
 
     updateActions();
 }
@@ -826,9 +848,16 @@ void MainWindow::showError(const QString& message) {
 void MainWindow::saveSettings() {
     QSettings settings;
     settings.setValue("pagination/pageSize", m_pageSize);
+    settings.setValue("state/lastTermId", selectedTermId());
 }
 
 void MainWindow::loadSettings() {
     QSettings settings;
     m_pageSize = settings.value("pagination/pageSize", 20).toInt();
+    m_lastTermId = settings.value("state/lastTermId", -1).toInt();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    saveSettings();
+    QMainWindow::closeEvent(event);
 }
