@@ -89,6 +89,7 @@ public:
     static QList<LinkRecord> loadBacklinks(int termId, QString* errorMessage = nullptr);
     static bool saveLink(const LinkRecord& link, QString* errorMessage = nullptr);
     static bool deleteLink(int linkId, QString* errorMessage = nullptr);
+    static bool logTermRead(int termId, QString* errorMessage = nullptr);
 
     static QStringList loadSuggestions(QString* errorMessage = nullptr);
     static QStringList loadTermTitles(QString* errorMessage = nullptr);
@@ -97,7 +98,7 @@ public:
     static QList<UsageValueRecord> loadAliasUsage(QString* errorMessage = nullptr);
 
 private:
-    static bool logOperation(const QString& tableName, int recordId, int logType, QString* errorMessage = nullptr);
+    static bool logOperation(const QString& tableName, int recordId, int logType, QString* errorMessage = nullptr); // 1=created, 2=updated, 3=deleted, 4=read
     static bool applyMigrations(QString* errorMessage = nullptr);
     static bool execStatements(const QStringList& statements, QString* errorMessage);
     static bool replaceStringValues(const QString& tableName, int termId, const QStringList& values, QString* errorMessage);

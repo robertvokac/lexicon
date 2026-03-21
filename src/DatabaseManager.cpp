@@ -160,7 +160,7 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             " id INTEGER PRIMARY KEY AUTOINCREMENT,"
             " table_name TEXT NOT NULL,"
             " record_id INTEGER NOT NULL,"
-            " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted
+            " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted, 4=read
             " happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ");"
         }},
@@ -663,6 +663,10 @@ bool DatabaseManager::logOperation(const QString& tableName, int recordId, int l
         return setError(errorMessage, query.lastError().text());
     }
     return true;
+}
+
+bool DatabaseManager::logTermRead(int termId, QString* errorMessage) {
+    return logOperation("term", termId, 4, errorMessage);
 }
 
 QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) {

@@ -665,6 +665,7 @@ void MainWindow::showTermContent(const QModelIndex& index) {
     if (DatabaseManager::loadTerm(termId, term, &error)) {
         m_termContentView->setHtml(MarkdownConverter::toHtml(term.content));
         updateLinksDisplay(termId);
+        DatabaseManager::logTermRead(termId);
     } else {
         m_termContentView->setPlainText("Error loading content: " + error);
         m_linksView->clear();
