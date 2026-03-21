@@ -38,6 +38,7 @@ struct TermRecord {
     QStringList flags;
     TermStatus status = TermStatus::None;
     UnderstandingLevel understanding = UnderstandingLevel::Unknown;
+    bool pinned = false;
 };
 
 struct UsageValueRecord {

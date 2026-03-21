@@ -151,6 +151,9 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }},
         {3, {
             "ALTER TABLE term ADD COLUMN understanding INTEGER NOT NULL DEFAULT 0;"
+        }},
+        {4, {
+            "ALTER TABLE term ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;"
         }}
     };
 
@@ -255,7 +258,7 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
         "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.term_id = t.id), '') AS aliases, "
         "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.term_id = t.id), '') AS tags, "
         "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.term_id = t.id), '') AS flags, "
-        "t.understanding, t.status "
+        "t.understanding, t.status, t.pinned "
         "FROM term t "
         "JOIN map m ON m.id = t.map_id "
         "WHERE 1 = 1 ";
@@ -364,6 +367,7 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
         term.flags = query.value(7).toString().split(", ", Qt::SkipEmptyParts);
         term.understanding = static_cast<UnderstandingLevel>(query.value(8).toInt());
         term.status = static_cast<TermStatus>(query.value(9).toInt());
+        term.pinned = query.value(10).toInt() != 0;
         terms.push_back(term);
     }
 
@@ -436,7 +440,7 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
 bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMessage) {
     QSqlQuery query(database());
     query.prepare(
-        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status "
+        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status, t.pinned "
         "FROM term t JOIN map m ON m.id = t.map_id WHERE t.id = ?;");
     query.addBindValue(termId);
 
@@ -454,6 +458,7 @@ bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMe
     outTerm.disambiguation = query.value(4).toString();
     outTerm.understanding = static_cast<UnderstandingLevel>(query.value(5).toInt());
     outTerm.status = static_cast<TermStatus>(query.value(6).toInt());
+    outTerm.pinned = query.value(7).toInt() != 0;
 
     auto loadValues = [&](const QString& sql, QStringList& target) -> bool {
         QSqlQuery childQuery(database());
@@ -507,24 +512,26 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
     int termId = term.id;
     QSqlQuery query(db);
     if (term.id < 0) {
-        query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding, status) VALUES(?, ?, NULLIF(?, ''), ?, ?);");
+        query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding, status, pinned) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?);");
         query.addBindValue(term.mapId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
         query.addBindValue(static_cast<int>(term.understanding));
         query.addBindValue(static_cast<int>(term.status));
+        query.addBindValue(term.pinned ? 1 : 0);
         if (!query.exec()) {
             db.rollback();
             return setError(errorMessage, query.lastError().text());
         }
         termId = query.lastInsertId().toInt();
     } else {
-        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ? WHERE id = ?;");
+        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ? WHERE id = ?;");
         query.addBindValue(term.mapId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
         query.addBindValue(static_cast<int>(term.understanding));
         query.addBindValue(static_cast<int>(term.status));
+        query.addBindValue(term.pinned ? 1 : 0);
         query.addBindValue(term.id);
         if (!query.exec()) {
             db.rollback();

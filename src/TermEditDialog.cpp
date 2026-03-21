@@ -81,6 +81,8 @@ void TermEditDialog::setupUi() {
     m_understandingCombo->setItemData(3, "Can apply in real situations", Qt::ToolTipRole);
     m_understandingCombo->setItemData(4, "Fully internalized, can teach or innovate", Qt::ToolTipRole);
 
+    m_pinnedCheck = new QCheckBox(this);
+
     m_titleEdit = new QLineEdit(this);
     m_disambiguationEdit = new QLineEdit(this);
 
@@ -89,6 +91,7 @@ void TermEditDialog::setupUi() {
     formLayout->addRow("Disambiguation:", m_disambiguationEdit);
     formLayout->addRow("Status:", m_statusCombo);
     formLayout->addRow("Understanding:", m_understandingCombo);
+    formLayout->addRow("Pinned:", m_pinnedCheck);
 
     rootLayout->addLayout(formLayout);
 
@@ -152,6 +155,8 @@ void TermEditDialog::setTerm(const TermRecord& term) {
         m_statusCombo->setCurrentIndex(statusIdx);
     }
 
+    m_pinnedCheck->setChecked(term.pinned);
+
     setListValues(m_aliasList, term.aliases);
     setListValues(m_tagList, term.tags);
     setListValues(m_flagList, term.flags);
@@ -166,6 +171,7 @@ TermRecord TermEditDialog::term() const {
     result.disambiguation = m_disambiguationEdit->text().trimmed();
     result.status = static_cast<TermStatus>(m_statusCombo->currentData().toInt());
     result.understanding = static_cast<UnderstandingLevel>(m_understandingCombo->currentData().toInt());
+    result.pinned = m_pinnedCheck->isChecked();
     result.aliases = valuesFromList(m_aliasList);
     result.tags = valuesFromList(m_tagList);
     result.flags = valuesFromList(m_flagList);

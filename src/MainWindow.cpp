@@ -107,7 +107,7 @@ void MainWindow::setupUi() {
 
     m_tableView = new QTableView(centralWidget);
     m_model = new QStandardItemModel(this);
-    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding"});
+    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"});
     m_tableView->setModel(m_model);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -337,11 +337,14 @@ void MainWindow::refreshTerms() {
             default:                             understandingText = "Unknown"; break;
         }
         row << new QStandardItem(understandingText);
+        row << new QStandardItem(term.pinned ? "Yes" : "No");
         m_model->appendRow(row);
     }
 
     m_tableView->setColumnHidden(0, false);
     m_tableView->resizeColumnsToContents();
+    m_tableView->horizontalHeader()->setSectionResizeMode(9, QHeaderView::Fixed);
+    m_tableView->setColumnWidth(9, 60);
 
     m_pageLabel->setText(QString("Page %1 of %2 (%3 total)").arg(m_currentPage + 1).arg(totalPages).arg(totalCount));
     m_firstButton->setEnabled(m_currentPage > 0);

@@ -52,6 +52,7 @@ private:
     QComboBox* m_mapCombo = nullptr;
     QComboBox* m_statusCombo = nullptr;
     QComboBox* m_understandingCombo = nullptr;
+    QCheckBox* m_pinnedCheck = nullptr;
     QLineEdit* m_titleEdit = nullptr;
     QLineEdit* m_disambiguationEdit = nullptr;
 
