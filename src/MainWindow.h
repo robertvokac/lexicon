@@ -182,6 +182,7 @@ private:
     QComboBox* m_flagFilter = nullptr;
     QComboBox* m_statusFilter = nullptr;
     QComboBox* m_understandingFilter = nullptr;
+    QComboBox* m_pinnedFilter = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;

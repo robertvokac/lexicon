@@ -67,6 +67,11 @@ void MainWindow::setupUi() {
     m_understandingFilter->addItem("Practiced", static_cast<int>(UnderstandingLevel::Practiced));
     m_understandingFilter->addItem("Mastered", static_cast<int>(UnderstandingLevel::Mastered));
 
+    m_pinnedFilter = new QComboBox(centralWidget);
+    m_pinnedFilter->addItem("All Pinned", -1);
+    m_pinnedFilter->addItem("Pinned", 1);
+    m_pinnedFilter->addItem("Not Pinned", 0);
+
     m_understandingFilter->setItemData(1, "Never encountered", Qt::ToolTipRole);
     m_understandingFilter->setItemData(2, "Seen before, can identify", Qt::ToolTipRole);
     m_understandingFilter->setItemData(3, "Conceptually grasped", Qt::ToolTipRole);
@@ -83,6 +88,8 @@ void MainWindow::setupUi() {
     filterRowLayout->addWidget(m_statusFilter);
     filterRowLayout->addWidget(new QLabel("Understanding:", centralWidget));
     filterRowLayout->addWidget(m_understandingFilter);
+    filterRowLayout->addWidget(new QLabel("Pinned:", centralWidget));
+    filterRowLayout->addWidget(m_pinnedFilter);
     filterRowLayout->addStretch(1);
 
     auto* searchRowLayout = new QHBoxLayout();
@@ -178,6 +185,7 @@ void MainWindow::setupUi() {
     connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_statusFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_understandingFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_pinnedFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
     connect(m_firstButton, &QPushButton::clicked, this, &MainWindow::firstPage);
     connect(m_prevButton, &QPushButton::clicked, this, &MainWindow::prevPage);
@@ -314,6 +322,7 @@ void MainWindow::refreshTerms() {
     QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     int understandingFilter = m_understandingFilter->currentData().toInt();
     int statusFilter = m_statusFilter->currentData().toInt();
+    int pinnedFilter = m_pinnedFilter->currentData().toInt();
     QString searchText = m_searchEdit->text().trimmed();
 
     // If we're restoring the last term at startup
@@ -327,7 +336,7 @@ void MainWindow::refreshTerms() {
         }
     }
     
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, &error);
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -340,7 +349,7 @@ void MainWindow::refreshTerms() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -437,9 +446,10 @@ void MainWindow::lastPage() {
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     const int understandingFilter = m_understandingFilter->currentData().toInt();
     const int statusFilter = m_statusFilter->currentData().toInt();
+    const int pinnedFilter = m_pinnedFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, &error);
+    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;

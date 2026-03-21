@@ -314,7 +314,7 @@ bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
+QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
     QList<TermRecord> terms;
 
     QString sql =
@@ -336,6 +336,9 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     }
     if (statusFilter >= 0) {
         filters += "AND t.status = ? ";
+    }
+    if (pinnedFilter >= 0) {
+        filters += "AND t.pinned = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
         filters += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
@@ -396,6 +399,9 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     if (statusFilter >= 0) {
         query.addBindValue(statusFilter);
     }
+    if (pinnedFilter >= 0) {
+        query.addBindValue(pinnedFilter);
+    }
     if (!tagFilter.trimmed().isEmpty()) {
         query.addBindValue(tagFilter.trimmed());
     }
@@ -438,7 +444,7 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     return terms;
 }
 
-int DatabaseManager::countTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, QString* errorMessage) {
+int DatabaseManager::countTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
     QString sql = "SELECT COUNT(*) FROM term t WHERE 1 = 1 ";
 
     if (mapId > 0) {
@@ -449,6 +455,9 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
     }
     if (statusFilter >= 0) {
         sql += "AND t.status = ? ";
+    }
+    if (pinnedFilter >= 0) {
+        sql += "AND t.pinned = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
         sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
@@ -475,6 +484,9 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
     }
     if (statusFilter >= 0) {
         query.addBindValue(statusFilter);
+    }
+    if (pinnedFilter >= 0) {
+        query.addBindValue(pinnedFilter);
     }
     if (!tagFilter.trimmed().isEmpty()) {
         query.addBindValue(tagFilter.trimmed());
