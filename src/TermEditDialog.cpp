@@ -492,18 +492,46 @@ namespace {
         }
         return {"", LinkType::None, false};
     }
+
+    int findTermId(const QString& text) {
+        QString title = text;
+        QString disambiguation;
+        if (text.contains(" [") && text.endsWith("]")) {
+            int idx = text.lastIndexOf(" [");
+            title = text.left(idx).trimmed();
+            disambiguation = text.mid(idx + 2, text.length() - idx - 3).trimmed();
+        }
+
+        QSqlDatabase db = DatabaseManager::database();
+        QSqlQuery query(db);
+        if (disambiguation.isEmpty()) {
+            query.prepare("SELECT id FROM term WHERE title = ? AND (disambiguation IS NULL OR disambiguation = '') LIMIT 1;");
+            query.addBindValue(title);
+            if (query.exec() && query.next()) {
+                return query.value(0).toInt();
+            }
+            // Fallback: try to find by title only even if disambiguation is not specified
+            query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
+            query.addBindValue(title);
+        } else {
+            query.prepare("SELECT id FROM term WHERE title = ? AND disambiguation = ? LIMIT 1;");
+            query.addBindValue(title);
+            query.addBindValue(disambiguation);
+        }
+
+        if (query.exec() && query.next()) {
+            return query.value(0).toInt();
+        }
+        return -1;
+    }
 }
 
 void TermEditDialog::addLink() {
     LinkData data = getLinkDetails(this, "Add Link", "Target term:", "", LinkType::Related);
     if (!data.accepted || data.term.isEmpty()) return;
 
-    QSqlDatabase db = DatabaseManager::database();
-    QSqlQuery query(db);
-    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
-    query.addBindValue(data.term);
-    if (query.exec() && query.next()) {
-        int toId = query.value(0).toInt();
+    int toId = findTermId(data.term);
+    if (toId != -1) {
         LinkRecord link;
         link.fromTermId = m_termId;
         link.toTermId = toId;
@@ -524,12 +552,9 @@ void TermEditDialog::editLink() {
     LinkData data = getLinkDetails(this, "Edit Link", "Target term:", link.toTermTitle, link.linkType);
     if (!data.accepted || data.term.isEmpty()) return;
 
-    QSqlDatabase db = DatabaseManager::database();
-    QSqlQuery query(db);
-    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
-    query.addBindValue(data.term);
-    if (query.exec() && query.next()) {
-        link.toTermId = query.value(0).toInt();
+    int toId = findTermId(data.term);
+    if (toId != -1) {
+        link.toTermId = toId;
         link.toTermTitle = data.term;
         link.linkType = data.type;
         updateLinksList();
@@ -550,12 +575,8 @@ void TermEditDialog::addBacklink() {
     LinkData data = getLinkDetails(this, "Add Backlink", "Source term:", "", LinkType::Related);
     if (!data.accepted || data.term.isEmpty()) return;
 
-    QSqlDatabase db = DatabaseManager::database();
-    QSqlQuery query(db);
-    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
-    query.addBindValue(data.term);
-    if (query.exec() && query.next()) {
-        int fromId = query.value(0).toInt();
+    int fromId = findTermId(data.term);
+    if (fromId != -1) {
         LinkRecord link;
         link.fromTermId = fromId;
         link.toTermId = m_termId;
@@ -576,12 +597,9 @@ void TermEditDialog::editBacklink() {
     LinkData data = getLinkDetails(this, "Edit Backlink", "Source term:", link.fromTermTitle, link.linkType);
     if (!data.accepted || data.term.isEmpty()) return;
 
-    QSqlDatabase db = DatabaseManager::database();
-    QSqlQuery query(db);
-    query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
-    query.addBindValue(data.term);
-    if (query.exec() && query.next()) {
-        link.fromTermId = query.value(0).toInt();
+    int fromId = findTermId(data.term);
+    if (fromId != -1) {
+        link.fromTermId = fromId;
         link.fromTermTitle = data.term;
         link.linkType = data.type;
         updateLinksList();

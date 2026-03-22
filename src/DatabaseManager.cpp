@@ -836,13 +836,19 @@ QStringList DatabaseManager::loadSuggestions(QString* errorMessage) {
 QStringList DatabaseManager::loadTermTitles(QString* errorMessage) {
     QStringList values;
     QSqlQuery query(database());
-    if (!query.exec("SELECT title FROM term ORDER BY title COLLATE NOCASE;")) {
+    if (!query.exec("SELECT title, disambiguation FROM term ORDER BY title COLLATE NOCASE;")) {
         setError(errorMessage, query.lastError().text());
         return values;
     }
 
     while (query.next()) {
-        values.push_back(query.value(0).toString());
+        QString title = query.value(0).toString();
+        QString disambiguation = query.value(1).toString();
+        if (!disambiguation.isEmpty()) {
+            values.push_back(QString("%1 [%2]").arg(title, disambiguation));
+        } else {
+            values.push_back(title);
+        }
     }
     return values;
 }
