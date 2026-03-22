@@ -458,6 +458,7 @@ void TermEditDialog::updateLinksList() {
             case LinkType::Related: return "Related";
             case LinkType::Contrasts: return "Contrasts";
             case LinkType::AlternativeTo: return "Alternative To";
+            case LinkType::ParentOf: return "Parent Of";
             default: return "Link";
         }
     };
@@ -502,6 +503,7 @@ namespace {
         typeCombo->addItem("Related", static_cast<int>(LinkType::Related));
         typeCombo->addItem("Contrasts", static_cast<int>(LinkType::Contrasts));
         typeCombo->addItem("Alternative To", static_cast<int>(LinkType::AlternativeTo));
+        typeCombo->addItem("Parent Of", static_cast<int>(LinkType::ParentOf));
 
         for (int i = 0; i < typeCombo->count(); ++i) {
             if (typeCombo->itemData(i).toInt() == static_cast<int>(initialType)) {

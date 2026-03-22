@@ -30,7 +30,8 @@ enum class LinkType {
     Implements = 5,
     Related = 6,
     Contrasts = 7,
-    AlternativeTo = 8
+    AlternativeTo = 8,
+    ParentOf = 9
 };
 
 struct MapRecord {
