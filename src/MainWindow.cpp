@@ -779,6 +779,7 @@ void MainWindow::updateLinksDisplay(int termId) {
             case LinkType::Related: return "Related";
             case LinkType::Contrasts: return "Contrasts";
             case LinkType::AlternativeTo: return "Alternative To";
+            case LinkType::ParentOf: return "Parent Of";
             default: return "Link";
         }
     };
