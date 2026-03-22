@@ -265,26 +265,24 @@ TermRecord TermEditDialog::term() const {
     return result;
 }
 
-void TermEditDialog::addValue(QListWidget* list, const QString& title) {
-    bool ok = false;
-    const QString value = QInputDialog::getText(this, title, "Value:", QLineEdit::Normal, QString(), &ok).trimmed();
-    if (!ok || value.isEmpty()) {
+void TermEditDialog::addValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
+    const QString value = getInputValue(title, "Value:", QString(), suggestions);
+    if (value.isEmpty()) {
         return;
     }
     list->addItem(value);
     list->sortItems();
 }
 
-void TermEditDialog::editValue(QListWidget* list, const QString& title) {
+void TermEditDialog::editValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
     auto* item = list->currentItem();
     if (!item) {
         QMessageBox::information(this, title, "Select a value first.");
         return;
     }
 
-    bool ok = false;
-    const QString value = QInputDialog::getText(this, title, "Value:", QLineEdit::Normal, item->text(), &ok).trimmed();
-    if (!ok || value.isEmpty()) {
+    const QString value = getInputValue(title, "Value:", item->text(), suggestions);
+    if (value.isEmpty()) {
         return;
     }
     item->setText(value);
@@ -412,16 +410,40 @@ void TermEditDialog::setListValues(QListWidget* list, const QStringList& values)
     list->sortItems();
 }
 
-void TermEditDialog::addAlias() { addValue(m_aliasList, "Add alias"); }
-void TermEditDialog::editAlias() { editValue(m_aliasList, "Edit alias"); }
+void TermEditDialog::addAlias() {
+    QStringList suggestions;
+    for (const auto& item : DatabaseManager::loadAliasUsage()) suggestions << item.value;
+    addValue(m_aliasList, "Add alias", suggestions);
+}
+void TermEditDialog::editAlias() {
+    QStringList suggestions;
+    for (const auto& item : DatabaseManager::loadAliasUsage()) suggestions << item.value;
+    editValue(m_aliasList, "Edit alias", suggestions);
+}
 void TermEditDialog::removeAlias() { removeValue(m_aliasList, "Remove alias"); }
 
-void TermEditDialog::addTag() { addValue(m_tagList, "Add tag"); }
-void TermEditDialog::editTag() { editValue(m_tagList, "Edit tag"); }
+void TermEditDialog::addTag() {
+    QStringList suggestions;
+    for (const auto& item : DatabaseManager::loadTagUsage()) suggestions << item.value;
+    addValue(m_tagList, "Add tag", suggestions);
+}
+void TermEditDialog::editTag() {
+    QStringList suggestions;
+    for (const auto& item : DatabaseManager::loadTagUsage()) suggestions << item.value;
+    editValue(m_tagList, "Edit tag", suggestions);
+}
 void TermEditDialog::removeTag() { removeValue(m_tagList, "Remove tag"); }
 
-void TermEditDialog::addFlag() { addValue(m_flagList, "Add flag"); }
-void TermEditDialog::editFlag() { editValue(m_flagList, "Edit flag"); }
+void TermEditDialog::addFlag() {
+    QStringList suggestions;
+    for (const auto& item : DatabaseManager::loadFlagUsage()) suggestions << item.value;
+    addValue(m_flagList, "Add flag", suggestions);
+}
+void TermEditDialog::editFlag() {
+    QStringList suggestions;
+    for (const auto& item : DatabaseManager::loadFlagUsage()) suggestions << item.value;
+    editValue(m_flagList, "Edit flag", suggestions);
+}
 void TermEditDialog::removeFlag() { removeValue(m_flagList, "Remove flag"); }
 
 void TermEditDialog::updateLinksList() {
@@ -535,6 +557,36 @@ namespace {
         }
         return -1;
     }
+}
+
+QString TermEditDialog::getInputValue(const QString& title, const QString& label, const QString& initialValue, const QStringList& suggestions) {
+    QDialog dialog(this);
+    dialog.setWindowTitle(title);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout();
+
+    auto* lineEdit = new QLineEdit(&dialog);
+    lineEdit->setText(initialValue);
+    if (!suggestions.isEmpty()) {
+        auto* completer = new QCompleter(suggestions, &dialog);
+        completer->setCaseSensitivity(Qt::CaseInsensitive);
+        completer->setFilterMode(Qt::MatchContains);
+        lineEdit->setCompleter(completer);
+    }
+
+    form->addRow(label, lineEdit);
+    layout->addLayout(form);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        return lineEdit->text().trimmed();
+    }
+    return QString();
 }
 
 void TermEditDialog::addLink() {

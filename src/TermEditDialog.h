@@ -73,8 +73,9 @@ private:
     void updateLinksList();
     void setupUi();
     void connectSignals();
-    void addValue(QListWidget* list, const QString& title);
-    void editValue(QListWidget* list, const QString& title);
+    QString getInputValue(const QString& title, const QString& label, const QString& initialValue, const QStringList& suggestions);
+    void addValue(QListWidget* list, const QString& title, const QStringList& suggestions = QStringList());
+    void editValue(QListWidget* list, const QString& title, const QStringList& suggestions = QStringList());
     void removeValue(QListWidget* list, const QString& title);
     void insertMarkdown(const QString& prefix, const QString& suffix = QString(), const QString& defaultText = QString());
     static QStringList valuesFromList(QListWidget* list);
