@@ -47,7 +47,9 @@ private slots:
     void formatTable();
     void formatList();
     void formatOrderedList();
-    void formatHeader();
+    void formatH2();
+    void formatH3();
+    void formatH4();
     void formatQuote();
     void formatCode();
     void formatCodeBlock();

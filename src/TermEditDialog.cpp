@@ -120,7 +120,10 @@ void TermEditDialog::setupUi() {
     m_contentToolbar->setIconSize(QSize(16, 16));
     m_contentToolbar->addAction("B", this, SLOT(formatBold()))->setToolTip("Bold (**)");
     m_contentToolbar->addAction("I", this, SLOT(formatItalic()))->setToolTip("Italic (*)");
-    m_contentToolbar->addAction("H", this, SLOT(formatHeader()))->setToolTip("Header (###)");
+    m_contentToolbar->addSeparator();
+    m_contentToolbar->addAction("H2", this, SLOT(formatH2()))->setToolTip("Header 2 (##)");
+    m_contentToolbar->addAction("H3", this, SLOT(formatH3()))->setToolTip("Header 3 (###)");
+    m_contentToolbar->addAction("H4", this, SLOT(formatH4()))->setToolTip("Header 4 (####)");
     m_contentToolbar->addSeparator();
     m_contentToolbar->addAction("List", this, SLOT(formatList()))->setToolTip("Unordered List (-)");
     m_contentToolbar->addAction("1.", this, SLOT(formatOrderedList()))->setToolTip("Ordered List (1.)");
@@ -329,8 +332,16 @@ void TermEditDialog::formatOrderedList() {
     insertMarkdown("\n1. ", "", "list item");
 }
 
-void TermEditDialog::formatHeader() {
-    insertMarkdown("\n### ", "", "Header");
+void TermEditDialog::formatH2() {
+    insertMarkdown("\n## ", "", "Header 2");
+}
+
+void TermEditDialog::formatH3() {
+    insertMarkdown("\n### ", "", "Header 3");
+}
+
+void TermEditDialog::formatH4() {
+    insertMarkdown("\n#### ", "", "Header 4");
 }
 
 void TermEditDialog::formatQuote() {
