@@ -155,17 +155,7 @@ void TermEditDialog::setupUi() {
     contentLayout->addLayout(editorSplitter);
     m_tabWidget->addTab(contentTab, "Content");
 
-    // --- Tab 3: Links ---
-    auto* linksTab = buildListEditor("Outgoing Links", m_linksList, this,
-                                     SLOT(addLink()), SLOT(editLink()), SLOT(removeLink()));
-    m_tabWidget->addTab(linksTab, "Links");
-
-    // --- Tab 4: Backlinks ---
-    auto* backlinksTab = buildListEditor("Incoming Links", m_backlinksList, this,
-                                         SLOT(addBacklink()), SLOT(editBacklink()), SLOT(removeBacklink()));
-    m_tabWidget->addTab(backlinksTab, "Backlinks");
-
-    // --- Tab 5: Additional ---
+    // --- Tab 3: Additional ---
     auto* additionalTab = new QWidget();
     auto* additionalLayout = new QVBoxLayout(additionalTab);
     auto* listsLayout = new QGridLayout();
@@ -181,7 +171,17 @@ void TermEditDialog::setupUi() {
                            1, 0, 1, 2); // Span aliases across both columns
 
     additionalLayout->addLayout(listsLayout);
-    m_tabWidget->addTab(additionalTab, "Additional");
+    m_tabWidget->addTab(additionalTab, "Metadata");
+
+    // --- Tab 4: Links ---
+    auto* linksTab = buildListEditor("Outgoing Links", m_linksList, this,
+                                     SLOT(addLink()), SLOT(editLink()), SLOT(removeLink()));
+    m_tabWidget->addTab(linksTab, "Links");
+
+    // --- Tab 5: Backlinks ---
+    auto* backlinksTab = buildListEditor("Incoming Links", m_backlinksList, this,
+                                         SLOT(addBacklink()), SLOT(editBacklink()), SLOT(removeBacklink()));
+    m_tabWidget->addTab(backlinksTab, "Backlinks");
 
     rootLayout->addWidget(m_tabWidget);
 

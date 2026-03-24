@@ -59,3 +59,4 @@ cmake --build build
 ## Todo
 
 - export to CSV/JSON
+- add new unique indexes
