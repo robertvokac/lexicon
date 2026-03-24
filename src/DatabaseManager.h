@@ -45,6 +45,7 @@ struct LinkRecord {
     int fromTermId = -1;
     int toTermId = -1;
     LinkType linkType = LinkType::None;
+    int position = 0;
 
     // Optional for UI:
     QString fromTermTitle;

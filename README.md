@@ -60,3 +60,5 @@ cmake --build build
 
 - export to CSV/JSON
 - add new unique indexes
+- export to static html
+- http server

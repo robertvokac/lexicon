@@ -178,6 +178,9 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             ");",
             "CREATE INDEX IF NOT EXISTS idx_link_from_term_id ON link(from_term_id);",
             "CREATE INDEX IF NOT EXISTS idx_link_to_term_id ON link(to_term_id);"
+        }},
+        {8, {
+            "ALTER TABLE link ADD COLUMN position INTEGER NOT NULL DEFAULT 0;"
         }}
     };
 
@@ -685,10 +688,11 @@ QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) 
     QList<LinkRecord> result;
     QSqlDatabase db = database();
     QSqlQuery query(db);
-    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, t.title "
+    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, t.title "
                   "FROM link l "
                   "JOIN term t ON l.to_term_id = t.id "
-                  "WHERE l.from_term_id = ?;");
+                  "WHERE l.from_term_id = ? "
+                  "ORDER BY l.position, t.title COLLATE NOCASE;");
     query.addBindValue(termId);
 
     if (!query.exec()) {
@@ -702,7 +706,8 @@ QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) 
         link.fromTermId = query.value(1).toInt();
         link.toTermId = query.value(2).toInt();
         link.linkType = static_cast<LinkType>(query.value(3).toInt());
-        link.toTermTitle = query.value(4).toString();
+        link.position = query.value(4).toInt();
+        link.toTermTitle = query.value(5).toString();
         result.push_back(link);
     }
     return result;
@@ -712,10 +717,11 @@ QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessa
     QList<LinkRecord> result;
     QSqlDatabase db = database();
     QSqlQuery query(db);
-    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, t.title "
+    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, t.title "
                   "FROM link l "
                   "JOIN term t ON l.from_term_id = t.id "
-                  "WHERE l.to_term_id = ?;");
+                  "WHERE l.to_term_id = ? "
+                  "ORDER BY l.position, t.title COLLATE NOCASE;");
     query.addBindValue(termId);
 
     if (!query.exec()) {
@@ -729,7 +735,8 @@ QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessa
         link.fromTermId = query.value(1).toInt();
         link.toTermId = query.value(2).toInt();
         link.linkType = static_cast<LinkType>(query.value(3).toInt());
-        link.fromTermTitle = query.value(4).toString();
+        link.position = query.value(4).toInt();
+        link.fromTermTitle = query.value(5).toString();
         result.push_back(link);
     }
     return result;
@@ -744,16 +751,18 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
     QSqlQuery query(db);
     int logType = 2; // updated
     if (link.id == -1) {
-        query.prepare("INSERT INTO link (from_term_id, to_term_id, link_type) VALUES (?, ?, ?);");
+        query.prepare("INSERT INTO link (from_term_id, to_term_id, link_type, position) VALUES (?, ?, ?, ?);");
         query.addBindValue(link.fromTermId);
         query.addBindValue(link.toTermId);
         query.addBindValue(static_cast<int>(link.linkType));
+        query.addBindValue(link.position);
         logType = 1; // created
     } else {
-        query.prepare("UPDATE link SET from_term_id = ?, to_term_id = ?, link_type = ? WHERE id = ?;");
+        query.prepare("UPDATE link SET from_term_id = ?, to_term_id = ?, link_type = ?, position = ? WHERE id = ?;");
         query.addBindValue(link.fromTermId);
         query.addBindValue(link.toTermId);
         query.addBindValue(static_cast<int>(link.linkType));
+        query.addBindValue(link.position);
         query.addBindValue(link.id);
     }
 
