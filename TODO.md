@@ -27,6 +27,8 @@ This file tracks features, improvements, and fixes for the Lexicon application.
 - [ ] **General layout:**
     - Use `QSplitter` to allow resizing between table, preview, and links.
     - Improve spacing and alignment for readability.
+  
+- [ ] Bug: Adding new term, if no map is selected, uses the first map
 
 ---
 
