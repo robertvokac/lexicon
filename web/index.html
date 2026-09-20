@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lexicon — Desktop Knowledge Dictionary</title>
-<meta name="description" content="Lexicon is a free, open-source desktop knowledge dictionary built with Qt Widgets and SQLite. Structured learning and technical note-taking with groups, terms, metadata, and typed links between concepts.">
+<meta name="description" content="Lexicon is a free, open-source desktop knowledge dictionary built with Qt Widgets and SQLite. Structured learning and technical note-taking with groups, items, metadata, and typed links between concepts.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -34,7 +34,7 @@
     <div class="container">
       <img class="hero-icon" src="assets/img/appicon.png" alt="Lexicon application icon">
       <h1>Lexicon</h1>
-      <p class="tagline">A desktop knowledge dictionary for structured learning and technical note-taking — groups, terms, rich metadata, and typed links between concepts.</p>
+      <p class="tagline">A desktop knowledge dictionary for structured learning and technical note-taking — groups, items, rich metadata, and typed links between concepts.</p>
       <div class="badges">
         <span class="badge">MIT License</span>
         <span class="badge">C++23</span>
@@ -48,8 +48,8 @@
         <a class="btn btn-ghost" href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">View source on GitHub</a>
       </div>
       <figure class="hero-shot screenshot">
-        <img src="assets/img/Screenshot.png" alt="Lexicon main window — filters, term table, pagination, and rendered Markdown content">
-        <figcaption>The main window: filters, searchable term table, pagination, and live Markdown preview.</figcaption>
+        <img src="assets/img/Screenshot.png" alt="Lexicon main window — filters, item table, pagination, and rendered Markdown content">
+        <figcaption>The main window: filters, searchable item table, pagination, and live Markdown preview.</figcaption>
       </figure>
     </div>
   </section>
@@ -66,13 +66,13 @@
         </div>
         <div class="card">
           <span class="card-emoji">🗺️</span>
-          <h3>Groups and terms</h3>
-          <p>Group terms into top-level groups such as <em>C++</em>, <em>Databases</em>, or <em>Networking</em>, with full create/edit/delete support.</p>
+          <h3>Groups and items</h3>
+          <p>Group items into top-level groups such as <em>C++</em>, <em>Databases</em>, or <em>Networking</em>, with full create/edit/delete support.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🏷️</span>
           <h3>Rich metadata</h3>
-          <p>Every term carries aliases, tags, flags, a status, an understanding level, and a pinned state — so you always know where you stand.</p>
+          <p>Every item carries aliases, tags, flags, a status, an understanding level, and a pinned state — so you always know where you stand.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🔗</span>
@@ -82,7 +82,7 @@
         <div class="card">
           <span class="card-emoji">✍️</span>
           <h3>Markdown editor</h3>
-          <p>Write term content in Markdown with a formatting toolbar and a live rendered preview, powered by the md4qt parser.</p>
+          <p>Write item content in Markdown with a formatting toolbar and a live rendered preview, powered by the md4qt parser.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🔎</span>
@@ -119,7 +119,7 @@
           <p>Everything you need to install Lexicon and organize your knowledge like a pro.</p>
           <ul>
             <li>Installation and first launch</li>
-            <li>Creating groups and terms</li>
+            <li>Creating groups and items</li>
             <li>The Markdown content editor</li>
             <li>Tags, flags, aliases, links &amp; backlinks</li>
             <li>Search, filtering, backup, and troubleshooting</li>
@@ -157,14 +157,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
   <section class="section section-alt">
     <div class="container">
       <h2>See it in action</h2>
-      <p class="section-lead">The term editor gives every concept five focused tabs: General, Content, Metadata, Links, and Backlinks.</p>
+      <p class="section-lead">The item editor gives every concept five focused tabs: General, Content, Metadata, Links, and Backlinks.</p>
       <div class="grid grid-2">
         <figure class="screenshot">
-          <img src="assets/img/Screenshot_Content.png" alt="Term editor Content tab — Markdown editor with live preview">
+          <img src="assets/img/Screenshot_Content.png" alt="Item editor Content tab — Markdown editor with live preview">
           <figcaption>Markdown editor with live preview</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/img/Screenshot_Links.png" alt="Term editor Links tab — typed outgoing relationships">
+          <img src="assets/img/Screenshot_Links.png" alt="Item editor Links tab — typed outgoing relationships">
           <figcaption>Typed links between concepts</figcaption>
         </figure>
       </div>

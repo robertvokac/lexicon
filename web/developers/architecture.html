@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Architecture — Lexicon Developer Docs</title>
-<meta name="description" content="Lexicon application architecture: source files and responsibilities, core data structures (TermRecord, GroupRecord, LinkRecord), enums, and design decisions.">
+<meta name="description" content="Lexicon application architecture: source files and responsibilities, core data structures (ItemRecord, GroupRecord, LinkRecord), enums, and design decisions.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -65,11 +65,11 @@
       </tr>
       <tr>
         <td><code>MainWindow.{h,cpp}</code></td>
-        <td>The largest UI class. Owns the filter row (group/tag/flag/status/understanding/pinned/search), the paginated and sortable term table, the pagination bar, the rendered content pane with links/backlinks summary, the menu bar (groups manager, global overviews, theme switch), and the Add/Edit/Delete actions.</td>
+        <td>The largest UI class. Owns the filter row (group/tag/flag/status/understanding/pinned/search), the paginated and sortable item table, the pagination bar, the rendered content pane with links/backlinks summary, the menu bar (groups manager, global overviews, theme switch), and the Add/Edit/Delete actions.</td>
       </tr>
       <tr>
-        <td><code>TermEditDialog.{h,cpp}</code></td>
-        <td>The five-tab term editor: General (identity and state), Content (Markdown editor with toolbar and live preview), Metadata (tags/flags/aliases lists), Links, and Backlinks (typed relationships).</td>
+        <td><code>ItemEditDialog.{h,cpp}</code></td>
+        <td>The five-tab item editor: General (identity and state), Content (Markdown editor with toolbar and live preview), Metadata (tags/flags/aliases lists), Links, and Backlinks (typed relationships).</td>
       </tr>
       <tr>
         <td><code>GroupManagerDialog.{h,cpp}</code></td>
@@ -81,11 +81,11 @@
       </tr>
       <tr>
         <td><code>DatabaseManager.{h,cpp}</code></td>
-        <td>The entire persistence layer: connection setup, pragma configuration, schema migrations, and every query the app runs (term listing with filters/paging/sorting, CRUD for groups/terms/links, metadata handling, usage statistics, operation logging).</td>
+        <td>The entire persistence layer: connection setup, pragma configuration, schema migrations, and every query the app runs (item listing with filters/paging/sorting, CRUD for groups/items/links, metadata handling, usage statistics, operation logging).</td>
       </tr>
       <tr>
         <td><code>MarkdownConverter.{h,cpp}</code></td>
-        <td>Thin wrapper around the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a> parser: converts Markdown term content to HTML for the preview panes.</td>
+        <td>Thin wrapper around the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a> parser: converts Markdown item content to HTML for the preview panes.</td>
       </tr>
       <tr>
         <td><code>3rdparty/md4qt/</code></td>
@@ -101,7 +101,7 @@
     QString description;
 };
 
-struct TermRecord {
+struct ItemRecord {
     int id = -1;
     int groupId = -1;
     QString groupName;
@@ -110,7 +110,7 @@ struct TermRecord {
     QStringList aliases;
     QStringList tags;
     QStringList flags;
-    TermStatus status = TermStatus::None;
+    ItemStatus status = ItemStatus::None;
     UnderstandingLevel understanding = UnderstandingLevel::Unknown;
     bool pinned = false;
     QString content;          // Markdown source
@@ -118,12 +118,12 @@ struct TermRecord {
 
 struct LinkRecord {
     int id = -1;
-    int fromTermId = -1;
-    int toTermId = -1;
+    int fromItemId = -1;
+    int toItemId = -1;
     LinkType linkType = LinkType::None;
     int position = 0;
-    QString fromTermTitle;    // optional, filled for UI display
-    QString toTermTitle;
+    QString fromItemTitle;    // optional, filled for UI display
+    QString toItemTitle;
 };
 
 struct UsageValueRecord {     // rows of the tag/flag/alias overviews
@@ -133,7 +133,7 @@ struct UsageValueRecord {     // rows of the tag/flag/alias overviews
 
     <h2 id="enums">Enums</h2>
     <p>Three enums encode the domain vocabulary. Their integer values are stored directly in SQLite, so <strong>they must never be renumbered</strong> — only appended to.</p>
-    <pre><code>enum class TermStatus {
+    <pre><code>enum class ItemStatus {
     None = 0, Draft = 1, Completed = 2
 };
 
@@ -155,15 +155,15 @@ enum class LinkType {
     <h3>Static data-access API</h3>
     <p><code>DatabaseManager</code> exposes only static methods over Qt's default database connection. There is no ORM and no repository hierarchy — every operation is an explicit, reviewable SQL statement. Errors are reported through an optional <code>QString* errorMessage</code> out-parameter combined with a <code>bool</code> return value:</p>
     <pre><code>QString error;
-if (!DatabaseManager::saveTerm(term, &amp;error)) {
+if (!DatabaseManager::saveItem(item, &amp;error)) {
     QMessageBox::warning(this, "Save failed", error);
 }</code></pre>
 
     <h3>Filtering and paging in SQL</h3>
-    <p><code>loadTerms()</code> takes the whole filter state (group, search text, tag, flag, understanding, status, pinned), plus <code>limit</code>/<code>offset</code> and the sort column/order, and translates them into one SQL query. The UI never filters in memory, which is what keeps large lexicons fast. A matching <code>countTerms()</code> powers the pagination bar.</p>
+    <p><code>loadItems()</code> takes the whole filter state (group, search text, tag, flag, understanding, status, pinned), plus <code>limit</code>/<code>offset</code> and the sort column/order, and translates them into one SQL query. The UI never filters in memory, which is what keeps large lexicons fast. A matching <code>countItems()</code> powers the pagination bar.</p>
 
     <h3>Operation log</h3>
-    <p>Every create, update, delete — and term read — is recorded in the <code>log</code> table with a type code (<code>1</code>=created, <code>2</code>=updated, <code>3</code>=deleted, <code>4</code>=read) and a timestamp. Nothing consumes the log in the UI yet; it is groundwork for future features such as recent-activity views or spaced-repetition hints.</p>
+    <p>Every create, update, delete — and item read — is recorded in the <code>log</code> table with a type code (<code>1</code>=created, <code>2</code>=updated, <code>3</code>=deleted, <code>4</code>=read) and a timestamp. Nothing consumes the log in the UI yet; it is groundwork for future features such as recent-activity views or spaced-repetition hints.</p>
 
     <h3>Referential integrity in the database</h3>
     <p>Foreign keys are switched on with <code>PRAGMA foreign_keys = ON</code> at connection time, and dependent rows (aliases, tags, flags, links) are declared <code>ON DELETE CASCADE</code>. Deletion consistency is the database's job, not scattered application code — see the <a href="database.html">schema reference</a>.</p>

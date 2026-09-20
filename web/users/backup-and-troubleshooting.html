@@ -37,7 +37,7 @@
         <li><a href="index.html">Overview</a></li>
         <li><a href="installation.html">Installation</a></li>
         <li><a href="getting-started.html">Getting started</a></li>
-        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="backup-and-troubleshooting.html" class="active">Backup &amp; troubleshooting</a></li>
@@ -86,11 +86,11 @@
     <p>Lexicon uses cascade deletion to keep the database consistent. Know the two rules before you delete anything:</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
-      <p><strong>Deleting a term</strong> also removes its aliases, tags, flags, and all links/backlinks pointing to or from it.</p>
+      <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, and all links/backlinks pointing to or from it.</p>
     </div>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
-      <p><strong>Deleting a group</strong> removes <em>every term inside it</em> — including all of their content and metadata. This is the most destructive action in the application.</p>
+      <p><strong>Deleting a group</strong> removes <em>every item inside it</em> — including all of their content and metadata. This is the most destructive action in the application.</p>
     </div>
     <p>There is no undo for deletions. When in doubt, make a quick copy of <code>lexicon.db</code> first.</p>
 

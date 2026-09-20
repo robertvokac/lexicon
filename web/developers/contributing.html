@@ -84,13 +84,13 @@
       <li><strong>C++23, no extensions.</strong> The build sets <code>CMAKE_CXX_STANDARD 23</code> with compiler extensions off; keep code portable across GCC, Clang, and MSVC.</li>
       <li><strong>All SQL belongs in <code>DatabaseManager</code>.</strong> UI classes must not talk to the database directly — extend the static API instead.</li>
       <li><strong>Schema changes are append-only migrations.</strong> Never modify a shipped migration; add a new version instead (see <a href="database.html#adding">Adding a migration</a>).</li>
-      <li><strong>Never renumber enums.</strong> <code>TermStatus</code>, <code>UnderstandingLevel</code>, and <code>LinkType</code> values are persisted in SQLite.</li>
+      <li><strong>Never renumber enums.</strong> <code>ItemStatus</code>, <code>UnderstandingLevel</code>, and <code>LinkType</code> values are persisted in SQLite.</li>
       <li><strong>Report errors, don't swallow them.</strong> Follow the <code>bool</code> + <code>QString* errorMessage</code> pattern used throughout the data layer.</li>
     </ul>
 
     <h2 id="license">License</h2>
     <p>Lexicon is released under the <strong>MIT License</strong> — you may use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, provided the copyright notice and permission notice appear in all copies. The software is provided "as is", without warranty of any kind.</p>
-    <p>By submitting a contribution you agree that it will be licensed under the same terms. Read the full text in <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>
+    <p>By submitting a contribution you agree that it will be licensed under the same items. Read the full text in <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>
     <p>Third-party code: the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a> Markdown parser retains its own license, found under <code>3rdparty/</code>.</p>
 
     <div class="page-nav">

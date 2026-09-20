@@ -4,7 +4,7 @@
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 
 Lexicon is a desktop knowledge dictionary built with Qt Widgets and SQLite.
-It is designed for structured learning and technical note-taking with groups, terms, metadata, and typed links between concepts.
+It is designed for structured learning and technical note-taking with groups, items, metadata, and typed links between concepts.
 
 ## Table of contents
 
@@ -23,25 +23,25 @@ It is designed for structured learning and technical note-taking with groups, te
 ## Highlights
 
 - SQLite-backed local dictionary (single-file DB)
-- Full CRUD for groups and terms
-- Rich term metadata:
+- Full CRUD for groups and items
+- Rich item metadata:
   - aliases
   - tags
   - flags
   - status
   - understanding level
   - pinned state
-- Typed term relationships:
+- Typed item relationships:
   - outgoing links
   - incoming links (backlinks)
   - link types like `Is A`, `Part Of`, `Depends On`, `Related`, etc.
-- Markdown term content editor with formatting toolbar and live preview
+- Markdown item content editor with formatting toolbar and live preview
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
   - search in title, disambiguation, alias, tag, and flag
   - filters for group, tag, flag, status, understanding, pinned
 - Pagination for large datasets
-- Column sorting in the term table
+- Column sorting in the item table
 - Theme switch: light mode and dark mode
 
 ## Screenshots
@@ -50,37 +50,37 @@ It is designed for structured learning and technical note-taking with groups, te
 
 ![Main window](images/Screenshot.png)
 
-The main screen combines filters, searchable term table, pagination, rendered Markdown content, and link/backlink preview.
+The main screen combines filters, searchable item table, pagination, rendered Markdown content, and link/backlink preview.
 
-### Term editor — General tab
+### Item editor — General tab
 
 ![General tab](images/Screenshot_General.png)
 
-Basic identity and state fields for a term: group, title, disambiguation, status, understanding, and pinned flag.
+Basic identity and state fields for an item: group, title, disambiguation, status, understanding, and pinned flag.
 
-### Term editor — Content tab
+### Item editor — Content tab
 
 ![Content tab](images/Screenshot_Content.png)
 
 Markdown editor on the left, live rendered preview on the right, plus a formatting toolbar.
 
-### Term editor — Metadata tab
+### Item editor — Metadata tab
 
 ![Metadata tab](images/Screenshot_Metadata.png)
 
 Manage tags, flags, and aliases with dedicated add/edit/remove controls.
 
-### Term editor — Links tab
+### Item editor — Links tab
 
 ![Links tab](images/Screenshot_Links.png)
 
-Create and maintain outgoing relationships to other terms.
+Create and maintain outgoing relationships to other items.
 
-### Term editor — Backlinks tab
+### Item editor — Backlinks tab
 
 ![Backlinks tab](images/Screenshot_Backlinks.png)
 
-Create and maintain incoming relationships (who references this term).
+Create and maintain incoming relationships (who references this item).
 
 ## Requirements
 
@@ -116,16 +116,16 @@ cmake --build build --target Lexicon -j
 
 ### 2) Create and manage groups
 
-Groups are top-level buckets for terms (for example: `C++`, `Databases`, `Networking`).
+Groups are top-level buckets for items (for example: `C++`, `Databases`, `Networking`).
 
 1. Open `Manage` → `Groups...`.
 2. Use:
    - `Add` to create a new group
    - `Edit` to rename/change description
    - `Delete` to remove a group
-3. Important: deleting a group also deletes all terms in that group (cascade delete).
+3. Important: deleting a group also deletes all items in that group (cascade delete).
 
-### 3) Explore terms in the main window
+### 3) Explore items in the main window
 
 At the top you can combine search and filters:
 
@@ -148,7 +148,7 @@ Search matches these fields:
 The central table supports:
 
 - row selection to show content/details below
-- double click to edit a term
+- double click to edit an item
 - sorting by clicking column headers
 
 ### 4) Pagination and large dictionaries
@@ -163,7 +163,7 @@ Lexicon is optimized for larger datasets with paging controls:
 
 Use these controls to browse large lexicons without loading everything into one visible page.
 
-### 5) Create a new term
+### 5) Create a new item
 
 You have two add options in the main toolbar:
 
@@ -183,9 +183,9 @@ Recommended workflow:
 4. Fill other tabs as needed.
 5. Click `Save`.
 
-### 6) Edit term content with Markdown
+### 6) Edit item content with Markdown
 
-Open a term and go to the `Content` tab.
+Open an item and go to the `Content` tab.
 
 - Left pane: raw Markdown text
 - Right pane: rendered preview
@@ -217,10 +217,10 @@ Tips:
 
 ### 8) Create links and backlinks
 
-Use `Links` and `Backlinks` tabs in the term editor.
+Use `Links` and `Backlinks` tabs in the item editor.
 
-- `Links`: create outgoing relationship from current term to a target term
-- `Backlinks`: create incoming relationship from a source term to current term
+- `Links`: create outgoing relationship from current item to a target item
+- `Backlinks`: create incoming relationship from a source item to current item
 
 Available relation types include:
 
@@ -238,9 +238,9 @@ These relationships help build a concept graph and improve navigation context.
 
 ### 9) Read content and relationship context
 
-When you select a term in the main table:
+When you select an item in the main table:
 
-- the lower content pane renders the term’s Markdown as HTML
+- the lower content pane renders the item’s Markdown as HTML
 - links/backlinks summary is shown below the content
 
 This gives quick context while browsing without opening the edit dialog every time.
@@ -264,8 +264,8 @@ Theme preference is persisted between sessions.
 
 ### 11) Editing and deletion safety notes
 
-- Deleting a term removes its aliases/tags/flags and related links due to cascade rules.
-- Deleting a group removes all contained terms.
+- Deleting an item removes its aliases/tags/flags and related links due to cascade rules.
+- Deleting a group removes all contained items.
 - Keep regular backups if your lexicon is mission-critical.
 
 ## Database model
@@ -275,7 +275,7 @@ Lexicon initializes and migrates schema automatically.
 Core tables:
 
 - `item_group`
-- `term`
+- `item`
 - `alias`
 - `tag`
 - `flag`
@@ -286,7 +286,7 @@ Design notes:
 
 - Foreign keys enabled
 - Cascade delete used for dependent records
-- Unique constraints for group names and per-term value deduplication
+- Unique constraints for group names and per-item value deduplication
 
 ## Data location and backup
 
@@ -318,8 +318,8 @@ Backup strategies:
 
 ## Recent updates
 
-- term table supports sorting by clicking column headers
-- `New term` now prefills `Title` from current `Search` text
+- item table supports sorting by clicking column headers
+- `New item` now prefills `Title` from current `Search` text
 
 ## Roadmap
 

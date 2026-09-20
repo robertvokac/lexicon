@@ -1,7 +1,7 @@
 #include "MainWindow.h"
 
 #include "GroupManagerDialog.h"
-#include "TermEditDialog.h"
+#include "ItemEditDialog.h"
 #include "ValueListDialog.h"
 
 #include "MarkdownConverter.h"
@@ -55,9 +55,9 @@ void MainWindow::setupUi() {
     m_flagFilter = new QComboBox(centralWidget);
     m_statusFilter = new QComboBox(centralWidget);
     m_statusFilter->addItem("All Statuses", -1);
-    m_statusFilter->addItem("None", static_cast<int>(TermStatus::None));
-    m_statusFilter->addItem("Draft", static_cast<int>(TermStatus::Draft));
-    m_statusFilter->addItem("Completed", static_cast<int>(TermStatus::Completed));
+    m_statusFilter->addItem("None", static_cast<int>(ItemStatus::None));
+    m_statusFilter->addItem("Draft", static_cast<int>(ItemStatus::Draft));
+    m_statusFilter->addItem("Completed", static_cast<int>(ItemStatus::Completed));
 
     m_understandingFilter = new QComboBox(centralWidget);
     m_understandingFilter->addItem("All Levels", -1);
@@ -154,11 +154,11 @@ void MainWindow::setupUi() {
 
     rootLayout->addLayout(paginationLayout);
 
-    m_termContentView = new QTextEdit(centralWidget);
-    m_termContentView->setReadOnly(true);
-    m_highlighter = new CodeHighlighter(m_termContentView->document());
-    m_termContentView->setPlaceholderText("Select a term to view content...");
-    m_termContentView->setMinimumHeight(150);
+    m_itemContentView = new QTextEdit(centralWidget);
+    m_itemContentView->setReadOnly(true);
+    m_highlighter = new CodeHighlighter(m_itemContentView->document());
+    m_itemContentView->setPlaceholderText("Select an item to view content...");
+    m_itemContentView->setMinimumHeight(150);
 
     m_linksView = new QTextBrowser(centralWidget);
     m_linksView->setReadOnly(true);
@@ -169,7 +169,7 @@ void MainWindow::setupUi() {
 
     updateMarkdownStyles();
 
-    rootLayout->addWidget(m_termContentView, 1);
+    rootLayout->addWidget(m_itemContentView, 1);
     rootLayout->addWidget(m_linksView, 0);
 
     setCentralWidget(centralWidget);
@@ -197,19 +197,19 @@ void MainWindow::setupUi() {
         resetPaginationAndRefresh();
     });
     connect(quickAddButton, &QPushButton::clicked, this, &MainWindow::quickAdd);
-    connect(addButton, &QPushButton::clicked, this, &MainWindow::addTerm);
-    connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedTerm);
-    connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedTerm);
+    connect(addButton, &QPushButton::clicked, this, &MainWindow::addItem);
+    connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedItem);
+    connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedItem);
     connect(m_tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this](const QItemSelection&, const QItemSelection&) {
         updateActions();
         auto indexes = m_tableView->selectionModel()->selectedRows();
         if (!indexes.isEmpty()) {
-            showTermContent(indexes.first());
+            showItemContent(indexes.first());
         } else {
-            m_termContentView->clear();
+            m_itemContentView->clear();
         }
     });
-    connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex&) { editSelectedTerm(); });
+    connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex&) { editSelectedItem(); });
 
 }
 
@@ -244,7 +244,7 @@ void MainWindow::refreshAll() {
     refreshTags();
     refreshFlags();
     refreshSuggestions();
-    refreshTerms();
+    refreshItems();
     updateActions();
 }
 
@@ -315,7 +315,7 @@ void MainWindow::refreshFlags() {
     m_flagFilter->blockSignals(false);
 }
 
-void MainWindow::refreshTerms() {
+void MainWindow::refreshItems() {
     QString error;
     int groupId = m_groupFilter->currentData().toInt();
     QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
@@ -325,18 +325,18 @@ void MainWindow::refreshTerms() {
     int pinnedFilter = m_pinnedFilter->currentData().toInt();
     QString searchText = m_searchEdit->text().trimmed();
 
-    // If we're restoring the last term at startup
-    if (m_lastTermId != -1 && searchText.isEmpty()) {
-        TermRecord lastTerm;
-        if (DatabaseManager::loadTerm(m_lastTermId, lastTerm, &error)) {
+    // If we're restoring the last item at startup
+    if (m_lastItemId != -1 && searchText.isEmpty()) {
+        ItemRecord lastItem;
+        if (DatabaseManager::loadItem(m_lastItemId, lastItem, &error)) {
             m_searchEdit->blockSignals(true);
-            m_searchEdit->setText(lastTerm.title);
+            m_searchEdit->setText(lastItem.title);
             m_searchEdit->blockSignals(false);
-            searchText = lastTerm.title;
+            searchText = lastItem.title;
         }
     }
     
-    int totalCount = DatabaseManager::countTerms(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countItems(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -349,7 +349,7 @@ void MainWindow::refreshTerms() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto terms = DatabaseManager::loadTerms(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto items = DatabaseManager::loadItems(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -358,33 +358,33 @@ void MainWindow::refreshTerms() {
     m_model->removeRows(0, m_model->rowCount());
     m_model->setRowCount(0); // Ensure it's clean
     int rowToSelect = -1;
-    for (int i = 0; i < terms.size(); ++i) {
-        const auto& term = terms[i];
-        if (m_lastTermId != -1 && term.id == m_lastTermId) {
+    for (int i = 0; i < items.size(); ++i) {
+        const auto& item = items[i];
+        if (m_lastItemId != -1 && item.id == m_lastItemId) {
             rowToSelect = i;
         }
         QList<QStandardItem*> row;
         auto* idItem = new QStandardItem();
-        idItem->setData(term.id, Qt::DisplayRole);
-        idItem->setData(term.id, Qt::UserRole);
+        idItem->setData(item.id, Qt::DisplayRole);
+        idItem->setData(item.id, Qt::UserRole);
         row << idItem
-            << new QStandardItem(term.groupName)
-            << new QStandardItem(term.title)
-            << new QStandardItem(term.disambiguation)
-            << new QStandardItem(term.tags.join(", "))
-            << new QStandardItem(term.flags.join(", "))
-            << new QStandardItem(term.aliases.join(", "));
+            << new QStandardItem(item.groupName)
+            << new QStandardItem(item.title)
+            << new QStandardItem(item.disambiguation)
+            << new QStandardItem(item.tags.join(", "))
+            << new QStandardItem(item.flags.join(", "))
+            << new QStandardItem(item.aliases.join(", "));
         
         QString statusText;
-        switch (term.status) {
-            case TermStatus::Draft:     statusText = "Draft"; break;
-            case TermStatus::Completed: statusText = "Completed"; break;
+        switch (item.status) {
+            case ItemStatus::Draft:     statusText = "Draft"; break;
+            case ItemStatus::Completed: statusText = "Completed"; break;
             default:                    statusText = "None"; break;
         }
         row << new QStandardItem(statusText);
 
         QString understandingText;
-        switch (term.understanding) {
+        switch (item.understanding) {
             case UnderstandingLevel::Recognized: understandingText = "Recognized"; break;
             case UnderstandingLevel::Understood: understandingText = "Understood"; break;
             case UnderstandingLevel::Practiced:  understandingText = "Practiced"; break;
@@ -392,7 +392,7 @@ void MainWindow::refreshTerms() {
             default:                             understandingText = "Unknown"; break;
         }
         row << new QStandardItem(understandingText);
-        row << new QStandardItem(term.pinned ? "Yes" : "No");
+        row << new QStandardItem(item.pinned ? "Yes" : "No");
         m_model->appendRow(row);
     }
 
@@ -409,7 +409,7 @@ void MainWindow::refreshTerms() {
 
     if (rowToSelect != -1) {
         m_tableView->selectRow(rowToSelect);
-        m_lastTermId = -1; // Reset so it doesn't keep selecting on every refresh
+        m_lastItemId = -1; // Reset so it doesn't keep selecting on every refresh
     }
 
     updateActions();
@@ -417,26 +417,26 @@ void MainWindow::refreshTerms() {
 
 void MainWindow::resetPaginationAndRefresh() {
     m_currentPage = 0;
-    refreshTerms();
+    refreshItems();
 }
 
 void MainWindow::firstPage() {
     if (m_currentPage > 0) {
         m_currentPage = 0;
-        refreshTerms();
+        refreshItems();
     }
 }
 
 void MainWindow::prevPage() {
     if (m_currentPage > 0) {
         m_currentPage--;
-        refreshTerms();
+        refreshItems();
     }
 }
 
 void MainWindow::nextPage() {
     m_currentPage++;
-    refreshTerms();
+    refreshItems();
 }
 
 void MainWindow::lastPage() {
@@ -449,7 +449,7 @@ void MainWindow::lastPage() {
     const int pinnedFilter = m_pinnedFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countTerms(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countItems(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -458,7 +458,7 @@ void MainWindow::lastPage() {
     int totalPages = std::max(1, (totalCount + m_pageSize - 1) / m_pageSize);
     if (m_currentPage < totalPages - 1) {
         m_currentPage = totalPages - 1;
-        refreshTerms();
+        refreshItems();
     }
 }
 
@@ -475,7 +475,7 @@ void MainWindow::refreshSuggestions() {
     }
 }
 
-int MainWindow::selectedTermId() const {
+int MainWindow::selectedItemId() const {
     const auto indexes = m_tableView->selectionModel()->selectedRows();
     if (indexes.isEmpty()) {
         return -1;
@@ -488,7 +488,7 @@ QList<GroupRecord> MainWindow::groups() const {
     return m_groups;
 }
 
-void MainWindow::addTerm() {
+void MainWindow::addItem() {
     if (m_groups.isEmpty()) {
         QMessageBox::information(this, "Lexicon", "Create a group first.");
         openGroupManager();
@@ -497,21 +497,21 @@ void MainWindow::addTerm() {
         }
     }
 
-    TermEditDialog dialog(this);
+    ItemEditDialog dialog(this);
     dialog.setGroups(m_groups);
-    TermRecord draft;
+    ItemRecord draft;
     if (m_groupFilter->currentData().toInt() > 0) {
         draft.groupId = m_groupFilter->currentData().toInt();
     }
     draft.title = m_searchEdit->text().trimmed();
-    dialog.setTerm(draft);
+    dialog.setItem(draft);
 
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
     QString error;
-    if (!DatabaseManager::saveTerm(dialog.term(), &error)) {
+    if (!DatabaseManager::saveItem(dialog.item(), &error)) {
         showError(error);
         return;
     }
@@ -532,8 +532,8 @@ void MainWindow::quickAdd() {
         }
     }
 
-    TermRecord term;
-    term.title = text;
+    ItemRecord item;
+    item.title = text;
     
     // Choose group: current filter or first available
     int groupId = m_groupFilter->currentData().toInt();
@@ -546,10 +546,10 @@ void MainWindow::quickAdd() {
          return;
     }
     
-    term.groupId = groupId;
+    item.groupId = groupId;
 
     QString error;
-    if (!DatabaseManager::saveTerm(term, &error)) {
+    if (!DatabaseManager::saveItem(item, &error)) {
         showError(error);
         return;
     }
@@ -558,48 +558,48 @@ void MainWindow::quickAdd() {
     refreshAll();
 }
 
-void MainWindow::editSelectedTerm() {
-    const int termId = selectedTermId();
-    if (termId < 0) {
+void MainWindow::editSelectedItem() {
+    const int itemId = selectedItemId();
+    if (itemId < 0) {
         return;
     }
 
-    TermRecord term;
+    ItemRecord item;
     QString error;
-    if (!DatabaseManager::loadTerm(termId, term, &error)) {
+    if (!DatabaseManager::loadItem(itemId, item, &error)) {
         showError(error);
         return;
     }
 
-    TermEditDialog dialog(this);
+    ItemEditDialog dialog(this);
     dialog.setGroups(m_groups);
-    dialog.setTerm(term);
+    dialog.setItem(item);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    if (!DatabaseManager::saveTerm(dialog.term(), &error)) {
+    if (!DatabaseManager::saveItem(dialog.item(), &error)) {
         showError(error);
         return;
     }
     refreshAll();
 }
 
-void MainWindow::deleteSelectedTerm() {
-    const int termId = selectedTermId();
-    if (termId < 0) {
+void MainWindow::deleteSelectedItem() {
+    const int itemId = selectedItemId();
+    if (itemId < 0) {
         return;
     }
 
     const int row = m_tableView->selectionModel()->selectedRows().first().row();
     const QString title = m_model->item(row, 2)->text();
-    const auto answer = QMessageBox::question(this, "Delete term", QString("Delete term '%1'?").arg(title));
+    const auto answer = QMessageBox::question(this, "Delete item", QString("Delete item '%1'?").arg(title));
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString error;
-    if (!DatabaseManager::deleteTerm(termId, &error)) {
+    if (!DatabaseManager::deleteItem(itemId, &error)) {
         showError(error);
         return;
     }
@@ -650,7 +650,7 @@ void MainWindow::showAliasesOverview() {
 }
 
 void MainWindow::updateActions() {
-    const bool hasSelection = selectedTermId() >= 0;
+    const bool hasSelection = selectedItemId() >= 0;
     const auto editButtons = findChildren<QPushButton*>(QString(), Qt::FindChildrenRecursively);
     for (auto* button : editButtons) {
         if (button->text() == "Edit") {
@@ -662,22 +662,22 @@ void MainWindow::updateActions() {
     }
 }
 
-void MainWindow::showTermContent(const QModelIndex& index) {
+void MainWindow::showItemContent(const QModelIndex& index) {
     if (!index.isValid()) {
-        m_termContentView->clear();
+        m_itemContentView->clear();
         m_linksView->clear();
         return;
     }
 
-    const int termId = m_model->data(m_model->index(index.row(), 0), Qt::UserRole).toInt();
-    TermRecord term;
+    const int itemId = m_model->data(m_model->index(index.row(), 0), Qt::UserRole).toInt();
+    ItemRecord item;
     QString error;
-    if (DatabaseManager::loadTerm(termId, term, &error)) {
-        m_termContentView->setHtml(MarkdownConverter::toHtml(term.content));
-        updateLinksDisplay(termId);
-        DatabaseManager::logTermRead(termId);
+    if (DatabaseManager::loadItem(itemId, item, &error)) {
+        m_itemContentView->setHtml(MarkdownConverter::toHtml(item.content));
+        updateLinksDisplay(itemId);
+        DatabaseManager::logItemRead(itemId);
     } else {
-        m_termContentView->setPlainText("Error loading content: " + error);
+        m_itemContentView->setPlainText("Error loading content: " + error);
         m_linksView->clear();
     }
 }
@@ -722,7 +722,7 @@ void MainWindow::applyTheme(const QString& themeName) {
 }
 
 void MainWindow::updateMarkdownStyles() {
-    if (!m_termContentView) return;
+    if (!m_itemContentView) return;
 
     QPalette pal = palette();
     QString bgColor = pal.color(QPalette::Base).name();
@@ -736,7 +736,7 @@ void MainWindow::updateMarkdownStyles() {
         codeBgColor = "#000000";
     }
 
-    m_termContentView->setStyleSheet(QString("QTextEdit[readOnly=\"true\"] { background-color: %1; color: %2; }").arg(bgColor, textColor));
+    m_itemContentView->setStyleSheet(QString("QTextEdit[readOnly=\"true\"] { background-color: %1; color: %2; }").arg(bgColor, textColor));
     m_linksView->setStyleSheet(QString("QTextEdit[readOnly=\"true\"] { background-color: %1; color: %2; }").arg(bgColor, textColor));
     
     QString style = QString(
@@ -750,24 +750,24 @@ void MainWindow::updateMarkdownStyles() {
         "a { color: %5; }"
     ).arg(textColor, borderColor, headerBgColor, codeBgColor, linkColor);
 
-    m_termContentView->document()->setDefaultStyleSheet(style);
+    m_itemContentView->document()->setDefaultStyleSheet(style);
     m_linksView->document()->setDefaultStyleSheet(style);
     
     // Force re-render of current content
     if (m_tableView->selectionModel()->hasSelection()) {
-        showTermContent(m_tableView->currentIndex());
+        showItemContent(m_tableView->currentIndex());
     }
 }
 
-void MainWindow::updateLinksDisplay(int termId) {
-    if (termId == -1) {
+void MainWindow::updateLinksDisplay(int itemId) {
+    if (itemId == -1) {
         m_linksView->clear();
         return;
     }
 
     QString error;
-    QList<LinkRecord> links = DatabaseManager::loadLinks(termId, &error);
-    QList<LinkRecord> backlinks = DatabaseManager::loadBacklinks(termId, &error);
+    QList<LinkRecord> links = DatabaseManager::loadLinks(itemId, &error);
+    QList<LinkRecord> backlinks = DatabaseManager::loadBacklinks(itemId, &error);
 
     auto linkTypeToString = [](LinkType type) -> QString {
         switch (type) {
@@ -795,7 +795,7 @@ void MainWindow::updateLinksDisplay(int termId) {
                 ? QString("Custom: %1").arg(links[i].customValue.toHtmlEscaped())
                 : linkTypeToString(links[i].linkType);
             html += QString("<a href=\"%1\">%2 (%3)</a>")
-                        .arg(QUrl::toPercentEncoding(links[i].toTermTitle), links[i].toTermTitle.toHtmlEscaped(), type);
+                        .arg(QUrl::toPercentEncoding(links[i].toItemTitle), links[i].toItemTitle.toHtmlEscaped(), type);
         }
     }
 
@@ -809,7 +809,7 @@ void MainWindow::updateLinksDisplay(int termId) {
                 ? QString("Custom: %1").arg(backlinks[i].customValue.toHtmlEscaped())
                 : linkTypeToString(backlinks[i].linkType);
             html += QString("<a href=\"%1\">%2 (%3)</a>")
-                        .arg(QUrl::toPercentEncoding(backlinks[i].fromTermTitle), backlinks[i].fromTermTitle.toHtmlEscaped(), type);
+                        .arg(QUrl::toPercentEncoding(backlinks[i].fromItemTitle), backlinks[i].fromItemTitle.toHtmlEscaped(), type);
         }
     }
 
@@ -817,7 +817,7 @@ void MainWindow::updateLinksDisplay(int termId) {
 }
 
 void MainWindow::onLinkActivated(const QUrl& link) {
-    QString termTitle = QUrl::fromPercentEncoding(link.toString().toUtf8());
+    QString itemTitle = QUrl::fromPercentEncoding(link.toString().toUtf8());
 
     m_groupFilter->blockSignals(true);
     m_tagFilter->blockSignals(true);
@@ -831,7 +831,7 @@ void MainWindow::onLinkActivated(const QUrl& link) {
     m_flagFilter->setCurrentIndex(0);
     m_statusFilter->setCurrentIndex(0);
     m_understandingFilter->setCurrentIndex(0);
-    m_searchEdit->setText(termTitle);
+    m_searchEdit->setText(itemTitle);
 
     m_groupFilter->blockSignals(false);
     m_tagFilter->blockSignals(false);
@@ -867,13 +867,17 @@ void MainWindow::showError(const QString& message) {
 void MainWindow::saveSettings() {
     QSettings settings;
     settings.setValue("pagination/pageSize", m_pageSize);
-    settings.setValue("state/lastTermId", selectedTermId());
+    settings.setValue("state/lastItemId", selectedItemId());
 }
 
 void MainWindow::loadSettings() {
     QSettings settings;
     m_pageSize = settings.value("pagination/pageSize", 20).toInt();
-    m_lastTermId = settings.value("state/lastTermId", -1).toInt();
+    m_lastItemId = settings.value("state/lastItemId", settings.value("state/lastTermId", -1)).toInt();
+    if (settings.contains("state/lastTermId")) {
+        settings.setValue("state/lastItemId", m_lastItemId);
+        settings.remove("state/lastTermId");
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

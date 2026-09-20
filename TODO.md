@@ -28,7 +28,7 @@ This file tracks features, improvements, and fixes for the Lexicon application.
     - Use `QSplitter` to allow resizing between table, preview, and links.
     - Improve spacing and alignment for readability.
   
-- [ ] Bug: Adding new term, if no group is selected, uses the first group
+- [ ] Bug: Adding new item, if no group is selected, uses the first group
 
 ---
 
@@ -40,7 +40,7 @@ This file tracks features, improvements, and fixes for the Lexicon application.
 
 - [ ] **Filtering / Searching:**
     - Improve search box to handle multiple fields (title, alias, tag, flag).
-    - Add quick filters for pinned / unpinned terms.
+    - Add quick filters for pinned / unpinned items.
 
 - [ ] **Markdown editor toolbar:**
     - Ensure all formatting buttons work correctly.
@@ -48,19 +48,19 @@ This file tracks features, improvements, and fixes for the Lexicon application.
     - Possibly support undo/redo for Markdown inserts.
 
 - [ ] **Validation:**
-    - Ensure a group exists before adding a term.
+    - Ensure a group exists before adding an item.
     - Check title is not empty before saving.
 
 ---
 
 ## 3. Database / Backend
 
-- [ ] **Term relations table:**
+- [ ] **Item relations table:**
     - Ensure correct mapping of relation types to SQLite.
     - Add optional `note` or `bidirectional` columns if needed.
 
 - [ ] **Aliases / Tags / Flags tables:**
-    - Verify proper linking to `dictionary_term`.
+    - Verify proper linking to `dictionary_item`.
     - Ensure sorting and uniqueness of items.
 
 - [ ] **Markdown content:**
@@ -72,10 +72,10 @@ This file tracks features, improvements, and fixes for the Lexicon application.
 ## 4. Future / Nice-to-Have
 
 - [ ] Dark mode / theme support.
-- [ ] Export / import terms (Markdown or JSON).
+- [ ] Export / import items (Markdown or JSON).
 - [ ] Keyboard shortcuts for common actions (Add, Edit, Delete, Format).
-- [ ] Undo/redo for term edits.
-- [ ] Graph visualization of term relationships.
+- [ ] Undo/redo for item edits.
+- [ ] Graph visualization of item relationships.
 
 ---
 

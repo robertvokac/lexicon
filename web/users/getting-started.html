@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Getting started — Lexicon User Guide</title>
-<meta name="description" content="Getting started with Lexicon: create groups, explore the main window, add your first terms, and browse large dictionaries with pagination.">
+<meta name="description" content="Getting started with Lexicon: create groups, explore the main window, add your first items, and browse large dictionaries with pagination.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -37,7 +37,7 @@
         <li><a href="index.html">Overview</a></li>
         <li><a href="installation.html">Installation</a></li>
         <li><a href="getting-started.html" class="active">Getting started</a></li>
-        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
@@ -46,7 +46,7 @@
       <ul>
         <li><a href="#groups">Create groups</a></li>
         <li><a href="#main-window">The main window</a></li>
-        <li><a href="#first-term">Your first term</a></li>
+        <li><a href="#first-item">Your first item</a></li>
         <li><a href="#pagination">Large dictionaries</a></li>
       </ul>
     </nav>
@@ -55,10 +55,10 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Getting started</p>
     <h1>Getting started</h1>
-    <p class="lead">Lexicon is running — let's build the skeleton of your knowledge base: groups first, then terms.</p>
+    <p class="lead">Lexicon is running — let's build the skeleton of your knowledge base: groups first, then items.</p>
 
     <h2 id="groups">1. Create and manage groups</h2>
-    <p>Groups are top-level buckets for terms. Think of them as the volumes of your personal encyclopedia — for example <code>C++</code>, <code>Databases</code>, or <code>Networking</code>.</p>
+    <p>Groups are top-level buckets for items. Think of them as the volumes of your personal encyclopedia — for example <code>C++</code>, <code>Databases</code>, or <code>Networking</code>.</p>
     <ol class="steps">
       <li>Open <code>Manage → Groups...</code> from the menu bar.</li>
       <li>Click <strong>Add</strong> to create a new group. Give it a short, unique name and an optional description.</li>
@@ -68,43 +68,43 @@
 
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
-      <p><strong>Deleting a group deletes its terms</strong> Removing a group cascades to <em>all terms inside it</em>, including their content, metadata, and links. There is no undo — back up first if unsure.</p>
+      <p><strong>Deleting a group deletes its items</strong> Removing a group cascades to <em>all items inside it</em>, including their content, metadata, and links. There is no undo — back up first if unsure.</p>
     </div>
 
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
-      <p><strong>Start coarse</strong> A handful of broad groups beats dozens of narrow ones. You can always refine with <a href="editing-terms.html#metadata">tags</a> later — they are much cheaper to reorganize.</p>
+      <p><strong>Start coarse</strong> A handful of broad groups beats dozens of narrow ones. You can always refine with <a href="editing-items.html#metadata">tags</a> later — they are much cheaper to reorganize.</p>
     </div>
 
     <h2 id="main-window">2. Explore the main window</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filter row, term table, pagination controls, and content preview">
-      <figcaption>The main window: filter row on top, term table in the middle, rendered content and relationships below.</figcaption>
+      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filter row, item table, pagination controls, and content preview">
+      <figcaption>The main window: filter row on top, item table in the middle, rendered content and relationships below.</figcaption>
     </figure>
     <p>The main window is organized top-to-bottom:</p>
     <table>
       <tr><th>Area</th><th>What it does</th></tr>
       <tr><td><strong>Filter row</strong></td><td>Combine <code>Group</code>, <code>Tag</code>, <code>Flag</code>, <code>Status</code>, <code>Understanding</code>, <code>Pinned</code>, and free-text <code>Search</code> to narrow the table.</td></tr>
-      <tr><td><strong>Term table</strong></td><td>Select a row to preview it below; double-click to edit; click column headers to sort.</td></tr>
+      <tr><td><strong>Item table</strong></td><td>Select a row to preview it below; double-click to edit; click column headers to sort.</td></tr>
       <tr><td><strong>Pagination bar</strong></td><td>Browse large result sets page by page with a configurable page size.</td></tr>
-      <tr><td><strong>Content pane</strong></td><td>Shows the selected term's Markdown rendered as HTML, followed by a links/backlinks summary.</td></tr>
+      <tr><td><strong>Content pane</strong></td><td>Shows the selected item's Markdown rendered as HTML, followed by a links/backlinks summary.</td></tr>
     </table>
 
-    <h2 id="first-term">3. Create your first term</h2>
-    <p>The main toolbar offers two ways to add a term:</p>
+    <h2 id="first-item">3. Create your first item</h2>
+    <p>The main toolbar offers two ways to add an item:</p>
     <ul>
       <li><strong><code>Add</code></strong> — the quick path. The title is prefilled from your current search text, which is perfect for the "searched it, didn't exist, so let's create it" workflow.</li>
-      <li><strong><code>Add ...</code></strong> — the full dialog path, opening the complete term editor.</li>
+      <li><strong><code>Add ...</code></strong> — the full dialog path, opening the complete item editor.</li>
     </ul>
     <p>Recommended workflow:</p>
     <ol class="steps">
-      <li><strong>Select the target group</strong> in the filter row, so the new term lands where you expect.</li>
+      <li><strong>Select the target group</strong> in the filter row, so the new item lands where you expect.</li>
       <li>Click <strong>Add</strong> or <strong>Add ...</strong>.</li>
       <li>Fill in the <strong>General tab</strong>: <code>Title</code> (required), an optional <code>Disambiguation</code> (useful when the same title exists twice in one group), <code>Status</code>, <code>Understanding</code>, and <code>Pinned</code>.</li>
       <li>Optionally add <strong>content, metadata, and links</strong> in the other tabs — or come back later.</li>
       <li>Click <strong>Save</strong>.</li>
     </ol>
-    <p>Everything about the editor tabs is covered in <a href="editing-terms.html">Editing terms</a>.</p>
+    <p>Everything about the editor tabs is covered in <a href="editing-items.html">Editing items</a>.</p>
 
     <h2 id="pagination">4. Working with large dictionaries</h2>
     <p>Lexicon is optimized for large datasets. The pagination bar keeps the table responsive no matter how big your lexicon grows:</p>
@@ -114,13 +114,13 @@
       <tr><td><code>&lt; Prev</code></td><td>Go one page back</td></tr>
       <tr><td><code>Next &gt;</code></td><td>Go one page forward</td></tr>
       <tr><td><code>Last &gt;&gt;</code></td><td>Jump to the last page</td></tr>
-      <tr><td><code>Page size</code></td><td>Choose how many terms are shown per page</td></tr>
+      <tr><td><code>Page size</code></td><td>Choose how many items are shown per page</td></tr>
     </table>
-    <p>Combined with <a href="search-and-navigation.html">search and filters</a>, you can comfortably navigate thousands of terms.</p>
+    <p>Combined with <a href="search-and-navigation.html">search and filters</a>, you can comfortably navigate thousands of items.</p>
 
     <div class="page-nav">
       <a class="prev" href="installation.html"><span class="dir">← Previous</span>Installation</a>
-      <a class="next" href="editing-terms.html"><span class="dir">Next →</span>Editing terms</a>
+      <a class="next" href="editing-items.html"><span class="dir">Next →</span>Editing items</a>
     </div>
   </main>
 

@@ -136,7 +136,7 @@ private slots:
     void refreshGroups();
     void refreshTags();
     void refreshFlags();
-    void refreshTerms();
+    void refreshItems();
     void resetPaginationAndRefresh();
     void firstPage();
     void prevPage();
@@ -144,10 +144,10 @@ private slots:
     void lastPage();
     void refreshSuggestions();
 
-    void addTerm();
+    void addItem();
     void quickAdd();
-    void editSelectedTerm();
-    void deleteSelectedTerm();
+    void editSelectedItem();
+    void deleteSelectedItem();
 
     void openGroupManager();
     void showTagsOverview();
@@ -155,7 +155,7 @@ private slots:
     void showAliasesOverview();
 
     void updateActions();
-    void showTermContent(const QModelIndex& index);
+    void showItemContent(const QModelIndex& index);
     void onLinkActivated(const QUrl& link);
 
 private:
@@ -165,10 +165,10 @@ private:
     void loadSettings();
 
     void updateMarkdownStyles();
-    void updateLinksDisplay(int termId);
+    void updateLinksDisplay(int itemId);
     void setupUi();
     void setupMenus();
-    int selectedTermId() const;
+    int selectedItemId() const;
     QList<GroupRecord> groups() const;
     void showError(const QString& message);
 
@@ -194,14 +194,14 @@ private:
     QPushButton* m_lastButton = nullptr;
     QLabel* m_pageLabel = nullptr;
     QComboBox* m_pageSizeCombo = nullptr;
-    QTextEdit* m_termContentView = nullptr;
+    QTextEdit* m_itemContentView = nullptr;
     QTextBrowser* m_linksView = nullptr;
     CodeHighlighter* m_highlighter = nullptr;
     CodeHighlighter* m_linksHighlighter = nullptr;
 
     int m_currentPage = 0;
     int m_pageSize = 20;
-    int m_lastTermId = -1;
+    int m_lastItemId = -1;
 
     QList<GroupRecord> m_groups;
 };

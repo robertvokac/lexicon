@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>User Guide — Lexicon</title>
-<meta name="description" content="Lexicon User Guide: learn how to install the desktop knowledge dictionary and organize your knowledge with groups, terms, metadata, and links.">
+<meta name="description" content="Lexicon User Guide: learn how to install the desktop knowledge dictionary and organize your knowledge with groups, items, metadata, and links.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -37,7 +37,7 @@
         <li><a href="index.html" class="active">Overview</a></li>
         <li><a href="installation.html">Installation</a></li>
         <li><a href="getting-started.html">Getting started</a></li>
-        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
@@ -56,11 +56,11 @@
     <p class="lead">Welcome! This guide takes you from installing Lexicon to running a well-organized, interlinked knowledge dictionary.</p>
 
     <h2>What is Lexicon?</h2>
-    <p>Lexicon is a free, open-source desktop application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>terms</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
+    <p>Lexicon is a free, open-source desktop application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>items</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
     <p>All data is stored locally in a single SQLite file — no account, no cloud, no telemetry. You own your knowledge.</p>
 
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filters, term table, and rendered content">
+      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filters, item table, and rendered content">
       <figcaption>The main window: everything you need on one screen.</figcaption>
     </figure>
 
@@ -68,20 +68,20 @@
     <p>Five ideas are enough to understand the whole application:</p>
     <table>
       <tr><th>Concept</th><th>What it is</th><th>Example</th></tr>
-      <tr><td><strong>Group</strong></td><td>A top-level bucket that groups related terms.</td><td><code>C++</code>, <code>Databases</code>, <code>Networking</code></td></tr>
-      <tr><td><strong>Term</strong></td><td>A single concept with a title, Markdown content, and metadata.</td><td><code>Move semantics</code>, <code>B-tree index</code></td></tr>
+      <tr><td><strong>Group</strong></td><td>A top-level bucket that groups related items.</td><td><code>C++</code>, <code>Databases</code>, <code>Networking</code></td></tr>
+      <tr><td><strong>Item</strong></td><td>A single concept with a title, Markdown content, and metadata.</td><td><code>Move semantics</code>, <code>B-tree index</code></td></tr>
       <tr><td><strong>Tag / Flag</strong></td><td>Labels for classification (tags) and workflow markers (flags).</td><td>Tags: <code>cpp20</code>, <code>templates</code> · Flags: <code>review</code>, <code>needs-example</code></td></tr>
       <tr><td><strong>Alias</strong></td><td>An alternate name or synonym that also matches in search.</td><td><code>RAII</code> for <em>Resource Acquisition Is Initialization</em></td></tr>
-      <tr><td><strong>Link</strong></td><td>A typed relationship between two terms (with automatic backlinks).</td><td><code>std::vector</code> — <em>Is A</em> → <code>container</code></td></tr>
+      <tr><td><strong>Link</strong></td><td>A typed relationship between two items (with automatic backlinks).</td><td><code>std::vector</code> — <em>Is A</em> → <code>container</code></td></tr>
     </table>
 
     <h2>Quick start checklist</h2>
     <ol class="steps">
       <li><strong><a href="installation.html">Install and launch Lexicon</a>.</strong> The database file is created automatically on first start.</li>
       <li><strong><a href="getting-started.html">Create your first group</a></strong> via <code>Manage → Groups...</code> — for example <code>C++</code>.</li>
-      <li><strong>Add a few terms</strong> with the <code>Add</code> button and fill in their titles.</li>
-      <li><strong><a href="editing-terms.html">Write content in Markdown</a></strong> in the Content tab and watch the live preview.</li>
-      <li><strong><a href="links-and-relationships.html">Connect related terms</a></strong> with typed links to grow your concept graph.</li>
+      <li><strong>Add a few items</strong> with the <code>Add</code> button and fill in their titles.</li>
+      <li><strong><a href="editing-items.html">Write content in Markdown</a></strong> in the Content tab and watch the live preview.</li>
+      <li><strong><a href="links-and-relationships.html">Connect related items</a></strong> with typed links to grow your concept graph.</li>
       <li><strong><a href="backup-and-troubleshooting.html">Set up a backup habit</a></strong> — copying one file is all it takes.</li>
     </ol>
 
@@ -93,11 +93,11 @@
       </a>
       <a class="card card-link" href="getting-started.html">
         <h3>🚀 Getting started</h3>
-        <p>Create groups, explore the main window, and add your first terms the recommended way.</p>
+        <p>Create groups, explore the main window, and add your first items the recommended way.</p>
       </a>
-      <a class="card card-link" href="editing-terms.html">
-        <h3>✍️ Editing terms</h3>
-        <p>The term editor in depth: General fields, the Markdown editor, and metadata management.</p>
+      <a class="card card-link" href="editing-items.html">
+        <h3>✍️ Editing items</h3>
+        <p>The item editor in depth: General fields, the Markdown editor, and metadata management.</p>
       </a>
       <a class="card card-link" href="links-and-relationships.html">
         <h3>🔗 Links &amp; relationships</h3>

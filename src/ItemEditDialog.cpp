@@ -1,4 +1,4 @@
-#include "TermEditDialog.h"
+#include "ItemEditDialog.h"
 
 #include "MarkdownConverter.h"
 #include <QCheckBox>
@@ -56,19 +56,19 @@ QWidget* buildListEditor(const QString& title,
 }
 }
 
-TermEditDialog::TermEditDialog(QWidget* parent)
+ItemEditDialog::ItemEditDialog(QWidget* parent)
     : QDialog(parent) {
     m_previewTimer = new QTimer(this);
     m_previewTimer->setSingleShot(true);
     m_previewTimer->setInterval(1000);
-    connect(m_previewTimer, &QTimer::timeout, this, &TermEditDialog::updatePreview);
+    connect(m_previewTimer, &QTimer::timeout, this, &ItemEditDialog::updatePreview);
 
     setupUi();
     connectSignals();
 }
 
-void TermEditDialog::setupUi() {
-    setWindowTitle("Edit term");
+void ItemEditDialog::setupUi() {
+    setWindowTitle("Edit item");
     resize(800, 600);
 
     auto* rootLayout = new QVBoxLayout(this);
@@ -81,9 +81,9 @@ void TermEditDialog::setupUi() {
 
     m_groupCombo = new QComboBox(this);
     m_statusCombo = new QComboBox(this);
-    m_statusCombo->addItem("None", static_cast<int>(TermStatus::None));
-    m_statusCombo->addItem("Draft", static_cast<int>(TermStatus::Draft));
-    m_statusCombo->addItem("Completed", static_cast<int>(TermStatus::Completed));
+    m_statusCombo->addItem("None", static_cast<int>(ItemStatus::None));
+    m_statusCombo->addItem("Draft", static_cast<int>(ItemStatus::Draft));
+    m_statusCombo->addItem("Completed", static_cast<int>(ItemStatus::Completed));
 
     m_understandingCombo = new QComboBox(this);
     m_understandingCombo->addItem("Unknown", static_cast<int>(UnderstandingLevel::Unknown));
@@ -188,17 +188,17 @@ void TermEditDialog::setupUi() {
 
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
     m_saveButton = buttonBox->button(QDialogButtonBox::Save);
-    QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &TermEditDialog::validateAndAccept);
-    QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &TermEditDialog::reject);
+    QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &ItemEditDialog::validateAndAccept);
+    QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &ItemEditDialog::reject);
 
     rootLayout->addWidget(buttonBox);
 }
 
-void TermEditDialog::connectSignals() {
+void ItemEditDialog::connectSignals() {
     connect(m_contentEdit, &QTextEdit::textChanged, m_previewTimer, QOverload<>::of(&QTimer::start));
 }
 
-void TermEditDialog::showEvent(QShowEvent* event) {
+void ItemEditDialog::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
     if (m_titleEdit) {
         m_titleEdit->setFocus();
@@ -207,56 +207,56 @@ void TermEditDialog::showEvent(QShowEvent* event) {
 }
 
 
-void TermEditDialog::setGroups(const QList<GroupRecord>& groups) {
+void ItemEditDialog::setGroups(const QList<GroupRecord>& groups) {
     m_groupCombo->clear();
     for (const GroupRecord& group : groups) {
         m_groupCombo->addItem(group.name, group.id);
     }
 }
 
-void TermEditDialog::setTerm(const TermRecord& term) {
-    m_termId = term.id;
-    m_titleEdit->setText(term.title);
-    m_disambiguationEdit->setText(term.disambiguation);
+void ItemEditDialog::setItem(const ItemRecord& item) {
+    m_itemId = item.id;
+    m_titleEdit->setText(item.title);
+    m_disambiguationEdit->setText(item.disambiguation);
 
-    const int groupIdx = m_groupCombo->findData(term.groupId);
+    const int groupIdx = m_groupCombo->findData(item.groupId);
     if (groupIdx >= 0) {
         m_groupCombo->setCurrentIndex(groupIdx);
     }
 
-    const int underIdx = m_understandingCombo->findData(static_cast<int>(term.understanding));
+    const int underIdx = m_understandingCombo->findData(static_cast<int>(item.understanding));
     if (underIdx >= 0) {
         m_understandingCombo->setCurrentIndex(underIdx);
     }
 
-    const int statusIdx = m_statusCombo->findData(static_cast<int>(term.status));
+    const int statusIdx = m_statusCombo->findData(static_cast<int>(item.status));
     if (statusIdx >= 0) {
         m_statusCombo->setCurrentIndex(statusIdx);
     }
 
-    m_pinnedCheck->setChecked(term.pinned);
-    m_contentEdit->setPlainText(term.content); // Use setPlainText to avoid auto-formatting during load
+    m_pinnedCheck->setChecked(item.pinned);
+    m_contentEdit->setPlainText(item.content); // Use setPlainText to avoid auto-formatting during load
     updatePreview();
 
-    setListValues(m_aliasList, term.aliases);
-    setListValues(m_tagList, term.tags);
-    setListValues(m_flagList, term.flags);
+    setListValues(m_aliasList, item.aliases);
+    setListValues(m_tagList, item.tags);
+    setListValues(m_flagList, item.flags);
 
-    if (m_termId != -1) {
-        m_currentLinks = DatabaseManager::loadLinks(m_termId);
-        m_currentBacklinks = DatabaseManager::loadBacklinks(m_termId);
+    if (m_itemId != -1) {
+        m_currentLinks = DatabaseManager::loadLinks(m_itemId);
+        m_currentBacklinks = DatabaseManager::loadBacklinks(m_itemId);
         updateLinksList();
     }
 }
 
-TermRecord TermEditDialog::term() const {
-    TermRecord result;
-    result.id = m_termId;
+ItemRecord ItemEditDialog::item() const {
+    ItemRecord result;
+    result.id = m_itemId;
     result.groupId = m_groupCombo->currentData().toInt();
     result.groupName = m_groupCombo->currentText();
     result.title = m_titleEdit->text().trimmed();
     result.disambiguation = m_disambiguationEdit->text().trimmed();
-    result.status = static_cast<TermStatus>(m_statusCombo->currentData().toInt());
+    result.status = static_cast<ItemStatus>(m_statusCombo->currentData().toInt());
     result.understanding = static_cast<UnderstandingLevel>(m_understandingCombo->currentData().toInt());
     result.pinned = m_pinnedCheck->isChecked();
     result.content = m_contentEdit->toPlainText();
@@ -266,7 +266,7 @@ TermRecord TermEditDialog::term() const {
     return result;
 }
 
-void TermEditDialog::addValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
+void ItemEditDialog::addValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
     const QString value = getInputValue(title, "Value:", QString(), suggestions);
     if (value.isEmpty()) {
         return;
@@ -275,7 +275,7 @@ void TermEditDialog::addValue(QListWidget* list, const QString& title, const QSt
     list->sortItems();
 }
 
-void TermEditDialog::editValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
+void ItemEditDialog::editValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
     auto* item = list->currentItem();
     if (!item) {
         QMessageBox::information(this, title, "Select a value first.");
@@ -290,7 +290,7 @@ void TermEditDialog::editValue(QListWidget* list, const QString& title, const QS
     list->sortItems();
 }
 
-void TermEditDialog::removeValue(QListWidget* list, const QString& title) {
+void ItemEditDialog::removeValue(QListWidget* list, const QString& title) {
     auto* item = list->currentItem();
     if (!item) {
         QMessageBox::information(this, title, "Select a value first.");
@@ -299,7 +299,7 @@ void TermEditDialog::removeValue(QListWidget* list, const QString& title) {
     delete item;
 }
 
-void TermEditDialog::insertMarkdown(const QString& prefix, const QString& suffix, const QString& defaultText) {
+void ItemEditDialog::insertMarkdown(const QString& prefix, const QString& suffix, const QString& defaultText) {
     auto cursor = m_contentEdit->textCursor();
     if (cursor.hasSelection()) {
         QString text = cursor.selectedText();
@@ -316,42 +316,42 @@ void TermEditDialog::insertMarkdown(const QString& prefix, const QString& suffix
     m_contentEdit->setFocus();
 }
 
-void TermEditDialog::formatBold() { insertMarkdown("**", "**", "bold text"); }
-void TermEditDialog::formatItalic() { insertMarkdown("*", "*", "italic text"); }
-void TermEditDialog::formatLink() { insertMarkdown("[", "](https://)", "link text"); }
-void TermEditDialog::formatTable() {
+void ItemEditDialog::formatBold() { insertMarkdown("**", "**", "bold text"); }
+void ItemEditDialog::formatItalic() { insertMarkdown("*", "*", "italic text"); }
+void ItemEditDialog::formatLink() { insertMarkdown("[", "](https://)", "link text"); }
+void ItemEditDialog::formatTable() {
     insertMarkdown("\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n", "", "");
 }
 
-void TermEditDialog::formatList() {
+void ItemEditDialog::formatList() {
     insertMarkdown("\n- ", "", "list item");
 }
 
-void TermEditDialog::formatOrderedList() {
+void ItemEditDialog::formatOrderedList() {
     insertMarkdown("\n1. ", "", "list item");
 }
 
-void TermEditDialog::formatH2() {
+void ItemEditDialog::formatH2() {
     insertMarkdown("\n## ", "", "Header 2");
 }
 
-void TermEditDialog::formatH3() {
+void ItemEditDialog::formatH3() {
     insertMarkdown("\n### ", "", "Header 3");
 }
 
-void TermEditDialog::formatH4() {
+void ItemEditDialog::formatH4() {
     insertMarkdown("\n#### ", "", "Header 4");
 }
 
-void TermEditDialog::formatQuote() {
+void ItemEditDialog::formatQuote() {
     insertMarkdown("\n> ", "", "quote");
 }
 
-void TermEditDialog::formatCode() {
+void ItemEditDialog::formatCode() {
     insertMarkdown("`", "`", "code");
 }
 
-void TermEditDialog::formatCodeBlock() {
+void ItemEditDialog::formatCodeBlock() {
     bool ok;
     QString language = QInputDialog::getText(this, "Code Block", "Language (e.g. cpp, python, sql):", QLineEdit::Normal, "", &ok);
     if (ok) {
@@ -359,15 +359,15 @@ void TermEditDialog::formatCodeBlock() {
     }
 }
 
-void TermEditDialog::formatHorizontalLine() {
+void ItemEditDialog::formatHorizontalLine() {
     insertMarkdown("\n---\n", "", "");
 }
 
-void TermEditDialog::updatePreview() {
+void ItemEditDialog::updatePreview() {
     m_previewEdit->setHtml(MarkdownConverter::toHtml(m_contentEdit->toPlainText()));
 }
 
-void TermEditDialog::updateMarkdownStyles() {
+void ItemEditDialog::updateMarkdownStyles() {
     if (!m_previewEdit) return;
 
     QPalette pal = palette();
@@ -397,7 +397,7 @@ void TermEditDialog::updateMarkdownStyles() {
     updatePreview();
 }
 
-QStringList TermEditDialog::valuesFromList(QListWidget* list) {
+QStringList ItemEditDialog::valuesFromList(QListWidget* list) {
     QStringList values;
     for (int i = 0; i < list->count(); ++i) {
         values.push_back(list->item(i)->text().trimmed());
@@ -405,49 +405,49 @@ QStringList TermEditDialog::valuesFromList(QListWidget* list) {
     return values;
 }
 
-void TermEditDialog::setListValues(QListWidget* list, const QStringList& values) {
+void ItemEditDialog::setListValues(QListWidget* list, const QStringList& values) {
     list->clear();
     list->addItems(values);
     list->sortItems();
 }
 
-void TermEditDialog::addAlias() {
+void ItemEditDialog::addAlias() {
     QStringList suggestions;
     for (const auto& item : DatabaseManager::loadAliasUsage()) suggestions << item.value;
     addValue(m_aliasList, "Add alias", suggestions);
 }
-void TermEditDialog::editAlias() {
+void ItemEditDialog::editAlias() {
     QStringList suggestions;
     for (const auto& item : DatabaseManager::loadAliasUsage()) suggestions << item.value;
     editValue(m_aliasList, "Edit alias", suggestions);
 }
-void TermEditDialog::removeAlias() { removeValue(m_aliasList, "Remove alias"); }
+void ItemEditDialog::removeAlias() { removeValue(m_aliasList, "Remove alias"); }
 
-void TermEditDialog::addTag() {
+void ItemEditDialog::addTag() {
     QStringList suggestions;
     for (const auto& item : DatabaseManager::loadTagUsage()) suggestions << item.value;
     addValue(m_tagList, "Add tag", suggestions);
 }
-void TermEditDialog::editTag() {
+void ItemEditDialog::editTag() {
     QStringList suggestions;
     for (const auto& item : DatabaseManager::loadTagUsage()) suggestions << item.value;
     editValue(m_tagList, "Edit tag", suggestions);
 }
-void TermEditDialog::removeTag() { removeValue(m_tagList, "Remove tag"); }
+void ItemEditDialog::removeTag() { removeValue(m_tagList, "Remove tag"); }
 
-void TermEditDialog::addFlag() {
+void ItemEditDialog::addFlag() {
     QStringList suggestions;
     for (const auto& item : DatabaseManager::loadFlagUsage()) suggestions << item.value;
     addValue(m_flagList, "Add flag", suggestions);
 }
-void TermEditDialog::editFlag() {
+void ItemEditDialog::editFlag() {
     QStringList suggestions;
     for (const auto& item : DatabaseManager::loadFlagUsage()) suggestions << item.value;
     editValue(m_flagList, "Edit flag", suggestions);
 }
-void TermEditDialog::removeFlag() { removeValue(m_flagList, "Remove flag"); }
+void ItemEditDialog::removeFlag() { removeValue(m_flagList, "Remove flag"); }
 
-void TermEditDialog::updateLinksList() {
+void ItemEditDialog::updateLinksList() {
     m_linksList->clear();
     auto typeToString = [](LinkType type) -> QString {
         switch (type) {
@@ -468,14 +468,14 @@ void TermEditDialog::updateLinksList() {
     // Sort links by position, then title
     std::sort(m_currentLinks.begin(), m_currentLinks.end(), [](const LinkRecord& a, const LinkRecord& b) {
         if (a.position != b.position) return a.position < b.position;
-        return a.toTermTitle.compare(b.toTermTitle, Qt::CaseInsensitive) < 0;
+        return a.toItemTitle.compare(b.toItemTitle, Qt::CaseInsensitive) < 0;
     });
 
     for (const auto& link : m_currentLinks) {
         const QString type = link.linkType == LinkType::Custom && !link.customValue.isEmpty()
             ? QString("Custom: %1").arg(link.customValue)
             : typeToString(link.linkType);
-        m_linksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.toTermTitle, type));
+        m_linksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.toItemTitle, type));
     }
 
     m_backlinksList->clear();
@@ -483,39 +483,39 @@ void TermEditDialog::updateLinksList() {
     // Sort backlinks by position, then title
     std::sort(m_currentBacklinks.begin(), m_currentBacklinks.end(), [](const LinkRecord& a, const LinkRecord& b) {
         if (a.position != b.position) return a.position < b.position;
-        return a.fromTermTitle.compare(b.fromTermTitle, Qt::CaseInsensitive) < 0;
+        return a.fromItemTitle.compare(b.fromItemTitle, Qt::CaseInsensitive) < 0;
     });
 
     for (const auto& link : m_currentBacklinks) {
         const QString type = link.linkType == LinkType::Custom && !link.customValue.isEmpty()
             ? QString("Custom: %1").arg(link.customValue)
             : typeToString(link.linkType);
-        m_backlinksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.fromTermTitle, type));
+        m_backlinksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.fromItemTitle, type));
     }
 }
 
 namespace {
     struct LinkData {
-        QString term;
+        QString item;
         LinkType type;
         int position;
         QString customValue;
         bool accepted;
     };
 
-    LinkData getLinkDetails(QWidget* parent, const QString& title, const QString& label, const QString& initialTerm, LinkType initialType, int initialPosition = 0, const QString& initialCustomValue = QString()) {
+    LinkData getLinkDetails(QWidget* parent, const QString& title, const QString& label, const QString& initialItem, LinkType initialType, int initialPosition = 0, const QString& initialCustomValue = QString()) {
         QDialog dialog(parent);
         dialog.setWindowTitle(title);
         auto* layout = new QVBoxLayout(&dialog);
         auto* form = new QFormLayout();
 
-        auto* termEdit = new QLineEdit(&dialog);
-        termEdit->setText(initialTerm);
-        QStringList titles = DatabaseManager::loadTermTitles();
+        auto* itemEdit = new QLineEdit(&dialog);
+        itemEdit->setText(initialItem);
+        QStringList titles = DatabaseManager::loadItemTitles();
         auto* completer = new QCompleter(titles, &dialog);
         completer->setCaseSensitivity(Qt::CaseInsensitive);
         completer->setFilterMode(Qt::MatchContains);
-        termEdit->setCompleter(completer);
+        itemEdit->setCompleter(completer);
 
         auto* typeCombo = new QComboBox(&dialog);
         typeCombo->addItem("Is A", static_cast<int>(LinkType::IsA));
@@ -547,7 +547,7 @@ namespace {
             customValueEdit->setEnabled(static_cast<LinkType>(typeCombo->currentData().toInt()) == LinkType::Custom);
         });
 
-        form->addRow(label, termEdit);
+        form->addRow(label, itemEdit);
         form->addRow("Link Type:", typeCombo);
         form->addRow("Custom Value:", customValueEdit);
         form->addRow("Position:", positionSpin);
@@ -560,12 +560,12 @@ namespace {
         QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
         if (dialog.exec() == QDialog::Accepted) {
-            return {termEdit->text().trimmed(), static_cast<LinkType>(typeCombo->currentData().toInt()), positionSpin->value(), customValueEdit->text().trimmed(), true};
+            return {itemEdit->text().trimmed(), static_cast<LinkType>(typeCombo->currentData().toInt()), positionSpin->value(), customValueEdit->text().trimmed(), true};
         }
         return {"", LinkType::None, 0, "", false};
     }
 
-    int findTermId(const QString& text) {
+    int findItemId(const QString& text) {
         QString title = text;
         QString disambiguation;
         if (text.contains(" [") && text.endsWith("]")) {
@@ -577,16 +577,16 @@ namespace {
         QSqlDatabase db = DatabaseManager::database();
         QSqlQuery query(db);
         if (disambiguation.isEmpty()) {
-            query.prepare("SELECT id FROM term WHERE title = ? AND (disambiguation IS NULL OR disambiguation = '') LIMIT 1;");
+            query.prepare("SELECT id FROM item WHERE title = ? AND (disambiguation IS NULL OR disambiguation = '') LIMIT 1;");
             query.addBindValue(title);
             if (query.exec() && query.next()) {
                 return query.value(0).toInt();
             }
             // Fallback: try to find by title only even if disambiguation is not specified
-            query.prepare("SELECT id FROM term WHERE title = ? LIMIT 1;");
+            query.prepare("SELECT id FROM item WHERE title = ? LIMIT 1;");
             query.addBindValue(title);
         } else {
-            query.prepare("SELECT id FROM term WHERE title = ? AND disambiguation = ? LIMIT 1;");
+            query.prepare("SELECT id FROM item WHERE title = ? AND disambiguation = ? LIMIT 1;");
             query.addBindValue(title);
             query.addBindValue(disambiguation);
         }
@@ -598,7 +598,7 @@ namespace {
     }
 }
 
-QString TermEditDialog::getInputValue(const QString& title, const QString& label, const QString& initialValue, const QStringList& suggestions) {
+QString ItemEditDialog::getInputValue(const QString& title, const QString& label, const QString& initialValue, const QStringList& suggestions) {
     QDialog dialog(this);
     dialog.setWindowTitle(title);
     auto* layout = new QVBoxLayout(&dialog);
@@ -628,48 +628,48 @@ QString TermEditDialog::getInputValue(const QString& title, const QString& label
     return QString();
 }
 
-void TermEditDialog::addLink() {
-    LinkData data = getLinkDetails(this, "Add Link", "Target term:", "", LinkType::Related, 0);
-    if (!data.accepted || data.term.isEmpty()) return;
+void ItemEditDialog::addLink() {
+    LinkData data = getLinkDetails(this, "Add Link", "Target item:", "", LinkType::Related, 0);
+    if (!data.accepted || data.item.isEmpty()) return;
 
-    int toId = findTermId(data.term);
+    int toId = findItemId(data.item);
     if (toId != -1) {
         LinkRecord link;
-        link.fromTermId = m_termId;
-        link.toTermId = toId;
-        link.toTermTitle = data.term;
+        link.fromItemId = m_itemId;
+        link.toItemId = toId;
+        link.toItemTitle = data.item;
         link.linkType = data.type;
         link.position = data.position;
         link.customValue = data.customValue;
         m_currentLinks.append(link);
         updateLinksList();
     } else {
-        QMessageBox::warning(this, "Add Link", "Target term not found.");
+        QMessageBox::warning(this, "Add Link", "Target item not found.");
     }
 }
 
-void TermEditDialog::editLink() {
+void ItemEditDialog::editLink() {
     int row = m_linksList->currentRow();
     if (row < 0 || row >= m_currentLinks.size()) return;
 
     LinkRecord& link = m_currentLinks[row];
-    LinkData data = getLinkDetails(this, "Edit Link", "Target term:", link.toTermTitle, link.linkType, link.position, link.customValue);
-    if (!data.accepted || data.term.isEmpty()) return;
+    LinkData data = getLinkDetails(this, "Edit Link", "Target item:", link.toItemTitle, link.linkType, link.position, link.customValue);
+    if (!data.accepted || data.item.isEmpty()) return;
 
-    int toId = findTermId(data.term);
+    int toId = findItemId(data.item);
     if (toId != -1) {
-        link.toTermId = toId;
-        link.toTermTitle = data.term;
+        link.toItemId = toId;
+        link.toItemTitle = data.item;
         link.linkType = data.type;
         link.position = data.position;
         link.customValue = data.customValue;
         updateLinksList();
     } else {
-        QMessageBox::warning(this, "Edit Link", "Target term not found.");
+        QMessageBox::warning(this, "Edit Link", "Target item not found.");
     }
 }
 
-void TermEditDialog::removeLink() {
+void ItemEditDialog::removeLink() {
     int row = m_linksList->currentRow();
     if (row >= 0) {
         m_currentLinks.removeAt(row);
@@ -677,48 +677,48 @@ void TermEditDialog::removeLink() {
     }
 }
 
-void TermEditDialog::addBacklink() {
-    LinkData data = getLinkDetails(this, "Add Backlink", "Source term:", "", LinkType::Related, 0);
-    if (!data.accepted || data.term.isEmpty()) return;
+void ItemEditDialog::addBacklink() {
+    LinkData data = getLinkDetails(this, "Add Backlink", "Source item:", "", LinkType::Related, 0);
+    if (!data.accepted || data.item.isEmpty()) return;
 
-    int fromId = findTermId(data.term);
+    int fromId = findItemId(data.item);
     if (fromId != -1) {
         LinkRecord link;
-        link.fromTermId = fromId;
-        link.toTermId = m_termId;
-        link.fromTermTitle = data.term;
+        link.fromItemId = fromId;
+        link.toItemId = m_itemId;
+        link.fromItemTitle = data.item;
         link.linkType = data.type;
         link.position = data.position;
         link.customValue = data.customValue;
         m_currentBacklinks.append(link);
         updateLinksList();
     } else {
-        QMessageBox::warning(this, "Add Backlink", "Source term not found.");
+        QMessageBox::warning(this, "Add Backlink", "Source item not found.");
     }
 }
 
-void TermEditDialog::editBacklink() {
+void ItemEditDialog::editBacklink() {
     int row = m_backlinksList->currentRow();
     if (row < 0 || row >= m_currentBacklinks.size()) return;
 
     LinkRecord& link = m_currentBacklinks[row];
-    LinkData data = getLinkDetails(this, "Edit Backlink", "Source term:", link.fromTermTitle, link.linkType, link.position, link.customValue);
-    if (!data.accepted || data.term.isEmpty()) return;
+    LinkData data = getLinkDetails(this, "Edit Backlink", "Source item:", link.fromItemTitle, link.linkType, link.position, link.customValue);
+    if (!data.accepted || data.item.isEmpty()) return;
 
-    int fromId = findTermId(data.term);
+    int fromId = findItemId(data.item);
     if (fromId != -1) {
-        link.fromTermId = fromId;
-        link.fromTermTitle = data.term;
+        link.fromItemId = fromId;
+        link.fromItemTitle = data.item;
         link.linkType = data.type;
         link.position = data.position;
         link.customValue = data.customValue;
         updateLinksList();
     } else {
-        QMessageBox::warning(this, "Edit Backlink", "Source term not found.");
+        QMessageBox::warning(this, "Edit Backlink", "Source item not found.");
     }
 }
 
-void TermEditDialog::removeBacklink() {
+void ItemEditDialog::removeBacklink() {
     int row = m_backlinksList->currentRow();
     if (row >= 0) {
         m_currentBacklinks.removeAt(row);
@@ -726,7 +726,7 @@ void TermEditDialog::removeBacklink() {
     }
 }
 
-void TermEditDialog::validateAndAccept() {
+void ItemEditDialog::validateAndAccept() {
     if (m_groupCombo->currentIndex() < 0) {
         QMessageBox::warning(this, "Validation", "Create at least one group first.");
         return;
@@ -737,30 +737,30 @@ void TermEditDialog::validateAndAccept() {
         return;
     }
 
-    // Save term first to get an ID if it's new
-    TermRecord t = term();
+    // Save item first to get an ID if it's new
+    ItemRecord t = item();
     QString error;
-    if (!DatabaseManager::saveTerm(t, &error)) {
-        QMessageBox::critical(this, "Error", "Failed to save term: " + error);
+    if (!DatabaseManager::saveItem(t, &error)) {
+        QMessageBox::critical(this, "Error", "Failed to save item: " + error);
         return;
     }
 
-    // If it was a new term, we need to load its ID (it might have been -1)
-    if (m_termId == -1) {
-        // Find the term by group and title
+    // If it was a new item, we need to load its ID (it might have been -1)
+    if (m_itemId == -1) {
+        // Find the item by group and title
         QSqlDatabase db = DatabaseManager::database();
         QSqlQuery query(db);
-        query.prepare("SELECT id FROM term WHERE group_id = ? AND title = ?;");
+        query.prepare("SELECT id FROM item WHERE group_id = ? AND title = ?;");
         query.addBindValue(t.groupId);
         query.addBindValue(t.title);
         if (query.exec() && query.next()) {
-            m_termId = query.value(0).toInt();
+            m_itemId = query.value(0).toInt();
         }
     }
 
-    if (m_termId != -1) {
+    if (m_itemId != -1) {
         // Sync links
-        QList<LinkRecord> oldLinks = DatabaseManager::loadLinks(m_termId);
+        QList<LinkRecord> oldLinks = DatabaseManager::loadLinks(m_itemId);
         for (const auto& old : oldLinks) {
             bool found = false;
             for (const auto& cur : m_currentLinks) {
@@ -769,12 +769,12 @@ void TermEditDialog::validateAndAccept() {
             if (!found) DatabaseManager::deleteLink(old.id);
         }
         for (auto& cur : m_currentLinks) {
-            cur.fromTermId = m_termId;
+            cur.fromItemId = m_itemId;
             DatabaseManager::saveLink(cur);
         }
 
         // Sync backlinks
-        QList<LinkRecord> oldBacklinks = DatabaseManager::loadBacklinks(m_termId);
+        QList<LinkRecord> oldBacklinks = DatabaseManager::loadBacklinks(m_itemId);
         for (const auto& old : oldBacklinks) {
             bool found = false;
             for (const auto& cur : m_currentBacklinks) {
@@ -783,7 +783,7 @@ void TermEditDialog::validateAndAccept() {
             if (!found) DatabaseManager::deleteLink(old.id);
         }
         for (auto& cur : m_currentBacklinks) {
-            cur.toTermId = m_termId;
+            cur.toItemId = m_itemId;
             DatabaseManager::saveLink(cur);
         }
     }

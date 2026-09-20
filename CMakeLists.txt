@@ -58,8 +58,8 @@ add_executable(Lexicon
     src/DatabaseManager.cpp
     src/MainWindow.h
     src/MainWindow.cpp
-    src/TermEditDialog.h
-    src/TermEditDialog.cpp
+    src/ItemEditDialog.h
+    src/ItemEditDialog.cpp
     src/GroupManagerDialog.h
     src/GroupManagerDialog.cpp
     src/ValueListDialog.h

@@ -192,6 +192,31 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             "CREATE UNIQUE INDEX item_group_name_unique ON item_group(name);",
             "DROP INDEX idx_term_map_id;",
             "CREATE INDEX idx_term_group_id ON term(group_id);"
+        }},
+        {11, {
+            "ALTER TABLE term RENAME TO item;",
+            "ALTER TABLE alias RENAME COLUMN term_id TO item_id;",
+            "ALTER TABLE tag RENAME COLUMN term_id TO item_id;",
+            "ALTER TABLE flag RENAME COLUMN term_id TO item_id;",
+            "ALTER TABLE link RENAME COLUMN from_term_id TO from_item_id;",
+            "ALTER TABLE link RENAME COLUMN to_term_id TO to_item_id;",
+            "DROP INDEX term_unique;",
+            "CREATE UNIQUE INDEX item_unique ON item(group_id, title, COALESCE(disambiguation, ''));",
+            "DROP INDEX idx_term_group_id;",
+            "CREATE INDEX idx_item_group_id ON item(group_id);",
+            "DROP INDEX idx_term_title;",
+            "CREATE INDEX idx_item_title ON item(title);",
+            "DROP INDEX idx_alias_term_id;",
+            "CREATE INDEX idx_alias_item_id ON alias(item_id);",
+            "DROP INDEX idx_tag_term_id;",
+            "CREATE INDEX idx_tag_item_id ON tag(item_id);",
+            "DROP INDEX idx_flag_term_id;",
+            "CREATE INDEX idx_flag_item_id ON flag(item_id);",
+            "DROP INDEX idx_link_from_term_id;",
+            "CREATE INDEX idx_link_from_item_id ON link(from_item_id);",
+            "DROP INDEX idx_link_to_term_id;",
+            "CREATE INDEX idx_link_to_item_id ON link(to_item_id);",
+            "UPDATE log SET table_name = 'item' WHERE table_name = 'term';"
         }}
     };
 
@@ -328,16 +353,16 @@ bool DatabaseManager::deleteGroup(int groupId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int groupId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
-    QList<TermRecord> terms;
+QList<ItemRecord> DatabaseManager::loadItems(int groupId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
+    QList<ItemRecord> items;
 
     QString sql =
         "SELECT t.id, m.name, t.group_id, t.title, t.disambiguation, "
-        "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.term_id = t.id), '') AS aliases, "
-        "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.term_id = t.id), '') AS tags, "
-        "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.term_id = t.id), '') AS flags, "
+        "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.item_id = t.id), '') AS aliases, "
+        "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.item_id = t.id), '') AS tags, "
+        "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.item_id = t.id), '') AS flags, "
         "t.understanding, t.status, t.pinned "
-        "FROM term t "
+        "FROM item t "
         "JOIN item_group m ON m.id = t.group_id "
         "WHERE 1 = 1 ";
 
@@ -355,18 +380,18 @@ QList<TermRecord> DatabaseManager::loadTerms(int groupId, const QString& searchT
         filters += "AND t.pinned = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
-        filters += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
+        filters += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND tg.name = ?) ";
     }
     if (!flagFilter.trimmed().isEmpty()) {
-        filters += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND fg.name = ?) ";
+        filters += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND fg.name = ?) ";
     }
     if (!searchText.trimmed().isEmpty()) {
         filters +=
             "AND (LOWER(t.title) LIKE ? "
             " OR LOWER(COALESCE(t.disambiguation, '')) LIKE ? "
-            " OR EXISTS (SELECT 1 FROM alias a WHERE a.term_id = t.id AND LOWER(a.alias) LIKE ?) "
-            " OR EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND LOWER(tg.name) LIKE ?) "
-            " OR EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND LOWER(fg.name) LIKE ?)) ";
+            " OR EXISTS (SELECT 1 FROM alias a WHERE a.item_id = t.id AND LOWER(a.alias) LIKE ?) "
+            " OR EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND LOWER(tg.name) LIKE ?) "
+            " OR EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND LOWER(fg.name) LIKE ?)) ";
     }
 
     sql += filters;
@@ -436,30 +461,30 @@ QList<TermRecord> DatabaseManager::loadTerms(int groupId, const QString& searchT
 
     if (!query.exec()) {
         setError(errorMessage, query.lastError().text());
-        return terms;
+        return items;
     }
 
     while (query.next()) {
-        TermRecord term;
-        term.id = query.value(0).toInt();
-        term.groupName = query.value(1).toString();
-        term.groupId = query.value(2).toInt();
-        term.title = query.value(3).toString();
-        term.disambiguation = query.value(4).toString();
-        term.aliases = query.value(5).toString().split(", ", Qt::SkipEmptyParts);
-        term.tags = query.value(6).toString().split(", ", Qt::SkipEmptyParts);
-        term.flags = query.value(7).toString().split(", ", Qt::SkipEmptyParts);
-        term.understanding = static_cast<UnderstandingLevel>(query.value(8).toInt());
-        term.status = static_cast<TermStatus>(query.value(9).toInt());
-        term.pinned = query.value(10).toInt() != 0;
-        terms.push_back(term);
+        ItemRecord item;
+        item.id = query.value(0).toInt();
+        item.groupName = query.value(1).toString();
+        item.groupId = query.value(2).toInt();
+        item.title = query.value(3).toString();
+        item.disambiguation = query.value(4).toString();
+        item.aliases = query.value(5).toString().split(", ", Qt::SkipEmptyParts);
+        item.tags = query.value(6).toString().split(", ", Qt::SkipEmptyParts);
+        item.flags = query.value(7).toString().split(", ", Qt::SkipEmptyParts);
+        item.understanding = static_cast<UnderstandingLevel>(query.value(8).toInt());
+        item.status = static_cast<ItemStatus>(query.value(9).toInt());
+        item.pinned = query.value(10).toInt() != 0;
+        items.push_back(item);
     }
 
-    return terms;
+    return items;
 }
 
-int DatabaseManager::countTerms(int groupId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
-    QString sql = "SELECT COUNT(*) FROM term t WHERE 1 = 1 ";
+int DatabaseManager::countItems(int groupId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
+    QString sql = "SELECT COUNT(*) FROM item t WHERE 1 = 1 ";
 
     if (groupId > 0) {
         sql += "AND t.group_id = ? ";
@@ -474,18 +499,18 @@ int DatabaseManager::countTerms(int groupId, const QString& searchText, const QS
         sql += "AND t.pinned = ? ";
     }
     if (!tagFilter.trimmed().isEmpty()) {
-        sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND tg.name = ?) ";
+        sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND tg.name = ?) ";
     }
     if (!flagFilter.trimmed().isEmpty()) {
-        sql += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND fg.name = ?) ";
+        sql += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND fg.name = ?) ";
     }
     if (!searchText.trimmed().isEmpty()) {
         sql +=
             "AND (LOWER(t.title) LIKE ? "
             " OR LOWER(COALESCE(t.disambiguation, '')) LIKE ? "
-            " OR EXISTS (SELECT 1 FROM alias a WHERE a.term_id = t.id AND LOWER(a.alias) LIKE ?) "
-            " OR EXISTS (SELECT 1 FROM tag tg WHERE tg.term_id = t.id AND LOWER(tg.name) LIKE ?) "
-            " OR EXISTS (SELECT 1 FROM flag fg WHERE fg.term_id = t.id AND LOWER(fg.name) LIKE ?)) ";
+            " OR EXISTS (SELECT 1 FROM alias a WHERE a.item_id = t.id AND LOWER(a.alias) LIKE ?) "
+            " OR EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND LOWER(tg.name) LIKE ?) "
+            " OR EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND LOWER(fg.name) LIKE ?)) ";
     }
 
     QSqlQuery query(database());
@@ -527,34 +552,34 @@ int DatabaseManager::countTerms(int groupId, const QString& searchText, const QS
     return 0;
 }
 
-bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMessage) {
+bool DatabaseManager::loadItem(int itemId, ItemRecord& outItem, QString* errorMessage) {
     QSqlQuery query(database());
     query.prepare(
         "SELECT t.id, t.group_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status, t.pinned, COALESCE(t.content, '') "
-        "FROM term t JOIN item_group m ON m.id = t.group_id WHERE t.id = ?;");
-    query.addBindValue(termId);
+        "FROM item t JOIN item_group m ON m.id = t.group_id WHERE t.id = ?;");
+    query.addBindValue(itemId);
 
     if (!query.exec()) {
         return setError(errorMessage, query.lastError().text());
     }
     if (!query.next()) {
-        return setError(errorMessage, "Term not found.");
+        return setError(errorMessage, "Item not found.");
     }
 
-    outTerm.id = query.value(0).toInt();
-    outTerm.groupId = query.value(1).toInt();
-    outTerm.groupName = query.value(2).toString();
-    outTerm.title = query.value(3).toString();
-    outTerm.disambiguation = query.value(4).toString();
-    outTerm.understanding = static_cast<UnderstandingLevel>(query.value(5).toInt());
-    outTerm.status = static_cast<TermStatus>(query.value(6).toInt());
-    outTerm.pinned = query.value(7).toInt() != 0;
-    outTerm.content = query.value(8).toString();
+    outItem.id = query.value(0).toInt();
+    outItem.groupId = query.value(1).toInt();
+    outItem.groupName = query.value(2).toString();
+    outItem.title = query.value(3).toString();
+    outItem.disambiguation = query.value(4).toString();
+    outItem.understanding = static_cast<UnderstandingLevel>(query.value(5).toInt());
+    outItem.status = static_cast<ItemStatus>(query.value(6).toInt());
+    outItem.pinned = query.value(7).toInt() != 0;
+    outItem.content = query.value(8).toString();
 
     auto loadValues = [&](const QString& sql, QStringList& target) -> bool {
         QSqlQuery childQuery(database());
         childQuery.prepare(sql);
-        childQuery.addBindValue(termId);
+        childQuery.addBindValue(itemId);
         if (!childQuery.exec()) {
             return setError(errorMessage, childQuery.lastError().text());
         }
@@ -565,26 +590,26 @@ bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMe
         return true;
     };
 
-    return loadValues("SELECT alias FROM alias WHERE term_id = ? ORDER BY alias COLLATE NOCASE;", outTerm.aliases)
-        && loadValues("SELECT name FROM tag WHERE term_id = ? ORDER BY name COLLATE NOCASE;", outTerm.tags)
-        && loadValues("SELECT name FROM flag WHERE term_id = ? ORDER BY name COLLATE NOCASE;", outTerm.flags);
+    return loadValues("SELECT alias FROM alias WHERE item_id = ? ORDER BY alias COLLATE NOCASE;", outItem.aliases)
+        && loadValues("SELECT name FROM tag WHERE item_id = ? ORDER BY name COLLATE NOCASE;", outItem.tags)
+        && loadValues("SELECT name FROM flag WHERE item_id = ? ORDER BY name COLLATE NOCASE;", outItem.flags);
 }
 
-bool DatabaseManager::replaceStringValues(const QString& tableName, int termId, const QStringList& values, QString* errorMessage) {
+bool DatabaseManager::replaceStringValues(const QString& tableName, int itemId, const QStringList& values, QString* errorMessage) {
     QSqlQuery deleteQuery(database());
-    deleteQuery.prepare(QString("DELETE FROM %1 WHERE term_id = ?;").arg(tableName));
-    deleteQuery.addBindValue(termId);
+    deleteQuery.prepare(QString("DELETE FROM %1 WHERE item_id = ?;").arg(tableName));
+    deleteQuery.addBindValue(itemId);
     if (!deleteQuery.exec()) {
         return setError(errorMessage, deleteQuery.lastError().text());
     }
 
     const QString columnName = tableName == "alias" ? "alias" : "name";
     QSqlQuery insertQuery(database());
-    insertQuery.prepare(QString("INSERT INTO %1(term_id, %2) VALUES(?, ?);").arg(tableName, columnName));
+    insertQuery.prepare(QString("INSERT INTO %1(item_id, %2) VALUES(?, ?);").arg(tableName, columnName));
 
     const QStringList cleaned = cleanedUniqueValues(values);
     for (const QString& value : cleaned) {
-        insertQuery.addBindValue(termId);
+        insertQuery.addBindValue(itemId);
         insertQuery.addBindValue(value);
         if (!insertQuery.exec()) {
             return setError(errorMessage, insertQuery.lastError().text());
@@ -594,54 +619,54 @@ bool DatabaseManager::replaceStringValues(const QString& tableName, int termId, 
     return true;
 }
 
-bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
+bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
     QSqlDatabase db = database();
     if (!db.transaction()) {
         return setError(errorMessage, db.lastError().text());
     }
 
-    int termId = term.id;
+    int itemId = item.id;
     int logType = 2; // updated
     QSqlQuery query(db);
-    if (term.id < 0) {
-        query.prepare("INSERT INTO term(group_id, title, disambiguation, understanding, status, pinned, content) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?);");
-        query.addBindValue(term.groupId);
-        query.addBindValue(term.title.trimmed());
-        query.addBindValue(normalizeNullable(term.disambiguation));
-        query.addBindValue(static_cast<int>(term.understanding));
-        query.addBindValue(static_cast<int>(term.status));
-        query.addBindValue(term.pinned ? 1 : 0);
-        query.addBindValue(term.content);
+    if (item.id < 0) {
+        query.prepare("INSERT INTO item(group_id, title, disambiguation, understanding, status, pinned, content) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?);");
+        query.addBindValue(item.groupId);
+        query.addBindValue(item.title.trimmed());
+        query.addBindValue(normalizeNullable(item.disambiguation));
+        query.addBindValue(static_cast<int>(item.understanding));
+        query.addBindValue(static_cast<int>(item.status));
+        query.addBindValue(item.pinned ? 1 : 0);
+        query.addBindValue(item.content);
         if (!query.exec()) {
             db.rollback();
             return setError(errorMessage, query.lastError().text());
         }
-        termId = query.lastInsertId().toInt();
+        itemId = query.lastInsertId().toInt();
         logType = 1; // created
     } else {
-        query.prepare("UPDATE term SET group_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ?, content = ? WHERE id = ?;");
-        query.addBindValue(term.groupId);
-        query.addBindValue(term.title.trimmed());
-        query.addBindValue(normalizeNullable(term.disambiguation));
-        query.addBindValue(static_cast<int>(term.understanding));
-        query.addBindValue(static_cast<int>(term.status));
-        query.addBindValue(term.pinned ? 1 : 0);
-        query.addBindValue(term.content);
-        query.addBindValue(term.id);
+        query.prepare("UPDATE item SET group_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ?, content = ? WHERE id = ?;");
+        query.addBindValue(item.groupId);
+        query.addBindValue(item.title.trimmed());
+        query.addBindValue(normalizeNullable(item.disambiguation));
+        query.addBindValue(static_cast<int>(item.understanding));
+        query.addBindValue(static_cast<int>(item.status));
+        query.addBindValue(item.pinned ? 1 : 0);
+        query.addBindValue(item.content);
+        query.addBindValue(item.id);
         if (!query.exec()) {
             db.rollback();
             return setError(errorMessage, query.lastError().text());
         }
     }
 
-    if (!replaceStringValues("alias", termId, term.aliases, errorMessage)
-        || !replaceStringValues("tag", termId, term.tags, errorMessage)
-        || !replaceStringValues("flag", termId, term.flags, errorMessage)) {
+    if (!replaceStringValues("alias", itemId, item.aliases, errorMessage)
+        || !replaceStringValues("tag", itemId, item.tags, errorMessage)
+        || !replaceStringValues("flag", itemId, item.flags, errorMessage)) {
         db.rollback();
         return false;
     }
 
-    if (!logOperation("term", termId, logType, errorMessage)) {
+    if (!logOperation("item", itemId, logType, errorMessage)) {
         db.rollback();
         return false;
     }
@@ -653,21 +678,21 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
     return true;
 }
 
-bool DatabaseManager::deleteTerm(int termId, QString* errorMessage) {
+bool DatabaseManager::deleteItem(int itemId, QString* errorMessage) {
     QSqlDatabase db = database();
     if (!db.transaction()) {
         return setError(errorMessage, db.lastError().text());
     }
 
     QSqlQuery query(db);
-    query.prepare("DELETE FROM term WHERE id = ?;");
-    query.addBindValue(termId);
+    query.prepare("DELETE FROM item WHERE id = ?;");
+    query.addBindValue(itemId);
     if (!query.exec()) {
         db.rollback();
         return setError(errorMessage, query.lastError().text());
     }
 
-    if (!logOperation("term", termId, 3, errorMessage)) {
+    if (!logOperation("item", itemId, 3, errorMessage)) {
         db.rollback();
         return false;
     }
@@ -691,20 +716,20 @@ bool DatabaseManager::logOperation(const QString& tableName, int recordId, int l
     return true;
 }
 
-bool DatabaseManager::logTermRead(int termId, QString* errorMessage) {
-    return logOperation("term", termId, 4, errorMessage);
+bool DatabaseManager::logItemRead(int itemId, QString* errorMessage) {
+    return logOperation("item", itemId, 4, errorMessage);
 }
 
-QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) {
+QList<LinkRecord> DatabaseManager::loadLinks(int itemId, QString* errorMessage) {
     QList<LinkRecord> result;
     QSqlDatabase db = database();
     QSqlQuery query(db);
-    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, l.custom_value, t.title "
+    query.prepare("SELECT l.id, l.from_item_id, l.to_item_id, l.link_type, l.position, l.custom_value, t.title "
                   "FROM link l "
-                  "JOIN term t ON l.to_term_id = t.id "
-                  "WHERE l.from_term_id = ? "
+                  "JOIN item t ON l.to_item_id = t.id "
+                  "WHERE l.from_item_id = ? "
                   "ORDER BY l.position, t.title COLLATE NOCASE;");
-    query.addBindValue(termId);
+    query.addBindValue(itemId);
 
     if (!query.exec()) {
         setError(errorMessage, "Failed to load links: " + query.lastError().text());
@@ -714,27 +739,27 @@ QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) 
     while (query.next()) {
         LinkRecord link;
         link.id = query.value(0).toInt();
-        link.fromTermId = query.value(1).toInt();
-        link.toTermId = query.value(2).toInt();
+        link.fromItemId = query.value(1).toInt();
+        link.toItemId = query.value(2).toInt();
         link.linkType = static_cast<LinkType>(query.value(3).toInt());
         link.position = query.value(4).toInt();
         link.customValue = query.value(5).toString();
-        link.toTermTitle = query.value(6).toString();
+        link.toItemTitle = query.value(6).toString();
         result.push_back(link);
     }
     return result;
 }
 
-QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessage) {
+QList<LinkRecord> DatabaseManager::loadBacklinks(int itemId, QString* errorMessage) {
     QList<LinkRecord> result;
     QSqlDatabase db = database();
     QSqlQuery query(db);
-    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, l.custom_value, t.title "
+    query.prepare("SELECT l.id, l.from_item_id, l.to_item_id, l.link_type, l.position, l.custom_value, t.title "
                   "FROM link l "
-                  "JOIN term t ON l.from_term_id = t.id "
-                  "WHERE l.to_term_id = ? "
+                  "JOIN item t ON l.from_item_id = t.id "
+                  "WHERE l.to_item_id = ? "
                   "ORDER BY l.position, t.title COLLATE NOCASE;");
-    query.addBindValue(termId);
+    query.addBindValue(itemId);
 
     if (!query.exec()) {
         setError(errorMessage, "Failed to load backlinks: " + query.lastError().text());
@@ -744,12 +769,12 @@ QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessa
     while (query.next()) {
         LinkRecord link;
         link.id = query.value(0).toInt();
-        link.fromTermId = query.value(1).toInt();
-        link.toTermId = query.value(2).toInt();
+        link.fromItemId = query.value(1).toInt();
+        link.toItemId = query.value(2).toInt();
         link.linkType = static_cast<LinkType>(query.value(3).toInt());
         link.position = query.value(4).toInt();
         link.customValue = query.value(5).toString();
-        link.fromTermTitle = query.value(6).toString();
+        link.fromItemTitle = query.value(6).toString();
         result.push_back(link);
     }
     return result;
@@ -764,17 +789,17 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
     QSqlQuery query(db);
     int logType = 2; // updated
     if (link.id == -1) {
-        query.prepare("INSERT INTO link (from_term_id, to_term_id, link_type, position, custom_value) VALUES (?, ?, ?, ?, ?);");
-        query.addBindValue(link.fromTermId);
-        query.addBindValue(link.toTermId);
+        query.prepare("INSERT INTO link (from_item_id, to_item_id, link_type, position, custom_value) VALUES (?, ?, ?, ?, ?);");
+        query.addBindValue(link.fromItemId);
+        query.addBindValue(link.toItemId);
         query.addBindValue(static_cast<int>(link.linkType));
         query.addBindValue(link.position);
         query.addBindValue(link.customValue.trimmed());
         logType = 1; // created
     } else {
-        query.prepare("UPDATE link SET from_term_id = ?, to_term_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;");
-        query.addBindValue(link.fromTermId);
-        query.addBindValue(link.toTermId);
+        query.prepare("UPDATE link SET from_item_id = ?, to_item_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;");
+        query.addBindValue(link.fromItemId);
+        query.addBindValue(link.toItemId);
         query.addBindValue(static_cast<int>(link.linkType));
         query.addBindValue(link.position);
         query.addBindValue(link.customValue.trimmed());
@@ -837,7 +862,7 @@ QStringList DatabaseManager::loadSuggestions(QString* errorMessage) {
     QSet<QString> seen;
 
     QSqlQuery query(database());
-    if (!query.exec("SELECT title AS value FROM term UNION SELECT alias AS value FROM alias ORDER BY value COLLATE NOCASE;")) {
+    if (!query.exec("SELECT title AS value FROM item UNION SELECT alias AS value FROM alias ORDER BY value COLLATE NOCASE;")) {
         setError(errorMessage, query.lastError().text());
         return values;
     }
@@ -857,10 +882,10 @@ QStringList DatabaseManager::loadSuggestions(QString* errorMessage) {
     return values;
 }
 
-QStringList DatabaseManager::loadTermTitles(QString* errorMessage) {
+QStringList DatabaseManager::loadItemTitles(QString* errorMessage) {
     QStringList values;
     QSqlQuery query(database());
-    if (!query.exec("SELECT title, disambiguation FROM term ORDER BY title COLLATE NOCASE;")) {
+    if (!query.exec("SELECT title, disambiguation FROM item ORDER BY title COLLATE NOCASE;")) {
         setError(errorMessage, query.lastError().text());
         return values;
     }

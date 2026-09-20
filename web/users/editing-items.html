@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Editing terms — Lexicon User Guide</title>
-<meta name="description" content="The Lexicon term editor in depth: General fields, statuses and understanding levels, the Markdown content editor with live preview, and metadata (tags, flags, aliases).">
+<title>Editing items — Lexicon User Guide</title>
+<meta name="description" content="The Lexicon item editor in depth: General fields, statuses and understanding levels, the Markdown content editor with live preview, and metadata (tags, flags, aliases).">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -37,7 +37,7 @@
         <li><a href="index.html">Overview</a></li>
         <li><a href="installation.html">Installation</a></li>
         <li><a href="getting-started.html">Getting started</a></li>
-        <li><a href="editing-terms.html" class="active">Editing terms</a></li>
+        <li><a href="editing-items.html" class="active">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
@@ -52,23 +52,23 @@
   </aside>
 
   <main class="docs-content">
-    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Editing terms</p>
-    <h1>Editing terms</h1>
-    <p class="lead">Double-click a term (or click <code>Edit</code>) to open the term editor. Five tabs cover everything: <strong>General</strong>, <strong>Content</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first three; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Editing items</p>
+    <h1>Editing items</h1>
+    <p class="lead">Double-click an item (or click <code>Edit</code>) to open the item editor. Five tabs cover everything: <strong>General</strong>, <strong>Content</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first three; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
 
     <h2 id="general">General tab — identity and state</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_General.png" alt="Term editor General tab with group, title, disambiguation, status, understanding, and pinned fields">
-      <figcaption>The General tab: where a term gets its identity.</figcaption>
+      <img src="../assets/img/Screenshot_General.png" alt="Item editor General tab with group, title, disambiguation, status, understanding, and pinned fields">
+      <figcaption>The General tab: where an item gets its identity.</figcaption>
     </figure>
     <table>
       <tr><th>Field</th><th>Purpose</th></tr>
-      <tr><td><code>Group</code></td><td>Which group the term belongs to.</td></tr>
-      <tr><td><code>Title</code></td><td>The term's name. Required.</td></tr>
+      <tr><td><code>Group</code></td><td>Which group the item belongs to.</td></tr>
+      <tr><td><code>Title</code></td><td>The item's name. Required.</td></tr>
       <tr><td><code>Disambiguation</code></td><td>Optional qualifier that lets the same title exist more than once in one group — e.g. <em>Index (database)</em> vs. <em>Index (array)</em>.</td></tr>
       <tr><td><code>Status</code></td><td>Editorial state of the entry: <code>None</code>, <code>Draft</code>, or <code>Completed</code>.</td></tr>
       <tr><td><code>Understanding</code></td><td>How well <em>you</em> understand the concept — see the scale below.</td></tr>
-      <tr><td><code>Pinned</code></td><td>Marks important terms so you can filter for them instantly.</td></tr>
+      <tr><td><code>Pinned</code></td><td>Marks important items so you can filter for them instantly.</td></tr>
     </table>
 
     <h3>The understanding scale</h3>
@@ -88,7 +88,7 @@
 
     <h2 id="content">Content tab — write in Markdown</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_Content.png" alt="Term editor Content tab with Markdown source on the left and rendered preview on the right">
+      <img src="../assets/img/Screenshot_Content.png" alt="Item editor Content tab with Markdown source on the left and rendered preview on the right">
       <figcaption>Markdown source on the left, live rendered preview on the right.</figcaption>
     </figure>
     <p>The Content tab is a split view: the <strong>left pane</strong> holds the raw Markdown, the <strong>right pane</strong> renders it as HTML. The preview updates automatically as you type.</p>
@@ -101,7 +101,7 @@
       <li>Inline code and fenced code blocks</li>
       <li>Links and tables</li>
     </ul>
-    <p>A typical term might look like this:</p>
+    <p>A typical item might look like this:</p>
     <pre><code>## Definition
 
 **Move semantics** transfer resources instead of copying them.
@@ -121,7 +121,7 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
 
     <h2 id="metadata">Metadata tab — tags, flags, aliases</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_Metadata.png" alt="Term editor Metadata tab with lists for tags, flags, and aliases">
+      <img src="../assets/img/Screenshot_Metadata.png" alt="Item editor Metadata tab with lists for tags, flags, and aliases">
       <figcaption>Three lists, each with Add / Edit / Remove controls.</figcaption>
     </figure>
     <table>
@@ -137,7 +137,7 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
 
     <div class="callout">
       <span class="callout-icon">ℹ️</span>
-      <p><strong>Tags vs. flags</strong> If it describes <em>what the term is about</em>, it's a tag. If it describes <em>what you still need to do with it</em>, it's a flag.</p>
+      <p><strong>Tags vs. flags</strong> If it describes <em>what the item is about</em>, it's a tag. If it describes <em>what you still need to do with it</em>, it's a flag.</p>
     </div>
 
     <div class="page-nav">

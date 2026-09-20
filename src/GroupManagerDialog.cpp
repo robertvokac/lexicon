@@ -140,7 +140,7 @@ void GroupManagerDialog::deleteGroup() {
     const auto answer = QMessageBox::question(
         this,
         "Delete group",
-        QString("Delete group '%1'? All terms inside it will also be deleted.").arg(group.name));
+        QString("Delete group '%1'? All items inside it will also be deleted.").arg(group.name));
     if (answer != QMessageBox::Yes) {
         return;
     }
