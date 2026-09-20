@@ -4,10 +4,13 @@
 // learns that a password exists.
 #include "Security.h"
 
+#include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <map>
 #include <mutex>
 #include <optional>
+#include <semaphore>
 #include <string>
 
 namespace lexicon::http {
@@ -35,6 +38,10 @@ struct LoginLimitPolicy {
   std::size_t maxTrackedClients = 4096;
   // Backstop against attackers rotating source addresses.
   int maxFailuresTotal = 200;
+  // Password hashing is deliberately expensive in CPU *and* memory, so only a
+  // few derivations may run at once. Without this, a burst of logins would
+  // multiply the scrypt working set by the number of requests.
+  int maxConcurrentHashes = 2;
 };
 
 class AuthState {
@@ -63,6 +70,12 @@ public:
   // Test hook: shifts the internal clock so expiry and rate-limit windows can
   // be exercised without sleeping.
   void advanceClockForTests(std::chrono::seconds amount);
+  // The largest number of password derivations that have ever overlapped.
+  // Observability for the bound above, and what the tests assert on.
+  int peakPasswordHashConcurrency() const;
+
+  // The upper bound the semaphore is sized for; the policy is clamped to it.
+  static constexpr std::ptrdiff_t maxHashSlots = 32;
 
 private:
   using Clock = std::chrono::steady_clock;
@@ -75,6 +88,20 @@ private:
     int failures = 0;
     Clock::time_point firstFailure;
     Clock::time_point lastFailure;
+  };
+
+  // Holds one of the bounded password-hashing slots for its lifetime. The
+  // session mutex is deliberately *not* held while it is alive: an expensive
+  // derivation must never delay authenticating an existing session.
+  class HashPermit {
+  public:
+    explicit HashPermit(AuthState &state);
+    ~HashPermit();
+    HashPermit(const HashPermit &) = delete;
+    HashPermit &operator=(const HashPermit &) = delete;
+
+  private:
+    AuthState &state_;
   };
 
   Clock::time_point now() const;
@@ -93,5 +120,10 @@ private:
   std::map<std::string, FailureCounter> failures_;
   FailureCounter totalFailures_;
   std::chrono::seconds testOffset_{0};
+
+  // Independent of mutex_ on purpose: these are touched while no lock is held.
+  std::counting_semaphore<maxHashSlots> hashSlots_;
+  std::atomic<int> activeHashes_{0};
+  std::atomic<int> peakHashes_{0};
 };
 } // namespace lexicon::http

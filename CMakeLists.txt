@@ -125,6 +125,11 @@ if (LEXICON_BUILD_SERVER)
     target_link_libraries(lexicon-http
         PUBLIC lexicon-application lexicon-nlohmann-json
         PRIVATE lexicon-cpp-httplib OpenSSL::Crypto)
+    if (WIN32)
+        # SetEntriesInAclW and SetNamedSecurityInfoW build the owner-only DACL
+        # that stands in for POSIX mode 0600.
+        target_link_libraries(lexicon-http PRIVATE advapi32)
+    endif()
     set_target_properties(lexicon-http PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
     add_executable(LexiconServer lexicon-server/main.cpp)

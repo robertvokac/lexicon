@@ -8,11 +8,14 @@
 
 #include <nlohmann/json.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 using lexicontest::Checks;
 using lexicontest::HttpTestClient;
@@ -386,12 +389,19 @@ void checkPasswordHashing(Checks &checks) {
 }
 
 void checkCredentialsFile(Checks &checks) {
-  const auto path =
-      (std::filesystem::temp_directory_path() /
-       ("lexicon-auth-test-" +
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
-        ".json"))
-          .string();
+  // Its own directory: the leftover scan below must see only what this test
+  // created.
+  const auto directory =
+      std::filesystem::temp_directory_path() /
+      ("lexicon-auth-test-" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::error_code directoryError;
+  std::filesystem::create_directories(directory, directoryError);
+  if (directoryError) {
+    checks.expect(false, "the credentials test directory can be created");
+    return;
+  }
+  const auto path = (directory / "lexicon-auth.json").string();
   auto hashed = lexicon::http::hashPassword(
       "another passphrase", lexicon::http::ScryptParameters::forTests());
   checks.expect(hashed.has_value(), "the test password hashes");
@@ -419,13 +429,184 @@ void checkCredentialsFile(Checks &checks) {
                     std::filesystem::perms::none,
                 "the credentials file is readable by its owner only");
 #endif
+
+  // Changing the password rewrites the same path. This is the `auth set-user`
+  // flow, and it has to work every time, not just the first.
+  auto second = lexicon::http::hashPassword(
+      "a different passphrase", lexicon::http::ScryptParameters::forTests());
+  checks.expect(second.has_value(), "the replacement password hashes");
+  checks.expect(
+      lexicon::http::writeCredentialsFile(path, {"renamed", *second})
+          .has_value(),
+      "credentials can be written again over the same file");
+  auto reloaded = lexicon::http::readCredentialsFile(path);
+  checks.expect(reloaded.has_value(), "the rewritten file can be read");
+  if (reloaded) {
+    checks.expectEqual(reloaded->username, "renamed",
+                       "the new user name replaced the old one");
+    auto current =
+        lexicon::http::verifyPassword(reloaded->password, "a different passphrase");
+    auto previous =
+        lexicon::http::verifyPassword(reloaded->password, "another passphrase");
+    checks.expect(current.has_value() && *current,
+                  "the new password verifies after the rewrite");
+    checks.expect(previous.has_value() && !*previous,
+                  "the old password no longer verifies");
+  }
+  // A third round, because an in-place rewrite must not depend on how the
+  // file came to exist.
+  checks.expect(
+      lexicon::http::writeCredentialsFile(path, {"third", *second}).has_value(),
+      "credentials can be written a third time");
+  checks.expectEqual(
+      lexicon::http::readCredentialsFile(path)
+          .transform([](const lexicon::http::Credentials &value) {
+            return value.username;
+          })
+          .value_or(std::string{}),
+      "third", "the third write is the one that survives");
+#ifndef _WIN32
+  const auto afterRewrite = std::filesystem::status(path).permissions();
+  checks.expect((afterRewrite & (std::filesystem::perms::group_all |
+                                 std::filesystem::perms::others_all)) ==
+                    std::filesystem::perms::none,
+                "a rewritten credentials file is still owner only");
+#endif
+  // Nothing is left behind next to the target.
+  int leftovers = 0;
+  for (const auto &entry : std::filesystem::directory_iterator(directory)) {
+    if (entry.path().filename() != "lexicon-auth.json")
+      ++leftovers;
+  }
+  checks.expectEqual(leftovers, 0, "no temporary credentials file is left");
+
+  // A write that cannot succeed must not damage what is already there.
+  const auto unreachable =
+      (directory / "no-such-directory" / "lexicon-auth.json").string();
+  checks.expect(!lexicon::http::writeCredentialsFile(unreachable,
+                                                     {"ghost", *second})
+                     .has_value(),
+                "writing into a missing directory fails");
+  checks.expectEqual(
+      lexicon::http::readCredentialsFile(path)
+          .transform([](const lexicon::http::Credentials &value) {
+            return value.username;
+          })
+          .value_or(std::string{}),
+      "third", "a failed write leaves the existing credentials intact");
+
   std::error_code ignored;
-  std::filesystem::remove(path, ignored);
+  std::filesystem::remove_all(directory, ignored);
 
   const auto missing = lexicon::http::readCredentialsFile(path);
   checks.expect(!missing.has_value() &&
                     missing.error().code == lexicon::Error::Code::NotFound,
                 "a missing credentials file is reported clearly");
+}
+
+// An expensive password derivation must never hold the lock that ordinary
+// authenticated requests need.
+void checkSlowLoginDoesNotBlockSessions(Checks &checks) {
+  lexicon::http::LoginLimitPolicy limits;
+  limits.maxFailuresPerClient = 100000;
+  limits.maxFailuresTotal = 0;
+  limits.maxConcurrentHashes = 2;
+  lexicon::http::AuthState auth(lexicon::http::SessionPolicy{}, limits);
+
+  // Costly enough that a serialized implementation would be obvious.
+  auto parameters = lexicon::http::ScryptParameters::forTests();
+  parameters.n = 1u << 16;
+  parameters.maxMemory = 256ull * 1024 * 1024;
+  auto hashed = lexicon::http::hashPassword("the real passphrase", parameters);
+  if (!hashed) {
+    checks.expect(false, "the slow test password hashes");
+    return;
+  }
+  auth.setCredentials({"user", *hashed});
+
+  const auto session = auth.login("client", "user", "the real passphrase");
+  checks.expect(session.status == lexicon::http::AuthState::LoginStatus::Ok,
+                "the slow-login test signs in");
+
+  const auto measure = [](auto &&operation) {
+    const auto start = std::chrono::steady_clock::now();
+    operation();
+    return std::chrono::steady_clock::now() - start;
+  };
+  const auto oneDerivation = measure(
+      [&] { auth.login("client", "user", "wrong"); });
+
+  std::atomic<bool> stop{false};
+  std::atomic<int> attempts{0};
+  std::vector<std::thread> workers;
+  for (int worker = 0; worker < 4; ++worker) {
+    workers.emplace_back([&, worker] {
+      while (!stop.load()) {
+        auth.login("storm-" + std::to_string(worker), "user", "wrong");
+        ++attempts;
+      }
+    });
+  }
+  // Wait until the storm is actually running before timing anything.
+  while (attempts.load() < 2 && !stop.load())
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+  constexpr int kChecks = 50;
+  const auto authenticateTime = measure([&] {
+    for (int index = 0; index < kChecks; ++index) {
+      const auto user = auth.authenticate(session.token);
+      if (!user)
+        checks.expect(false, "the session stays valid during a login storm");
+    }
+  });
+  stop.store(true);
+  for (auto &worker : workers)
+    worker.join();
+
+  // Serialized behind scrypt, fifty of these would cost fifty derivations.
+  checks.expect(authenticateTime < oneDerivation,
+                "50 session checks cost less than one password derivation (" +
+                    std::to_string(std::chrono::duration_cast<
+                                       std::chrono::milliseconds>(
+                                       authenticateTime)
+                                       .count()) +
+                    "ms vs " +
+                    std::to_string(std::chrono::duration_cast<
+                                       std::chrono::milliseconds>(
+                                       oneDerivation)
+                                       .count()) +
+                    "ms)");
+  checks.expect(auth.peakPasswordHashConcurrency() <= limits.maxConcurrentHashes,
+                "password derivations stay within their concurrency bound (" +
+                    std::to_string(auth.peakPasswordHashConcurrency()) + ")");
+  checks.expect(auth.peakPasswordHashConcurrency() >= 2,
+                "the bound is actually exercised by the storm");
+}
+
+void checkPasswordHashBoundOfOne(Checks &checks) {
+  lexicon::http::LoginLimitPolicy limits;
+  limits.maxFailuresPerClient = 100000;
+  limits.maxFailuresTotal = 0;
+  limits.maxConcurrentHashes = 1;
+  lexicon::http::AuthState auth(lexicon::http::SessionPolicy{}, limits);
+  auto hashed = lexicon::http::hashPassword(
+      "passphrase", lexicon::http::ScryptParameters::forTests());
+  if (!hashed) {
+    checks.expect(false, "the bound test password hashes");
+    return;
+  }
+  auth.setCredentials({"user", *hashed});
+  std::vector<std::thread> workers;
+  for (int worker = 0; worker < 8; ++worker) {
+    workers.emplace_back([&, worker] {
+      for (int round = 0; round < 4; ++round)
+        auth.login("bound-" + std::to_string(worker), "user", "wrong");
+    });
+  }
+  for (auto &worker : workers)
+    worker.join();
+  checks.expectEqual(auth.peakPasswordHashConcurrency(), 1,
+                     "a bound of one serializes every derivation");
 }
 
 void checkTls(Checks &checks) {
@@ -481,6 +662,8 @@ int main() {
   checkConfigurationGuards(checks);
   checkPasswordHashing(checks);
   checkCredentialsFile(checks);
+  checkSlowLoginDoesNotBlockSessions(checks);
+  checkPasswordHashBoundOfOne(checks);
   checkTls(checks);
   checkUnconfiguredServer(checks);
   return checks.summarize("server_auth");

@@ -80,7 +80,16 @@ not reach the shell history or the process list. `LexiconServer auth show`
 prints the configured user name and the hash parameters, never the hash.
 
 Credentials are stored in `lexicon-auth.json` next to the database (override
-with `--auth-file`), created with owner-only permissions:
+with `--auth-file`). Changing the password rewrites that file, so the write
+goes through an exclusively created temporary file with an unpredictable name
+and is then installed atomically - `rename()` on POSIX, `ReplaceFileW()` (or
+`MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` for a first write) on Windows.
+A crash or a concurrent reader sees either the old credentials or the new
+ones, never half a document. The file is owner-only: mode `0600` on POSIX, and
+on Windows a protected DACL granting the current user alone, because Windows
+has no mode bits and an inherited directory ACL is not equivalent.
+
+The document looks like this:
 
 ```json
 {
@@ -132,6 +141,7 @@ intentional, not a bug.
 | `--login-max-failures N` | `10` | Failed logins per client before 429 |
 | `--login-failure-window S` | `900` | Rate limit window |
 | `--login-max-failures-total N` | `200` | Failed logins from all clients before 429 (0 disables) |
+| `--login-max-parallel-hashes N` | `2` | Password derivations allowed to run at once |
 | `--quiet` | off | Do not log one line per request |
 
 ## HTTP, HTTPS and reverse proxies
@@ -202,6 +212,14 @@ warning. Never use it on the Internet.
   versioned record so the cost can be raised later. Hashes are compared in
   constant time. Tests use deliberately cheap parameters; the CLI always
   writes production ones.
+- **Password hashing never blocks the server.** The session mutex is held only
+  to check the rate limit and to copy the stored credential, then released;
+  scrypt runs with no lock held, and the mutex is taken again briefly to record
+  the outcome. An expensive or repeated login therefore cannot delay
+  authenticating an existing session. At most `--login-max-parallel-hashes`
+  derivations run at once, so a burst of logins cannot multiply the scrypt
+  working set either: two concurrent derivations at the default parameters
+  cost about 128 MB, not 128 MB per request.
 - **Sessions.** On a successful login the server generates 256 bits from the
   OpenSSL CSPRNG and returns it as an opaque base64url token. Only the SHA-256
   of the token is kept in memory. Sessions expire on idle timeout and on
@@ -235,6 +253,12 @@ warning. Never use it on the Internet.
   `--login-max-failures-total`, or set it to 0, if that trade-off is wrong for
   your deployment.
 - Writes are serialized; this is not a multi-user concurrent server.
+- Logins queue behind `--login-max-parallel-hashes`. That is the intended
+  trade: bounded memory and CPU under a login flood, at the cost of a slower
+  sign-in while one is in progress. Authenticated requests are unaffected.
+- The Windows credential path (atomic `ReplaceFileW` install and the
+  owner-only DACL) is written against the documented API and exercised through
+  a cross-compiled build, but the project's automated tests run on POSIX.
 - Blob storage maintenance (scan, verify, garbage collect) stays in the desktop
   client and on the server machine. It is local file system maintenance, so it
   is deliberately not reachable over HTTP.

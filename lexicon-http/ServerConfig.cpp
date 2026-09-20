@@ -94,6 +94,10 @@ Result<void> validate(const ServerConfig &config) {
                    "--session-idle-timeout.");
   if (config.sessions.maxSessions == 0)
     return invalid("--max-sessions must be at least 1.");
+  if (config.loginLimits.maxConcurrentHashes < 1 ||
+      config.loginLimits.maxConcurrentHashes > AuthState::maxHashSlots)
+    return invalid("--login-max-parallel-hashes must be between 1 and " +
+                   std::to_string(AuthState::maxHashSlots) + ".");
   for (const auto &origin : config.allowedOrigins)
     if (!looksLikeOrigin(origin))
       return invalid("--allowed-origin expects an exact origin such as "
@@ -139,6 +143,9 @@ Options:
   --login-max-failures-total N
                              Failed logins from all clients before HTTP 429
                              (default: 200, 0 disables)
+  --login-max-parallel-hashes N
+                             Password derivations allowed to run at once
+                             (default: 2)
   --quiet                    Do not write a request log line per request
   -h, --help                 Show this help
   --version                  Show the version
@@ -274,6 +281,11 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
         if (!count)
           return std::unexpected(count.error());
         parsed.config.loginLimits.maxFailuresTotal = static_cast<int>(*count);
+      } else if (option == "--login-max-parallel-hashes") {
+        auto count = number(1, AuthState::maxHashSlots);
+        if (!count)
+          return std::unexpected(count.error());
+        parsed.config.loginLimits.maxConcurrentHashes = static_cast<int>(*count);
       } else {
         return invalid("Unknown option '" + option + "'.");
       }

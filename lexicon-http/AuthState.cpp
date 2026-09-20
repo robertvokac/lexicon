@@ -1,5 +1,7 @@
 #include "AuthState.h"
 
+#include "TempFile.h"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -16,10 +18,6 @@ using Json = nlohmann::json;
 std::unexpected<Error> invalid(std::string message) {
   return std::unexpected(Error{Error::Code::Validation, std::move(message)});
 }
-std::unexpected<Error> storage(std::string message) {
-  return std::unexpected(Error{Error::Code::Storage, std::move(message)});
-}
-
 fs::path utf8Path(const std::string &value) {
   return fs::path(std::u8string(reinterpret_cast<const char8_t *>(value.data()),
                                 value.size()));
@@ -105,47 +103,57 @@ Result<void> writeCredentialsFile(const std::string &path,
         {"maxMemory", credentials.password.parameters.maxMemory},
         {"salt", base64Encode(credentials.password.salt)},
         {"hash", base64Encode(credentials.password.hash)}}}};
+  const auto text = document.dump(2) + "\n";
 
+  // Changing the password rewrites an existing file, so it goes through an
+  // exclusively created temporary with an unpredictable name and is then
+  // installed atomically. A crash or a concurrent reader sees either the old
+  // credentials or the new ones, never a half-written file, and no attacker
+  // can pre-create the temporary path.
   const auto target = utf8Path(path);
-  const auto temporary = fs::path(target).concat(".new");
-  std::error_code ignored;
-  fs::remove(temporary, ignored);
-  {
-    std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-    if (!output)
-      return storage("Cannot write the server credentials file.");
-    std::error_code error;
-    fs::permissions(temporary,
-                    fs::perms::owner_read | fs::perms::owner_write,
-                    fs::perm_options::replace, error);
-    if (error) {
-      output.close();
-      fs::remove(temporary, ignored);
-      return storage("Cannot restrict the credentials file permissions.");
-    }
-    output << document.dump(2) << '\n';
-    output.flush();
-    if (!output) {
-      output.close();
-      fs::remove(temporary, ignored);
-      return storage("Cannot write the server credentials file.");
-    }
-  }
-  std::error_code error;
-  fs::rename(temporary, target, error);
-  if (error) {
-    fs::remove(temporary, ignored);
-    return storage("Cannot install the server credentials file.");
-  }
-  fs::permissions(target, fs::perms::owner_read | fs::perms::owner_write,
-                  fs::perm_options::replace, ignored);
+  const auto directory = target.parent_path();
+  auto staging = TempFile::create(directory.empty() ? std::string(".")
+                                                    : directory.string());
+  if (!staging)
+    return std::unexpected(staging.error());
+  if (auto written = staging->write(text.data(), text.size()); !written)
+    return written;
+  if (auto installed =
+          staging->replace(path, TempFile::Protection::OwnerOnly);
+      !installed)
+    return installed;
   return {};
 }
 
+namespace {
+std::ptrdiff_t hashSlotCount(const LoginLimitPolicy &limits) {
+  return std::clamp<std::ptrdiff_t>(limits.maxConcurrentHashes, 1,
+                                    AuthState::maxHashSlots);
+}
+} // namespace
+
 AuthState::AuthState(SessionPolicy sessions, LoginLimitPolicy limits)
-    : sessions_(sessions), limits_(limits) {
+    : sessions_(sessions), limits_(limits), hashSlots_(hashSlotCount(limits)) {
   totalFailures_.firstFailure = Clock::now();
   totalFailures_.lastFailure = Clock::now();
+}
+
+AuthState::HashPermit::HashPermit(AuthState &state) : state_(state) {
+  state_.hashSlots_.acquire();
+  const int active = state_.activeHashes_.fetch_add(1) + 1;
+  int peak = state_.peakHashes_.load(std::memory_order_relaxed);
+  while (active > peak &&
+         !state_.peakHashes_.compare_exchange_weak(peak, active))
+    ;
+}
+
+AuthState::HashPermit::~HashPermit() {
+  state_.activeHashes_.fetch_sub(1);
+  state_.hashSlots_.release();
+}
+
+int AuthState::peakPasswordHashConcurrency() const {
+  return peakHashes_.load();
 }
 
 void AuthState::setCredentials(Credentials credentials) {
@@ -263,30 +271,50 @@ void AuthState::clearFailures(const std::string &clientKey) {
 AuthState::LoginResult AuthState::login(const std::string &clientKey,
                                         const std::string &username,
                                         const std::string &password) {
+  LoginResult result;
+
+  // Phase one, under the lock: apply the rate limit and take a copy of the
+  // credentials to verify against.
+  std::optional<Credentials> expected;
+  {
+    std::lock_guard lock(mutex_);
+    const auto moment = now();
+    expireSessions(moment);
+    if (limited(clientKey, moment, result.retryAfterSeconds)) {
+      result.status = LoginStatus::RateLimited;
+      return result;
+    }
+    expected = credentials_;
+  }
+
+  // Phase two, with no lock held: derive the key. This is deliberately slow,
+  // which is exactly why every other request must not wait behind it. At most
+  // maxConcurrentHashes derivations run at a time.
+  bool credentialsMatch = false;
+  if (expected) {
+    const HashPermit permit(*this);
+    // The hash is always computed, so a wrong user name costs the same as a
+    // wrong password.
+    const bool nameMatches = constantTimeEquals(expected->username, username);
+    auto verified = verifyPassword(expected->password, password);
+    if (!verified) {
+      result.status = LoginStatus::Unavailable;
+      return result;
+    }
+    credentialsMatch = nameMatches && *verified;
+  }
+
+  // Phase three, under the lock again: record the outcome.
   std::lock_guard lock(mutex_);
   const auto moment = now();
-  expireSessions(moment);
-  LoginResult result;
-  if (limited(clientKey, moment, result.retryAfterSeconds)) {
-    result.status = LoginStatus::RateLimited;
-    return result;
-  }
-  if (!credentials_) {
-    // Counted as a failure so that probing an unconfigured server is also
-    // rate limited, and reported like any other rejected login.
-    recordFailure(clientKey, moment);
-    result.status = LoginStatus::InvalidCredentials;
-    return result;
-  }
-  // The hash is always computed, so a wrong user name costs the same as a
-  // wrong password.
-  const bool nameMatches = constantTimeEquals(credentials_->username, username);
-  auto verified = verifyPassword(credentials_->password, password);
-  if (!verified) {
-    result.status = LoginStatus::Unavailable;
-    return result;
-  }
-  if (!nameMatches || !*verified) {
+  // A password change during the derivation invalidates what was verified.
+  const bool stillCurrent =
+      expected && credentials_ &&
+      credentials_->username == expected->username &&
+      credentials_->password.hash == expected->password.hash;
+  if (!credentialsMatch || !stillCurrent) {
+    // Probing an unconfigured or just-changed server is rate limited and
+    // reported exactly like any other rejected login.
     recordFailure(clientKey, moment);
     result.status = LoginStatus::InvalidCredentials;
     return result;
