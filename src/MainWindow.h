@@ -169,6 +169,7 @@ private:
     void setupUi();
     void setupMenus();
     int selectedItemId() const;
+    int groupIdForNewItem();
     QList<GroupRecord> groups() const;
     void showError(const QString& message);
 

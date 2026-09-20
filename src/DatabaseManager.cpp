@@ -227,6 +227,14 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             " AND earlier.id < item_group.id)"
             ");",
             "CREATE INDEX idx_item_group_position ON item_group(position, name COLLATE NOCASE);"
+        }},
+        {13, {
+            "INSERT INTO item_group(name, description, position) "
+            "SELECT 'Default', 'Default group for new items when no group is selected.', "
+            "COALESCE((SELECT MAX(position) + 1 FROM item_group), 0) "
+            "WHERE NOT EXISTS (SELECT 1 FROM item_group WHERE name = 'Default');",
+            "UPDATE item_group SET description = 'Default group for new items when no group is selected.' "
+            "WHERE name = 'Default' AND TRIM(description) = '';"
         }}
     };
 
@@ -290,6 +298,39 @@ QList<GroupRecord> DatabaseManager::loadGroups(QString* errorMessage) {
         groups.push_back(group);
     }
     return groups;
+}
+
+int DatabaseManager::defaultGroupId(QString* errorMessage) {
+    QSqlQuery query(database());
+    const QString findDefault = "SELECT id FROM item_group WHERE name = 'Default' LIMIT 1;";
+    if (!query.exec(findDefault)) {
+        setError(errorMessage, query.lastError().text());
+        return -1;
+    }
+    if (query.next()) {
+        return query.value(0).toInt();
+    }
+    query.finish();
+
+    // A user can delete or rename Default; restore it when a new item needs it.
+    QSqlQuery positionQuery(database());
+    if (!positionQuery.exec("SELECT COALESCE(MAX(position) + 1, 0) FROM item_group;") || !positionQuery.next()) {
+        setError(errorMessage, positionQuery.lastError().text());
+        return -1;
+    }
+    GroupRecord group;
+    group.name = "Default";
+    group.description = "Default group for new items when no group is selected.";
+    group.position = positionQuery.value(0).toInt();
+    positionQuery.finish();
+    if (!upsertGroup(group, errorMessage)) {
+        return -1;
+    }
+    if (!query.exec(findDefault) || !query.next()) {
+        setError(errorMessage, "Failed to find the Default group after creating it.");
+        return -1;
+    }
+    return query.value(0).toInt();
 }
 
 bool DatabaseManager::upsertGroup(const GroupRecord& group, QString* errorMessage) {

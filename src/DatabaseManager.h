@@ -81,6 +81,7 @@ public:
     static QSqlDatabase database();
 
     static QList<GroupRecord> loadGroups(QString* errorMessage = nullptr);
+    static int defaultGroupId(QString* errorMessage = nullptr);
     static bool upsertGroup(const GroupRecord& group, QString* errorMessage = nullptr);
     static bool deleteGroup(int groupId, QString* errorMessage = nullptr);
 

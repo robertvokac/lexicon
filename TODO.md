@@ -28,8 +28,6 @@ This file tracks features, improvements, and fixes for the Lexicon application.
     - Use `QSplitter` to allow resizing between table, preview, and links.
     - Improve spacing and alignment for readability.
   
-- [ ] Bug: Adding new item, if no group is selected, uses the first group
-
 ---
 
 ## 2. Features / Enhancements

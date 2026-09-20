@@ -118,6 +118,7 @@ cmake --build build --target Lexicon -j
 ### 2) Create and manage groups
 
 Groups are top-level buckets for items (for example: `C++`, `Databases`, `Networking`).
+Lexicon creates a `Default` group automatically. Items added while the filter is set to `All groups` go there.
 
 1. Open `Manage` → `Groups...`.
 2. Use:
@@ -173,7 +174,7 @@ You have two add options in the main toolbar:
 
 Recommended workflow:
 
-1. Select the target group.
+1. Select the target group, or leave `All groups` selected to use `Default`.
 2. Click `Add` or `Add ...`.
 3. Fill the General tab:
    - `Title` (required)

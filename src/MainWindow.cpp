@@ -488,21 +488,31 @@ QList<GroupRecord> MainWindow::groups() const {
     return m_groups;
 }
 
-void MainWindow::addItem() {
-    if (m_groups.isEmpty()) {
-        QMessageBox::information(this, "Lexicon", "Create a group first.");
-        openGroupManager();
-        if (m_groups.isEmpty()) {
-            return;
-        }
+int MainWindow::groupIdForNewItem() {
+    const int selectedGroupId = m_groupFilter->currentData().toInt();
+    if (selectedGroupId > 0) {
+        return selectedGroupId;
     }
 
+    QString error;
+    const int groupId = DatabaseManager::defaultGroupId(&error);
+    if (groupId <= 0) {
+        showError(error.isEmpty() ? "Cannot find the Default group." : error);
+        return -1;
+    }
+    refreshGroups();
+    return groupId;
+}
+
+void MainWindow::addItem() {
+    const int groupId = groupIdForNewItem();
+    if (groupId <= 0) {
+        return;
+    }
     ItemEditDialog dialog(this);
     dialog.setGroups(m_groups);
     ItemRecord draft;
-    if (m_groupFilter->currentData().toInt() > 0) {
-        draft.groupId = m_groupFilter->currentData().toInt();
-    }
+    draft.groupId = groupId;
     draft.title = m_searchEdit->text().trimmed();
     dialog.setItem(draft);
 
@@ -524,28 +534,12 @@ void MainWindow::quickAdd() {
         return;
     }
 
-    if (m_groups.isEmpty()) {
-        QMessageBox::information(this, "Lexicon", "Create a group first.");
-        openGroupManager();
-        if (m_groups.isEmpty()) {
-            return;
-        }
-    }
-
     ItemRecord item;
     item.title = text;
-    
-    // Choose group: current filter or first available
-    int groupId = m_groupFilter->currentData().toInt();
-    if (groupId <= 0 && !m_groups.isEmpty()) {
-        groupId = m_groups.first().id;
-    }
-
+    const int groupId = groupIdForNewItem();
     if (groupId <= 0) {
-        QMessageBox::warning(this, "Lexicon", "No group available for quick add.");
-         return;
+        return;
     }
-    
     item.groupId = groupId;
 
     QString error;
