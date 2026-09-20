@@ -3,8 +3,8 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 
-Lexicon is a desktop knowledge dictionary built with Qt Widgets and SQLite.
-It is designed for structured learning and technical note-taking with groups, items, metadata, and typed links between concepts.
+Lexicon is a knowledge dictionary for structured learning and technical note-taking, with groups, items, metadata, and typed links between concepts.
+It has two clients over one long-lived core: a Qt Widgets desktop application, and a static web client talking to a Qt-free REST server. Both store everything in the same SQLite database.
 
 ## Table of contents
 
@@ -13,6 +13,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - [Requirements](#requirements)
 - [Build and run](#build-and-run)
 - [Architecture](#architecture)
+- [REST server and web client](#rest-server-and-web-client)
 - [Extensive user manual](#extensive-user-manual)
 - [Database model](#database-model)
 - [Data location and backup](#data-location-and-backup)
@@ -48,6 +49,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - Pagination for large datasets
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
+- A Qt-free REST server and an independently deployable static web client with the same capabilities
 
 ## Screenshots
 
@@ -95,8 +97,9 @@ Create and maintain incoming relationships (who references this item).
 
 - CMake `3.21+` and a C++23-compatible compiler
 - SQLite 3.38+ with JSON functions
-- OpenSSL `libcrypto` for SHA-256 blob identifiers
+- OpenSSL `libcrypto` for SHA-256 blob identifiers, plus `libssl` for the server's HTTPS support
 - Qt 6 `Core` and `Widgets` only for the desktop client
+- A current browser for the web client; it needs no build tools at all
 
 ### Debian/Ubuntu example
 
@@ -105,6 +108,8 @@ sudo apt update
 sudo apt install -y build-essential cmake libsqlite3-dev libssl-dev qt6-base-dev
 ```
 
+The server alone needs neither `qt6-base-dev` nor a display.
+
 ## Build and run
 
 ```bash
@@ -112,6 +117,17 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target Lexicon -j
 ./build/Lexicon
 ```
+
+The REST server is built by the same tree and needs no Qt:
+
+```bash
+cmake --build build --target LexiconServer -j
+./build/LexiconServer auth set-user --database ~/lexicon.db
+./build/LexiconServer --database ~/lexicon.db --allowed-origin http://127.0.0.1:8080
+```
+
+Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
+`-DLEXICON_BUILD_SERVER=OFF`.
 
 ## Architecture
 
@@ -122,21 +138,47 @@ cmake --build build --target Lexicon -j
 | `lexicon-storage-sqlite` | Native SQLite repository, migrations, transactions, and blob files; depends on application, SQLite C API, and OpenSSL Crypto. No Qt. |
 | `lexicon-qt-bridge` | Converts UTF-8 standard C++ values to and from Qt values; depends on core and QtCore. |
 | `Lexicon` (`lexicon-qt/`) | Qt Widgets frontend and composition root; injects `SqliteRepository` into `LexiconApplication`. No SQL in Widgets. |
+| `lexicon-http` | HTTP/JSON adapter: transport conversions, authentication, sessions, CORS, TLS, routes. Depends on application, vendored cpp-httplib and nlohmann/json, and OpenSSL. No Qt. |
+| `LexiconServer` (`lexicon-server/`) | Server composition root; injects `SqliteRepository` into `LexiconApplication` and serves `lexicon-http`. No Qt. |
+| `lexicon-web/` | Static HTML, CSS and vanilla JavaScript client. No C++, no framework, no build step. Talks only REST. |
 
 Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. Migration versions and schema are unchanged; old QtSql databases are covered by version 10 and version 20 compatibility fixtures.
 
 Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding.
 
-Qt is limited to the frontend and conversion target so another client can use core, application, and native SQLite without Qt. A future `lexicon-http` executable would call `lexicon-application` and compose it with `lexicon-storage-sqlite`; no HTTP implementation is included here.
+Qt is limited to the frontend and conversion target so another client can use core, application, and native SQLite without Qt. `LexiconServer` is exactly that second client: it composes `SqliteRepository` with `LexiconApplication` and adds an HTTP adapter, without duplicating a single domain rule.
+
+```text
+                   Qt Widgets (lexicon-qt)
+                             |
+                             v
+                    LexiconApplication --------------+
+                             ^                       |
+                             |                       |
+                   SQLite Repository            HTTP Adapter
+                  (lexicon-storage-sqlite)      (lexicon-http)
+                             |                       |
+                             v                       v
+                        lexicon.db              REST / JSON
+                                                     |
+                                                     v
+                                          static lexicon-web
+```
+
+**`LexiconServer` never serves `lexicon-web`.** The server answers versioned REST/JSON under `/api/v1` and nothing else; the web client is static content deployed separately, possibly on a completely different host.
 
 Qt-free backend build and tests:
 
 ```bash
-cmake -S . -B build-headless -DLEXICON_BUILD_DESKTOP=OFF -DBUILD_TESTING=ON \
+cmake -S . -B build-headless -DLEXICON_BUILD_DESKTOP=OFF -DLEXICON_BUILD_SERVER=ON \
+  -DBUILD_TESTING=ON \
   -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=ON -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=ON
 cmake --build build-headless -j
 ctest --test-dir build-headless --output-on-failure
 ```
+
+This builds and tests the backend and the server, including the REST,
+authentication and concurrency suites, with Qt unavailable.
 
 Desktop build and tests:
 
@@ -145,6 +187,33 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
+
+## REST server and web client
+
+`LexiconServer` exposes the application services over HTTP so a browser can use
+the same database as the desktop client:
+
+```bash
+LexiconServer auth set-user --database ~/lexicon/lexicon.db   # asks interactively
+LexiconServer --database ~/lexicon/lexicon.db \
+  --allowed-origin https://lexicon.example.com
+```
+
+It binds `127.0.0.1:8628` by default, requires a Bearer session for every
+domain endpoint, hashes the password with scrypt, rate limits failed logins,
+and refuses to serve password authentication over plaintext HTTP on a public
+address unless you override it explicitly.
+
+`lexicon-web/` is the browser client: HTML, CSS and vanilla JavaScript modules
+with no bundler, no transpiler and no `npm install`. Copy the directory to any
+static host, point it at the API and log in. It reproduces the desktop
+workflows - the filtered item table, the six-tab item editor, group and type
+management, the overview dialogs, Markdown editing with live preview, and light
+and dark themes - and adapts to phones with a responsive layout.
+
+- [`docs/server.md`](docs/server.md) - build, run, TLS, reverse proxies, the security model
+- [`docs/rest-api.md`](docs/rest-api.md) - every endpoint, the JSON shapes, the error format
+- [`lexicon-web/README.md`](lexicon-web/README.md) - static deployment and browser storage
 
 ## Extensive user manual
 
@@ -408,6 +477,8 @@ Backup strategies:
 
 ## Recent updates
 
+- Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
+- `lexicon-web`, an independently deployable static web client with desktop feature parity
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 
@@ -416,7 +487,6 @@ Backup strategies:
 - export to CSV/JSON
 - add new unique indexes
 - export to static HTML
-- HTTP server
 - improve search ranking so exact match appears first
 
 ## License

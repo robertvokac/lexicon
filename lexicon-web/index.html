@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="referrer" content="no-referrer">
+    <title>Lexicon</title>
+    <link rel="stylesheet" href="css/lexicon.css">
+    <!-- Optional deployment configuration. Copy config.example.js to config.js
+         and set apiBaseUrl; the file is loaded only if it exists. -->
+    <script src="config.js" onerror="this.remove()"></script>
+</head>
+<body>
+    <header id="menu-bar" class="menu-bar" hidden>
+        <button id="menu-toggle" class="menu-toggle" type="button"
+                aria-expanded="false" aria-label="Menu">☰</button>
+        <span class="brand">Lexicon</span>
+        <nav id="menu-list" class="menu-list" aria-label="Main menu"></nav>
+        <span class="spacer"></span>
+        <span id="session-label" class="session-label"></span>
+        <button id="logout-button" class="secondary" type="button">Logout</button>
+    </header>
+
+    <main id="login-view" class="login-view" hidden>
+        <form id="login-form" class="login-card" autocomplete="on">
+            <h1>Lexicon</h1>
+            <p class="hint">Sign in to your Lexicon server.</p>
+            <div class="form-row">
+                <label for="login-server">Server URL:</label>
+                <input id="login-server" name="server" type="url" required
+                       placeholder="https://api.lexicon.example.com" autocomplete="url">
+            </div>
+            <div class="form-row">
+                <label for="login-username">User name:</label>
+                <input id="login-username" name="username" type="text" required
+                       autocomplete="username" autocapitalize="none" spellcheck="false">
+            </div>
+            <div class="form-row">
+                <label for="login-password">Password:</label>
+                <input id="login-password" name="password" type="password" required
+                       autocomplete="current-password">
+            </div>
+            <p id="login-error" class="dialog-error" role="alert" hidden></p>
+            <div class="login-actions">
+                <button id="login-submit" class="primary" type="submit">Log in</button>
+            </div>
+            <p class="hint">
+                The session token is kept in this browser tab only. Closing the
+                browser signs you out.
+            </p>
+        </form>
+    </main>
+
+    <main id="main-view" class="main-view" hidden></main>
+
+    <script type="module" src="js/app.js"></script>
+    <noscript>
+        <p class="fatal">Lexicon needs JavaScript and native ES modules.</p>
+    </noscript>
+</body>
+</html>
