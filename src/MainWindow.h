@@ -158,6 +158,7 @@ private slots:
     void showTagsOverview();
     void showFlagsOverview();
     void showAliasesOverview();
+    void openColumnVisibilityDialog();
 
     void updateActions();
     void showItemContent(const QModelIndex& index);
@@ -168,6 +169,8 @@ private:
     void applyTheme(const QString& themeName);
     void saveSettings();
     void loadSettings();
+    void loadColumnVisibility();
+    void applyColumnVisibility();
 
     void updateMarkdownStyles();
     void updateLinksDisplay(int itemId);
@@ -199,6 +202,7 @@ private:
     QLineEdit* m_searchEdit = nullptr;
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;
+    QMap<QString, bool> m_columnVisibility;
     QCompleter* m_completer = nullptr;
 
     QPushButton* m_firstButton = nullptr;

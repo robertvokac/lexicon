@@ -290,7 +290,7 @@ Core tables:
 - `item_group`
 - `item`
 - `item_type`
-- `item_type_field`
+- `item_field`
 - `item_value`
 - `property`
 - `alias`
@@ -298,6 +298,7 @@ Core tables:
 - `flag`
 - `link`
 - `log`
+- `configuration`
 
 Design notes:
 

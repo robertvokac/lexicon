@@ -125,7 +125,7 @@ void ItemEditDialog::setupUi() {
     generalScroll->setWidget(generalTab);
     m_tabWidget->addTab(generalScroll, "General");
 
-    // --- Tab 2: Values ---
+    // --- Values tab ---
     auto* valuesTab = new QWidget();
     auto* valuesLayout = new QVBoxLayout(valuesTab);
     m_noFieldsLabel = new QLabel("This type has no fields yet.", valuesTab);
@@ -137,10 +137,7 @@ void ItemEditDialog::setupUi() {
     auto* valuesScroll = new QScrollArea(this);
     valuesScroll->setWidgetResizable(true);
     valuesScroll->setWidget(valuesTab);
-    m_valuesTabIndex = m_tabWidget->addTab(valuesScroll, "Values");
-    m_tabWidget->setTabEnabled(m_valuesTabIndex, false);
-
-    // --- Tab 3: Content ---
+    // --- Tab 2: Content ---
     auto* contentTab = new QWidget();
     auto* contentLayout = new QVBoxLayout(contentTab);
 
@@ -183,7 +180,10 @@ void ItemEditDialog::setupUi() {
     contentLayout->addLayout(editorSplitter);
     m_tabWidget->addTab(contentTab, "Content");
 
-    // --- Tab 3: Additional ---
+    m_valuesTabIndex = m_tabWidget->addTab(valuesScroll, "Values");
+    m_tabWidget->setTabEnabled(m_valuesTabIndex, false);
+
+    // --- Tab 4: Additional ---
     auto* additionalTab = new QWidget();
     auto* additionalLayout = new QVBoxLayout(additionalTab);
     auto* listsLayout = new QGridLayout();
@@ -204,12 +204,12 @@ void ItemEditDialog::setupUi() {
     additionalLayout->addLayout(listsLayout);
     m_tabWidget->addTab(additionalTab, "Metadata");
 
-    // --- Tab 4: Links ---
+    // --- Tab 5: Links ---
     auto* linksTab = buildListEditor("Outgoing Links", m_linksList, this,
                                      SLOT(addLink()), SLOT(editLink()), SLOT(removeLink()));
     m_tabWidget->addTab(linksTab, "Links");
 
-    // --- Tab 5: Backlinks ---
+    // --- Tab 6: Backlinks ---
     auto* backlinksTab = buildListEditor("Incoming Links", m_backlinksList, this,
                                          SLOT(addBacklink()), SLOT(editBacklink()), SLOT(removeBacklink()));
     m_tabWidget->addTab(backlinksTab, "Backlinks");
@@ -227,7 +227,7 @@ void ItemEditDialog::setupUi() {
 void ItemEditDialog::connectSignals() {
     connect(m_contentEdit, &QTextEdit::textChanged, m_previewTimer, QOverload<>::of(&QTimer::start));
     connect(m_groupCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshTypes(); });
-    connect(m_typeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshFields(); });
+    connect(m_typeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { typeSelectionChanged(); });
 }
 
 void ItemEditDialog::showEvent(QShowEvent* event) {
@@ -299,6 +299,45 @@ void ItemEditDialog::captureFieldValues() {
     }
 }
 
+void ItemEditDialog::typeSelectionChanged() {
+    const int newTypeId = m_typeCombo->currentData().toInt();
+    const int oldTypeId = m_displayedTypeId;
+    if (oldTypeId == newTypeId) return;
+
+    captureFieldValues();
+    QList<int> oldFieldIds;
+    int affectedValues = 0;
+    for (const auto& field : m_currentFields) {
+        oldFieldIds.append(field.id);
+        if (!m_pendingFieldValues.value(field.id).isEmpty()
+            || (oldTypeId == m_originalTypeId && !m_originalTypeChangeConfirmed
+                && !m_originalFieldValues.value(field.id).isEmpty())
+            || (m_blobPathEditors.contains(field.id)
+                && !m_blobPathEditors.value(field.id)->text().trimmed().isEmpty())) {
+            ++affectedValues;
+        }
+    }
+
+    if (oldTypeId > 0 && affectedValues > 0) {
+        const auto answer = QMessageBox::question(this, "Change type",
+            QString("Changing the type will remove %1 field value(s) from this item. Continue?")
+                .arg(affectedValues),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes) {
+            const QSignalBlocker blocker(m_typeCombo);
+            m_typeCombo->setCurrentIndex(m_typeCombo->findData(oldTypeId));
+            return;
+        }
+        if (oldTypeId == m_originalTypeId) m_originalTypeChangeConfirmed = true;
+    }
+
+    refreshFields();
+    for (const int fieldId : oldFieldIds) {
+        m_pendingFieldValues.remove(fieldId);
+        m_pendingBlobPaths.remove(fieldId);
+    }
+}
+
 void ItemEditDialog::refreshFields() {
     captureFieldValues();
     for (auto it = m_blobPathEditors.cbegin(); it != m_blobPathEditors.cend(); ++it) {
@@ -313,6 +352,7 @@ void ItemEditDialog::refreshFields() {
     m_fieldsLoadFailed = false;
     m_fieldsBox->hide();
     const int typeId = m_typeCombo->currentData().toInt();
+    m_displayedTypeId = typeId;
     m_tabWidget->setTabEnabled(m_valuesTabIndex, typeId > 0);
     if (typeId <= 0) {
         if (m_tabWidget->currentIndex() == m_valuesTabIndex) m_tabWidget->setCurrentIndex(0);
@@ -427,6 +467,7 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
     m_itemId = item.id;
     m_originalTypeId = item.itemTypeId;
     m_originalFieldValues = item.fieldValues;
+    m_originalTypeChangeConfirmed = false;
     m_pendingFieldValues = item.fieldValues;
     m_pendingBlobPaths.clear();
     m_titleEdit->setText(item.title);
@@ -1039,7 +1080,7 @@ void ItemEditDialog::validateAndAccept() {
     }
 
     if (m_itemId >= 0 && m_originalTypeId != m_typeCombo->currentData().toInt()
-        && !m_originalFieldValues.isEmpty()) {
+        && !m_originalFieldValues.isEmpty() && !m_originalTypeChangeConfirmed) {
         const auto answer = QMessageBox::question(this, "Change type",
             QString("Changing the type will remove %1 saved field value(s) from this item. Continue?")
                 .arg(m_originalFieldValues.size()),

@@ -45,8 +45,8 @@
       <p class="sidebar-title">On this page</p>
       <ul>
         <li><a href="#general">General tab</a></li>
-        <li><a href="#values">Values tab</a></li>
         <li><a href="#content">Content tab (Markdown)</a></li>
+        <li><a href="#values">Values tab</a></li>
         <li><a href="#metadata">Metadata tab</a></li>
       </ul>
     </nav>
@@ -55,7 +55,7 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Editing items</p>
     <h1>Editing items</h1>
-    <p class="lead">Double-click an item (or click <code>Edit</code>) to open the item editor. Six tabs cover everything: <strong>General</strong>, <strong>Values</strong>, <strong>Content</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first four; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
+    <p class="lead">Double-click an item (or click <code>Edit</code>) to open the item editor. Six tabs cover everything: <strong>General</strong>, <strong>Content</strong>, <strong>Values</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first four; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
 
     <h2 id="general">General tab — identity and state</h2>
     <figure class="screenshot">
@@ -73,7 +73,7 @@
       <tr><td><code>Pinned</code></td><td>Marks important items so you can filter for them instantly.</td></tr>
     </table>
     <p>Use <code>Manage → Types...</code> to create or edit types, their descriptions, and their fields. Descriptions appear as tooltips in the type manager.</p>
-    <p>Changing an item's type removes its saved custom field values after confirmation. Deleting a type also clears its assignment and custom values on every affected item, with a confirmation showing the affected item count.</p>
+    <p>When a type has custom field values, changing it asks for confirmation before discarding those values. Deleting a type also clears its assignment and custom values on every affected item, with a confirmation showing the affected item count.</p>
 
     <h3>The understanding scale</h3>
     <p>Lexicon is a learning tool, so it tracks your personal mastery of every concept:</p>
@@ -89,11 +89,6 @@
       <span class="callout-icon">💡</span>
       <p><strong>Review workflow</strong> Filter for <em>Understanding = Recognized</em> to get an instant list of concepts you should revisit. Update the level as you learn — watching it climb is great motivation.</p>
     </div>
-
-    <h2 id="values">Values tab — custom fields</h2>
-    <p>When an item has a type, its Values tab shows that type's fields in position order. Fields can use integer, float, text, date, time, timestamp, boolean, enum, blob, or other values. Date/time values use ISO format; enum fields show their configured choices. The tab is disabled when the item has no type.</p>
-    <p>For a blob field, enter a file path or choose one with <code>Browse...</code>. Click <code>Import</code> to see its SHA-256 hash immediately, or save the item to import the entered path. This replaces that item's previous blob value. The bytes are stored under <code>blobs</code> next to <code>lexicon.db</code>; <code>Save as...</code> exports the current file.</p>
-    <p>In the main window, selecting a specific Type adds columns for these values and filters for each field. Text filters match part of a value; other fields use exact matches.</p>
 
     <h2 id="content">Content tab — write in Markdown</h2>
     <figure class="screenshot">
@@ -127,6 +122,11 @@
 std::vector&lt;int&gt; a = make_data();
 std::vector&lt;int&gt; b = std::move(a); // no copy
 ```</code></pre>
+
+    <h2 id="values">Values tab — custom fields</h2>
+    <p>When an item has a type, its Values tab shows that type's fields in position order. Fields can use integer, float, text, date, time, timestamp, boolean, enum, blob, or other values. Date/time values use ISO format; enum fields show their configured choices. The tab is disabled when the item has no type.</p>
+    <p>For a blob field, enter a file path or choose one with <code>Browse...</code>. Click <code>Import</code> to see its SHA-256 hash immediately, or save the item to import the entered path. This replaces that item's previous blob value. The bytes are stored under <code>blobs</code> next to <code>lexicon.db</code>; <code>Save as...</code> exports the current file.</p>
+    <p>In the main window, selecting a specific Type adds columns for these values and filters for each field. Text filters match part of a value; other fields use exact matches.</p>
 
     <h2 id="metadata">Metadata tab — tags, flags, aliases, properties</h2>
     <figure class="screenshot">

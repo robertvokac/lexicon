@@ -8,8 +8,11 @@
 #include "MarkdownConverter.h"
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -36,12 +39,24 @@
 #include <QWidget>
 #include <QItemSelectionModel>
 
+namespace {
+const QStringList kConfigurableColumns = {
+    "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"
+};
+constexpr int kFirstConfigurableColumn = 4;
+
+QString columnVisibilityKey(const QString& name) {
+    return "main.columns." + name.toLower();
+}
+}
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
     loadSettings();
     applySavedTheme();
     setupUi();
     setupMenus();
+    loadColumnVisibility();
     refreshAll();
     updateActions();
 }
@@ -116,6 +131,8 @@ void MainWindow::setupUi() {
     auto* addButton = new QPushButton("Add ...", centralWidget);
     auto* editButton = new QPushButton("Edit", centralWidget);
     auto* deleteButton = new QPushButton("Delete", centralWidget);
+    auto* columnsButton = new QPushButton("Columns...", centralWidget);
+    columnsButton->setObjectName("columnsButton");
     editButton->setObjectName("editButton");
     deleteButton->setObjectName("deleteButton");
 
@@ -127,6 +144,7 @@ void MainWindow::setupUi() {
     searchRowLayout->addWidget(addButton);
     searchRowLayout->addWidget(editButton);
     searchRowLayout->addWidget(deleteButton);
+    searchRowLayout->addWidget(columnsButton);
     searchRowLayout->addStretch(1);
 
     rootLayout->addLayout(filterRowLayout);
@@ -225,6 +243,7 @@ void MainWindow::setupUi() {
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addItem);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedItem);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedItem);
+    connect(columnsButton, &QPushButton::clicked, this, &MainWindow::openColumnVisibilityDialog);
     connect(m_tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this](const QItemSelection&, const QItemSelection&) {
         updateActions();
         auto indexes = m_tableView->selectionModel()->selectedRows();
@@ -264,6 +283,59 @@ void MainWindow::setupMenus() {
     connect(aliasesAction, &QAction::triggered, this, &MainWindow::showAliasesOverview);
     connect(lightThemeAction, &QAction::triggered, this, &MainWindow::setLightTheme);
     connect(darkThemeAction, &QAction::triggered, this, &MainWindow::setDarkTheme);
+}
+
+void MainWindow::loadColumnVisibility() {
+    QString error;
+    const auto configuration = DatabaseManager::loadConfiguration(&error);
+    if (!error.isEmpty()) {
+        showError(error);
+        return;
+    }
+    for (const QString& name : kConfigurableColumns) {
+        m_columnVisibility.insert(name, configuration.value(columnVisibilityKey(name), "1") != "0");
+    }
+}
+
+void MainWindow::applyColumnVisibility() {
+    for (int i = 0; i < kConfigurableColumns.size(); ++i) {
+        const QString& name = kConfigurableColumns.at(i);
+        m_tableView->setColumnHidden(kFirstConfigurableColumn + i,
+                                     !m_columnVisibility.value(name, true));
+    }
+}
+
+void MainWindow::openColumnVisibilityDialog() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Visible columns");
+    auto* layout = new QVBoxLayout(&dialog);
+    QMap<QString, QCheckBox*> checkboxes;
+    for (const QString& name : kConfigurableColumns) {
+        auto* checkbox = new QCheckBox(name, &dialog);
+        checkbox->setChecked(m_columnVisibility.value(name, true));
+        layout->addWidget(checkbox);
+        checkboxes.insert(name, checkbox);
+    }
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    QMap<QString, bool> visibility;
+    QMap<QString, QString> configuration;
+    for (const QString& name : kConfigurableColumns) {
+        const bool visible = checkboxes.value(name)->isChecked();
+        visibility.insert(name, visible);
+        configuration.insert(columnVisibilityKey(name), visible ? "1" : "0");
+    }
+    QString error;
+    if (!DatabaseManager::saveConfiguration(configuration, &error)) {
+        showError(error);
+        return;
+    }
+    m_columnVisibility = visibility;
+    applyColumnVisibility();
 }
 
 void MainWindow::refreshAll() {
@@ -533,7 +605,7 @@ void MainWindow::refreshItems() {
         m_model->appendRow(row);
     }
 
-    m_tableView->setColumnHidden(0, false);
+    applyColumnVisibility();
     m_tableView->resizeColumnsToContents();
     m_tableView->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Fixed);
     m_tableView->setColumnWidth(10, 60);

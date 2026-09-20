@@ -77,6 +77,7 @@ private:
     void updateMarkdownStyles();
     void updateLinksList();
     void refreshTypes();
+    void typeSelectionChanged();
     void refreshFields();
     void captureFieldValues();
     QString editorValue(int fieldId) const;
@@ -105,6 +106,8 @@ private:
     QMap<int, QString> m_pendingBlobPaths;
     QMap<int, QString> m_originalFieldValues;
     int m_originalTypeId = -1;
+    int m_displayedTypeId = -1;
+    bool m_originalTypeChangeConfirmed = false;
     bool m_fieldsLoadFailed = false;
     QComboBox* m_statusCombo = nullptr;
     QComboBox* m_understandingCombo = nullptr;

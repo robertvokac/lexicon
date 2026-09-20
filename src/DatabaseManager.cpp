@@ -372,6 +372,31 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }},
         {18, {
             "ALTER TABLE item_type ADD COLUMN description TEXT NOT NULL DEFAULT '';"
+        }},
+        {19, {
+            "DROP TRIGGER item_value_scope_insert;",
+            "DROP TRIGGER item_value_scope_update;",
+            "ALTER TABLE item_type_field RENAME TO item_field;",
+            "DROP INDEX item_type_field_type_name_unique;",
+            "CREATE UNIQUE INDEX item_field_type_name_unique "
+            "ON item_field(item_type_id, name COLLATE NOCASE);",
+            "DROP INDEX idx_item_type_field_type_position;",
+            "CREATE INDEX idx_item_field_type_position ON item_field(item_type_id, position);",
+            "CREATE TRIGGER item_value_scope_insert BEFORE INSERT ON item_value "
+            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
+            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
+            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
+            "CREATE TRIGGER item_value_scope_update BEFORE UPDATE ON item_value "
+            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
+            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
+            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
+            "UPDATE log SET table_name = 'item_field' WHERE table_name = 'item_type_field';"
+        }},
+        {20, {
+            "CREATE TABLE configuration ("
+            " \"key\" TEXT PRIMARY KEY NOT NULL CHECK(TRIM(\"key\") <> ''),"
+            " value TEXT NOT NULL"
+            ");"
         }}
     };
 
@@ -414,6 +439,43 @@ bool DatabaseManager::execStatements(const QStringList& statements, QString* err
             return setError(errorMessage, QString("Schema error: %1\nSQL: %2")
                 .arg(query.lastError().text(), statement));
         }
+    }
+    return true;
+}
+
+QMap<QString, QString> DatabaseManager::loadConfiguration(QString* errorMessage) {
+    QMap<QString, QString> values;
+    QSqlQuery query(database());
+    if (!query.exec("SELECT \"key\", value FROM configuration;")) {
+        setError(errorMessage, query.lastError().text());
+        return {};
+    }
+    while (query.next()) values.insert(query.value(0).toString(), query.value(1).toString());
+    return values;
+}
+
+bool DatabaseManager::saveConfiguration(const QMap<QString, QString>& values, QString* errorMessage) {
+    if (values.isEmpty()) return true;
+    QSqlDatabase db = database();
+    if (!db.transaction()) return setError(errorMessage, db.lastError().text());
+    QSqlQuery query(db);
+    query.prepare("INSERT INTO configuration(\"key\", value) VALUES(?, ?) "
+                  "ON CONFLICT(\"key\") DO UPDATE SET value = excluded.value;");
+    for (auto it = values.cbegin(); it != values.cend(); ++it) {
+        if (it.key().trimmed().isEmpty()) {
+            db.rollback();
+            return setError(errorMessage, "Configuration key cannot be empty.");
+        }
+        query.bindValue(0, it.key());
+        query.bindValue(1, it.value());
+        if (!query.exec()) {
+            db.rollback();
+            return setError(errorMessage, query.lastError().text());
+        }
+    }
+    if (!db.commit()) {
+        db.rollback();
+        return setError(errorMessage, db.lastError().text());
     }
     return true;
 }
@@ -650,7 +712,7 @@ QList<ItemFieldRecord> DatabaseManager::loadItemFields(int itemTypeId, QString* 
     QList<ItemFieldRecord> fields;
     QSqlQuery query(database());
     query.prepare("SELECT id, item_type_id, name, data_type, position, enum_options "
-                  "FROM item_type_field WHERE item_type_id = ? ORDER BY position, name COLLATE NOCASE, id;");
+                  "FROM item_field WHERE item_type_id = ? ORDER BY position, name COLLATE NOCASE, id;");
     query.addBindValue(itemTypeId);
     if (!query.exec()) {
         setError(errorMessage, query.lastError().text());
@@ -705,7 +767,7 @@ bool DatabaseManager::upsertItemField(const ItemFieldRecord& field, QString* err
     }
     QSqlQuery query(db);
     if (field.id >= 0) {
-        query.prepare("SELECT data_type, enum_options FROM item_type_field WHERE id = ?;");
+        query.prepare("SELECT data_type, enum_options FROM item_field WHERE id = ?;");
         query.addBindValue(field.id);
         if (!query.exec() || !query.next()) {
             db.rollback();
@@ -722,9 +784,9 @@ bool DatabaseManager::upsertItemField(const ItemFieldRecord& field, QString* err
                 return setError(errorMessage, query.lastError().text());
             }
         }
-        query.prepare("UPDATE item_type_field SET name = ?, data_type = ?, position = ?, enum_options = ? WHERE id = ?;");
+        query.prepare("UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ? WHERE id = ?;");
     } else {
-        query.prepare("INSERT INTO item_type_field(item_type_id, name, data_type, position, enum_options) VALUES(?, ?, ?, ?, ?);");
+        query.prepare("INSERT INTO item_field(item_type_id, name, data_type, position, enum_options) VALUES(?, ?, ?, ?, ?);");
         query.addBindValue(field.itemTypeId);
     }
     query.addBindValue(name);
@@ -739,7 +801,7 @@ bool DatabaseManager::upsertItemField(const ItemFieldRecord& field, QString* err
         return setError(errorMessage, query.lastError().text());
     }
     const int fieldId = field.id < 0 ? query.lastInsertId().toInt() : field.id;
-    if (!logOperation("item_type_field", fieldId, field.id < 0 ? 1 : 2, errorMessage)) {
+    if (!logOperation("item_field", fieldId, field.id < 0 ? 1 : 2, errorMessage)) {
         db.rollback();
         return false;
     }
@@ -767,13 +829,13 @@ bool DatabaseManager::deleteItemField(int fieldId, QString* errorMessage) {
         return setError(errorMessage, db.lastError().text());
     }
     QSqlQuery query(db);
-    query.prepare("DELETE FROM item_type_field WHERE id = ?;");
+    query.prepare("DELETE FROM item_field WHERE id = ?;");
     query.addBindValue(fieldId);
     if (!query.exec()) {
         db.rollback();
         return setError(errorMessage, query.lastError().text());
     }
-    if (!logOperation("item_type_field", fieldId, 3, errorMessage)) {
+    if (!logOperation("item_field", fieldId, 3, errorMessage)) {
         db.rollback();
         return false;
     }

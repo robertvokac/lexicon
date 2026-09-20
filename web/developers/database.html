@@ -58,13 +58,13 @@
     <p class="lead">Lexicon stores structured data in <code>lexicon.db</code> and blob bytes in an adjacent <code>blobs</code> directory. The database is initialized at startup; the blob directory is created when a file is imported. This page documents the schema defined by the migrations in <code>DatabaseManager.cpp</code>.</p>
 
     <h2 id="overview">Overview</h2>
-    <p>Eleven domain tables plus one bookkeeping table:</p>
+    <p>Eleven domain tables, one configuration table, and one bookkeeping table:</p>
     <table>
       <tr><th>Table</th><th>Purpose</th></tr>
       <tr><td><code>item_group</code></td><td>Top-level buckets for items</td></tr>
       <tr><td><code>item</code></td><td>The concepts themselves: title, disambiguation, status, understanding, pinned, Markdown content</td></tr>
       <tr><td><code>item_type</code></td><td>Optional item classes, available globally or in one group</td></tr>
-      <tr><td><code>item_type_field</code></td><td>Named, ordered fields belonging to a type</td></tr>
+      <tr><td><code>item_field</code></td><td>Named, ordered fields belonging to a type</td></tr>
       <tr><td><code>item_value</code></td><td>Typed field values belonging to items</td></tr>
       <tr><td><code>property</code></td><td>Additional per-item key/value text properties</td></tr>
       <tr><td><code>alias</code></td><td>Alternate names per item</td></tr>
@@ -72,13 +72,14 @@
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
       <tr><td><code>link</code></td><td>Typed, directed relationships between items</td></tr>
       <tr><td><code>log</code></td><td>Operation log (create/update/delete/read events)</td></tr>
+      <tr><td><code>configuration</code></td><td>Persistent application settings</td></tr>
       <tr><td><code>db_version</code></td><td>Applied migration versions</td></tr>
     </table>
     <p>Relationships at a glance:</p>
-    <pre><code>item_group 1 ──── n item ──── 0..1 item_type ──── n item_type_field
+    <pre><code>item_group 1 ──── n item ──── 0..1 item_type ──── n item_field
         │             ├───── n alias / tag / flag / property
         └── n item_type (optional scope)
-                      item ──── n item_value ──── 1 item_type_field
+                      item ──── n item_value ──── 1 item_field
                       item ──── n link n ── item (typed, directed)</code></pre>
 
     <h2 id="migrations">Migration system</h2>
@@ -86,7 +87,7 @@
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–18</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–20</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
     </ol>
     <table>
       <tr><th>Version</th><th>What it introduced</th></tr>
@@ -108,6 +109,8 @@
       <tr><td>16</td><td>Creates the per-item <code>property</code> table</td></tr>
       <tr><td>17</td><td>Renames <code>item_field</code> to <code>item_type_field</code> and <code>item_field_value</code> to <code>item_value</code>, preserving field definitions and values</td></tr>
       <tr><td>18</td><td>Adds optional text <code>item_type.description</code> with an empty default for existing types</td></tr>
+      <tr><td>19</td><td>Renames <code>item_type_field</code> back to <code>item_field</code>, preserving field definitions and values</td></tr>
+      <tr><td>20</td><td>Creates the <code>configuration</code> table for persistent application settings</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -143,7 +146,7 @@ CREATE INDEX idx_item_title  ON item(title);
 CREATE INDEX idx_item_item_type_id ON item(item_type_id);</code></pre>
     <p>The unique index is why the same title can exist twice in one group only when the disambiguations differ.</p>
 
-    <h3><code>item_type</code> and <code>item_type_field</code></h3>
+    <h3><code>item_type</code> and <code>item_field</code></h3>
     <pre><code>CREATE TABLE item_type (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,
   group_id INTEGER,                         -- NULL: available in every group
@@ -154,7 +157,7 @@ CREATE INDEX idx_item_item_type_id ON item(item_type_id);</code></pre>
 CREATE UNIQUE INDEX item_type_scope_name_unique
   ON item_type(COALESCE(group_id, 0), name COLLATE NOCASE);
 
-CREATE TABLE item_type_field (
+CREATE TABLE item_field (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   item_type_id INTEGER NOT NULL,
   name         TEXT NOT NULL CHECK(TRIM(name) &lt;&gt; ''),
@@ -163,10 +166,10 @@ CREATE TABLE item_type_field (
   enum_options TEXT NOT NULL DEFAULT '[]', -- JSON array
   FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE
 );
-CREATE UNIQUE INDEX item_type_field_type_name_unique
-  ON item_type_field(item_type_id, name COLLATE NOCASE);
-CREATE INDEX idx_item_type_field_type_position
-  ON item_type_field(item_type_id, position);</code></pre>
+CREATE UNIQUE INDEX item_field_type_name_unique
+  ON item_field(item_type_id, name COLLATE NOCASE);
+CREATE INDEX idx_item_field_type_position
+  ON item_field(item_type_id, position);</code></pre>
     <p>Fields are displayed by <code>position</code>, then name and ID. <code>data_type</code> uses the stable <code>FieldDataType</code> integer enum. A type may be assigned only to items in its group, unless <code>group_id</code> is null; triggers enforce this.</p>
 
     <h3><code>item_value</code> and <code>property</code></h3>
@@ -177,7 +180,7 @@ CREATE INDEX idx_item_type_field_type_position
   value         TEXT NOT NULL,
   UNIQUE(item_id, item_field_id),
   FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE,
-  FOREIGN KEY(item_field_id) REFERENCES item_type_field(id) ON DELETE CASCADE
+  FOREIGN KEY(item_field_id) REFERENCES item_field(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_item_value_field_id ON item_value(item_field_id);
 
@@ -228,6 +231,13 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
   log_type    INTEGER NOT NULL,  -- 1=created, 2=updated, 3=deleted, 4=read
   happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );</code></pre>
+
+    <h3><code>configuration</code></h3>
+    <pre><code>CREATE TABLE configuration (
+  "key" TEXT PRIMARY KEY NOT NULL CHECK(TRIM("key") &lt;&gt; ''),
+  value TEXT NOT NULL
+);</code></pre>
+    <p>The main table stores optional column visibility as <code>main.columns.*</code> keys with <code>1</code> or <code>0</code> values. Missing keys mean visible.</p>
 
     <h2 id="integrity">Integrity rules</h2>
     <ul>

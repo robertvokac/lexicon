@@ -124,6 +124,8 @@ class DatabaseManager {
 public:
     static bool initialize(const QString& dbPath, QString* errorMessage = nullptr);
     static QSqlDatabase database();
+    static QMap<QString, QString> loadConfiguration(QString* errorMessage = nullptr);
+    static bool saveConfiguration(const QMap<QString, QString>& values, QString* errorMessage = nullptr);
 
     static QList<GroupRecord> loadGroups(QString* errorMessage = nullptr);
     static int defaultGroupId(QString* errorMessage = nullptr);
