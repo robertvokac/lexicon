@@ -62,6 +62,8 @@ add_executable(Lexicon
     src/MainWindow.cpp
     src/FilterHeaderView.h
     src/FilterHeaderView.cpp
+    src/PropertyFilterDialog.h
+    src/PropertyFilterDialog.cpp
     src/ItemEditDialog.h
     src/ItemEditDialog.cpp
     src/GroupManagerDialog.h

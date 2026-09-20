@@ -43,6 +43,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - Fast filtering and search:
   - search in title, disambiguation, alias, tag, and flag
   - per-column filters above the table headers, including type fields
+  - property key/value filters via `Filter Properties...`
 - Pagination for large datasets
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
@@ -147,6 +148,7 @@ Use the row above the table's column names to combine filters:
 - `Pinned`
 
 Selecting a type adds filters above its value columns. The separate `Search` box searches across multiple fields.
+Use `Filter Properties...` to add, edit, remove, or clear property filters. All listed filters must match; keys match exactly without case sensitivity, and values match contained text. Leave a value blank to match any value for the key.
 
 Search matches these fields:
 

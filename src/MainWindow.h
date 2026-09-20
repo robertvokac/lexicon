@@ -158,6 +158,7 @@ private slots:
     void showFlagsOverview();
     void showAliasesOverview();
     void openColumnVisibilityDialog();
+    void openPropertyFilterDialog();
 
     void updateActions();
     void showItemContent(const QModelIndex& index);
@@ -206,6 +207,8 @@ private:
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;
     QMap<QString, bool> m_columnVisibility;
+    QList<ItemPropertyFilter> m_propertyFilters;
+    QPushButton* m_propertyFilterButton = nullptr;
     QCompleter* m_completer = nullptr;
 
     QPushButton* m_firstButton = nullptr;

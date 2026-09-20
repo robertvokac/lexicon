@@ -194,7 +194,7 @@ if (!DatabaseManager::saveItem(item, &amp;error)) {
 }</code></pre>
 
     <h3>Filtering and paging in SQL</h3>
-    <p><code>loadItems()</code> takes the whole filter state (group, type, search text, per-column text and field values, tag, flag, understanding, status, pinned), plus <code>limit</code>/<code>offset</code> and the sort column/order, and translates them into one SQL query. The UI never filters in memory, which is what keeps large lexicons fast. A matching <code>countItems()</code> powers the pagination bar.</p>
+    <p><code>loadItems()</code> takes the whole filter state (group, type, search text, per-column text and field values, property key/value pairs, tag, flag, understanding, status, pinned), plus <code>limit</code>/<code>offset</code> and the sort column/order, and translates them into one SQL query. The UI never filters in memory, which is what keeps large lexicons fast. A matching <code>countItems()</code> powers the pagination bar.</p>
 
     <h3>Operation log</h3>
     <p>Every create, update, delete — and item read — is recorded in the <code>log</code> table with a type code (<code>1</code>=created, <code>2</code>=updated, <code>3</code>=deleted, <code>4</code>=read) and a timestamp. Nothing consumes the log in the UI yet; it is groundwork for future features such as recent-activity views or spaced-repetition hints.</p>

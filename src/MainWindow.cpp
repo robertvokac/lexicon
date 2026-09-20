@@ -5,6 +5,7 @@
 #include "ItemEditDialog.h"
 #include "ValueListDialog.h"
 #include "FilterHeaderView.h"
+#include "PropertyFilterDialog.h"
 
 #include "MarkdownConverter.h"
 #include <QAction>
@@ -123,6 +124,8 @@ void MainWindow::setupUi() {
     auto* deleteButton = new QPushButton("Delete", centralWidget);
     auto* columnsButton = new QPushButton("Columns...", centralWidget);
     columnsButton->setObjectName("columnsButton");
+    m_propertyFilterButton = new QPushButton("Filter Properties...", centralWidget);
+    m_propertyFilterButton->setObjectName("propertyFiltersButton");
     editButton->setObjectName("editButton");
     deleteButton->setObjectName("deleteButton");
 
@@ -135,6 +138,7 @@ void MainWindow::setupUi() {
     searchRowLayout->addWidget(editButton);
     searchRowLayout->addWidget(deleteButton);
     searchRowLayout->addWidget(columnsButton);
+    searchRowLayout->addWidget(m_propertyFilterButton);
     searchRowLayout->addStretch(1);
 
     rootLayout->addLayout(searchRowLayout);
@@ -251,6 +255,7 @@ void MainWindow::setupUi() {
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedItem);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedItem);
     connect(columnsButton, &QPushButton::clicked, this, &MainWindow::openColumnVisibilityDialog);
+    connect(m_propertyFilterButton, &QPushButton::clicked, this, &MainWindow::openPropertyFilterDialog);
     connect(m_tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this](const QItemSelection&, const QItemSelection&) {
         updateActions();
         auto indexes = m_tableView->selectionModel()->selectedRows();
@@ -371,6 +376,17 @@ void MainWindow::openColumnVisibilityDialog() {
         const QSignalBlocker blocker(m_pinnedFilter);
         m_pinnedFilter->setCurrentIndex(0);
     }
+    resetPaginationAndRefresh();
+}
+
+void MainWindow::openPropertyFilterDialog() {
+    PropertyFilterDialog dialog(this);
+    dialog.setFilters(m_propertyFilters);
+    if (dialog.exec() != QDialog::Accepted) return;
+    m_propertyFilters = dialog.filters();
+    m_propertyFilterButton->setText(m_propertyFilters.isEmpty()
+        ? "Filter Properties..."
+        : QString("Filter Properties (%1)...").arg(m_propertyFilters.size()));
     resetPaginationAndRefresh();
 }
 
@@ -577,7 +593,7 @@ void MainWindow::refreshItems() {
         }
     }
     
-    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -590,7 +606,7 @@ void MainWindow::refreshItems() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto items = DatabaseManager::loadItems(groupId, typeId, fieldFilters, searchText, textFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto items = DatabaseManager::loadItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -711,7 +727,7 @@ void MainWindow::lastPage() {
     const int pinnedFilter = m_pinnedFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -1106,6 +1122,8 @@ void MainWindow::onLinkActivated(const QUrl& link) {
     m_disambiguationFilter->clear();
     m_aliasFilter->clear();
     m_searchEdit->setText(itemTitle);
+    m_propertyFilters.clear();
+    m_propertyFilterButton->setText("Filter Properties...");
     refreshTypes();
     refreshValueFilters();
 
