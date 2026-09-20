@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DatabaseManager.h"
+#include "LexiconApplication.h"
 
 #include <QLabel>
 #include <QMainWindow>

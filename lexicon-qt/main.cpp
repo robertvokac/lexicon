@@ -1,4 +1,5 @@
-#include "DatabaseManager.h"
+#include "LexiconApplication.h"
+#include "SqliteRepository.h"
 #include "MainWindow.h"
 
 #include <QApplication>
@@ -14,10 +15,14 @@ int main(int argc, char *argv[]) {
 
     const QString dbPath = QDir(QCoreApplication::applicationDirPath()).filePath("lexicon.db");
     QString error;
-    if (!DatabaseManager::initialize(dbPath, &error)) {
+    SqliteRepository repository;
+    if (!repository.open(dbPath, &error)) {
         QMessageBox::critical(nullptr, "Lexicon", error);
         return 1;
     }
+
+    LexiconApplication application(repository);
+    installApplication(application);
 
     MainWindow window;
     window.show();

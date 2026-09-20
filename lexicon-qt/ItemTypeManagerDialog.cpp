@@ -86,9 +86,9 @@ ItemTypeManagerDialog::ItemTypeManagerDialog(QWidget* parent)
 void ItemTypeManagerDialog::loadTypes() {
     const int selectedTypeId = m_list->currentItem() ? m_list->currentItem()->data(Qt::UserRole).toInt() : -1;
     QString error;
-    m_groups = DatabaseManager::loadGroups(&error);
+    m_groups = services().groups.loadGroups(&error);
     if (error.isEmpty()) {
-        m_types = DatabaseManager::loadItemTypes(-1, &error);
+        m_types = services().types.loadItemTypes(-1, &error);
     }
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
@@ -120,7 +120,7 @@ void ItemTypeManagerDialog::loadFields() {
         return;
     }
     QString error;
-    m_fields = DatabaseManager::loadItemFields(m_types.at(row).id, &error);
+    m_fields = services().types.loadItemFields(m_types.at(row).id, &error);
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
         return;
@@ -179,7 +179,7 @@ void ItemTypeManagerDialog::addType() {
         return;
     }
     QString error;
-    if (!DatabaseManager::upsertItemType(type, &error)) {
+    if (!services().types.upsertItemType(type, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -204,7 +204,7 @@ void ItemTypeManagerDialog::editType() {
         return;
     }
     QString error;
-    if (!DatabaseManager::upsertItemType(type, &error)) {
+    if (!services().types.upsertItemType(type, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -219,7 +219,7 @@ void ItemTypeManagerDialog::deleteType() {
     }
     const auto& type = m_types.at(row);
     QString error;
-    const int affectedItems = DatabaseManager::countItemsForType(type.id, &error);
+    const int affectedItems = services().types.countItemsForType(type.id, &error);
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
         return;
@@ -232,7 +232,7 @@ void ItemTypeManagerDialog::deleteType() {
     if (answer != QMessageBox::Yes) {
         return;
     }
-    if (!DatabaseManager::deleteItemType(type.id, &error)) {
+    if (!services().types.deleteItemType(type.id, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -305,7 +305,7 @@ void ItemTypeManagerDialog::addField() {
     }
     if (!promptForField(field, false)) return;
     QString error;
-    if (!DatabaseManager::upsertItemField(field, &error)) {
+    if (!services().types.upsertItemField(field, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -321,7 +321,7 @@ void ItemTypeManagerDialog::editField() {
     if (!promptForField(field, true)) return;
     QString error;
     if (field.dataType != original.dataType || field.enumOptions != original.enumOptions) {
-        const int affected = DatabaseManager::countFieldValues(field.id, &error);
+        const int affected = services().types.countFieldValues(field.id, &error);
         if (!error.isEmpty()) {
             QMessageBox::critical(this, "Database error", error);
             return;
@@ -330,7 +330,7 @@ void ItemTypeManagerDialog::editField() {
             QString("Changing the data type or enum options will clear %1 stored value(s). Continue?").arg(affected),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
     }
-    if (!DatabaseManager::upsertItemField(field, &error)) {
+    if (!services().types.upsertItemField(field, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -343,7 +343,7 @@ void ItemTypeManagerDialog::deleteField() {
     if (row < 0 || row >= m_fields.size()) return;
     const auto& field = m_fields.at(row);
     QString error;
-    const int affected = DatabaseManager::countFieldValues(field.id, &error);
+    const int affected = services().types.countFieldValues(field.id, &error);
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
         return;
@@ -351,7 +351,7 @@ void ItemTypeManagerDialog::deleteField() {
     if (QMessageBox::question(this, "Delete field",
         QString("Delete field '%1'? This will remove its value from %2 item(s). Continue?").arg(field.name).arg(affected),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
-    if (!DatabaseManager::deleteItemField(field.id, &error)) {
+    if (!services().types.deleteItemField(field.id, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }

@@ -1,6 +1,6 @@
 #include "ItemEditDialog.h"
 
-#include "BlobStore.h"
+#include "LexiconApplication.h"
 #include "MarkdownConverter.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -24,7 +24,6 @@
 #include <QSignalBlocker>
 #include <QShowEvent>
 #include <QSpinBox>
-#include <QSqlQuery>
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolBar>
@@ -261,7 +260,7 @@ void ItemEditDialog::refreshTypes() {
         return;
     }
     QString error;
-    const auto types = DatabaseManager::loadItemTypes(groupId, &error);
+    const auto types = services().types.loadItemTypes(groupId, &error);
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
         return;
@@ -359,7 +358,7 @@ void ItemEditDialog::refreshFields() {
         return;
     }
     QString error;
-    m_currentFields = DatabaseManager::loadItemFields(typeId, &error);
+    m_currentFields = services().types.loadItemFields(typeId, &error);
     if (!error.isEmpty()) {
         m_fieldsLoadFailed = true;
         QMessageBox::critical(this, "Database error", error);
@@ -414,7 +413,7 @@ void ItemEditDialog::refreshFields() {
                 const QString path = pathEdit->text().trimmed();
                 if (path.isEmpty()) return;
                 QString error;
-                const QString hash = BlobStore::importFile(path, &error);
+                const QString hash = services().blobs.importFile(path, &error);
                 if (hash.isEmpty()) QMessageBox::critical(this, "File error", error);
                 else {
                     valueEdit->setText(hash);
@@ -427,7 +426,7 @@ void ItemEditDialog::refreshFields() {
                 const QString path = QFileDialog::getSaveFileName(this, "Save file as");
                 if (path.isEmpty()) return;
                 QString error;
-                if (!BlobStore::exportFile(valueEdit->text(), path, &error)) {
+                if (!services().blobs.exportFile(valueEdit->text(), path, &error)) {
                     QMessageBox::critical(this, "File error", error);
                 }
             });
@@ -511,8 +510,8 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
     updatePropertiesList();
 
     if (m_itemId != -1) {
-        m_currentLinks = DatabaseManager::loadLinks(m_itemId);
-        m_currentBacklinks = DatabaseManager::loadBacklinks(m_itemId);
+        m_currentLinks = services().links.loadLinks(m_itemId);
+        m_currentBacklinks = services().links.loadBacklinks(m_itemId);
         updateLinksList();
     }
 }
@@ -751,36 +750,36 @@ void ItemEditDialog::setListValues(QListWidget* list, const QStringList& values)
 
 void ItemEditDialog::addAlias() {
     QStringList suggestions;
-    for (const auto& item : DatabaseManager::loadAliasUsage()) suggestions << item.value;
+    for (const auto& item : services().search.loadAliasUsage()) suggestions << item.value;
     addValue(m_aliasList, "Add alias", suggestions);
 }
 void ItemEditDialog::editAlias() {
     QStringList suggestions;
-    for (const auto& item : DatabaseManager::loadAliasUsage()) suggestions << item.value;
+    for (const auto& item : services().search.loadAliasUsage()) suggestions << item.value;
     editValue(m_aliasList, "Edit alias", suggestions);
 }
 void ItemEditDialog::removeAlias() { removeValue(m_aliasList, "Remove alias"); }
 
 void ItemEditDialog::addTag() {
     QStringList suggestions;
-    for (const auto& item : DatabaseManager::loadTagUsage()) suggestions << item.value;
+    for (const auto& item : services().search.loadTagUsage()) suggestions << item.value;
     addValue(m_tagList, "Add tag", suggestions);
 }
 void ItemEditDialog::editTag() {
     QStringList suggestions;
-    for (const auto& item : DatabaseManager::loadTagUsage()) suggestions << item.value;
+    for (const auto& item : services().search.loadTagUsage()) suggestions << item.value;
     editValue(m_tagList, "Edit tag", suggestions);
 }
 void ItemEditDialog::removeTag() { removeValue(m_tagList, "Remove tag"); }
 
 void ItemEditDialog::addFlag() {
     QStringList suggestions;
-    for (const auto& item : DatabaseManager::loadFlagUsage()) suggestions << item.value;
+    for (const auto& item : services().search.loadFlagUsage()) suggestions << item.value;
     addValue(m_flagList, "Add flag", suggestions);
 }
 void ItemEditDialog::editFlag() {
     QStringList suggestions;
-    for (const auto& item : DatabaseManager::loadFlagUsage()) suggestions << item.value;
+    for (const auto& item : services().search.loadFlagUsage()) suggestions << item.value;
     editValue(m_flagList, "Edit flag", suggestions);
 }
 void ItemEditDialog::removeFlag() { removeValue(m_flagList, "Remove flag"); }
@@ -849,7 +848,7 @@ namespace {
 
         auto* itemEdit = new QLineEdit(&dialog);
         itemEdit->setText(initialItem);
-        QStringList titles = DatabaseManager::loadItemTitles();
+        QStringList titles = services().search.loadItemTitles();
         auto* completer = new QCompleter(titles, &dialog);
         completer->setCaseSensitivity(Qt::CaseInsensitive);
         completer->setFilterMode(Qt::MatchContains);
@@ -912,27 +911,7 @@ namespace {
             disambiguation = text.mid(idx + 2, text.length() - idx - 3).trimmed();
         }
 
-        QSqlDatabase db = DatabaseManager::database();
-        QSqlQuery query(db);
-        if (disambiguation.isEmpty()) {
-            query.prepare("SELECT id FROM item WHERE title = ? AND (disambiguation IS NULL OR disambiguation = '') LIMIT 1;");
-            query.addBindValue(title);
-            if (query.exec() && query.next()) {
-                return query.value(0).toInt();
-            }
-            // Fallback: try to find by title only even if disambiguation is not specified
-            query.prepare("SELECT id FROM item WHERE title = ? LIMIT 1;");
-            query.addBindValue(title);
-        } else {
-            query.prepare("SELECT id FROM item WHERE title = ? AND disambiguation = ? LIMIT 1;");
-            query.addBindValue(title);
-            query.addBindValue(disambiguation);
-        }
-
-        if (query.exec() && query.next()) {
-            return query.value(0).toInt();
-        }
-        return -1;
+        return services().search.findItemId(title, disambiguation);
     }
 }
 
@@ -1092,7 +1071,7 @@ void ItemEditDialog::validateAndAccept() {
         const QString path = it.value()->text().trimmed();
         if (path.isEmpty()) continue;
         QString error;
-        const QString hash = BlobStore::importFile(path, &error);
+        const QString hash = services().blobs.importFile(path, &error);
         if (hash.isEmpty()) {
             QMessageBox::critical(this, "File error", error);
             return;
@@ -1104,57 +1083,11 @@ void ItemEditDialog::validateAndAccept() {
         m_pendingBlobPaths.remove(it.key());
     }
 
-    // Save item first to get an ID if it's new
     ItemRecord t = item();
     QString error;
-    if (!DatabaseManager::saveItem(t, &error)) {
+    if (!services().items.saveItemWithLinks(t, m_currentLinks, m_currentBacklinks, &m_itemId, &error)) {
         QMessageBox::critical(this, "Error", "Failed to save item: " + error);
         return;
     }
-
-    // If it was a new item, we need to load its ID (it might have been -1)
-    if (m_itemId == -1) {
-        // Find the item by group and title
-        QSqlDatabase db = DatabaseManager::database();
-        QSqlQuery query(db);
-        query.prepare("SELECT id FROM item WHERE group_id = ? AND title = ? AND COALESCE(disambiguation, '') = ?;");
-        query.addBindValue(t.groupId);
-        query.addBindValue(t.title);
-        query.addBindValue(t.disambiguation);
-        if (query.exec() && query.next()) {
-            m_itemId = query.value(0).toInt();
-        }
-    }
-
-    if (m_itemId != -1) {
-        // Sync links
-        QList<LinkRecord> oldLinks = DatabaseManager::loadLinks(m_itemId);
-        for (const auto& old : oldLinks) {
-            bool found = false;
-            for (const auto& cur : m_currentLinks) {
-                if (cur.id == old.id) { found = true; break; }
-            }
-            if (!found) DatabaseManager::deleteLink(old.id);
-        }
-        for (auto& cur : m_currentLinks) {
-            cur.fromItemId = m_itemId;
-            DatabaseManager::saveLink(cur);
-        }
-
-        // Sync backlinks
-        QList<LinkRecord> oldBacklinks = DatabaseManager::loadBacklinks(m_itemId);
-        for (const auto& old : oldBacklinks) {
-            bool found = false;
-            for (const auto& cur : m_currentBacklinks) {
-                if (cur.id == old.id) { found = true; break; }
-            }
-            if (!found) DatabaseManager::deleteLink(old.id);
-        }
-        for (auto& cur : m_currentBacklinks) {
-            cur.toItemId = m_itemId;
-            DatabaseManager::saveLink(cur);
-        }
-    }
-
     accept();
 }

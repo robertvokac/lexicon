@@ -1,4 +1,5 @@
 #include "DatabaseManager.h"
+#include "Validation.h"
 
 #include <QCoreApplication>
 #include <QDate>
@@ -24,27 +25,6 @@ QString normalizeNullable(const QString& value) {
     return trimmed;
 }
 
-QStringList cleanedUniqueValues(const QStringList& values) {
-    QSet<QString> seen;
-    QStringList result;
-    for (const QString& value : values) {
-        const QString trimmed = value.trimmed();
-        if (trimmed.isEmpty()) {
-            continue;
-        }
-        const QString key = trimmed.toCaseFolded();
-        if (seen.contains(key)) {
-            continue;
-        }
-        seen.insert(key);
-        result.push_back(trimmed);
-    }
-    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
-        return a.localeAwareCompare(b) < 0;
-    });
-    return result;
-}
-
 bool setError(QString* errorMessage, const QString& message) {
     if (errorMessage) {
         *errorMessage = message;
@@ -52,31 +32,12 @@ bool setError(QString* errorMessage, const QString& message) {
     return false;
 }
 
-bool validFieldValue(const ItemFieldRecord& field, const QString& value) {
-    bool ok = false;
-    switch (field.dataType) {
-        case FieldDataType::Integer:
-            value.toLongLong(&ok);
-            return ok;
-        case FieldDataType::Float:
-            return std::isfinite(value.toDouble(&ok)) && ok;
-        case FieldDataType::Date:
-            return QDate::fromString(value, Qt::ISODate).isValid();
-        case FieldDataType::Time:
-            return QTime::fromString(value, Qt::ISODate).isValid();
-        case FieldDataType::Timestamp:
-            return QDateTime::fromString(value, Qt::ISODate).isValid();
-        case FieldDataType::Boolean:
-            return value == "true" || value == "false";
-        case FieldDataType::Enum:
-            return field.enumOptions.contains(value);
-        case FieldDataType::Blob:
-            return QRegularExpression("^[0-9a-f]{64}$").match(value).hasMatch();
-        case FieldDataType::Text:
-        case FieldDataType::Other:
-            return true;
-    }
-    return false;
+bool beginWrite(QSqlDatabase& db) { QSqlQuery query(db); return query.exec("SAVEPOINT lexicon_write"); }
+bool commitWrite(QSqlDatabase& db) { QSqlQuery query(db); return query.exec("RELEASE SAVEPOINT lexicon_write"); }
+void rollbackWrite(QSqlDatabase& db) {
+    QSqlQuery query(db);
+    query.exec("ROLLBACK TO SAVEPOINT lexicon_write");
+    query.exec("RELEASE SAVEPOINT lexicon_write");
 }
 
 void appendColumnFilters(QString& sql, const ItemColumnFilters& filters) {
@@ -142,344 +103,6 @@ bool DatabaseManager::initialize(const QString& dbPath, QString* errorMessage) {
 
 QSqlDatabase DatabaseManager::database() {
     return QSqlDatabase::database(kConnectionName);
-}
-
-bool DatabaseManager::applyMigrations(QString* errorMessage) {
-    QSqlDatabase db = database();
-
-    // 1. Create version table if not exists
-    {
-        QSqlQuery query(db);
-        if (!query.exec("CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);")) {
-            return setError(errorMessage, "Failed to create version table: " + query.lastError().text());
-        }
-    }
-
-    // 2. Get current version
-    int currentVersion = 0;
-    {
-        QSqlQuery query(db);
-        if (query.exec("SELECT version FROM db_version LIMIT 1;") && query.next()) {
-            currentVersion = query.value(0).toInt();
-        } else {
-            // Initial insert if table is empty
-            QSqlQuery insertVersion(db);
-            insertVersion.exec("INSERT INTO db_version (version) VALUES (0);");
-        }
-    }
-
-    // 3. Define migrations
-    struct Migration {
-        int version;
-        QStringList statements;
-    };
-
-    QList<Migration> migrations = {
-        {1, {
-            "CREATE TABLE IF NOT EXISTS map ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " name TEXT NOT NULL,"
-            " description TEXT NOT NULL DEFAULT ''"
-            ");",
-            "CREATE UNIQUE INDEX IF NOT EXISTS map_name_unique ON map(name);",
-            "CREATE TABLE IF NOT EXISTS term ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " map_id INTEGER NOT NULL,"
-            " title TEXT NOT NULL,"
-            " disambiguation TEXT,"
-            " FOREIGN KEY(map_id) REFERENCES map(id) ON DELETE CASCADE"
-            ");",
-            "CREATE UNIQUE INDEX IF NOT EXISTS term_unique "
-            "ON term(map_id, title, COALESCE(disambiguation, ''));",
-            "CREATE TABLE IF NOT EXISTS alias ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " term_id INTEGER NOT NULL,"
-            " alias TEXT NOT NULL,"
-            " UNIQUE(term_id, alias),"
-            " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
-            ");",
-            "CREATE TABLE IF NOT EXISTS flag ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " term_id INTEGER NOT NULL,"
-            " name TEXT NOT NULL,"
-            " UNIQUE(term_id, name),"
-            " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
-            ");",
-            "CREATE TABLE IF NOT EXISTS tag ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " term_id INTEGER NOT NULL,"
-            " name TEXT NOT NULL,"
-            " UNIQUE(term_id, name),"
-            " FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE"
-            ");",
-            "CREATE INDEX IF NOT EXISTS idx_term_map_id ON term(map_id);",
-            "CREATE INDEX IF NOT EXISTS idx_alias_term_id ON alias(term_id);",
-            "CREATE INDEX IF NOT EXISTS idx_tag_term_id ON tag(term_id);",
-            "CREATE INDEX IF NOT EXISTS idx_flag_term_id ON flag(term_id);",
-            "CREATE INDEX IF NOT EXISTS idx_term_title ON term(title);",
-            "CREATE INDEX IF NOT EXISTS idx_alias_alias ON alias(alias);",
-            "CREATE INDEX IF NOT EXISTS idx_tag_name ON tag(name);",
-            "CREATE INDEX IF NOT EXISTS idx_flag_name ON flag(name);"
-        }},
-        {2, {
-            "ALTER TABLE term ADD COLUMN status INTEGER NOT NULL DEFAULT 0;"
-        }},
-        {3, {
-            "ALTER TABLE term ADD COLUMN understanding INTEGER NOT NULL DEFAULT 0;"
-        }},
-        {4, {
-            "ALTER TABLE term ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;"
-        }},
-        {5, {
-            "CREATE TABLE log ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " table_name TEXT NOT NULL,"
-            " record_id INTEGER NOT NULL,"
-            " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted, 4=read
-            " happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
-            ");"
-        }},
-        {6, {
-            "ALTER TABLE term ADD COLUMN content TEXT;"
-        }},
-        {7, {
-            "CREATE TABLE IF NOT EXISTS link ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " from_term_id INTEGER NOT NULL,"
-            " to_term_id INTEGER NOT NULL,"
-            " link_type INTEGER NOT NULL DEFAULT 0,"
-            " FOREIGN KEY(from_term_id) REFERENCES term(id) ON DELETE CASCADE,"
-            " FOREIGN KEY(to_term_id) REFERENCES term(id) ON DELETE CASCADE"
-            ");",
-            "CREATE INDEX IF NOT EXISTS idx_link_from_term_id ON link(from_term_id);",
-            "CREATE INDEX IF NOT EXISTS idx_link_to_term_id ON link(to_term_id);"
-        }},
-        {8, {
-            "ALTER TABLE link ADD COLUMN position INTEGER NOT NULL DEFAULT 0;"
-        }},
-        {9, {
-            "ALTER TABLE link ADD COLUMN custom_value TEXT NOT NULL DEFAULT '';"
-        }},
-        {10, {
-            "ALTER TABLE map RENAME TO item_group;",
-            "ALTER TABLE term RENAME COLUMN map_id TO group_id;",
-            "DROP INDEX map_name_unique;",
-            "CREATE UNIQUE INDEX item_group_name_unique ON item_group(name);",
-            "DROP INDEX idx_term_map_id;",
-            "CREATE INDEX idx_term_group_id ON term(group_id);"
-        }},
-        {11, {
-            "ALTER TABLE term RENAME TO item;",
-            "ALTER TABLE alias RENAME COLUMN term_id TO item_id;",
-            "ALTER TABLE tag RENAME COLUMN term_id TO item_id;",
-            "ALTER TABLE flag RENAME COLUMN term_id TO item_id;",
-            "ALTER TABLE link RENAME COLUMN from_term_id TO from_item_id;",
-            "ALTER TABLE link RENAME COLUMN to_term_id TO to_item_id;",
-            "DROP INDEX term_unique;",
-            "CREATE UNIQUE INDEX item_unique ON item(group_id, title, COALESCE(disambiguation, ''));",
-            "DROP INDEX idx_term_group_id;",
-            "CREATE INDEX idx_item_group_id ON item(group_id);",
-            "DROP INDEX idx_term_title;",
-            "CREATE INDEX idx_item_title ON item(title);",
-            "DROP INDEX idx_alias_term_id;",
-            "CREATE INDEX idx_alias_item_id ON alias(item_id);",
-            "DROP INDEX idx_tag_term_id;",
-            "CREATE INDEX idx_tag_item_id ON tag(item_id);",
-            "DROP INDEX idx_flag_term_id;",
-            "CREATE INDEX idx_flag_item_id ON flag(item_id);",
-            "DROP INDEX idx_link_from_term_id;",
-            "CREATE INDEX idx_link_from_item_id ON link(from_item_id);",
-            "DROP INDEX idx_link_to_term_id;",
-            "CREATE INDEX idx_link_to_item_id ON link(to_item_id);",
-            "UPDATE log SET table_name = 'item' WHERE table_name = 'term';"
-        }},
-        {12, {
-            "ALTER TABLE item_group ADD COLUMN position INTEGER NOT NULL DEFAULT 0;",
-            "UPDATE item_group SET position = ("
-            " SELECT COUNT(*) FROM item_group AS earlier"
-            " WHERE earlier.name COLLATE NOCASE < item_group.name COLLATE NOCASE"
-            " OR (earlier.name COLLATE NOCASE = item_group.name COLLATE NOCASE"
-            " AND earlier.id < item_group.id)"
-            ");",
-            "CREATE INDEX idx_item_group_position ON item_group(position, name COLLATE NOCASE);"
-        }},
-        {13, {
-            "INSERT INTO item_group(name, description, position) "
-            "SELECT 'Default', 'Default group for new items when no group is selected.', "
-            "COALESCE((SELECT MAX(position) + 1 FROM item_group), 0) "
-            "WHERE NOT EXISTS (SELECT 1 FROM item_group WHERE name = 'Default');",
-            "UPDATE item_group SET description = 'Default group for new items when no group is selected.' "
-            "WHERE name = 'Default' AND TRIM(description) = '';"
-        }},
-        {14, {
-            "CREATE TABLE item_type ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " group_id INTEGER,"
-            " name TEXT NOT NULL CHECK(TRIM(name) <> ''),"
-            " FOREIGN KEY(group_id) REFERENCES item_group(id) ON DELETE CASCADE"
-            ");",
-            "CREATE UNIQUE INDEX item_type_scope_name_unique "
-            "ON item_type(COALESCE(group_id, 0), name COLLATE NOCASE);",
-            "CREATE INDEX idx_item_type_group_id ON item_type(group_id);",
-            "ALTER TABLE item ADD COLUMN item_type_id INTEGER REFERENCES item_type(id) ON DELETE SET NULL;",
-            "CREATE INDEX idx_item_item_type_id ON item(item_type_id);",
-            "CREATE TRIGGER item_type_scope_insert BEFORE INSERT ON item "
-            "WHEN NEW.item_type_id IS NOT NULL AND NOT EXISTS ("
-            " SELECT 1 FROM item_type ty WHERE ty.id = NEW.item_type_id"
-            " AND (ty.group_id IS NULL OR ty.group_id = NEW.group_id)) "
-            "BEGIN SELECT RAISE(ABORT, 'Type is not available for this group'); END;",
-            "CREATE TRIGGER item_type_scope_update BEFORE UPDATE OF group_id, item_type_id ON item "
-            "WHEN NEW.item_type_id IS NOT NULL AND NOT EXISTS ("
-            " SELECT 1 FROM item_type ty WHERE ty.id = NEW.item_type_id"
-            " AND (ty.group_id IS NULL OR ty.group_id = NEW.group_id)) "
-            "BEGIN SELECT RAISE(ABORT, 'Type is not available for this group'); END;",
-            "CREATE TRIGGER item_type_group_update BEFORE UPDATE OF group_id ON item_type "
-            "WHEN NEW.group_id IS NOT NULL AND EXISTS ("
-            " SELECT 1 FROM item WHERE item_type_id = OLD.id AND group_id <> NEW.group_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Type is used by items in another group'); END;"
-        }},
-        {15, {
-            "CREATE TABLE item_field ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " item_type_id INTEGER NOT NULL,"
-            " name TEXT NOT NULL CHECK(TRIM(name) <> ''),"
-            " data_type INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 9),"
-            " position INTEGER NOT NULL DEFAULT 0,"
-            " enum_options TEXT NOT NULL DEFAULT '[]',"
-            " FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE"
-            ");",
-            "CREATE UNIQUE INDEX item_field_type_name_unique ON item_field(item_type_id, name COLLATE NOCASE);",
-            "CREATE INDEX idx_item_field_type_position ON item_field(item_type_id, position);",
-            "CREATE TABLE item_field_value ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " item_id INTEGER NOT NULL,"
-            " item_field_id INTEGER NOT NULL,"
-            " value TEXT NOT NULL,"
-            " UNIQUE(item_id, item_field_id),"
-            " FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE,"
-            " FOREIGN KEY(item_field_id) REFERENCES item_field(id) ON DELETE CASCADE"
-            ");",
-            "CREATE INDEX idx_item_field_value_field_id ON item_field_value(item_field_id);",
-            "CREATE TRIGGER item_field_value_scope_insert BEFORE INSERT ON item_field_value "
-            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
-            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
-            "CREATE TRIGGER item_field_value_scope_update BEFORE UPDATE ON item_field_value "
-            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
-            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
-            "CREATE TRIGGER item_type_value_cleanup AFTER UPDATE OF item_type_id ON item "
-            "WHEN OLD.item_type_id IS NOT NEW.item_type_id "
-            "BEGIN DELETE FROM item_field_value WHERE item_id = NEW.id; END;"
-        }},
-        {16, {
-            "CREATE TABLE property ("
-            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            " item_id INTEGER NOT NULL,"
-            " \"key\" TEXT NOT NULL CHECK(TRIM(\"key\") <> ''),"
-            " value TEXT NOT NULL DEFAULT '',"
-            " FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE"
-            ");",
-            "CREATE UNIQUE INDEX property_item_key_unique ON property(item_id, \"key\" COLLATE NOCASE);",
-            "CREATE INDEX idx_property_item_id ON property(item_id);"
-        }},
-        {17, {
-            "ALTER TABLE item_field RENAME TO item_type_field;",
-            "ALTER TABLE item_field_value RENAME TO item_value;",
-            "DROP INDEX item_field_type_name_unique;",
-            "CREATE UNIQUE INDEX item_type_field_type_name_unique "
-            "ON item_type_field(item_type_id, name COLLATE NOCASE);",
-            "DROP INDEX idx_item_field_type_position;",
-            "CREATE INDEX idx_item_type_field_type_position ON item_type_field(item_type_id, position);",
-            "DROP INDEX idx_item_field_value_field_id;",
-            "CREATE INDEX idx_item_value_field_id ON item_value(item_field_id);",
-            "DROP TRIGGER item_field_value_scope_insert;",
-            "DROP TRIGGER item_field_value_scope_update;",
-            "CREATE TRIGGER item_value_scope_insert BEFORE INSERT ON item_value "
-            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_type_field f ON f.item_type_id = i.item_type_id "
-            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
-            "CREATE TRIGGER item_value_scope_update BEFORE UPDATE ON item_value "
-            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_type_field f ON f.item_type_id = i.item_type_id "
-            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
-            "DROP TRIGGER item_type_value_cleanup;",
-            "CREATE TRIGGER item_type_value_cleanup AFTER UPDATE OF item_type_id ON item "
-            "WHEN OLD.item_type_id IS NOT NEW.item_type_id "
-            "BEGIN DELETE FROM item_value WHERE item_id = NEW.id; END;",
-            "UPDATE log SET table_name = 'item_type_field' WHERE table_name = 'item_field';"
-        }},
-        {18, {
-            "ALTER TABLE item_type ADD COLUMN description TEXT NOT NULL DEFAULT '';"
-        }},
-        {19, {
-            "DROP TRIGGER item_value_scope_insert;",
-            "DROP TRIGGER item_value_scope_update;",
-            "ALTER TABLE item_type_field RENAME TO item_field;",
-            "DROP INDEX item_type_field_type_name_unique;",
-            "CREATE UNIQUE INDEX item_field_type_name_unique "
-            "ON item_field(item_type_id, name COLLATE NOCASE);",
-            "DROP INDEX idx_item_type_field_type_position;",
-            "CREATE INDEX idx_item_field_type_position ON item_field(item_type_id, position);",
-            "CREATE TRIGGER item_value_scope_insert BEFORE INSERT ON item_value "
-            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
-            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
-            "CREATE TRIGGER item_value_scope_update BEFORE UPDATE ON item_value "
-            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
-            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
-            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
-            "UPDATE log SET table_name = 'item_field' WHERE table_name = 'item_type_field';"
-        }},
-        {20, {
-            "CREATE TABLE configuration ("
-            " \"key\" TEXT PRIMARY KEY NOT NULL CHECK(TRIM(\"key\") <> ''),"
-            " value TEXT NOT NULL"
-            ");"
-        }}
-    };
-
-    // 4. Apply migrations
-    for (const auto& migration : migrations) {
-        if (migration.version > currentVersion) {
-            if (!db.transaction()) {
-                return setError(errorMessage, "Failed to start migration transaction: " + db.lastError().text());
-            }
-
-            if (!execStatements(migration.statements, errorMessage)) {
-                db.rollback();
-                return false;
-            }
-
-            QSqlQuery updateVersion(db);
-            updateVersion.prepare("UPDATE db_version SET version = ?;");
-            updateVersion.addBindValue(migration.version);
-            if (!updateVersion.exec()) {
-                db.rollback();
-                return setError(errorMessage, "Failed to update database version: " + updateVersion.lastError().text());
-            }
-
-            if (!db.commit()) {
-                db.rollback();
-                return setError(errorMessage, "Failed to commit migration: " + db.lastError().text());
-            }
-            currentVersion = migration.version;
-        }
-    }
-
-    return true;
-}
-
-bool DatabaseManager::execStatements(const QStringList& statements, QString* errorMessage) {
-    QSqlDatabase db = database();
-    for (const QString& statement : statements) {
-        QSqlQuery query(db);
-        if (!query.exec(statement)) {
-            return setError(errorMessage, QString("Schema error: %1\nSQL: %2")
-                .arg(query.lastError().text(), statement));
-        }
-    }
-    return true;
 }
 
 QMap<QString, QString> DatabaseManager::loadConfiguration(QString* errorMessage) {
@@ -885,7 +508,7 @@ bool DatabaseManager::deleteItemField(int fieldId, QString* errorMessage) {
     return true;
 }
 
-QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QList<ItemPropertyFilter>& propertyFilters, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
+QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QList<ItemPropertyFilter>& propertyFilters, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, SortOrder sortOrder, QString* errorMessage) {
     QList<ItemRecord> items;
 
     QString sql =
@@ -972,7 +595,7 @@ QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QLis
         }
     }
 
-    sql += "ORDER BY " + orderClause + (sortOrder == Qt::AscendingOrder ? " ASC " : " DESC ");
+    sql += "ORDER BY " + orderClause + (sortOrder == SortOrder::Ascending ? " ASC " : " DESC ");
     if (sortColumn == 1) {
         sql += ", m.name COLLATE NOCASE";
     }
@@ -1248,7 +871,7 @@ bool DatabaseManager::replaceStringValues(const QString& tableName, int itemId, 
     QSqlQuery insertQuery(database());
     insertQuery.prepare(QString("INSERT INTO %1(item_id, %2) VALUES(?, ?);").arg(tableName, columnName));
 
-    const QStringList cleaned = cleanedUniqueValues(values);
+    const QStringList cleaned = lexicon::cleanedUniqueValues(values);
     for (const QString& value : cleaned) {
         insertQuery.addBindValue(itemId);
         insertQuery.addBindValue(value);
@@ -1260,36 +883,13 @@ bool DatabaseManager::replaceStringValues(const QString& tableName, int itemId, 
     return true;
 }
 
-bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
-    QSet<QString> propertyKeys;
-    for (const auto& property : item.properties) {
-        const QString key = property.key.trimmed();
-        if (key.isEmpty() || propertyKeys.contains(key.toCaseFolded())) {
-            return setError(errorMessage, "Property keys must be nonempty and unique within an item.");
-        }
-        propertyKeys.insert(key.toCaseFolded());
-    }
-    QMap<int, ItemFieldRecord> availableFields;
-    if (item.itemTypeId <= 0 && !item.fieldValues.isEmpty()) {
-        return setError(errorMessage, "An item without a type cannot have field values.");
-    }
-    if (item.itemTypeId > 0) {
-        QString fieldError;
-        const auto fields = loadItemFields(item.itemTypeId, &fieldError);
-        if (!fieldError.isEmpty()) {
-            return setError(errorMessage, fieldError);
-        }
-        for (const auto& field : fields) {
-            availableFields.insert(field.id, field);
-        }
-        for (auto it = item.fieldValues.cbegin(); it != item.fieldValues.cend(); ++it) {
-            if (!availableFields.contains(it.key()) || !validFieldValue(availableFields.value(it.key()), it.value())) {
-                return setError(errorMessage, "Invalid value for item field " + QString::number(it.key()) + ".");
-            }
-        }
-    }
+bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage, int* savedId) {
+    QString fieldError;
+    const auto fields = item.itemTypeId > 0 ? loadItemFields(item.itemTypeId, &fieldError) : QList<ItemFieldRecord>();
+    if (!fieldError.isEmpty()) return setError(errorMessage, fieldError);
+    if (!lexicon::validateItem(item, fields, errorMessage)) return false;
     QSqlDatabase db = database();
-    if (!db.transaction()) {
+    if (!beginWrite(db)) {
         return setError(errorMessage, db.lastError().text());
     }
 
@@ -1307,7 +907,7 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
         query.addBindValue(item.content);
         query.addBindValue(item.itemTypeId > 0 ? QVariant(item.itemTypeId) : QVariant());
         if (!query.exec()) {
-            db.rollback();
+            rollbackWrite(db);
             return setError(errorMessage, query.lastError().text());
         }
         itemId = query.lastInsertId().toInt();
@@ -1324,7 +924,7 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
         query.addBindValue(item.itemTypeId > 0 ? QVariant(item.itemTypeId) : QVariant());
         query.addBindValue(item.id);
         if (!query.exec()) {
-            db.rollback();
+            rollbackWrite(db);
             return setError(errorMessage, query.lastError().text());
         }
     }
@@ -1332,7 +932,7 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
     if (!replaceStringValues("alias", itemId, item.aliases, errorMessage)
         || !replaceStringValues("tag", itemId, item.tags, errorMessage)
         || !replaceStringValues("flag", itemId, item.flags, errorMessage)) {
-        db.rollback();
+        rollbackWrite(db);
         return false;
     }
 
@@ -1340,7 +940,7 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
     fieldQuery.prepare("DELETE FROM item_value WHERE item_id = ?;");
     fieldQuery.addBindValue(itemId);
     if (!fieldQuery.exec()) {
-        db.rollback();
+        rollbackWrite(db);
         return setError(errorMessage, fieldQuery.lastError().text());
     }
     fieldQuery.prepare("INSERT INTO item_value(item_id, item_field_id, value) VALUES(?, ?, ?);");
@@ -1349,7 +949,7 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
         fieldQuery.addBindValue(it.key());
         fieldQuery.addBindValue(it.value());
         if (!fieldQuery.exec()) {
-            db.rollback();
+            rollbackWrite(db);
             return setError(errorMessage, fieldQuery.lastError().text());
         }
         fieldQuery.finish();
@@ -1359,7 +959,7 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
     propertyQuery.prepare("DELETE FROM property WHERE item_id = ?;");
     propertyQuery.addBindValue(itemId);
     if (!propertyQuery.exec()) {
-        db.rollback();
+        rollbackWrite(db);
         return setError(errorMessage, propertyQuery.lastError().text());
     }
     propertyQuery.prepare("INSERT INTO property(item_id, \"key\", value) VALUES(?, ?, ?);");
@@ -1368,21 +968,22 @@ bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage) {
         propertyQuery.addBindValue(property.key.trimmed());
         propertyQuery.addBindValue(property.value);
         if (!propertyQuery.exec()) {
-            db.rollback();
+            rollbackWrite(db);
             return setError(errorMessage, propertyQuery.lastError().text());
         }
         propertyQuery.finish();
     }
 
     if (!logOperation("item", itemId, logType, errorMessage)) {
-        db.rollback();
+        rollbackWrite(db);
         return false;
     }
 
-    if (!db.commit()) {
-        db.rollback();
+    if (!commitWrite(db)) {
+        rollbackWrite(db);
         return setError(errorMessage, db.lastError().text());
     }
+    if (savedId) *savedId = itemId;
     return true;
 }
 
@@ -1490,11 +1091,13 @@ QList<LinkRecord> DatabaseManager::loadBacklinks(int itemId, QString* errorMessa
 
 bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
     QSqlDatabase db = database();
-    if (!db.transaction()) {
+    if (!beginWrite(db)) {
         return setError(errorMessage, "Failed to start transaction: " + db.lastError().text());
     }
 
     QSqlQuery query(db);
+    const QString customValue = link.customValue.trimmed().isNull()
+        ? QStringLiteral("") : link.customValue.trimmed();
     int logType = 2; // updated
     if (link.id == -1) {
         query.prepare("INSERT INTO link (from_item_id, to_item_id, link_type, position, custom_value) VALUES (?, ?, ?, ?, ?);");
@@ -1502,7 +1105,7 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
         query.addBindValue(link.toItemId);
         query.addBindValue(static_cast<int>(link.linkType));
         query.addBindValue(link.position);
-        query.addBindValue(link.customValue.trimmed());
+        query.addBindValue(customValue);
         logType = 1; // created
     } else {
         query.prepare("UPDATE link SET from_item_id = ?, to_item_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;");
@@ -1510,12 +1113,12 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
         query.addBindValue(link.toItemId);
         query.addBindValue(static_cast<int>(link.linkType));
         query.addBindValue(link.position);
-        query.addBindValue(link.customValue.trimmed());
+        query.addBindValue(customValue);
         query.addBindValue(link.id);
     }
 
     if (!query.exec()) {
-        db.rollback();
+        rollbackWrite(db);
         return setError(errorMessage, "Failed to save link: " + query.lastError().text());
     }
 
@@ -1525,12 +1128,12 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
     }
 
     if (!logOperation("link", recordId, logType, errorMessage)) {
-        db.rollback();
+        rollbackWrite(db);
         return false;
     }
 
-    if (!db.commit()) {
-        db.rollback();
+    if (!commitWrite(db)) {
+        rollbackWrite(db);
         return setError(errorMessage, "Failed to commit transaction: " + db.lastError().text());
     }
 
@@ -1539,12 +1142,12 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
 
 bool DatabaseManager::deleteLink(int linkId, QString* errorMessage) {
     QSqlDatabase db = database();
-    if (!db.transaction()) {
+    if (!beginWrite(db)) {
         return setError(errorMessage, "Failed to start transaction: " + db.lastError().text());
     }
 
     if (!logOperation("link", linkId, 3, errorMessage)) { // 3 = deleted
-        db.rollback();
+        rollbackWrite(db);
         return false;
     }
 
@@ -1553,12 +1156,12 @@ bool DatabaseManager::deleteLink(int linkId, QString* errorMessage) {
     query.addBindValue(linkId);
 
     if (!query.exec()) {
-        db.rollback();
+        rollbackWrite(db);
         return setError(errorMessage, "Failed to delete link: " + query.lastError().text());
     }
 
-    if (!db.commit()) {
-        db.rollback();
+    if (!commitWrite(db)) {
+        rollbackWrite(db);
         return setError(errorMessage, "Failed to commit transaction: " + db.lastError().text());
     }
 

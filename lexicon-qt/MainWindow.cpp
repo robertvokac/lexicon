@@ -299,7 +299,7 @@ void MainWindow::setupMenus() {
 
 void MainWindow::loadColumnVisibility() {
     QString error;
-    const auto configuration = DatabaseManager::loadConfiguration(&error);
+    const auto configuration = services().configuration.loadConfiguration(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -343,7 +343,7 @@ void MainWindow::openColumnVisibilityDialog() {
         configuration.insert(columnVisibilityKey(name), visible ? "1" : "0");
     }
     QString error;
-    if (!DatabaseManager::saveConfiguration(configuration, &error)) {
+    if (!services().configuration.saveConfiguration(configuration, &error)) {
         showError(error);
         return;
     }
@@ -403,7 +403,7 @@ void MainWindow::refreshAll() {
 
 void MainWindow::refreshGroups() {
     QString error;
-    m_groups = DatabaseManager::loadGroups(&error);
+    m_groups = services().groups.loadGroups(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -426,7 +426,7 @@ void MainWindow::refreshGroups() {
 
 void MainWindow::refreshTypes() {
     QString error;
-    const auto types = DatabaseManager::loadItemTypes(m_groupFilter->currentData().toInt(), &error);
+    const auto types = services().types.loadItemTypes(m_groupFilter->currentData().toInt(), &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -462,7 +462,7 @@ void MainWindow::refreshValueFilters() {
     }
 
     QString error;
-    const auto fields = typeId > 0 ? DatabaseManager::loadItemFields(typeId, &error) : QList<ItemFieldRecord>();
+    const auto fields = typeId > 0 ? services().types.loadItemFields(typeId, &error) : QList<ItemFieldRecord>();
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -527,7 +527,7 @@ ItemColumnFilters MainWindow::columnFilters() const {
 
 void MainWindow::refreshTags() {
     QString error;
-    auto tags = DatabaseManager::loadTagUsage(&error);
+    auto tags = services().search.loadTagUsage(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -549,7 +549,7 @@ void MainWindow::refreshTags() {
 
 void MainWindow::refreshFlags() {
     QString error;
-    auto flags = DatabaseManager::loadFlagUsage(&error);
+    auto flags = services().search.loadFlagUsage(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -585,7 +585,7 @@ void MainWindow::refreshItems() {
     // If we're restoring the last item at startup
     if (m_lastItemId != -1 && searchText.isEmpty()) {
         ItemRecord lastItem;
-        if (DatabaseManager::loadItem(m_lastItemId, lastItem, &error)) {
+        if (services().items.loadItem(m_lastItemId, lastItem, &error)) {
             m_searchEdit->blockSignals(true);
             m_searchEdit->setText(lastItem.title);
             m_searchEdit->blockSignals(false);
@@ -593,7 +593,7 @@ void MainWindow::refreshItems() {
         }
     }
     
-    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = services().items.countItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -604,9 +604,10 @@ void MainWindow::refreshItems() {
     if (m_currentPage < 0) m_currentPage = 0;
 
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
-    const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
+    const SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder() == Qt::AscendingOrder
+        ? SortOrder::Ascending : SortOrder::Descending;
 
-    const auto items = DatabaseManager::loadItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto items = services().items.loadItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -727,7 +728,7 @@ void MainWindow::lastPage() {
     const int pinnedFilter = m_pinnedFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = services().items.countItems(groupId, typeId, fieldFilters, searchText, textFilters, m_propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -742,7 +743,7 @@ void MainWindow::lastPage() {
 
 void MainWindow::refreshSuggestions() {
     QString error;
-    const QStringList suggestions = DatabaseManager::loadSuggestions(&error);
+    const QStringList suggestions = services().search.loadSuggestions(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -777,7 +778,7 @@ int MainWindow::groupIdForNewItem() {
     }
 
     QString error;
-    const int groupId = DatabaseManager::defaultGroupId(&error);
+    const int groupId = services().groups.defaultGroupId(&error);
     if (groupId <= 0) {
         showError(error.isEmpty() ? "Cannot find the Default group." : error);
         return -1;
@@ -824,7 +825,7 @@ void MainWindow::quickAdd() {
     if (typeId > 0) item.itemTypeId = typeId;
 
     QString error;
-    if (!DatabaseManager::saveItem(item, &error)) {
+    if (services().items.createItem(item, &error) <= 0) {
         showError(error);
         return;
     }
@@ -841,7 +842,7 @@ void MainWindow::editSelectedItem() {
 
     ItemRecord item;
     QString error;
-    if (!DatabaseManager::loadItem(itemId, item, &error)) {
+    if (!services().items.loadItem(itemId, item, &error)) {
         showError(error);
         return;
     }
@@ -870,7 +871,7 @@ void MainWindow::deleteSelectedItem() {
     }
 
     QString error;
-    if (!DatabaseManager::deleteItem(itemId, &error)) {
+    if (!services().items.deleteItem(itemId, &error)) {
         showError(error);
         return;
     }
@@ -893,7 +894,7 @@ void MainWindow::openTypeManager() {
 
 void MainWindow::showTagsOverview() {
     QString error;
-    auto values = DatabaseManager::loadTagUsage(&error);
+    auto values = services().search.loadTagUsage(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -905,7 +906,7 @@ void MainWindow::showTagsOverview() {
 
 void MainWindow::showFlagsOverview() {
     QString error;
-    auto values = DatabaseManager::loadFlagUsage(&error);
+    auto values = services().search.loadFlagUsage(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -917,7 +918,7 @@ void MainWindow::showFlagsOverview() {
 
 void MainWindow::showAliasesOverview() {
     QString error;
-    auto values = DatabaseManager::loadAliasUsage(&error);
+    auto values = services().search.loadAliasUsage(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -950,10 +951,10 @@ void MainWindow::showItemContent(const QModelIndex& index) {
     const int itemId = m_model->data(m_model->index(index.row(), 0), Qt::UserRole).toInt();
     ItemRecord item;
     QString error;
-    if (DatabaseManager::loadItem(itemId, item, &error)) {
+    if (services().items.loadItem(itemId, item, &error)) {
         m_itemContentView->setHtml(MarkdownConverter::toHtml(item.content));
         updateLinksDisplay(itemId);
-        DatabaseManager::logItemRead(itemId);
+        services().items.logItemRead(itemId);
     } else {
         m_itemContentView->setPlainText("Error loading content: " + error);
         m_linksView->clear();
@@ -1044,8 +1045,8 @@ void MainWindow::updateLinksDisplay(int itemId) {
     }
 
     QString error;
-    QList<LinkRecord> links = DatabaseManager::loadLinks(itemId, &error);
-    QList<LinkRecord> backlinks = DatabaseManager::loadBacklinks(itemId, &error);
+    QList<LinkRecord> links = services().links.loadLinks(itemId, &error);
+    QList<LinkRecord> backlinks = services().links.loadBacklinks(itemId, &error);
 
     auto linkTypeToString = [](LinkType type) -> QString {
         switch (type) {

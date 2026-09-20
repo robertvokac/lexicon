@@ -12,6 +12,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Build and run](#build-and-run)
+- [Architecture](#architecture)
 - [Extensive user manual](#extensive-user-manual)
 - [Database model](#database-model)
 - [Data location and backup](#data-location-and-backup)
@@ -112,6 +113,40 @@ sudo apt install -y build-essential cmake qt6-base-dev libqt6sql6-sqlite
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target Lexicon -j
 ./build/Lexicon
+```
+
+## Architecture
+
+The build has four layers:
+
+| Target | Responsibility |
+| --- | --- |
+| `lexicon-core` | Item, type, field, group, and link records; domain validation. Depends on QtCore value types, with no Widgets or SQL dependency. |
+| `lexicon-application` | Item, type, group, link, and search services. Defines the `Repository` interface and coordinates an item edit with its links as one unit of work. |
+| `lexicon-storage-sqlite` | Implements `Repository` with Qt SQL, contains schema migrations, queries, transactions, and blob storage. |
+| `Lexicon` (`lexicon-qt/`) | Qt Widgets desktop client. Calls application services and contains no SQL queries. |
+
+The application API can run without a GUI. A client creates a `SqliteRepository`, opens a database, then constructs `LexiconApplication` with that repository. For example:
+
+```cpp
+SqliteRepository repository;
+QString error;
+if (!repository.open(databasePath, &error)) { /* report error */ }
+LexiconApplication lexicon(repository);
+
+ItemRecord item;
+item.title = "Pointer provenance";
+item.groupId = lexicon.groups.defaultGroupId(&error);
+const int id = lexicon.items.createItem(item, &error);
+```
+
+The desktop client installs that application instance for its existing dialogs. `ItemService::saveItemWithLinks` validates an edit and updates the item and its links in one transaction; a failed link update rolls back the item update. The schema and existing `lexicon.db` migration versions are unchanged. QtCore value types remain in the shared API, so a client built without any Qt libraries would require a later conversion of those types to standard C++ types.
+
+Run the headless application and SQLite integration test with:
+
+```bash
+cmake --build build --target lexicon-application-integration -j
+ctest --test-dir build --output-on-failure
 ```
 
 ## Extensive user manual

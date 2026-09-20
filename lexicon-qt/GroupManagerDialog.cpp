@@ -54,7 +54,7 @@ void GroupManagerDialog::setupUi() {
 
 void GroupManagerDialog::loadGroups() {
     QString error;
-    m_groups = DatabaseManager::loadGroups(&error);
+    m_groups = services().groups.loadGroups(&error);
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
         return;
@@ -115,7 +115,7 @@ void GroupManagerDialog::addGroup() {
     }
 
     QString error;
-    if (!DatabaseManager::upsertGroup(group, &error)) {
+    if (!services().groups.upsertGroup(group, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -135,7 +135,7 @@ void GroupManagerDialog::editGroup() {
     }
 
     QString error;
-    if (!DatabaseManager::upsertGroup(group, &error)) {
+    if (!services().groups.upsertGroup(group, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
@@ -159,7 +159,7 @@ void GroupManagerDialog::deleteGroup() {
     }
 
     QString error;
-    if (!DatabaseManager::deleteGroup(group.id, &error)) {
+    if (!services().groups.deleteGroup(group.id, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
