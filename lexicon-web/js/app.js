@@ -54,6 +54,14 @@ class Application {
             api.setToken(token);
             try {
                 const me = await api.me();
+                // The server may have been upgraded while this tab was open.
+                if (me.apiVersion !== API_VERSION) {
+                    writeSession(STORAGE.token, null);
+                    api.setToken(null);
+                    this.showLogin(`This client speaks API version ${API_VERSION}, but the `
+                        + `server reports version ${me.apiVersion}.`);
+                    return;
+                }
                 this.username = me.username;
                 await this.showMain();
                 return;
