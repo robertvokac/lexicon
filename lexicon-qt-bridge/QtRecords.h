@@ -1,13 +1,12 @@
 #pragma once
 
-#include <map>
-#include <string>
-#include <vector>
+#include <QList>
+#include <QMap>
+#include <QString>
+#include <QStringList>
 
-namespace lexicon {
-// All text crossing the core/application boundary is UTF-8.
-using ItemId = int;
-
+// Qt value objects retained for the existing Widgets client and Qt SQL
+// implementation.
 enum class SortOrder { Ascending, Descending };
 enum class ItemStatus { None = 0, Draft = 1, Completed = 2 };
 enum class UnderstandingLevel {
@@ -45,43 +44,43 @@ enum class FieldDataType {
 
 struct GroupRecord {
   int id = -1;
-  std::string name;
-  std::string description;
+  QString name;
+  QString description;
   int position = 0;
 };
 struct ItemTypeRecord {
   int id = -1;
   int groupId = -1;
-  std::string groupName;
-  std::string name;
-  std::string description;
+  QString groupName;
+  QString name;
+  QString description;
 };
 struct ItemFieldRecord {
   int id = -1;
   int itemTypeId = -1;
-  std::string name;
+  QString name;
   FieldDataType dataType = FieldDataType::Text;
   int position = 0;
-  std::vector<std::string> enumOptions;
+  QStringList enumOptions;
 };
 struct ItemValueFilter {
   int fieldId = -1;
-  std::string value;
+  QString value;
   bool exact = false;
 };
 struct ItemColumnFilters {
-  std::string id;
-  std::string title;
-  std::string disambiguation;
-  std::string alias;
+  QString id;
+  QString title;
+  QString disambiguation;
+  QString alias;
 };
 struct ItemPropertyFilter {
-  std::string key;
-  std::string value;
+  QString key;
+  QString value;
 };
 struct PropertyRecord {
-  std::string key;
-  std::string value;
+  QString key;
+  QString value;
 };
 struct LinkRecord {
   int id = -1;
@@ -89,30 +88,29 @@ struct LinkRecord {
   int toItemId = -1;
   LinkType linkType = LinkType::None;
   int position = 0;
-  std::string customValue;
-  std::string fromItemTitle;
-  std::string toItemTitle;
+  QString customValue;
+  QString fromItemTitle;
+  QString toItemTitle;
 };
 struct ItemRecord {
-  ItemId id = -1;
+  int id = -1;
   int groupId = -1;
-  std::string groupName;
+  QString groupName;
   int itemTypeId = -1;
-  std::string itemTypeName;
-  std::map<int, std::string> fieldValues;
-  std::vector<PropertyRecord> properties;
-  std::string title;
-  std::string disambiguation;
-  std::vector<std::string> aliases;
-  std::vector<std::string> tags;
-  std::vector<std::string> flags;
+  QString itemTypeName;
+  QMap<int, QString> fieldValues;
+  QList<PropertyRecord> properties;
+  QString title;
+  QString disambiguation;
+  QStringList aliases;
+  QStringList tags;
+  QStringList flags;
   ItemStatus status = ItemStatus::None;
   UnderstandingLevel understanding = UnderstandingLevel::Unknown;
   bool pinned = false;
-  std::string content;
+  QString content;
 };
 struct UsageValueRecord {
-  std::string value;
+  QString value;
   int usageCount = 0;
 };
-} // namespace lexicon

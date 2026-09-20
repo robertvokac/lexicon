@@ -1,12 +1,18 @@
 #pragma once
 #include "Records.h"
+#include "Result.h"
+
+#include <string_view>
 
 namespace lexicon {
-bool validateGroup(const GroupRecord& group, QString* error = nullptr);
-bool validateType(const ItemTypeRecord& type, QString* error = nullptr);
-bool validateField(const ItemFieldRecord& field, QString* error = nullptr);
-bool validateItem(const ItemRecord& item, const QList<ItemFieldRecord>& fields, QString* error = nullptr);
-bool validateLink(const LinkRecord& link, QString* error = nullptr);
-bool validFieldValue(const ItemFieldRecord& field, const QString& value);
-QStringList cleanedUniqueValues(const QStringList& values);
-}
+std::string trim(std::string_view value);
+std::vector<std::string>
+cleanedUniqueValues(const std::vector<std::string> &values);
+bool validFieldValue(const ItemFieldRecord &field, std::string_view value);
+Result<void> validateGroup(const GroupRecord &group);
+Result<void> validateType(const ItemTypeRecord &type);
+Result<void> validateField(const ItemFieldRecord &field);
+Result<void> validateItem(const ItemRecord &item,
+                          const std::vector<ItemFieldRecord> &fields);
+Result<void> validateLink(const LinkRecord &link);
+} // namespace lexicon

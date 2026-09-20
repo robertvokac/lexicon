@@ -1,6 +1,6 @@
 #include "ItemEditDialog.h"
 
-#include "LexiconApplication.h"
+#include "ApplicationContext.h"
 #include "MarkdownConverter.h"
 #include <QCheckBox>
 #include <QComboBox>

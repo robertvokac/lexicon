@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Records.h"
+#include "QtRecords.h"
 #include <QSqlDatabase>
 #include <QString>
 #include <QStringList>

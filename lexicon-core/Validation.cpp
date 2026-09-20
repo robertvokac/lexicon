@@ -1,94 +1,173 @@
 #include "Validation.h"
 
-#include <QDate>
-#include <QDateTime>
-#include <QRegularExpression>
-#include <QSet>
-#include <QTime>
-
 #include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <chrono>
 #include <cmath>
+#include <regex>
+#include <set>
 
 namespace {
-bool fail(QString* error, const QString& message) {
-    if (error) *error = message;
+lexicon::Result<void> invalid(std::string message) {
+  return std::unexpected(
+      lexicon::Error{lexicon::Error::Code::Validation, std::move(message)});
+}
+
+std::string asciiFold(std::string value) {
+  std::transform(
+      value.begin(), value.end(), value.begin(),
+      [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  return value;
+}
+
+bool dateValid(std::string_view value) {
+  static const std::regex pattern(R"(^(\d{4})-(\d{2})-(\d{2})$)");
+  std::cmatch match;
+  const std::string text(value);
+  if (!std::regex_match(text.c_str(), match, pattern))
     return false;
+  const auto year = std::chrono::year(std::stoi(match[1]));
+  const auto month =
+      std::chrono::month(static_cast<unsigned>(std::stoi(match[2])));
+  const auto day = std::chrono::day(static_cast<unsigned>(std::stoi(match[3])));
+  return (year / month / day).ok();
 }
+
+bool timeValid(std::string_view value) {
+  static const std::regex pattern(
+      R"(^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?$)");
+  std::cmatch match;
+  const std::string text(value);
+  if (!std::regex_match(text.c_str(), match, pattern))
+    return false;
+  return std::stoi(match[1]) < 24 && std::stoi(match[2]) < 60 &&
+         (!match[3].matched || std::stoi(match[3]) < 60);
 }
+} // namespace
 
 namespace lexicon {
-QStringList cleanedUniqueValues(const QStringList& values) {
-    QSet<QString> seen;
-    QStringList result;
-    for (const QString& value : values) {
-        const QString trimmed = value.trimmed();
-        if (trimmed.isEmpty() || seen.contains(trimmed.toCaseFolded())) continue;
-        seen.insert(trimmed.toCaseFolded());
-        result.push_back(trimmed);
-    }
-    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
-        return a.localeAwareCompare(b) < 0;
-    });
-    return result;
+std::string trim(std::string_view value) {
+  while (!value.empty() &&
+         std::isspace(static_cast<unsigned char>(value.front())))
+    value.remove_prefix(1);
+  while (!value.empty() &&
+         std::isspace(static_cast<unsigned char>(value.back())))
+    value.remove_suffix(1);
+  return std::string(value);
 }
 
-bool validFieldValue(const ItemFieldRecord& field, const QString& value) {
-    bool ok = false;
-    switch (field.dataType) {
-    case FieldDataType::Integer: value.toLongLong(&ok); return ok;
-    case FieldDataType::Float: { const double number = value.toDouble(&ok); return ok && std::isfinite(number); }
-    case FieldDataType::Date: return QDate::fromString(value, Qt::ISODate).isValid();
-    case FieldDataType::Time: return QTime::fromString(value, Qt::ISODate).isValid();
-    case FieldDataType::Timestamp: return QDateTime::fromString(value, Qt::ISODate).isValid();
-    case FieldDataType::Boolean: return value == "true" || value == "false";
-    case FieldDataType::Enum: return field.enumOptions.contains(value);
-    case FieldDataType::Blob: return QRegularExpression("^[0-9a-f]{64}$").match(value).hasMatch();
-    case FieldDataType::Text:
-    case FieldDataType::Other: return true;
-    }
-    return false;
+std::vector<std::string>
+cleanedUniqueValues(const std::vector<std::string> &values) {
+  std::set<std::string> seen;
+  std::vector<std::string> result;
+  for (const auto &raw : values) {
+    const auto value = trim(raw);
+    if (!value.empty() && seen.insert(asciiFold(value)).second)
+      result.push_back(value);
+  }
+  std::sort(result.begin(), result.end());
+  return result;
 }
 
-bool validateGroup(const GroupRecord& group, QString* error) {
-    return !group.name.trimmed().isEmpty() || fail(error, "Group name cannot be empty.");
-}
-
-bool validateType(const ItemTypeRecord& type, QString* error) {
-    return !type.name.trimmed().isEmpty() || fail(error, "Type name cannot be empty.");
-}
-
-bool validateField(const ItemFieldRecord& field, QString* error) {
-    const int kind = static_cast<int>(field.dataType);
-    if (field.name.trimmed().isEmpty() || kind < 0 || kind > static_cast<int>(FieldDataType::Other))
-        return fail(error, "Field name or data type is invalid.");
-    if (field.dataType == FieldDataType::Enum && cleanedUniqueValues(field.enumOptions).isEmpty())
-        return fail(error, "Enum fields need at least one option.");
+bool validFieldValue(const ItemFieldRecord &field, std::string_view value) {
+  const std::string text(value);
+  switch (field.dataType) {
+  case FieldDataType::Integer: {
+    std::string number = trim(value);
+    if (!number.empty() && number.front() == '+')
+      number.erase(0, 1);
+    long long parsed = 0;
+    auto [end, error] =
+        std::from_chars(number.data(), number.data() + number.size(), parsed);
+    return error == std::errc{} && end == number.data() + number.size();
+  }
+  case FieldDataType::Float: {
+    std::string number = trim(value);
+    if (!number.empty() && number.front() == '+')
+      number.erase(0, 1);
+    double parsed = 0;
+    auto [end, error] =
+        std::from_chars(number.data(), number.data() + number.size(), parsed);
+    return error == std::errc{} && end == number.data() + number.size() &&
+           std::isfinite(parsed);
+  }
+  case FieldDataType::Date:
+    return dateValid(value);
+  case FieldDataType::Time:
+    return timeValid(value);
+  case FieldDataType::Timestamp: {
+    static const std::regex pattern(
+        R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$)");
+    if (!std::regex_match(text, pattern))
+      return false;
+    return dateValid(value.substr(0, 10)) &&
+           timeValid(value.substr(11, value.find_first_of("Z+-", 11) - 11));
+  }
+  case FieldDataType::Boolean:
+    return value == "true" || value == "false";
+  case FieldDataType::Enum:
+    return std::find(field.enumOptions.begin(), field.enumOptions.end(),
+                     text) != field.enumOptions.end();
+  case FieldDataType::Blob: {
+    static const std::regex pattern("^[0-9a-f]{64}$");
+    return std::regex_match(text, pattern);
+  }
+  case FieldDataType::Text:
+  case FieldDataType::Other:
     return true;
+  }
+  return false;
 }
 
-bool validateItem(const ItemRecord& item, const QList<ItemFieldRecord>& fields, QString* error) {
-    if (item.title.trimmed().isEmpty()) return fail(error, "Item title cannot be empty.");
-    if (item.groupId <= 0) return fail(error, "Item group is required.");
-    QSet<QString> propertyKeys;
-    for (const auto& property : item.properties) {
-        const QString key = property.key.trimmed().toCaseFolded();
-        if (key.isEmpty() || propertyKeys.contains(key))
-            return fail(error, "Property keys must be nonempty and unique within an item.");
-        propertyKeys.insert(key);
-    }
-    if (item.itemTypeId <= 0 && !item.fieldValues.isEmpty())
-        return fail(error, "An item without a type cannot have field values.");
-    QMap<int, ItemFieldRecord> available;
-    for (const auto& field : fields) available.insert(field.id, field);
-    for (auto it = item.fieldValues.cbegin(); it != item.fieldValues.cend(); ++it) {
-        if (!available.contains(it.key()) || !validFieldValue(available.value(it.key()), it.value()))
-            return fail(error, "Invalid value for item field " + QString::number(it.key()) + ".");
-    }
-    return true;
+Result<void> validateGroup(const GroupRecord &group) {
+  if (trim(group.name).empty())
+    return invalid("Group name cannot be empty.");
+  return {};
 }
-
-bool validateLink(const LinkRecord& link, QString* error) {
-    if (link.fromItemId <= 0 || link.toItemId <= 0) return fail(error, "Both link endpoints are required.");
-    return true;
+Result<void> validateType(const ItemTypeRecord &type) {
+  if (trim(type.name).empty())
+    return invalid("Type name cannot be empty.");
+  return {};
 }
+Result<void> validateField(const ItemFieldRecord &field) {
+  const int kind = static_cast<int>(field.dataType);
+  if (trim(field.name).empty() || kind < 0 ||
+      kind > static_cast<int>(FieldDataType::Other))
+    return invalid("Field name or data type is invalid.");
+  if (field.dataType == FieldDataType::Enum &&
+      cleanedUniqueValues(field.enumOptions).empty())
+    return invalid("Enum fields need at least one option.");
+  return {};
 }
+Result<void> validateItem(const ItemRecord &item,
+                          const std::vector<ItemFieldRecord> &fields) {
+  if (trim(item.title).empty())
+    return invalid("Item title cannot be empty.");
+  if (item.groupId <= 0)
+    return invalid("Item group is required.");
+  std::set<std::string> keys;
+  for (const auto &property : item.properties) {
+    const auto key = asciiFold(trim(property.key));
+    if (key.empty() || !keys.insert(key).second)
+      return invalid(
+          "Property keys must be nonempty and unique within an item.");
+  }
+  if (item.itemTypeId <= 0 && !item.fieldValues.empty())
+    return invalid("An item without a type cannot have field values.");
+  for (const auto &[id, value] : item.fieldValues) {
+    const auto field =
+        std::find_if(fields.begin(), fields.end(),
+                     [id](const auto &current) { return current.id == id; });
+    if (field == fields.end() || !validFieldValue(*field, value))
+      return invalid("Invalid value for item field " + std::to_string(id) +
+                     ".");
+  }
+  return {};
+}
+Result<void> validateLink(const LinkRecord &link) {
+  if (link.fromItemId <= 0 || link.toItemId <= 0)
+    return invalid("Both link endpoints are required.");
+  return {};
+}
+} // namespace lexicon

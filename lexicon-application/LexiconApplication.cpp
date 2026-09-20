@@ -1,88 +1,103 @@
 #include "LexiconApplication.h"
 
-#include <cassert>
-#include <QSet>
+#include <set>
 
-namespace { LexiconApplication* activeApplication = nullptr; }
-
+namespace lexicon {
 namespace {
-bool validateForSave(Repository& repository, const ItemRecord& item, QString* error) {
-    QString fieldError;
-    const auto fields = item.itemTypeId > 0 ? repository.loadItemFields(item.itemTypeId, &fieldError)
-                                            : QList<ItemFieldRecord>();
-    if (!fieldError.isEmpty()) {
-        if (error) *error = fieldError;
-        return false;
-    }
-    return lexicon::validateItem(item, fields, error);
+Result<void> validateForSave(Repository &repository, const ItemRecord &item) {
+  std::vector<ItemFieldRecord> fields;
+  if (item.itemTypeId > 0) {
+    auto loaded = repository.loadItemFields(item.itemTypeId);
+    if (!loaded)
+      return std::unexpected(loaded.error());
+    fields = std::move(*loaded);
+  }
+  return validateItem(item, fields);
 }
 
-bool syncLinks(Repository& repository, int itemId, QList<LinkRecord> desired, bool outgoing, QString* error) {
-    QString queryError;
-    const auto existing = outgoing ? repository.loadLinks(itemId, &queryError)
-                                   : repository.loadBacklinks(itemId, &queryError);
-    if (!queryError.isEmpty()) {
-        if (error) *error = queryError;
-        return false;
+Result<void> syncLinks(Repository &repository, int itemId,
+                       std::vector<LinkRecord> desired, bool outgoing) {
+  auto existing = outgoing ? repository.loadLinks(itemId)
+                           : repository.loadBacklinks(itemId);
+  if (!existing)
+    return std::unexpected(existing.error());
+  std::set<int> ownedIds;
+  std::set<int> seenIds;
+  for (const auto &old : *existing)
+    ownedIds.insert(old.id);
+  for (const auto &link : desired) {
+    if (link.id < 0)
+      continue;
+    if (!ownedIds.contains(link.id) || !seenIds.insert(link.id).second)
+      return std::unexpected(
+          Error{Error::Code::Validation,
+                "Link does not belong to this item or occurs twice."});
+  }
+  for (const auto &old : *existing) {
+    bool kept = false;
+    for (const auto &current : desired) {
+      if (current.id == old.id) {
+        kept = true;
+        break;
+      }
     }
-    QSet<int> ownedIds;
-    QSet<int> seenIds;
-    for (const auto& old : existing) ownedIds.insert(old.id);
-    for (const auto& link : desired) {
-        if (link.id < 0) continue;
-        if (!ownedIds.contains(link.id) || seenIds.contains(link.id)) {
-            if (error) *error = "Link does not belong to this item or occurs twice.";
-            return false;
-        }
-        seenIds.insert(link.id);
+    if (!kept) {
+      auto deleted = repository.deleteLink(old.id);
+      if (!deleted)
+        return deleted;
     }
-    for (const auto& old : existing) {
-        bool kept = false;
-        for (const auto& current : desired) {
-            if (current.id == old.id) { kept = true; break; }
-        }
-        if (!kept && !repository.deleteLink(old.id, error)) return false;
-    }
-    for (auto& link : desired) {
-        if (outgoing) link.fromItemId = itemId;
-        else link.toItemId = itemId;
-        if (!lexicon::validateLink(link, error) || !repository.saveLink(link, error)) return false;
-    }
-    return true;
+  }
+  for (auto &link : desired) {
+    if (outgoing)
+      link.fromItemId = itemId;
+    else
+      link.toItemId = itemId;
+    if (auto valid = validateLink(link); !valid)
+      return valid;
+    if (auto saved = repository.saveLink(link); !saved)
+      return saved;
+  }
+  return {};
 }
+} // namespace
+
+Result<void> ItemService::saveItem(const ItemRecord &item) {
+  if (auto valid = validateForSave(repository_, item); !valid)
+    return valid;
+  return repository_.saveItem(item);
 }
 
-bool ItemService::saveItem(const ItemRecord& item, QString* error) {
-    return validateForSave(repository_, item, error) && repository_.saveItem(item, error);
+Result<ItemId> ItemService::createItem(const ItemRecord &item) {
+  if (item.id >= 0)
+    return std::unexpected(Error{Error::Code::Validation,
+                                 "A new item must not already have an ID."});
+  if (auto valid = validateForSave(repository_, item); !valid)
+    return std::unexpected(valid.error());
+  return repository_.saveItemReturningId(item);
 }
 
-int ItemService::createItem(const ItemRecord& item, QString* error) {
-    if (item.id >= 0) {
-        if (error) *error = "A new item must not already have an ID.";
-        return -1;
-    }
-    if (!validateForSave(repository_, item, error)) return -1;
-    int id = -1;
-    return repository_.saveItemReturningId(item, &id, error) ? id : -1;
+Result<ItemId>
+ItemService::saveItemWithLinks(const ItemRecord &item,
+                               const std::vector<LinkRecord> &links,
+                               const std::vector<LinkRecord> &backlinks) {
+  if (auto valid = validateForSave(repository_, item); !valid)
+    return std::unexpected(valid.error());
+  if (auto begin = repository_.beginUnitOfWork(); !begin)
+    return std::unexpected(begin.error());
+  const auto rollback = [&](Error error) -> Result<ItemId> {
+    repository_.rollbackUnitOfWork();
+    return std::unexpected(std::move(error));
+  };
+  auto saved = repository_.saveItemReturningId(item);
+  if (!saved)
+    return rollback(saved.error());
+  if (auto outgoing = syncLinks(repository_, *saved, links, true); !outgoing)
+    return rollback(outgoing.error());
+  if (auto incoming = syncLinks(repository_, *saved, backlinks, false);
+      !incoming)
+    return rollback(incoming.error());
+  if (auto commit = repository_.commitUnitOfWork(); !commit)
+    return rollback(commit.error());
+  return *saved;
 }
-
-bool ItemService::saveItemWithLinks(const ItemRecord& item, const QList<LinkRecord>& links,
-                                    const QList<LinkRecord>& backlinks, int* savedId, QString* error) {
-    if (!validateForSave(repository_, item, error)) return false;
-    if (!repository_.beginUnitOfWork(error)) return false;
-    const auto rollback = [&] { repository_.rollbackUnitOfWork(); return false; };
-    int id = -1;
-    if (!repository_.saveItemReturningId(item, &id, error)) return rollback();
-    if (!syncLinks(repository_, id, links, true, error)
-        || !syncLinks(repository_, id, backlinks, false, error)) return rollback();
-    if (!repository_.commitUnitOfWork(error)) return rollback();
-    if (savedId) *savedId = id;
-    return true;
-}
-
-void installApplication(LexiconApplication& application) { activeApplication = &application; }
-
-LexiconApplication& services() {
-    assert(activeApplication != nullptr);
-    return *activeApplication;
-}
+} // namespace lexicon

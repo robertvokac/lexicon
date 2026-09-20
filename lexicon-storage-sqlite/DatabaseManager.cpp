@@ -1,5 +1,6 @@
 #include "DatabaseManager.h"
 #include "Validation.h"
+#include "Conversions.h"
 
 #include <QCoreApplication>
 #include <QDate>
@@ -16,6 +17,7 @@
 #include <QTime>
 
 #include <cmath>
+#include <algorithm>
 
 namespace {
 constexpr const char* kConnectionName = "lexicon_connection";
@@ -23,6 +25,21 @@ constexpr const char* kConnectionName = "lexicon_connection";
 QString normalizeNullable(const QString& value) {
     const QString trimmed = value.trimmed();
     return trimmed;
+}
+
+QStringList cleanedUniqueValues(const QStringList& values) {
+    QSet<QString> seen;
+    QStringList result;
+    for (const auto& raw : values) {
+        const QString value = raw.trimmed();
+        if (value.isEmpty() || seen.contains(value.toCaseFolded())) continue;
+        seen.insert(value.toCaseFolded());
+        result.push_back(value);
+    }
+    std::sort(result.begin(), result.end(), [](const QString& a, const QString& b) {
+        return a.localeAwareCompare(b) < 0;
+    });
+    return result;
 }
 
 bool setError(QString* errorMessage, const QString& message) {
@@ -871,7 +888,7 @@ bool DatabaseManager::replaceStringValues(const QString& tableName, int itemId, 
     QSqlQuery insertQuery(database());
     insertQuery.prepare(QString("INSERT INTO %1(item_id, %2) VALUES(?, ?);").arg(tableName, columnName));
 
-    const QStringList cleaned = lexicon::cleanedUniqueValues(values);
+    const QStringList cleaned = cleanedUniqueValues(values);
     for (const QString& value : cleaned) {
         insertQuery.addBindValue(itemId);
         insertQuery.addBindValue(value);
@@ -884,10 +901,18 @@ bool DatabaseManager::replaceStringValues(const QString& tableName, int itemId, 
 }
 
 bool DatabaseManager::saveItem(const ItemRecord& item, QString* errorMessage, int* savedId) {
+    QSet<QString> propertyKeys;
+    for (const auto& property : item.properties) {
+        const QString key = property.key.trimmed().toCaseFolded();
+        if (key.isEmpty() || propertyKeys.contains(key))
+            return setError(errorMessage, "Property keys must be nonempty and unique within an item.");
+        propertyKeys.insert(key);
+    }
     QString fieldError;
     const auto fields = item.itemTypeId > 0 ? loadItemFields(item.itemTypeId, &fieldError) : QList<ItemFieldRecord>();
     if (!fieldError.isEmpty()) return setError(errorMessage, fieldError);
-    if (!lexicon::validateItem(item, fields, errorMessage)) return false;
+    if (auto valid = lexicon::validateItem(qtbridge::toCore(item), qtbridge::toCore(fields)); !valid)
+        return setError(errorMessage, qtbridge::toQt(valid.error().message));
     QSqlDatabase db = database();
     if (!beginWrite(db)) {
         return setError(errorMessage, db.lastError().text());

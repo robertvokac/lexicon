@@ -9,8 +9,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql)
+option(LEXICON_BUILD_DESKTOP "Build the Qt desktop client and SQLite adapter" ON)
 
 set(MD4QT_SRC
     3rdparty/md4qt/src/algo.cpp
@@ -54,11 +53,12 @@ set(MD4QT_SRC
 
 add_library(lexicon-core STATIC
     lexicon-core/Records.h
+    lexicon-core/Result.h
     lexicon-core/Validation.h
     lexicon-core/Validation.cpp
 )
 target_include_directories(lexicon-core PUBLIC lexicon-core)
-target_link_libraries(lexicon-core PUBLIC Qt${QT_VERSION_MAJOR}::Core)
+set_target_properties(lexicon-core PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
 add_library(lexicon-application STATIC
     lexicon-application/Repository.h
@@ -67,54 +67,87 @@ add_library(lexicon-application STATIC
 )
 target_include_directories(lexicon-application PUBLIC lexicon-application)
 target_link_libraries(lexicon-application PUBLIC lexicon-core)
+set_target_properties(lexicon-application PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
-add_library(lexicon-storage-sqlite STATIC
-    lexicon-storage-sqlite/DatabaseManager.h
-    lexicon-storage-sqlite/DatabaseManager.cpp
-    lexicon-storage-sqlite/Migrations.cpp
-    lexicon-storage-sqlite/SqliteRepository.h
-    lexicon-storage-sqlite/SqliteRepository.cpp
-    lexicon-storage-sqlite/BlobStore.h
-    lexicon-storage-sqlite/BlobStore.cpp
-)
-target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
-target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application Qt${QT_VERSION_MAJOR}::Sql)
+# Keep these libraries usable by clients that do not install Qt.
+foreach(target lexicon-core lexicon-application)
+    get_target_property(direct_links ${target} LINK_LIBRARIES)
+    get_target_property(public_links ${target} INTERFACE_LINK_LIBRARIES)
+    if ("${direct_links};${public_links}" MATCHES "Qt[56]?::")
+        message(FATAL_ERROR "${target} must not link Qt")
+    endif()
+endforeach()
 
-add_executable(Lexicon
-    lexicon-qt/main.cpp
-    lexicon-qt/MainWindow.h
-    lexicon-qt/MainWindow.cpp
-    lexicon-qt/FilterHeaderView.h
-    lexicon-qt/FilterHeaderView.cpp
-    lexicon-qt/PropertyFilterDialog.h
-    lexicon-qt/PropertyFilterDialog.cpp
-    lexicon-qt/ItemEditDialog.h
-    lexicon-qt/ItemEditDialog.cpp
-    lexicon-qt/GroupManagerDialog.h
-    lexicon-qt/GroupManagerDialog.cpp
-    lexicon-qt/ItemTypeManagerDialog.h
-    lexicon-qt/ItemTypeManagerDialog.cpp
-    lexicon-qt/ValueListDialog.h
-    lexicon-qt/ValueListDialog.cpp
-    lexicon-qt/MarkdownConverter.h
-    lexicon-qt/MarkdownConverter.cpp
-    ${MD4QT_SRC}
-)
+if (LEXICON_BUILD_DESKTOP)
+    find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql)
 
-target_include_directories(Lexicon PRIVATE 3rdparty/md4qt/src)
-target_link_libraries(Lexicon PRIVATE
-    lexicon-application
-    lexicon-storage-sqlite
-    Qt${QT_VERSION_MAJOR}::Widgets
-)
+    add_library(lexicon-qt-bridge STATIC
+        lexicon-qt-bridge/QtRecords.h
+        lexicon-qt-bridge/Conversions.h
+        lexicon-qt-bridge/Conversions.cpp
+    )
+    target_include_directories(lexicon-qt-bridge PUBLIC lexicon-qt-bridge)
+    target_link_libraries(lexicon-qt-bridge PUBLIC lexicon-core Qt${QT_VERSION_MAJOR}::Core)
 
-if (WIN32)
-    set_target_properties(Lexicon PROPERTIES WIN32_EXECUTABLE TRUE)
+    add_library(lexicon-storage-sqlite STATIC
+        lexicon-storage-sqlite/DatabaseManager.h
+        lexicon-storage-sqlite/DatabaseManager.cpp
+        lexicon-storage-sqlite/Migrations.cpp
+        lexicon-storage-sqlite/SqliteRepository.h
+        lexicon-storage-sqlite/SqliteRepository.cpp
+        lexicon-storage-sqlite/BlobStore.h
+        lexicon-storage-sqlite/BlobStore.cpp
+    )
+    target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
+    target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application lexicon-qt-bridge Qt${QT_VERSION_MAJOR}::Sql)
+
+    add_executable(Lexicon
+        lexicon-qt/main.cpp
+        lexicon-qt/ApplicationContext.h
+        lexicon-qt/ApplicationContext.cpp
+        lexicon-qt/MainWindow.h
+        lexicon-qt/MainWindow.cpp
+        lexicon-qt/FilterHeaderView.h
+        lexicon-qt/FilterHeaderView.cpp
+        lexicon-qt/PropertyFilterDialog.h
+        lexicon-qt/PropertyFilterDialog.cpp
+        lexicon-qt/ItemEditDialog.h
+        lexicon-qt/ItemEditDialog.cpp
+        lexicon-qt/GroupManagerDialog.h
+        lexicon-qt/GroupManagerDialog.cpp
+        lexicon-qt/ItemTypeManagerDialog.h
+        lexicon-qt/ItemTypeManagerDialog.cpp
+        lexicon-qt/ValueListDialog.h
+        lexicon-qt/ValueListDialog.cpp
+        lexicon-qt/MarkdownConverter.h
+        lexicon-qt/MarkdownConverter.cpp
+        ${MD4QT_SRC}
+    )
+
+    target_include_directories(Lexicon PRIVATE 3rdparty/md4qt/src)
+    target_link_libraries(Lexicon PRIVATE
+        lexicon-application
+        lexicon-storage-sqlite
+        lexicon-qt-bridge
+        Qt${QT_VERSION_MAJOR}::Widgets
+    )
+
+    if (WIN32)
+        set_target_properties(Lexicon PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()
 endif()
 
 include(CTest)
 if (BUILD_TESTING)
-    add_executable(lexicon-application-integration tests/ApplicationIntegration.cpp)
-    target_link_libraries(lexicon-application-integration PRIVATE lexicon-application lexicon-storage-sqlite)
-    add_test(NAME application_integration COMMAND lexicon-application-integration)
+    add_executable(lexicon-core-smoke tests/CoreSmoke.cpp)
+    target_link_libraries(lexicon-core-smoke PRIVATE lexicon-application)
+    set_target_properties(lexicon-core-smoke PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME core_smoke COMMAND lexicon-core-smoke)
+
+    if (LEXICON_BUILD_DESKTOP)
+        add_executable(lexicon-application-integration tests/ApplicationIntegration.cpp)
+        target_link_libraries(lexicon-application-integration PRIVATE lexicon-application lexicon-storage-sqlite)
+        add_test(NAME application_integration COMMAND lexicon-application-integration)
+    endif()
 endif()

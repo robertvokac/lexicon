@@ -1,45 +1,72 @@
 #pragma once
 #include "Repository.h"
-#include "DatabaseManager.h"
-#include "BlobStore.h"
 
-class SqliteRepository final : public Repository {
+class SqliteRepository final : public lexicon::Repository {
 public:
-    bool open(const QString& path, QString* errorMessage = nullptr) { return DatabaseManager::initialize(path, errorMessage); }
-    QMap<QString, QString> loadConfiguration(QString* errorMessage) override { return DatabaseManager::loadConfiguration(errorMessage); }
-    bool saveConfiguration(const QMap<QString, QString>& values, QString* errorMessage) override { return DatabaseManager::saveConfiguration(values, errorMessage); }
-    QList<GroupRecord> loadGroups(QString* errorMessage) override { return DatabaseManager::loadGroups(errorMessage); }
-    int defaultGroupId(QString* errorMessage) override { return DatabaseManager::defaultGroupId(errorMessage); }
-    bool upsertGroup(const GroupRecord& group, QString* errorMessage) override { return DatabaseManager::upsertGroup(group, errorMessage); }
-    bool deleteGroup(int groupId, QString* errorMessage) override { return DatabaseManager::deleteGroup(groupId, errorMessage); }
-    QList<ItemTypeRecord> loadItemTypes(int groupId, QString* errorMessage) override { return DatabaseManager::loadItemTypes(groupId, errorMessage); }
-    bool upsertItemType(const ItemTypeRecord& itemType, QString* errorMessage) override { return DatabaseManager::upsertItemType(itemType, errorMessage); }
-    int countItemsForType(int itemTypeId, QString* errorMessage) override { return DatabaseManager::countItemsForType(itemTypeId, errorMessage); }
-    bool deleteItemType(int itemTypeId, QString* errorMessage) override { return DatabaseManager::deleteItemType(itemTypeId, errorMessage); }
-    QList<ItemFieldRecord> loadItemFields(int itemTypeId, QString* errorMessage) override { return DatabaseManager::loadItemFields(itemTypeId, errorMessage); }
-    bool upsertItemField(const ItemFieldRecord& field, QString* errorMessage) override { return DatabaseManager::upsertItemField(field, errorMessage); }
-    int countFieldValues(int fieldId, QString* errorMessage) override { return DatabaseManager::countFieldValues(fieldId, errorMessage); }
-    bool deleteItemField(int fieldId, QString* errorMessage) override { return DatabaseManager::deleteItemField(fieldId, errorMessage); }
-    QList<ItemRecord> loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QList<ItemPropertyFilter>& propertyFilters, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, SortOrder sortOrder, QString* errorMessage) override { return DatabaseManager::loadItems(groupId, typeId, valueFilters, searchText, columnFilters, propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, limit, offset, sortColumn, sortOrder, errorMessage); }
-    int countItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QList<ItemPropertyFilter>& propertyFilters, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) override { return DatabaseManager::countItems(groupId, typeId, valueFilters, searchText, columnFilters, propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, errorMessage); }
-    bool loadItem(int itemId, ItemRecord& outItem, QString* errorMessage) override { return DatabaseManager::loadItem(itemId, outItem, errorMessage); }
-    bool saveItem(const ItemRecord& item, QString* errorMessage) override { return DatabaseManager::saveItem(item, errorMessage); }
-    bool deleteItem(int itemId, QString* errorMessage) override { return DatabaseManager::deleteItem(itemId, errorMessage); }
-    QList<LinkRecord> loadLinks(int itemId, QString* errorMessage) override { return DatabaseManager::loadLinks(itemId, errorMessage); }
-    QList<LinkRecord> loadBacklinks(int itemId, QString* errorMessage) override { return DatabaseManager::loadBacklinks(itemId, errorMessage); }
-    bool saveLink(const LinkRecord& link, QString* errorMessage) override { return DatabaseManager::saveLink(link, errorMessage); }
-    bool deleteLink(int linkId, QString* errorMessage) override { return DatabaseManager::deleteLink(linkId, errorMessage); }
-    bool logItemRead(int itemId, QString* errorMessage) override { return DatabaseManager::logItemRead(itemId, errorMessage); }
-    QStringList loadSuggestions(QString* errorMessage) override { return DatabaseManager::loadSuggestions(errorMessage); }
-    QStringList loadItemTitles(QString* errorMessage) override { return DatabaseManager::loadItemTitles(errorMessage); }
-    QList<UsageValueRecord> loadTagUsage(QString* errorMessage) override { return DatabaseManager::loadTagUsage(errorMessage); }
-    QList<UsageValueRecord> loadFlagUsage(QString* errorMessage) override { return DatabaseManager::loadFlagUsage(errorMessage); }
-    QList<UsageValueRecord> loadAliasUsage(QString* errorMessage) override { return DatabaseManager::loadAliasUsage(errorMessage); }
-    int findItemId(const QString& title, const QString& disambiguation, QString* errorMessage) override;
-    bool saveItemReturningId(const ItemRecord& item, int* savedId, QString* errorMessage) override { return DatabaseManager::saveItem(item, errorMessage, savedId); }
-    bool beginUnitOfWork(QString* errorMessage) override;
-    bool commitUnitOfWork(QString* errorMessage) override;
-    void rollbackUnitOfWork() override;
-    QString importBlob(const QString& sourcePath, QString* errorMessage) override { return BlobStore::importFile(sourcePath, errorMessage); }
-    bool exportBlob(const QString& hash, const QString& destinationPath, QString* errorMessage) override { return BlobStore::exportFile(hash, destinationPath, errorMessage); }
+  template <class T> using Result = lexicon::Result<T>;
+  using GroupRecord = lexicon::GroupRecord;
+  using ItemTypeRecord = lexicon::ItemTypeRecord;
+  using ItemFieldRecord = lexicon::ItemFieldRecord;
+  using ItemValueFilter = lexicon::ItemValueFilter;
+  using ItemColumnFilters = lexicon::ItemColumnFilters;
+  using ItemPropertyFilter = lexicon::ItemPropertyFilter;
+  using ItemRecord = lexicon::ItemRecord;
+  using LinkRecord = lexicon::LinkRecord;
+  using UsageValueRecord = lexicon::UsageValueRecord;
+  using SortOrder = lexicon::SortOrder;
+
+  Result<void> open(const std::string &utf8Path);
+
+  Result<std::map<std::string, std::string>> loadConfiguration() override;
+  Result<void>
+  saveConfiguration(const std::map<std::string, std::string> &values) override;
+  Result<std::vector<GroupRecord>> loadGroups() override;
+  Result<int> defaultGroupId() override;
+  Result<void> upsertGroup(const GroupRecord &group) override;
+  Result<void> deleteGroup(int groupId) override;
+  Result<std::vector<ItemTypeRecord>> loadItemTypes(int groupId) override;
+  Result<void> upsertItemType(const ItemTypeRecord &itemType) override;
+  Result<int> countItemsForType(int itemTypeId) override;
+  Result<void> deleteItemType(int itemTypeId) override;
+  Result<std::vector<ItemFieldRecord>> loadItemFields(int itemTypeId) override;
+  Result<void> upsertItemField(const ItemFieldRecord &field) override;
+  Result<int> countFieldValues(int fieldId) override;
+  Result<void> deleteItemField(int fieldId) override;
+  Result<std::vector<ItemRecord>> loadItems(
+      int groupId, int typeId, const std::vector<ItemValueFilter> &valueFilters,
+      const std::string &searchText, const ItemColumnFilters &columnFilters,
+      const std::vector<ItemPropertyFilter> &propertyFilters,
+      const std::string &tagFilter, const std::string &flagFilter,
+      int understandingFilter, int statusFilter, int pinnedFilter, int limit,
+      int offset, int sortColumn, SortOrder sortOrder) override;
+  Result<int> countItems(int groupId, int typeId,
+                         const std::vector<ItemValueFilter> &valueFilters,
+                         const std::string &searchText,
+                         const ItemColumnFilters &columnFilters,
+                         const std::vector<ItemPropertyFilter> &propertyFilters,
+                         const std::string &tagFilter,
+                         const std::string &flagFilter, int understandingFilter,
+                         int statusFilter, int pinnedFilter) override;
+  Result<ItemRecord> loadItem(int itemId) override;
+  Result<void> saveItem(const ItemRecord &item) override;
+  Result<int> saveItemReturningId(const ItemRecord &item) override;
+  Result<void> deleteItem(int itemId) override;
+  Result<std::vector<LinkRecord>> loadLinks(int itemId) override;
+  Result<std::vector<LinkRecord>> loadBacklinks(int itemId) override;
+  Result<void> saveLink(const LinkRecord &link) override;
+  Result<void> deleteLink(int linkId) override;
+  Result<void> logItemRead(int itemId) override;
+  Result<std::vector<std::string>> loadSuggestions() override;
+  Result<std::vector<std::string>> loadItemTitles() override;
+  Result<std::vector<UsageValueRecord>> loadTagUsage() override;
+  Result<std::vector<UsageValueRecord>> loadFlagUsage() override;
+  Result<std::vector<UsageValueRecord>> loadAliasUsage() override;
+  Result<int> findItemId(const std::string &title,
+                         const std::string &disambiguation) override;
+  Result<void> beginUnitOfWork() override;
+  Result<void> commitUnitOfWork() override;
+  void rollbackUnitOfWork() override;
+  Result<std::string> importBlob(const std::string &sourcePath) override;
+  Result<void> exportBlob(const std::string &hash,
+                          const std::string &destinationPath) override;
 };

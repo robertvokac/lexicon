@@ -4,64 +4,151 @@
 #include <QCoreApplication>
 #include <QTemporaryDir>
 
+#include <algorithm>
 #include <iostream>
 
 namespace {
-bool check(bool ok, const char* message, const QString& detail = {}) {
-    if (ok) return true;
-    std::cerr << message << ": " << detail.toStdString() << '\n';
-    return false;
+template <class T>
+bool check(const lexicon::Result<T> &result, const char *operation) {
+  if (result)
+    return true;
+  std::cerr << operation << ": " << result.error().message << '\n';
+  return false;
 }
+bool condition(bool ok, const char *message) {
+  if (!ok)
+    std::cerr << message << '\n';
+  return ok;
 }
+} // namespace
 
-int main(int argc, char** argv) {
-    QCoreApplication runtime(argc, argv);
-    QTemporaryDir directory;
-    if (!check(directory.isValid(), "Temporary directory")) return 1;
+int main(int argc, char **argv) {
+  QCoreApplication runtime(argc, argv);
+  QTemporaryDir directory;
+  if (!condition(directory.isValid(), "Temporary directory failed"))
+    return 1;
 
-    SqliteRepository repository;
-    QString error;
-    if (!check(repository.open(directory.filePath("lexicon.db"), &error), "Database migration", error)) return 1;
-    LexiconApplication lexicon(repository);
+  const QByteArray path = directory.filePath("lexicon.db").toUtf8();
+  SqliteRepository repository;
+  if (!check(repository.open(
+                 {path.constData(), static_cast<std::size_t>(path.size())}),
+             "Database migration"))
+    return 1;
+  lexicon::LexiconApplication application(repository);
 
-    const int groupId = lexicon.groups.defaultGroupId(&error);
-    if (!check(groupId > 0, "Default group", error)) return 1;
+  auto groupId = application.groups.defaultGroupId();
+  if (!check(groupId, "Default group") ||
+      !condition(*groupId > 0, "Invalid group ID"))
+    return 1;
 
-    ItemRecord first;
-    first.groupId = groupId;
-    first.title = "Pointer provenance";
-    int firstId = lexicon.items.createItem(first, &error);
-    if (!check(firstId > 0,
-               "Create first item", error)) return 1;
+  lexicon::ItemRecord first;
+  first.groupId = *groupId;
+  first.title = "Pointer provenance";
+  auto firstId = application.items.createItem(first);
+  if (!check(firstId, "Create first item") ||
+      !condition(*firstId > 0, "Invalid first ID"))
+    return 1;
 
-    ItemRecord second;
-    second.groupId = groupId;
-    second.title = "C++";
-    int secondId = -1;
-    if (!check(lexicon.items.saveItemWithLinks(second, {}, {}, &secondId, &error) && secondId > firstId,
-               "Create second item", error)) return 1;
+  lexicon::ItemRecord second;
+  second.groupId = *groupId;
+  second.title = "C++";
+  auto secondId = application.items.saveItemWithLinks(second, {}, {});
+  if (!check(secondId, "Create second item") ||
+      !condition(*secondId > *firstId, "Invalid second ID"))
+    return 1;
 
-    first.id = firstId;
-    LinkRecord relation;
-    relation.toItemId = secondId;
-    relation.linkType = LinkType::PartOf;
-    if (!check(lexicon.items.saveItemWithLinks(first, {relation}, {}, &firstId, &error),
-               "Save item with link", error)) return 1;
-    const auto links = lexicon.links.loadLinks(firstId, &error);
-    if (!check(links.size() == 1 && links.first().toItemId == secondId,
-               "Link persisted", error)) return 1;
+  first.id = *firstId;
+  lexicon::LinkRecord relation;
+  relation.toItemId = *secondId;
+  relation.linkType = lexicon::LinkType::PartOf;
+  if (!check(application.items.saveItemWithLinks(first, {relation}, {}),
+             "Save item with link"))
+    return 1;
+  auto links = application.links.loadLinks(*firstId);
+  if (!check(links, "Load links") ||
+      !condition(links->size() == 1 && links->front().toItemId == *secondId,
+                 "Link was not persisted"))
+    return 1;
 
-    first.title = "Should roll back";
-    LinkRecord invalid;
-    invalid.toItemId = -1;
-    error.clear();
-    if (!check(!lexicon.items.saveItemWithLinks(first, {invalid}, {}, nullptr, &error),
-               "Invalid link rejected", error)) return 1;
-    ItemRecord persisted;
-    error.clear();
-    if (!check(lexicon.items.loadItem(firstId, persisted, &error)
-               && persisted.title == "Pointer provenance"
-               && lexicon.links.loadLinks(firstId, &error).size() == 1,
-               "Transaction rollback", error)) return 1;
-    return 0;
+  first.title = "Should roll back";
+  lexicon::LinkRecord invalid;
+  invalid.toItemId = -1;
+  auto failed = application.items.saveItemWithLinks(first, {invalid}, {});
+  if (!condition(!failed &&
+                     failed.error().code == lexicon::Error::Code::Validation,
+                 "Invalid link was not rejected"))
+    return 1;
+  auto persisted = application.items.loadItem(*firstId);
+  auto remainingLinks = application.links.loadLinks(*firstId);
+  if (!check(persisted, "Reload item") ||
+      !check(remainingLinks, "Reload links") ||
+      !condition(persisted->title == "Pointer provenance" &&
+                     remainingLinks->size() == 1,
+                 "Transaction was not rolled back"))
+    return 1;
+
+  lexicon::ItemTypeRecord type;
+  type.name = "Term";
+  if (!check(application.types.upsertItemType(type), "Create type"))
+    return 1;
+  auto types = application.types.loadItemTypes();
+  if (!check(types, "Load types"))
+    return 1;
+  const auto termType =
+      std::find_if(types->begin(), types->end(), [](const auto &candidate) {
+        return candidate.name == "Term";
+      });
+  if (!condition(termType != types->end(), "Created type missing"))
+    return 1;
+
+  lexicon::ItemFieldRecord field;
+  field.itemTypeId = termType->id;
+  field.name = "Meaning";
+  if (!check(application.types.upsertItemField(field), "Create field"))
+    return 1;
+  auto fields = application.types.loadItemFields(termType->id);
+  if (!check(fields, "Load fields") ||
+      !condition(fields->size() == 1, "Created field missing"))
+    return 1;
+
+  lexicon::ItemRecord localized;
+  localized.groupId = *groupId;
+  localized.itemTypeId = termType->id;
+  localized.title = "Příliš žluťoučký kůň";
+  localized.disambiguation = "česky";
+  localized.aliases = {"kůň"};
+  localized.tags = {"čeština"};
+  localized.properties = {{"poznámka", "hodnota"}};
+  localized.fieldValues[fields->front().id] = "Význam";
+  localized.content = "Žádný problém.";
+  auto localizedId = application.items.createItem(localized);
+  if (!check(localizedId, "Create UTF-8 item"))
+    return 1;
+  auto loaded = application.items.loadItem(*localizedId);
+  if (!check(loaded, "Load UTF-8 item") ||
+      !condition(loaded->title == localized.title &&
+                     loaded->disambiguation == localized.disambiguation &&
+                     loaded->aliases == localized.aliases &&
+                     loaded->tags == localized.tags &&
+                     loaded->properties.front().value == "hodnota" &&
+                     loaded->fieldValues == localized.fieldValues &&
+                     loaded->content == localized.content,
+                 "UTF-8 record did not round trip"))
+    return 1;
+  auto found =
+      application.search.findItemId(localized.title, localized.disambiguation);
+  if (!check(found, "Find UTF-8 item") ||
+      !condition(*found == *localizedId, "UTF-8 lookup failed"))
+    return 1;
+
+  const std::map<std::string, std::string> settings{{"view.theme", "tmavý"}};
+  if (!check(application.configuration.saveConfiguration(settings),
+             "Save configuration"))
+    return 1;
+  auto configuration = application.configuration.loadConfiguration();
+  if (!check(configuration, "Load configuration") ||
+      !condition(configuration->at("view.theme") == "tmavý",
+                 "Configuration did not round trip"))
+    return 1;
+  return 0;
 }

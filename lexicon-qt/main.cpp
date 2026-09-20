@@ -1,4 +1,4 @@
-#include "LexiconApplication.h"
+#include "ApplicationContext.h"
 #include "SqliteRepository.h"
 #include "MainWindow.h"
 
@@ -14,15 +14,15 @@ int main(int argc, char *argv[]) {
     QCoreApplication::setApplicationName("Lexicon");
 
     const QString dbPath = QDir(QCoreApplication::applicationDirPath()).filePath("lexicon.db");
-    QString error;
     SqliteRepository repository;
-    if (!repository.open(dbPath, &error)) {
-        QMessageBox::critical(nullptr, "Lexicon", error);
+    if (auto opened = repository.open(qtbridge::toCore(dbPath)); !opened) {
+        QMessageBox::critical(nullptr, "Lexicon", qtbridge::toQt(opened.error().message));
         return 1;
     }
 
-    LexiconApplication application(repository);
-    installApplication(application);
+    lexicon::LexiconApplication application(repository);
+    QtApplicationFacade desktop(application);
+    installApplication(desktop);
 
     MainWindow window;
     window.show();
