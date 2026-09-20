@@ -1,0 +1,1290 @@
+#include "RestServer.h"
+
+#include "TempFile.h"
+#include "Transport.h"
+
+// CPPHTTPLIB_OPENSSL_SUPPORT is defined by the build so that every translation
+// unit that includes httplib.h agrees on the TLS-enabled layout.
+#include <httplib.h>
+
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <set>
+#include <string>
+#include <utility>
+
+namespace lexicon::http {
+namespace {
+namespace fs = std::filesystem;
+using httplib::Request;
+using httplib::Response;
+
+constexpr int kApiVersion = 1;
+constexpr const char *kJsonContentType = "application/json; charset=utf-8";
+constexpr const char *kBinaryContentType = "application/octet-stream";
+
+std::string lowerAscii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(), [](char ch) {
+    return static_cast<char>(
+        std::tolower(static_cast<unsigned char>(ch)));
+  });
+  return value;
+}
+
+// "application/json; charset=utf-8" and "application/json" are accepted;
+// anything else is rejected instead of being sniffed.
+bool isContentType(const std::string &header, const char *expected) {
+  const auto semicolon = header.find(';');
+  const auto base = lexicon::trim(
+      semicolon == std::string::npos ? header : header.substr(0, semicolon));
+  return lowerAscii(base) == expected;
+}
+
+std::string bearerToken(const Request &request) {
+  const auto header = request.get_header_value("Authorization");
+  constexpr std::string_view prefix = "Bearer ";
+  if (header.size() <= prefix.size() ||
+      lowerAscii(header.substr(0, prefix.size())) != "bearer ")
+    return {};
+  return lexicon::trim(header.substr(prefix.size()));
+}
+
+void respondJson(Response &response, int status, const Json &body) {
+  response.status = status;
+  response.set_content(body.dump(), kJsonContentType);
+}
+
+void respondNoContent(Response &response) {
+  response.status = 204;
+  response.body.clear();
+}
+
+void respondFailure(Response &response, const ApiFailure &failure) {
+  respondJson(response, failure.status, errorBody(failure));
+}
+
+// Domain errors with Storage code carry SQL or paths, so the detail is logged
+// here and never sent to the client.
+void respondError(Response &response, const Error &error, const char *what) {
+  const auto failure = toApiFailure(error);
+  if (error.code == Error::Code::Storage)
+    std::cerr << "lexicon-http: " << what << " failed: " << error.message
+              << '\n';
+  respondFailure(response, failure);
+}
+
+ApiFailure failureForStatus(int status) {
+  switch (status) {
+  case 400:
+    return {400, "bad_request", "The request could not be understood."};
+  case 401:
+    return {401, "unauthorized", "Authentication is required."};
+  case 403:
+    return {403, "forbidden", "The request is not allowed."};
+  case 404:
+    return {404, "not_found", "The requested endpoint does not exist."};
+  case 405:
+    return {405, "method_not_allowed",
+            "The method is not allowed for this endpoint."};
+  case 413:
+    return {413, "payload_too_large", "The request body is too large."};
+  case 415:
+    return {415, "unsupported_media_type",
+            "The request content type is not supported."};
+  case 429:
+    return {429, "too_many_requests", "Too many requests."};
+  default:
+    break;
+  }
+  return {status >= 400 ? status : 500, "internal",
+          "The server could not complete the request."};
+}
+
+bool validBlobHash(const std::string &hash) {
+  return hash.size() == 64 && std::all_of(hash.begin(), hash.end(), [](char ch) {
+           return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+         });
+}
+
+// Serializes every database and blob operation. The SQLite repository owns one
+// connection and is not safe for concurrent use.
+class GuardedApplication {
+public:
+  explicit GuardedApplication(LexiconApplication &application)
+      : application_(application) {}
+  template <class Operation> auto with(Operation &&operation) {
+    std::lock_guard lock(mutex_);
+    return operation(application_);
+  }
+
+private:
+  LexiconApplication &application_;
+  std::mutex mutex_;
+};
+} // namespace
+
+struct RestServer::Impl {
+  Impl(ServerConfig configuration, LexiconApplication &application,
+       AuthState &authentication)
+      : config(std::move(configuration)), guarded(application),
+        auth(authentication),
+        allowedOrigins(config.allowedOrigins.begin(),
+                       config.allowedOrigins.end()) {}
+
+  ServerConfig config;
+  GuardedApplication guarded;
+  AuthState &auth;
+  std::set<std::string> allowedOrigins;
+  std::set<std::string> publicRoutes;
+  std::unique_ptr<httplib::Server> server;
+  int boundPort = -1;
+
+  void createServer();
+  void registerRoutes();
+  std::string databaseDirectory() const;
+
+  // Request helpers -------------------------------------------------------
+  std::optional<Json> jsonBody(const Request &request, Response &response) const;
+  std::optional<int> pathId(const Request &request, Response &response,
+                            const char *name) const;
+  bool applyCors(const Request &request, Response &response) const;
+};
+
+namespace {
+std::string queryValue(const Request &request, const char *key) {
+  return request.has_param(key) ? request.get_param_value(key) : std::string{};
+}
+} // namespace
+
+std::string RestServer::Impl::databaseDirectory() const {
+  const fs::path database(config.databasePath);
+  const auto directory = database.parent_path();
+  return directory.empty() ? std::string(".") : directory.string();
+}
+
+std::optional<Json> RestServer::Impl::jsonBody(const Request &request,
+                                               Response &response) const {
+  if (!isContentType(request.get_header_value("Content-Type"),
+                     "application/json")) {
+    respondFailure(response, {415, "unsupported_media_type",
+                              "Content-Type must be application/json."});
+    return std::nullopt;
+  }
+  if (request.body.size() > config.maxJsonBytes) {
+    respondFailure(response, {413, "payload_too_large",
+                              "The JSON request body is too large."});
+    return std::nullopt;
+  }
+  Json parsed = Json::parse(request.body, nullptr, false);
+  if (parsed.is_discarded()) {
+    respondFailure(response,
+                   {400, "malformed_json", "The request body is not valid JSON."});
+    return std::nullopt;
+  }
+  if (!parsed.is_object()) {
+    respondFailure(response, {400, "malformed_json",
+                              "The request body must be a JSON object."});
+    return std::nullopt;
+  }
+  return parsed;
+}
+
+std::optional<int> RestServer::Impl::pathId(const Request &request,
+                                            Response &response,
+                                            const char *name) const {
+  const auto found = request.path_params.find(name);
+  const std::optional<int> id = found == request.path_params.end()
+                                    ? std::optional<int>{}
+                                    : parseId(found->second);
+  if (!id)
+    respondFailure(response, {400, "validation",
+                              std::string("'") + name +
+                                  "' must be a positive integer."});
+  return id;
+}
+
+bool RestServer::Impl::applyCors(const Request &request,
+                                 Response &response) const {
+  const auto origin = request.get_header_value("Origin");
+  if (origin.empty())
+    return true;
+  response.set_header("Vary", "Origin");
+  if (allowedOrigins.find(origin) == allowedOrigins.end())
+    return false;
+  // Exact origin only. A wildcard would expose the authenticated API to any
+  // site the browser visits.
+  response.set_header("Access-Control-Allow-Origin", origin);
+  response.set_header("Access-Control-Expose-Headers", "Content-Disposition");
+  return true;
+}
+
+void RestServer::Impl::createServer() {
+  if (config.tlsEnabled()) {
+    auto secure = std::make_unique<httplib::SSLServer>(
+        config.tlsCertificatePath.c_str(), config.tlsPrivateKeyPath.c_str());
+    server = std::move(secure);
+  } else {
+    server = std::make_unique<httplib::Server>();
+  }
+
+  server->set_payload_max_length(config.maxBlobBytes);
+  server->set_read_timeout(config.readTimeoutSeconds, 0);
+  server->set_write_timeout(config.writeTimeoutSeconds, 0);
+  server->set_keep_alive_timeout(config.keepAliveTimeoutSeconds);
+  server->set_keep_alive_max_count(config.keepAliveMaxCount);
+  server->set_tcp_nodelay(true);
+  if (!config.trustedProxies.empty())
+    server->set_trusted_proxies(config.trustedProxies);
+
+  const bool tls = config.tlsEnabled();
+  server->set_pre_routing_handler([this, tls](const Request &request,
+                                              Response &response) {
+    response.set_header("X-Content-Type-Options", "nosniff");
+    // The API returns private data only; no intermediary may store it.
+    response.set_header("Cache-Control", "no-store");
+    response.set_header("Referrer-Policy", "no-referrer");
+    response.set_header("X-Frame-Options", "DENY");
+    response.set_header("Content-Security-Policy",
+                        "default-src 'none'; frame-ancestors 'none'");
+    if (tls)
+      response.set_header("Strict-Transport-Security",
+                          "max-age=31536000; includeSubDomains");
+    const bool originAllowed = applyCors(request, response);
+    if (request.method == "OPTIONS") {
+      if (!originAllowed) {
+        respondFailure(response,
+                       {403, "origin_not_allowed",
+                        "This origin is not allowed to use the API."});
+        return httplib::Server::HandlerResponse::Handled;
+      }
+      response.set_header("Access-Control-Allow-Methods",
+                          "GET, POST, PUT, DELETE, OPTIONS");
+      response.set_header("Access-Control-Allow-Headers",
+                          "Authorization, Content-Type");
+      response.set_header("Access-Control-Max-Age", "600");
+      respondNoContent(response);
+      return httplib::Server::HandlerResponse::Handled;
+    }
+    if (!originAllowed) {
+      respondFailure(response, {403, "origin_not_allowed",
+                                "This origin is not allowed to use the API."});
+      return httplib::Server::HandlerResponse::Handled;
+    }
+    return httplib::Server::HandlerResponse::Unhandled;
+  });
+
+  // Runs after routing but before the body is read, so an unauthenticated or
+  // oversized request never allocates a buffer for its payload.
+  server->set_pre_request_handler([this](const Request &request,
+                                         Response &response) {
+    const bool isBlobUpload = request.matched_route == "/api/v1/blobs" &&
+                              request.method == "POST";
+    const auto limit = isBlobUpload ? config.maxBlobBytes : config.maxJsonBytes;
+    if (request.has_header("Content-Length") &&
+        request.get_header_value_u64("Content-Length") > limit) {
+      response.set_header("Connection", "close");
+      respondFailure(response, {413, "payload_too_large",
+                                "The request body is too large."});
+      return httplib::Server::HandlerResponse::Handled;
+    }
+    if (publicRoutes.find(request.matched_route) != publicRoutes.end())
+      return httplib::Server::HandlerResponse::Unhandled;
+    const auto user = auth.authenticate(bearerToken(request));
+    if (!user) {
+      response.set_header("WWW-Authenticate", "Bearer");
+      respondFailure(response, {401, "unauthorized",
+                                "Authentication is required."});
+      return httplib::Server::HandlerResponse::Handled;
+    }
+    return httplib::Server::HandlerResponse::Unhandled;
+  });
+
+  server->set_error_handler([](const Request &, Response &response) {
+    if (!response.body.empty())
+      return;
+    const auto failure = failureForStatus(response.status);
+    response.set_content(errorBody(failure).dump(), kJsonContentType);
+  });
+
+  server->set_exception_handler(
+      [](const Request &request, Response &response, std::exception_ptr caught) {
+        std::string detail = "unknown error";
+        try {
+          std::rethrow_exception(caught);
+        } catch (const BadRequest &bad) {
+          respondFailure(response, {400, "validation", bad.message});
+          return;
+        } catch (const std::exception &error) {
+          detail = error.what();
+        } catch (...) {
+        }
+        std::cerr << "lexicon-http: unhandled exception for " << request.method
+                  << ' ' << request.path << ": " << detail << '\n';
+        respondFailure(response, {500, "internal",
+                                  "The server could not complete the request."});
+      });
+
+  if (config.requestLogging)
+    server->set_logger([](const Request &request, const Response &response) {
+      // Query strings, headers and bodies are deliberately not logged: they
+      // may carry Bearer tokens or passwords.
+      std::cerr << "lexicon-http: " << request.method << ' ' << request.path
+                << " -> " << response.status << '\n';
+    });
+
+  registerRoutes();
+}
+
+void RestServer::Impl::registerRoutes() {
+  httplib::Server &api = *server;
+  publicRoutes = {"/api/v1/health", "/api/v1/auth/login"};
+
+  // Health ----------------------------------------------------------------
+  api.Get("/api/v1/health", [](const Request &, Response &response) {
+    respondJson(response, 200,
+                Json{{"status", "ok"},
+                     {"apiVersion", kApiVersion},
+                     {"application", "Lexicon"}});
+  });
+
+  // Authentication --------------------------------------------------------
+  api.Post("/api/v1/auth/login", [this](const Request &request,
+                                        Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto username = requiredString(*body, "username");
+    const auto password = requiredString(*body, "password");
+    if (username.size() > 256 || password.size() > 1024) {
+      respondFailure(response, {400, "validation",
+                                "The user name or password is too long."});
+      return;
+    }
+    const auto outcome = auth.login(request.remote_addr, username, password);
+    switch (outcome.status) {
+    case AuthState::LoginStatus::Ok:
+      respondJson(response, 200,
+                  Json{{"token", outcome.token},
+                       {"username", auth.username()},
+                       {"apiVersion", kApiVersion},
+                       {"idleTimeoutSeconds",
+                        static_cast<long long>(
+                            config.sessions.idleTimeout.count())},
+                       {"absoluteLifetimeSeconds",
+                        static_cast<long long>(
+                            config.sessions.absoluteLifetime.count())}});
+      return;
+    case AuthState::LoginStatus::RateLimited:
+      response.set_header("Retry-After",
+                          std::to_string(outcome.retryAfterSeconds));
+      respondFailure(response, {429, "too_many_requests",
+                                "Too many failed sign-in attempts. Try again "
+                                "later."});
+      return;
+    case AuthState::LoginStatus::Unavailable:
+      respondFailure(response, {500, "internal",
+                                "The server could not verify the credentials."});
+      return;
+    case AuthState::LoginStatus::InvalidCredentials:
+      break;
+    }
+    // Deliberately identical whether or not the user name exists.
+    response.set_header("WWW-Authenticate", "Bearer");
+    respondFailure(response,
+                   {401, "unauthorized", "Invalid user name or password."});
+  });
+
+  api.Post("/api/v1/auth/logout", [this](const Request &request,
+                                         Response &response) {
+    auth.logout(bearerToken(request));
+    respondNoContent(response);
+  });
+
+  api.Get("/api/v1/auth/me", [this](const Request &request,
+                                    Response &response) {
+    const auto user = auth.authenticate(bearerToken(request));
+    respondJson(response, 200,
+                Json{{"username", user.value_or(std::string{})},
+                     {"apiVersion", kApiVersion}});
+  });
+
+  // Groups ----------------------------------------------------------------
+  const auto sendGroups = [this](Response &response) {
+    auto groups = guarded.with(
+        [](LexiconApplication &application) { return application.groups.loadGroups(); });
+    if (!groups) {
+      respondError(response, groups.error(), "loadGroups");
+      return;
+    }
+    respondJson(response, 200, Json{{"groups", toJsonArray(*groups)}});
+  };
+
+  api.Get("/api/v1/groups", [sendGroups](const Request &, Response &response) {
+    sendGroups(response);
+  });
+
+  api.Get("/api/v1/groups/default", [this](const Request &, Response &response) {
+    auto id = guarded.with([](LexiconApplication &application) {
+      return application.groups.defaultGroupId();
+    });
+    if (!id) {
+      respondError(response, id.error(), "defaultGroupId");
+      return;
+    }
+    respondJson(response, 200, Json{{"groupId", *id}});
+  });
+
+  // upsertGroup does not return an ID, so the saved record is looked up by its
+  // unique name inside the same lock.
+  const auto saveGroup = [this](GroupRecord group, Response &response,
+                                int status) {
+    auto saved = guarded.with(
+        [&group](LexiconApplication &application) -> Result<GroupRecord> {
+          if (auto stored = application.groups.upsertGroup(group); !stored)
+            return std::unexpected(stored.error());
+          auto groups = application.groups.loadGroups();
+          if (!groups)
+            return std::unexpected(groups.error());
+          const auto wanted = lexicon::asciiFold(lexicon::trim(group.name));
+          for (const auto &candidate : *groups) {
+            if (group.id > 0 ? candidate.id == group.id
+                             : lexicon::asciiFold(candidate.name) == wanted)
+              return candidate;
+          }
+          return std::unexpected(
+              Error{Error::Code::NotFound, "Group not found."});
+        });
+    if (!saved) {
+      respondError(response, saved.error(), "upsertGroup");
+      return;
+    }
+    respondJson(response, status, Json{{"group", toJson(*saved)}});
+  };
+
+  api.Post("/api/v1/groups", [this, saveGroup](const Request &request,
+                                               Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto group = groupFromJson(*body);
+    if (group.id > 0) {
+      respondFailure(response, {400, "validation",
+                                "A new group must not carry an ID."});
+      return;
+    }
+    group.id = -1;
+    saveGroup(std::move(group), response, 201);
+  });
+
+  api.Put("/api/v1/groups/:id", [this, saveGroup](const Request &request,
+                                                  Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto group = groupFromJson(*body);
+    group.id = *id; // The path owns the identity, never the body.
+    saveGroup(std::move(group), response, 200);
+  });
+
+  api.Delete("/api/v1/groups/:id", [this](const Request &request,
+                                          Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) {
+      return application.groups.deleteGroup(*id);
+    });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteGroup");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  // Types and fields ------------------------------------------------------
+  api.Get("/api/v1/types", [this](const Request &request, Response &response) {
+    int groupId = -1;
+    const auto raw = queryValue(request, "groupId");
+    if (!raw.empty()) {
+      const auto parsed = parseId(raw);
+      if (!parsed) {
+        respondFailure(response, {400, "validation",
+                                  "'groupId' must be a positive integer."});
+        return;
+      }
+      groupId = *parsed;
+    }
+    auto types = guarded.with([groupId](LexiconApplication &application) {
+      return application.types.loadItemTypes(groupId);
+    });
+    if (!types) {
+      respondError(response, types.error(), "loadItemTypes");
+      return;
+    }
+    respondJson(response, 200, Json{{"types", toJsonArray(*types)}});
+  });
+
+  const auto saveType = [this](ItemTypeRecord type, Response &response,
+                               int status) {
+    auto saved = guarded.with(
+        [&type](LexiconApplication &application) -> Result<ItemTypeRecord> {
+          if (auto stored = application.types.upsertItemType(type); !stored)
+            return std::unexpected(stored.error());
+          auto types = application.types.loadItemTypes(-1);
+          if (!types)
+            return std::unexpected(types.error());
+          const auto wanted = lexicon::asciiFold(lexicon::trim(type.name));
+          for (const auto &candidate : *types) {
+            if (type.id > 0 ? candidate.id == type.id
+                            : (lexicon::asciiFold(candidate.name) == wanted &&
+                               candidate.groupId == type.groupId))
+              return candidate;
+          }
+          return std::unexpected(Error{Error::Code::NotFound, "Type not found."});
+        });
+    if (!saved) {
+      respondError(response, saved.error(), "upsertItemType");
+      return;
+    }
+    respondJson(response, status, Json{{"type", toJson(*saved)}});
+  };
+
+  api.Post("/api/v1/types", [this, saveType](const Request &request,
+                                             Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto type = typeFromJson(*body);
+    if (type.id > 0) {
+      respondFailure(response,
+                     {400, "validation", "A new type must not carry an ID."});
+      return;
+    }
+    type.id = -1;
+    saveType(std::move(type), response, 201);
+  });
+
+  api.Put("/api/v1/types/:id", [this, saveType](const Request &request,
+                                                Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto type = typeFromJson(*body);
+    type.id = *id;
+    saveType(std::move(type), response, 200);
+  });
+
+  api.Delete("/api/v1/types/:id", [this](const Request &request,
+                                         Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) {
+      return application.types.deleteItemType(*id);
+    });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteItemType");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  // Used by the destructive-change confirmations in both clients.
+  api.Get("/api/v1/types/:id/item-count", [this](const Request &request,
+                                                 Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto count = guarded.with([id](LexiconApplication &application) {
+      return application.types.countItemsForType(*id);
+    });
+    if (!count) {
+      respondError(response, count.error(), "countItemsForType");
+      return;
+    }
+    respondJson(response, 200, Json{{"count", *count}});
+  });
+
+  api.Get("/api/v1/types/:id/fields", [this](const Request &request,
+                                             Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto fields = guarded.with([id](LexiconApplication &application) {
+      return application.types.loadItemFields(*id);
+    });
+    if (!fields) {
+      respondError(response, fields.error(), "loadItemFields");
+      return;
+    }
+    respondJson(response, 200, Json{{"fields", toJsonArray(*fields)}});
+  });
+
+  const auto saveField = [this](ItemFieldRecord field, Response &response,
+                                int status) {
+    auto saved = guarded.with(
+        [&field](LexiconApplication &application) -> Result<ItemFieldRecord> {
+          if (auto stored = application.types.upsertItemField(field); !stored)
+            return std::unexpected(stored.error());
+          auto fields = application.types.loadItemFields(field.itemTypeId);
+          if (!fields)
+            return std::unexpected(fields.error());
+          const auto wanted = lexicon::asciiFold(lexicon::trim(field.name));
+          for (const auto &candidate : *fields) {
+            if (field.id > 0 ? candidate.id == field.id
+                             : lexicon::asciiFold(candidate.name) == wanted)
+              return candidate;
+          }
+          return std::unexpected(
+              Error{Error::Code::NotFound, "Field not found."});
+        });
+    if (!saved) {
+      respondError(response, saved.error(), "upsertItemField");
+      return;
+    }
+    respondJson(response, status, Json{{"field", toJson(*saved)}});
+  };
+
+  api.Post("/api/v1/types/:id/fields", [this, saveField](const Request &request,
+                                                         Response &response) {
+    auto typeId = pathId(request, response, "id");
+    if (!typeId)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto field = fieldFromJson(*body);
+    if (field.id > 0) {
+      respondFailure(response,
+                     {400, "validation", "A new field must not carry an ID."});
+      return;
+    }
+    field.id = -1;
+    field.itemTypeId = *typeId;
+    saveField(std::move(field), response, 201);
+  });
+
+  api.Put("/api/v1/fields/:id", [this, saveField](const Request &request,
+                                                  Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto field = fieldFromJson(*body);
+    field.id = *id;
+    if (field.itemTypeId <= 0) {
+      respondFailure(response, {400, "validation",
+                                "'itemTypeId' is required when updating a "
+                                "field."});
+      return;
+    }
+    saveField(std::move(field), response, 200);
+  });
+
+  api.Delete("/api/v1/fields/:id", [this](const Request &request,
+                                          Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) {
+      return application.types.deleteItemField(*id);
+    });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteItemField");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  api.Get("/api/v1/fields/:id/value-count", [this](const Request &request,
+                                                   Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto count = guarded.with([id](LexiconApplication &application) {
+      return application.types.countFieldValues(*id);
+    });
+    if (!count) {
+      respondError(response, count.error(), "countFieldValues");
+      return;
+    }
+    respondJson(response, 200, Json{{"count", *count}});
+  });
+
+  // Items -----------------------------------------------------------------
+  api.Post("/api/v1/items/query", [this](const Request &request,
+                                         Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto query = itemQueryFromJson(*body);
+    struct Page {
+      std::vector<ItemRecord> items;
+      int totalCount = 0;
+    };
+    auto page = guarded.with(
+        [&query](LexiconApplication &application) -> Result<Page> {
+          auto total = application.items.countItems(
+              query.groupId, query.typeId, query.valueFilters, query.searchText,
+              query.columnFilters, query.propertyFilters, query.tagFilter,
+              query.flagFilter, query.understandingFilter, query.statusFilter,
+              query.pinnedFilter);
+          if (!total)
+            return std::unexpected(total.error());
+          auto items = application.items.loadItems(
+              query.groupId, query.typeId, query.valueFilters, query.searchText,
+              query.columnFilters, query.propertyFilters, query.tagFilter,
+              query.flagFilter, query.understandingFilter, query.statusFilter,
+              query.pinnedFilter, query.limit, query.offset, query.sortColumn,
+              query.sortOrder);
+          if (!items)
+            return std::unexpected(items.error());
+          return Page{std::move(*items), *total};
+        });
+    if (!page) {
+      respondError(response, page.error(), "loadItems");
+      return;
+    }
+    respondJson(response, 200,
+                Json{{"items", toJsonArray(page->items)},
+                     {"totalCount", page->totalCount}});
+  });
+
+  api.Get("/api/v1/items/resolve", [this](const Request &request,
+                                          Response &response) {
+    const auto title = queryValue(request, "title");
+    if (lexicon::trim(title).empty()) {
+      respondFailure(response,
+                     {400, "validation", "'title' must not be empty."});
+      return;
+    }
+    const auto disambiguation = queryValue(request, "disambiguation");
+    auto id = guarded.with([&](LexiconApplication &application) {
+      return application.search.findItemId(title, disambiguation);
+    });
+    if (!id) {
+      respondError(response, id.error(), "findItemId");
+      return;
+    }
+    respondJson(response, 200, Json{{"itemId", *id}});
+  });
+
+  api.Get("/api/v1/items/:id", [this](const Request &request,
+                                      Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    bool withLinks = false;
+    bool withBacklinks = false;
+    const auto include = queryValue(request, "include");
+    std::size_t start = 0;
+    while (start <= include.size() && !include.empty()) {
+      const auto end = include.find(',', start);
+      const auto part = lexicon::trim(include.substr(
+          start, end == std::string::npos ? std::string::npos : end - start));
+      if (part == "links")
+        withLinks = true;
+      else if (part == "backlinks")
+        withBacklinks = true;
+      else if (!part.empty()) {
+        respondFailure(response, {400, "validation",
+                                  "'include' accepts links and backlinks."});
+        return;
+      }
+      if (end == std::string::npos)
+        break;
+      start = end + 1;
+    }
+    struct Bundle {
+      ItemRecord item;
+      std::vector<LinkRecord> links;
+      std::vector<LinkRecord> backlinks;
+    };
+    auto bundle = guarded.with(
+        [&](LexiconApplication &application) -> Result<Bundle> {
+          auto item = application.items.loadItem(*id);
+          if (!item)
+            return std::unexpected(item.error());
+          Bundle result;
+          result.item = std::move(*item);
+          if (withLinks) {
+            auto links = application.links.loadLinks(*id);
+            if (!links)
+              return std::unexpected(links.error());
+            result.links = std::move(*links);
+          }
+          if (withBacklinks) {
+            auto backlinks = application.links.loadBacklinks(*id);
+            if (!backlinks)
+              return std::unexpected(backlinks.error());
+            result.backlinks = std::move(*backlinks);
+          }
+          return result;
+        });
+    if (!bundle) {
+      respondError(response, bundle.error(), "loadItem");
+      return;
+    }
+    Json body{{"item", toJson(bundle->item)}};
+    if (withLinks)
+      body["links"] = toJsonArray(bundle->links);
+    if (withBacklinks)
+      body["backlinks"] = toJsonArray(bundle->backlinks);
+    respondJson(response, 200, body);
+  });
+
+  // The item, its outgoing links and its backlinks are saved in one unit of
+  // work by ItemService, exactly as in the Qt dialog.
+  const auto saveItem = [this](const Json &body, int itemId,
+                               Response &response) {
+    const auto itemJson = body.find("item");
+    if (itemJson == body.end() || !itemJson->is_object()) {
+      respondFailure(response,
+                     {400, "validation", "'item' must be a JSON object."});
+      return;
+    }
+    auto item = itemFromJson(*itemJson);
+    item.id = itemId; // -1 creates, a positive value updates.
+    auto links = body.contains("links") ? linksFromJson(body.at("links"))
+                                        : std::vector<LinkRecord>{};
+    auto backlinks = body.contains("backlinks")
+                         ? linksFromJson(body.at("backlinks"))
+                         : std::vector<LinkRecord>{};
+    struct Saved {
+      int id = -1;
+      ItemRecord item;
+    };
+    auto saved = guarded.with(
+        [&](LexiconApplication &application) -> Result<Saved> {
+          auto id = itemId > 0
+                        ? application.items.saveItemWithLinks(item, links,
+                                                              backlinks)
+                        : application.items.createItem(item, links, backlinks);
+          if (!id)
+            return std::unexpected(id.error());
+          auto stored = application.items.loadItem(*id);
+          if (!stored)
+            return std::unexpected(stored.error());
+          return Saved{*id, std::move(*stored)};
+        });
+    if (!saved) {
+      respondError(response, saved.error(), "saveItemWithLinks");
+      return;
+    }
+    respondJson(response, itemId > 0 ? 200 : 201,
+                Json{{"id", saved->id}, {"item", toJson(saved->item)}});
+  };
+
+  api.Post("/api/v1/items", [this, saveItem](const Request &request,
+                                             Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto itemJson = body->find("item");
+    if (itemJson != body->end() && itemJson->is_object() &&
+        optionalId(*itemJson, "id") > 0) {
+      respondFailure(response,
+                     {400, "validation", "A new item must not carry an ID."});
+      return;
+    }
+    saveItem(*body, -1, response);
+  });
+
+  api.Put("/api/v1/items/:id", [this, saveItem](const Request &request,
+                                                Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    saveItem(*body, *id, response);
+  });
+
+  api.Delete("/api/v1/items/:id", [this](const Request &request,
+                                         Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) {
+      return application.items.deleteItem(*id);
+    });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteItem");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  api.Post("/api/v1/items/:id/read", [this](const Request &request,
+                                            Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto logged = guarded.with([id](LexiconApplication &application) {
+      return application.items.logItemRead(*id);
+    });
+    if (!logged) {
+      respondError(response, logged.error(), "logItemRead");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  const auto sendLinks = [this](int itemId, bool incoming, Response &response) {
+    auto links = guarded.with([itemId, incoming](LexiconApplication &application) {
+      return incoming ? application.links.loadBacklinks(itemId)
+                      : application.links.loadLinks(itemId);
+    });
+    if (!links) {
+      respondError(response, links.error(), "loadLinks");
+      return;
+    }
+    respondJson(response, 200,
+                Json{{incoming ? "backlinks" : "links", toJsonArray(*links)}});
+  };
+
+  api.Get("/api/v1/items/:id/links", [this, sendLinks](const Request &request,
+                                                       Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    sendLinks(*id, false, response);
+  });
+
+  api.Get("/api/v1/items/:id/backlinks",
+          [this, sendLinks](const Request &request, Response &response) {
+            auto id = pathId(request, response, "id");
+            if (!id)
+              return;
+            sendLinks(*id, true, response);
+          });
+
+  const auto saveLink = [this](LinkRecord link, Response &response,
+                               int status) {
+    auto links = guarded.with(
+        [&link](LexiconApplication &application)
+            -> Result<std::vector<LinkRecord>> {
+          if (auto saved = application.links.saveLink(link); !saved)
+            return std::unexpected(saved.error());
+          return application.links.loadLinks(link.fromItemId);
+        });
+    if (!links) {
+      respondError(response, links.error(), "saveLink");
+      return;
+    }
+    respondJson(response, status, Json{{"links", toJsonArray(*links)}});
+  };
+
+  api.Post("/api/v1/links", [this, saveLink](const Request &request,
+                                             Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto link = linkFromJson(*body);
+    if (link.id > 0) {
+      respondFailure(response,
+                     {400, "validation", "A new link must not carry an ID."});
+      return;
+    }
+    link.id = -1;
+    saveLink(std::move(link), response, 201);
+  });
+
+  api.Put("/api/v1/links/:id", [this, saveLink](const Request &request,
+                                                Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto link = linkFromJson(*body);
+    link.id = *id;
+    saveLink(std::move(link), response, 200);
+  });
+
+  api.Delete("/api/v1/links/:id", [this](const Request &request,
+                                         Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) {
+      return application.links.deleteLink(*id);
+    });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteLink");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  // Search and usage ------------------------------------------------------
+  const auto sendStrings = [this](Response &response,
+                                  Result<std::vector<std::string>> values,
+                                  const char *what) {
+    if (!values) {
+      respondError(response, values.error(), what);
+      return;
+    }
+    respondJson(response, 200, Json{{"values", *values}});
+  };
+
+  api.Get("/api/v1/search/suggestions", [this, sendStrings](const Request &,
+                                                            Response &response) {
+    sendStrings(response,
+                guarded.with([](LexiconApplication &application) {
+                  return application.search.loadSuggestions();
+                }),
+                "loadSuggestions");
+  });
+
+  api.Get("/api/v1/search/item-titles", [this, sendStrings](const Request &,
+                                                            Response &response) {
+    sendStrings(response,
+                guarded.with([](LexiconApplication &application) {
+                  return application.search.loadItemTitles();
+                }),
+                "loadItemTitles");
+  });
+
+  const auto sendUsage = [this](Response &response,
+                                Result<std::vector<UsageValueRecord>> values,
+                                const char *what) {
+    if (!values) {
+      respondError(response, values.error(), what);
+      return;
+    }
+    respondJson(response, 200, Json{{"values", toJsonArray(*values)}});
+  };
+
+  api.Get("/api/v1/usage/tags", [this, sendUsage](const Request &,
+                                                  Response &response) {
+    sendUsage(response,
+              guarded.with([](LexiconApplication &application) {
+                return application.search.loadTagUsage();
+              }),
+              "loadTagUsage");
+  });
+
+  api.Get("/api/v1/usage/flags", [this, sendUsage](const Request &,
+                                                   Response &response) {
+    sendUsage(response,
+              guarded.with([](LexiconApplication &application) {
+                return application.search.loadFlagUsage();
+              }),
+              "loadFlagUsage");
+  });
+
+  api.Get("/api/v1/usage/aliases", [this, sendUsage](const Request &,
+                                                     Response &response) {
+    sendUsage(response,
+              guarded.with([](LexiconApplication &application) {
+                return application.search.loadAliasUsage();
+              }),
+              "loadAliasUsage");
+  });
+
+  // Blobs -----------------------------------------------------------------
+  // The browser sends bytes; the server owns the file system. No request ever
+  // names a server-side path.
+  api.Post(
+      "/api/v1/blobs",
+      [this](const Request &request, Response &response,
+             const httplib::ContentReader &readBody) {
+        if (!isContentType(request.get_header_value("Content-Type"),
+                           kBinaryContentType)) {
+          respondFailure(response,
+                         {415, "unsupported_media_type",
+                          "Content-Type must be application/octet-stream."});
+          response.set_header("Connection", "close");
+          return;
+        }
+        auto staging = TempFile::create(databaseDirectory());
+        if (!staging) {
+          respondError(response, staging.error(), "createTemporaryFile");
+          return;
+        }
+        std::size_t total = 0;
+        bool tooLarge = false;
+        std::optional<Error> writeError;
+        readBody([&](const char *data, std::size_t length) {
+          total += length;
+          if (total > config.maxBlobBytes) {
+            tooLarge = true;
+            return false;
+          }
+          if (auto written = staging->write(data, length); !written) {
+            writeError = written.error();
+            return false;
+          }
+          return true;
+        });
+        if (tooLarge) {
+          response.set_header("Connection", "close");
+          respondFailure(response, {413, "payload_too_large",
+                                    "The upload exceeds the configured blob "
+                                    "size limit."});
+          return;
+        }
+        if (writeError) {
+          respondError(response, *writeError, "writeTemporaryFile");
+          return;
+        }
+        if (total == 0) {
+          respondFailure(response,
+                         {400, "validation", "The upload is empty."});
+          return;
+        }
+        if (auto closed = staging->close(); !closed) {
+          respondError(response, closed.error(), "closeTemporaryFile");
+          return;
+        }
+        auto hash = guarded.with([&](LexiconApplication &application) {
+          return application.blobs.importFile(staging->path());
+        });
+        staging->discard();
+        if (!hash) {
+          respondError(response, hash.error(), "importBlob");
+          return;
+        }
+        respondJson(response, 201, Json{{"hash", *hash}});
+      });
+
+  api.Get("/api/v1/blobs/:hash", [this](const Request &request,
+                                        Response &response) {
+    const auto found = request.path_params.find("hash");
+    const std::string hash =
+        found == request.path_params.end() ? std::string{} : found->second;
+    if (!validBlobHash(hash)) {
+      respondFailure(response, {400, "validation",
+                                "A blob is addressed by its lowercase SHA-256 "
+                                "hash."});
+      return;
+    }
+    auto staging = TempFile::create(databaseDirectory());
+    if (!staging) {
+      respondError(response, staging.error(), "createTemporaryFile");
+      return;
+    }
+    // exportBlob replaces the reserved path atomically after verifying the
+    // stored content against its hash.
+    if (auto closed = staging->close(); !closed) {
+      respondError(response, closed.error(), "closeTemporaryFile");
+      return;
+    }
+    auto exported = guarded.with([&](LexiconApplication &application) {
+      return application.blobs.exportFile(hash, staging->path());
+    });
+    if (!exported) {
+      respondError(response, exported.error(), "exportBlob");
+      return;
+    }
+    auto stream = std::make_shared<std::ifstream>(
+        fs::path(staging->path()), std::ios::binary);
+    if (!*stream) {
+      respondError(response,
+                   Error{Error::Code::Storage, "Cannot read the exported blob."},
+                   "readExportedBlob");
+      return;
+    }
+    std::error_code sizeError;
+    const auto size = fs::file_size(fs::path(staging->path()), sizeError);
+    if (sizeError) {
+      respondError(response,
+                   Error{Error::Code::Storage, "Cannot size the exported blob."},
+                   "sizeExportedBlob");
+      return;
+    }
+    // The staged file is removed once the response has been written.
+    auto cleanup = std::make_shared<TempFile>(std::move(*staging));
+    response.set_header("Content-Disposition",
+                        "attachment; filename=\"" + hash + "\"");
+    response.status = 200;
+    response.set_content_provider(
+        static_cast<std::size_t>(size), kBinaryContentType,
+        [stream](std::size_t offset, std::size_t length, httplib::DataSink &sink) {
+          static constexpr std::size_t kChunk = 256 * 1024;
+          std::string buffer(std::min(length, kChunk), '\0');
+          stream->seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+          stream->read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+          const auto read = static_cast<std::size_t>(stream->gcount());
+          if (read == 0)
+            return false;
+          return sink.write(buffer.data(), read);
+        },
+        [stream, cleanup](bool) {
+          stream->close();
+          cleanup->discard();
+        });
+  });
+}
+
+RestServer::RestServer(ServerConfig config, LexiconApplication &application,
+                       AuthState &auth)
+    : impl_(std::make_unique<Impl>(std::move(config), application, auth)) {
+  impl_->createServer();
+}
+
+RestServer::~RestServer() {
+  if (impl_->server)
+    impl_->server->stop();
+}
+
+Result<int> RestServer::bind() {
+  if (!impl_->server->is_valid())
+    return std::unexpected(Error{
+        Error::Code::Storage,
+        "The listener could not be created. With TLS, check --tls-cert and "
+        "--tls-key."});
+  const auto &address = impl_->config.listenAddress;
+  const auto cannotBind = [&]() {
+    return std::unexpected(
+        Error{Error::Code::Storage,
+              "Cannot bind " + address + ":" +
+                  std::to_string(impl_->config.port) + "."});
+  };
+  if (impl_->config.port == 0) {
+    // Port 0 asks the operating system for a free port, which tests use.
+    const int port = impl_->server->bind_to_any_port(address);
+    if (port < 0)
+      return cannotBind();
+    impl_->boundPort = port;
+    return port;
+  }
+  if (!impl_->server->bind_to_port(address, impl_->config.port))
+    return cannotBind();
+  impl_->boundPort = impl_->config.port;
+  return impl_->boundPort;
+}
+
+Result<void> RestServer::listen() {
+  if (impl_->boundPort < 0) {
+    auto bound = bind();
+    if (!bound)
+      return std::unexpected(bound.error());
+  }
+  if (!impl_->server->listen_after_bind())
+    return std::unexpected(
+        Error{Error::Code::Storage, "The HTTP listener stopped unexpectedly."});
+  return {};
+}
+
+void RestServer::stop() { impl_->server->stop(); }
+
+void RestServer::waitUntilReady() const { impl_->server->wait_until_ready(); }
+
+int RestServer::boundPort() const { return impl_->boundPort; }
+} // namespace lexicon::http

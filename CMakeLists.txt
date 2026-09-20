@@ -10,10 +10,16 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
 option(LEXICON_BUILD_DESKTOP "Build the Qt desktop client" ON)
+option(LEXICON_BUILD_SERVER "Build the Qt-free REST server" ON)
 include(CTest)
 
 find_package(SQLite3 3.38 REQUIRED)
-find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+if (LEXICON_BUILD_SERVER)
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto SSL)
+    find_package(Threads REQUIRED)
+else()
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+endif()
 
 set(MD4QT_SRC
     3rdparty/md4qt/src/algo.cpp
@@ -84,8 +90,86 @@ target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
 target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application PRIVATE SQLite::SQLite3 OpenSSL::Crypto)
 set_target_properties(lexicon-storage-sqlite PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
+# Vendored, pinned, header-only third-party libraries. Normal builds never
+# download anything.
+add_library(lexicon-nlohmann-json INTERFACE)
+target_include_directories(lexicon-nlohmann-json SYSTEM INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nlohmann-json/include)
+
+if (LEXICON_BUILD_SERVER)
+    add_library(lexicon-cpp-httplib INTERFACE)
+    target_include_directories(lexicon-cpp-httplib SYSTEM INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/cpp-httplib)
+    # Every translation unit including httplib.h must agree on the TLS layout.
+    target_compile_definitions(lexicon-cpp-httplib INTERFACE
+        CPPHTTPLIB_OPENSSL_SUPPORT)
+    target_link_libraries(lexicon-cpp-httplib INTERFACE
+        OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+
+    add_library(lexicon-http STATIC
+        lexicon-http/Transport.h
+        lexicon-http/Transport.cpp
+        lexicon-http/Security.h
+        lexicon-http/Security.cpp
+        lexicon-http/AuthState.h
+        lexicon-http/AuthState.cpp
+        lexicon-http/ServerConfig.h
+        lexicon-http/ServerConfig.cpp
+        lexicon-http/TempFile.h
+        lexicon-http/TempFile.cpp
+        lexicon-http/RestServer.h
+        lexicon-http/RestServer.cpp
+    )
+    target_include_directories(lexicon-http PUBLIC lexicon-http)
+    # Transport.h exposes nlohmann::json, so consumers need its include path.
+    target_link_libraries(lexicon-http
+        PUBLIC lexicon-application lexicon-nlohmann-json
+        PRIVATE lexicon-cpp-httplib OpenSSL::Crypto)
+    set_target_properties(lexicon-http PROPERTIES AUTOMOC OFF AUTORCC OFF)
+
+    add_executable(LexiconServer lexicon-server/main.cpp)
+    target_link_libraries(LexiconServer PRIVATE lexicon-http lexicon-storage-sqlite)
+    set_target_properties(LexiconServer PROPERTIES AUTOMOC OFF AUTORCC OFF)
+
+    if (BUILD_TESTING)
+        # Requests travel over a real socket, so the tests exercise routing,
+        # headers, limits and status codes, not just handler functions.
+        add_library(lexicon-server-test-support STATIC
+            tests/support/HttpTestClient.h
+            tests/support/HttpTestClient.cpp
+            tests/support/ServerHarness.h
+            tests/support/ServerHarness.cpp
+        )
+        target_include_directories(lexicon-server-test-support PUBLIC tests)
+        target_link_libraries(lexicon-server-test-support
+            PUBLIC lexicon-http lexicon-storage-sqlite
+            PRIVATE lexicon-cpp-httplib)
+        set_target_properties(lexicon-server-test-support PROPERTIES
+            AUTOMOC OFF AUTORCC OFF)
+
+        foreach(suite server-auth:ServerAuth:server_auth
+                      server-rest:ServerRest:server_rest
+                      server-concurrency:ServerConcurrency:server_concurrency)
+            string(REPLACE ":" ";" parts ${suite})
+            list(GET parts 0 suite_target)
+            list(GET parts 1 suite_source)
+            list(GET parts 2 suite_test)
+            add_executable(lexicon-${suite_target} tests/${suite_source}.cpp)
+            target_link_libraries(lexicon-${suite_target}
+                PRIVATE lexicon-server-test-support)
+            set_target_properties(lexicon-${suite_target} PROPERTIES
+                AUTOMOC OFF AUTORCC OFF)
+            add_test(NAME ${suite_test} COMMAND lexicon-${suite_target})
+        endforeach()
+    endif()
+endif()
+
 # The backend must remain usable when Qt is not installed.
-foreach(target lexicon-core lexicon-application lexicon-storage-sqlite)
+set(LEXICON_QT_FREE_TARGETS lexicon-core lexicon-application lexicon-storage-sqlite)
+if (LEXICON_BUILD_SERVER)
+    list(APPEND LEXICON_QT_FREE_TARGETS lexicon-http LexiconServer)
+endif()
+foreach(target ${LEXICON_QT_FREE_TARGETS})
     get_target_property(direct_links ${target} LINK_LIBRARIES)
     get_target_property(public_links ${target} INTERFACE_LINK_LIBRARIES)
     if ("${direct_links};${public_links}" MATCHES "Qt[56]?::")

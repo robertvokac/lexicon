@@ -11,3 +11,11 @@
 
 cmake-build-debug/*
 
+
+# Server runtime state must never be committed
+lexicon-auth.json
+lexicon-auth.json.new
+*.pem
+*.key
+*.crt
+lexicon-web/config.js
