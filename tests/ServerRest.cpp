@@ -185,6 +185,15 @@ void checkTypesAndFields(Checks &checks) {
   checks.expectEqual(parse(renamed).at("field").value("name", std::string{}),
                      "Renamed integer", "the field keeps its new name");
   checks.expectEqual(
+      client
+          .put("/api/v1/fields/" + std::to_string(fieldIds.front()),
+               Json{{"name", "Wrong type"},
+                    {"dataType", "Integer"},
+                    {"itemTypeId", 999999}}
+                   .dump())
+          .status,
+      404, "a field cannot be moved to another type");
+  checks.expectEqual(
       client.remove("/api/v1/fields/" + std::to_string(fieldIds.back())).status,
       204, "a field can be deleted");
   checks.expectEqual(client.remove("/api/v1/types/" + std::to_string(typeId))
@@ -247,7 +256,8 @@ void checkItems(Checks &checks) {
   checks.expectEqual(stored.value("understanding", std::string{}), "Practiced",
                      "the understanding level is symbolic");
   checks.expect(stored.value("pinned", false), "the pinned flag round-trips");
-  checks.expectEqual(stored.at("tags").size(), 2u, "tags round-trip");
+  checks.expectEqual(static_cast<long long>(stored.at("tags").size()), 2,
+                     "tags round-trip");
   checks.expectEqual(stored.at("properties").at(0).value("key", std::string{}),
                      "source", "properties round-trip");
   checks.expectEqual(
@@ -323,7 +333,7 @@ void checkItems(Checks &checks) {
   checks.expectEqual(page.status, 200, "items can be queried");
   checks.expectEqual(parse(page).value("totalCount", 0), 6,
                      "the total count covers every match");
-  checks.expectEqual(parse(page).at("items").size(), 2u,
+  checks.expectEqual(static_cast<long long>(parse(page).at("items").size()), 2,
                      "the page size is honoured");
   const auto secondPage = client.post("/api/v1/items/query",
                                       Json{{"limit", 2},
@@ -456,7 +466,8 @@ void checkLinks(Checks &checks) {
       client.get("/api/v1/items/" + std::to_string(group) + "/links");
   checks.expectEqual(links.status, 200, "links can be listed");
   const auto linkArray = parse(links).at("links");
-  checks.expectEqual(linkArray.size(), 2u, "both links were stored");
+  checks.expectEqual(static_cast<long long>(linkArray.size()), 2,
+                     "both links were stored");
   checks.expectEqual(linkArray.at(0).value("linkType", std::string{}), "PartOf",
                      "link types are symbolic");
   checks.expectEqual(linkArray.at(1).value("customValue", std::string{}),
@@ -465,7 +476,7 @@ void checkLinks(Checks &checks) {
                 "links carry the target title");
   const auto backlinks =
       client.get("/api/v1/items/" + std::to_string(group) + "/backlinks");
-  checks.expectEqual(parse(backlinks).at("backlinks").size(), 1u,
+  checks.expectEqual(static_cast<long long>(parse(backlinks).at("backlinks").size()), 1,
                      "backlinks were stored");
 
   const auto bundled = client.get("/api/v1/items/" + std::to_string(group) +
@@ -511,10 +522,11 @@ void checkLinks(Checks &checks) {
 
   // A failed save must leave the previous links untouched.
   checks.expectEqual(
-      parse(client.get("/api/v1/items/" + std::to_string(group) + "/links"))
-          .at("links")
-          .size(),
-      2u, "a rejected save does not change stored links");
+      static_cast<long long>(
+          parse(client.get("/api/v1/items/" + std::to_string(group) + "/links"))
+              .at("links")
+              .size()),
+      2, "a rejected save does not change stored links");
 
   const auto standalone = client.post(
       "/api/v1/links", Json{{"fromItemId", algebra},
@@ -542,10 +554,11 @@ void checkLinks(Checks &checks) {
                          .status,
                      204, "the linked item can be deleted");
   checks.expectEqual(
-      parse(client.get("/api/v1/items/" + std::to_string(group) + "/links"))
-          .at("links")
-          .size(),
-      1u, "links to a deleted item disappear");
+      static_cast<long long>(
+          parse(client.get("/api/v1/items/" + std::to_string(group) + "/links"))
+              .at("links")
+              .size()),
+      1, "links to a deleted item disappear");
 }
 
 void checkSearchAndUsage(Checks &checks) {

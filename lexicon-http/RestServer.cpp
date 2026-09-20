@@ -55,7 +55,12 @@ std::string bearerToken(const Request &request) {
 
 void respondJson(Response &response, int status, const Json &body) {
   response.status = status;
-  response.set_content(body.dump(), kJsonContentType);
+  // A historical database may hold text that is not valid UTF-8. Replacing
+  // those bytes keeps such an item readable instead of failing the whole
+  // response.
+  response.set_content(
+      body.dump(-1, ' ', false, Json::error_handler_t::replace),
+      kJsonContentType);
 }
 
 void respondNoContent(Response &response) {
@@ -90,6 +95,8 @@ ApiFailure failureForStatus(int status) {
   case 405:
     return {405, "method_not_allowed",
             "The method is not allowed for this endpoint."};
+  case 411:
+    return {411, "length_required", "A Content-Length header is required."};
   case 413:
     return {413, "payload_too_large", "The request body is too large."};
   case 415:
@@ -289,6 +296,15 @@ void RestServer::Impl::createServer() {
       response.set_header("Connection", "close");
       respondFailure(response, {413, "payload_too_large",
                                 "The request body is too large."});
+      return httplib::Server::HandlerResponse::Handled;
+    }
+    // Only the streaming blob upload can bound a body it has not measured
+    // yet. A chunked JSON body would otherwise be buffered before its size
+    // could be checked, which is a cheap way to make the server allocate.
+    if (!isBlobUpload && request.has_header("Transfer-Encoding")) {
+      response.set_header("Connection", "close");
+      respondFailure(response, {411, "length_required",
+                                "A Content-Length header is required."});
       return httplib::Server::HandlerResponse::Handled;
     }
     if (publicRoutes.find(request.matched_route) != publicRoutes.end())
@@ -634,6 +650,21 @@ void RestServer::Impl::registerRoutes() {
                                 int status) {
     auto saved = guarded.with(
         [&field](LexiconApplication &application) -> Result<ItemFieldRecord> {
+          if (field.id > 0) {
+            // A field cannot move between types, so an update that names the
+            // wrong type is rejected before anything is written.
+            auto existing = application.types.loadItemFields(field.itemTypeId);
+            if (!existing)
+              return std::unexpected(existing.error());
+            const bool belongs =
+                std::any_of(existing->begin(), existing->end(),
+                            [&field](const ItemFieldRecord &candidate) {
+                              return candidate.id == field.id;
+                            });
+            if (!belongs)
+              return std::unexpected(Error{Error::Code::NotFound,
+                                           "Field not found in this type."});
+          }
           if (auto stored = application.types.upsertItemField(field); !stored)
             return std::unexpected(stored.error());
           auto fields = application.types.loadItemFields(field.itemTypeId);

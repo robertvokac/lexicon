@@ -143,7 +143,7 @@ if (LEXICON_BUILD_SERVER)
         target_include_directories(lexicon-server-test-support PUBLIC tests)
         target_link_libraries(lexicon-server-test-support
             PUBLIC lexicon-http lexicon-storage-sqlite
-            PRIVATE lexicon-cpp-httplib)
+            PRIVATE lexicon-cpp-httplib OpenSSL::Crypto)
         set_target_properties(lexicon-server-test-support PROPERTIES
             AUTOMOC OFF AUTORCC OFF)
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <limits>
 #include <utility>
 
 namespace lexicon::http {

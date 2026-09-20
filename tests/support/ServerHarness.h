@@ -13,8 +13,14 @@
 #include <vector>
 
 namespace lexicontest {
+// Writes a short-lived self-signed certificate and key so the TLS listener can
+// be exercised without any external tool.
+bool writeSelfSignedCertificate(const std::string &certificatePath,
+                                const std::string &keyPath);
+
 struct HarnessOptions {
   std::vector<std::string> allowedOrigins;
+  bool tls = false;
   lexicon::http::SessionPolicy sessions;
   lexicon::http::LoginLimitPolicy loginLimits;
   std::string username = "lexicon";

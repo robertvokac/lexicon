@@ -33,6 +33,9 @@ public:
                     const std::map<std::string, std::string> &extraHeaders = {});
   HttpResponse put(const std::string &path, const std::string &body,
                    const std::string &contentType = "application/json");
+  // Sends the body with chunked transfer encoding and no Content-Length.
+  HttpResponse postChunked(const std::string &path, const std::string &body,
+                           const std::string &contentType = "application/json");
   HttpResponse remove(const std::string &path);
   HttpResponse options(const std::string &path,
                        const std::map<std::string, std::string> &extraHeaders);

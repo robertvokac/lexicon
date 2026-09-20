@@ -91,6 +91,24 @@ HttpResponse HttpTestClient::put(const std::string &path,
   return convert(impl_->client->Put(path, impl_->headers({}), body, contentType));
 }
 
+HttpResponse HttpTestClient::postChunked(const std::string &path,
+                                         const std::string &body,
+                                         const std::string &contentType) {
+  bool sent = false;
+  return convert(impl_->client->Post(
+      path, impl_->headers({}),
+      [body, sent](std::size_t, httplib::DataSink &sink) mutable {
+        if (!sent) {
+          sink.write(body.data(), body.size());
+          sent = true;
+        } else {
+          sink.done();
+        }
+        return true;
+      },
+      contentType));
+}
+
 HttpResponse HttpTestClient::remove(const std::string &path) {
   return convert(impl_->client->Delete(path, impl_->headers({})));
 }

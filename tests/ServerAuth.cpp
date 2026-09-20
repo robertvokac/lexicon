@@ -241,6 +241,12 @@ void checkRequestHygiene(Checks &checks) {
       client.post("/api/v1/items/query", R"({"statusFilter":"Nonsense"})")
           .status,
       400, "an unknown enum name is rejected");
+  // A body of unknown length on a JSON route cannot be size checked before it
+  // is buffered, so it is refused outright.
+  const auto chunked = client.postChunked("/api/v1/items/query", "{}");
+  checks.expect(!chunked.transported || chunked.status == 411,
+                "a chunked JSON body is refused (status " +
+                    std::to_string(chunked.status) + ")");
   const auto badEnum =
       client.post("/api/v1/items/query", R"({"sortOrder":"sideways"})");
   checks.expectEqual(badEnum.status, 400, "an unknown sort order is rejected");
@@ -422,6 +428,30 @@ void checkCredentialsFile(Checks &checks) {
                 "a missing credentials file is reported clearly");
 }
 
+void checkTls(Checks &checks) {
+  lexicontest::HarnessOptions options;
+  options.tls = true;
+  ServerHarness harness(options);
+  if (!harness.started()) {
+    checks.expect(false, "TLS harness start: " + harness.startupError());
+    return;
+  }
+  HttpTestClient client("127.0.0.1", harness.port(), true);
+  const auto health = client.get("/api/v1/health");
+  checks.expectEqual(health.status, 200, "the TLS listener serves the API");
+  checks.expect(health.header("Strict-Transport-Security")
+                    .find("max-age=") != std::string::npos,
+                "HSTS is sent when the server terminates TLS itself");
+  const auto login =
+      client.post("/api/v1/auth/login",
+                  credentials(options.username, options.password));
+  checks.expectEqual(login.status, 200, "credentials travel over TLS");
+  client.setBearerToken(
+      Json::parse(login.body, nullptr, false).value("token", std::string{}));
+  checks.expectEqual(client.get("/api/v1/groups").status, 200,
+                     "a TLS session reaches the domain endpoints");
+}
+
 void checkUnconfiguredServer(Checks &checks) {
   lexicontest::HarnessOptions options;
   options.configureCredentials = false;
@@ -451,6 +481,7 @@ int main() {
   checkConfigurationGuards(checks);
   checkPasswordHashing(checks);
   checkCredentialsFile(checks);
+  checkTls(checks);
   checkUnconfiguredServer(checks);
   return checks.summarize("server_auth");
 }

@@ -115,6 +115,40 @@ These preferences are per browser. They never touch the desktop client's
 settings, so switching the web theme does not change the Qt theme, and hiding a
 column here does not hide it there.
 
+## Desktop parity
+
+The web client is built against the Qt client as its functional specification.
+Everything below behaves the same way in both:
+
+| Qt | Web |
+| --- | --- |
+| `MainWindow` search, Add, Add..., Edit, Delete, Columns..., Filter Properties... | the same action row |
+| `FilterHeaderView` filter row, including dynamic type field filters | a second header row with the same widgets |
+| Column sorting, pagination (10/20/50/100), page label | the same, sorted and paged by the server |
+| Markdown content preview and the link/backlink line with clickable targets | the same, links reset the filters and search for the target |
+| `ItemEditDialog` General, Content, Values, Metadata, Links, Backlinks | the same six tabs, saved in one atomic request |
+| Markdown toolbar (B, I, H2-H4, lists, quote, rule, code, code block, link, table) | the same buttons with a live preview |
+| Type change confirmation before field values are discarded | the same confirmation and counts |
+| `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
+| `PropertyFilterDialog` (key exact, value contains, empty value matches any) | the same semantics with Add/Edit/Remove/Clear/Apply |
+| `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |
+| Light and dark themes | the same, stored per browser |
+
+Deliberate differences, all of them because a browser is not a desktop:
+
+- **File > Quit becomes File > Logout.** A browser tab has no application to
+  quit.
+- **Blob fields upload a chosen file** instead of importing a server-side path.
+  A web page cannot hand the server a local path, and the server must never
+  accept one.
+- **Preferences (theme, page size, visible columns) live in this browser**
+  rather than in the database, so the web client and the desktop client never
+  overwrite each other's settings.
+- **Tools > Blob maintenance is not exposed.** Scanning, verifying and garbage
+  collecting the blob directory is local file system maintenance; it stays with
+  the desktop client and the server machine, and is deliberately not reachable
+  over HTTP.
+
 ## Requirements
 
 A current browser with ES modules, `<dialog>`, `fetch` and CSS custom
