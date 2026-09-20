@@ -780,6 +780,7 @@ void MainWindow::updateLinksDisplay(int termId) {
             case LinkType::Contrasts: return "Contrasts";
             case LinkType::AlternativeTo: return "Alternative To";
             case LinkType::ParentOf: return "Parent Of";
+            case LinkType::Custom: return "Custom";
             default: return "Link";
         }
     };
@@ -790,8 +791,11 @@ void MainWindow::updateLinksDisplay(int termId) {
     } else {
         for (int i = 0; i < links.size(); ++i) {
             if (i > 0) html += ", ";
+            const QString type = links[i].linkType == LinkType::Custom && !links[i].customValue.isEmpty()
+                ? QString("Custom: %1").arg(links[i].customValue.toHtmlEscaped())
+                : linkTypeToString(links[i].linkType);
             html += QString("<a href=\"%1\">%2 (%3)</a>")
-                        .arg(QUrl::toPercentEncoding(links[i].toTermTitle), links[i].toTermTitle, linkTypeToString(links[i].linkType));
+                        .arg(QUrl::toPercentEncoding(links[i].toTermTitle), links[i].toTermTitle.toHtmlEscaped(), type);
         }
     }
 
@@ -801,8 +805,11 @@ void MainWindow::updateLinksDisplay(int termId) {
     } else {
         for (int i = 0; i < backlinks.size(); ++i) {
             if (i > 0) html += ", ";
+            const QString type = backlinks[i].linkType == LinkType::Custom && !backlinks[i].customValue.isEmpty()
+                ? QString("Custom: %1").arg(backlinks[i].customValue.toHtmlEscaped())
+                : linkTypeToString(backlinks[i].linkType);
             html += QString("<a href=\"%1\">%2 (%3)</a>")
-                        .arg(QUrl::toPercentEncoding(backlinks[i].fromTermTitle), backlinks[i].fromTermTitle, linkTypeToString(backlinks[i].linkType));
+                        .arg(QUrl::toPercentEncoding(backlinks[i].fromTermTitle), backlinks[i].fromTermTitle.toHtmlEscaped(), type);
         }
     }
 

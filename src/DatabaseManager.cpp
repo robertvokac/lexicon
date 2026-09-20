@@ -181,6 +181,9 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }},
         {8, {
             "ALTER TABLE link ADD COLUMN position INTEGER NOT NULL DEFAULT 0;"
+        }},
+        {9, {
+            "ALTER TABLE link ADD COLUMN custom_value TEXT NOT NULL DEFAULT '';"
         }}
     };
 
@@ -688,7 +691,7 @@ QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) 
     QList<LinkRecord> result;
     QSqlDatabase db = database();
     QSqlQuery query(db);
-    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, t.title "
+    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, l.custom_value, t.title "
                   "FROM link l "
                   "JOIN term t ON l.to_term_id = t.id "
                   "WHERE l.from_term_id = ? "
@@ -707,7 +710,8 @@ QList<LinkRecord> DatabaseManager::loadLinks(int termId, QString* errorMessage) 
         link.toTermId = query.value(2).toInt();
         link.linkType = static_cast<LinkType>(query.value(3).toInt());
         link.position = query.value(4).toInt();
-        link.toTermTitle = query.value(5).toString();
+        link.customValue = query.value(5).toString();
+        link.toTermTitle = query.value(6).toString();
         result.push_back(link);
     }
     return result;
@@ -717,7 +721,7 @@ QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessa
     QList<LinkRecord> result;
     QSqlDatabase db = database();
     QSqlQuery query(db);
-    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, t.title "
+    query.prepare("SELECT l.id, l.from_term_id, l.to_term_id, l.link_type, l.position, l.custom_value, t.title "
                   "FROM link l "
                   "JOIN term t ON l.from_term_id = t.id "
                   "WHERE l.to_term_id = ? "
@@ -736,7 +740,8 @@ QList<LinkRecord> DatabaseManager::loadBacklinks(int termId, QString* errorMessa
         link.toTermId = query.value(2).toInt();
         link.linkType = static_cast<LinkType>(query.value(3).toInt());
         link.position = query.value(4).toInt();
-        link.fromTermTitle = query.value(5).toString();
+        link.customValue = query.value(5).toString();
+        link.fromTermTitle = query.value(6).toString();
         result.push_back(link);
     }
     return result;
@@ -751,18 +756,20 @@ bool DatabaseManager::saveLink(const LinkRecord& link, QString* errorMessage) {
     QSqlQuery query(db);
     int logType = 2; // updated
     if (link.id == -1) {
-        query.prepare("INSERT INTO link (from_term_id, to_term_id, link_type, position) VALUES (?, ?, ?, ?);");
+        query.prepare("INSERT INTO link (from_term_id, to_term_id, link_type, position, custom_value) VALUES (?, ?, ?, ?, ?);");
         query.addBindValue(link.fromTermId);
         query.addBindValue(link.toTermId);
         query.addBindValue(static_cast<int>(link.linkType));
         query.addBindValue(link.position);
+        query.addBindValue(link.customValue.trimmed());
         logType = 1; // created
     } else {
-        query.prepare("UPDATE link SET from_term_id = ?, to_term_id = ?, link_type = ?, position = ? WHERE id = ?;");
+        query.prepare("UPDATE link SET from_term_id = ?, to_term_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;");
         query.addBindValue(link.fromTermId);
         query.addBindValue(link.toTermId);
         query.addBindValue(static_cast<int>(link.linkType));
         query.addBindValue(link.position);
+        query.addBindValue(link.customValue.trimmed());
         query.addBindValue(link.id);
     }
 

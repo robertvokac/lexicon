@@ -31,7 +31,8 @@ enum class LinkType {
     Related = 6,
     Contrasts = 7,
     AlternativeTo = 8,
-    ParentOf = 9
+    ParentOf = 9,
+    Custom = 10
 };
 
 struct MapRecord {
@@ -46,6 +47,7 @@ struct LinkRecord {
     int toTermId = -1;
     LinkType linkType = LinkType::None;
     int position = 0;
+    QString customValue;
 
     // Optional for UI:
     QString fromTermTitle;

@@ -460,6 +460,7 @@ void TermEditDialog::updateLinksList() {
             case LinkType::Contrasts: return "Contrasts";
             case LinkType::AlternativeTo: return "Alternative To";
             case LinkType::ParentOf: return "Parent Of";
+            case LinkType::Custom: return "Custom";
             default: return "Link";
         }
     };
@@ -471,7 +472,10 @@ void TermEditDialog::updateLinksList() {
     });
 
     for (const auto& link : m_currentLinks) {
-        m_linksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.toTermTitle, typeToString(link.linkType)));
+        const QString type = link.linkType == LinkType::Custom && !link.customValue.isEmpty()
+            ? QString("Custom: %1").arg(link.customValue)
+            : typeToString(link.linkType);
+        m_linksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.toTermTitle, type));
     }
 
     m_backlinksList->clear();
@@ -483,7 +487,10 @@ void TermEditDialog::updateLinksList() {
     });
 
     for (const auto& link : m_currentBacklinks) {
-        m_backlinksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.fromTermTitle, typeToString(link.linkType)));
+        const QString type = link.linkType == LinkType::Custom && !link.customValue.isEmpty()
+            ? QString("Custom: %1").arg(link.customValue)
+            : typeToString(link.linkType);
+        m_backlinksList->addItem(QString("[%1] %2 (%3)").arg(link.position).arg(link.fromTermTitle, type));
     }
 }
 
@@ -492,10 +499,11 @@ namespace {
         QString term;
         LinkType type;
         int position;
+        QString customValue;
         bool accepted;
     };
 
-    LinkData getLinkDetails(QWidget* parent, const QString& title, const QString& label, const QString& initialTerm, LinkType initialType, int initialPosition = 0) {
+    LinkData getLinkDetails(QWidget* parent, const QString& title, const QString& label, const QString& initialTerm, LinkType initialType, int initialPosition = 0, const QString& initialCustomValue = QString()) {
         QDialog dialog(parent);
         dialog.setWindowTitle(title);
         auto* layout = new QVBoxLayout(&dialog);
@@ -519,6 +527,7 @@ namespace {
         typeCombo->addItem("Contrasts", static_cast<int>(LinkType::Contrasts));
         typeCombo->addItem("Alternative To", static_cast<int>(LinkType::AlternativeTo));
         typeCombo->addItem("Parent Of", static_cast<int>(LinkType::ParentOf));
+        typeCombo->addItem("Custom", static_cast<int>(LinkType::Custom));
 
         for (int i = 0; i < typeCombo->count(); ++i) {
             if (typeCombo->itemData(i).toInt() == static_cast<int>(initialType)) {
@@ -531,8 +540,16 @@ namespace {
         positionSpin->setRange(-10000, 10000);
         positionSpin->setValue(initialPosition);
 
+        auto* customValueEdit = new QLineEdit(&dialog);
+        customValueEdit->setText(initialCustomValue);
+        customValueEdit->setEnabled(initialType == LinkType::Custom);
+        QObject::connect(typeCombo, &QComboBox::currentIndexChanged, &dialog, [typeCombo, customValueEdit]() {
+            customValueEdit->setEnabled(static_cast<LinkType>(typeCombo->currentData().toInt()) == LinkType::Custom);
+        });
+
         form->addRow(label, termEdit);
         form->addRow("Link Type:", typeCombo);
+        form->addRow("Custom Value:", customValueEdit);
         form->addRow("Position:", positionSpin);
         layout->addLayout(form);
 
@@ -543,9 +560,9 @@ namespace {
         QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 
         if (dialog.exec() == QDialog::Accepted) {
-            return {termEdit->text().trimmed(), static_cast<LinkType>(typeCombo->currentData().toInt()), positionSpin->value(), true};
+            return {termEdit->text().trimmed(), static_cast<LinkType>(typeCombo->currentData().toInt()), positionSpin->value(), customValueEdit->text().trimmed(), true};
         }
-        return {"", LinkType::None, 0, false};
+        return {"", LinkType::None, 0, "", false};
     }
 
     int findTermId(const QString& text) {
@@ -623,6 +640,7 @@ void TermEditDialog::addLink() {
         link.toTermTitle = data.term;
         link.linkType = data.type;
         link.position = data.position;
+        link.customValue = data.customValue;
         m_currentLinks.append(link);
         updateLinksList();
     } else {
@@ -635,7 +653,7 @@ void TermEditDialog::editLink() {
     if (row < 0 || row >= m_currentLinks.size()) return;
 
     LinkRecord& link = m_currentLinks[row];
-    LinkData data = getLinkDetails(this, "Edit Link", "Target term:", link.toTermTitle, link.linkType, link.position);
+    LinkData data = getLinkDetails(this, "Edit Link", "Target term:", link.toTermTitle, link.linkType, link.position, link.customValue);
     if (!data.accepted || data.term.isEmpty()) return;
 
     int toId = findTermId(data.term);
@@ -644,6 +662,7 @@ void TermEditDialog::editLink() {
         link.toTermTitle = data.term;
         link.linkType = data.type;
         link.position = data.position;
+        link.customValue = data.customValue;
         updateLinksList();
     } else {
         QMessageBox::warning(this, "Edit Link", "Target term not found.");
@@ -670,6 +689,7 @@ void TermEditDialog::addBacklink() {
         link.fromTermTitle = data.term;
         link.linkType = data.type;
         link.position = data.position;
+        link.customValue = data.customValue;
         m_currentBacklinks.append(link);
         updateLinksList();
     } else {
@@ -682,7 +702,7 @@ void TermEditDialog::editBacklink() {
     if (row < 0 || row >= m_currentBacklinks.size()) return;
 
     LinkRecord& link = m_currentBacklinks[row];
-    LinkData data = getLinkDetails(this, "Edit Backlink", "Source term:", link.fromTermTitle, link.linkType, link.position);
+    LinkData data = getLinkDetails(this, "Edit Backlink", "Source term:", link.fromTermTitle, link.linkType, link.position, link.customValue);
     if (!data.accepted || data.term.isEmpty()) return;
 
     int fromId = findTermId(data.term);
@@ -691,6 +711,7 @@ void TermEditDialog::editBacklink() {
         link.fromTermTitle = data.term;
         link.linkType = data.type;
         link.position = data.position;
+        link.customValue = data.customValue;
         updateLinksList();
     } else {
         QMessageBox::warning(this, "Edit Backlink", "Source term not found.");
