@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Editing items — Lexicon User Guide</title>
-<meta name="description" content="The Lexicon item editor in depth: General fields, statuses and understanding levels, the Markdown content editor with live preview, and metadata (tags, flags, aliases).">
+<meta name="description" content="The Lexicon item editor: types and custom fields, Markdown content, tags, flags, aliases, and key/value properties.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -45,6 +45,7 @@
       <p class="sidebar-title">On this page</p>
       <ul>
         <li><a href="#general">General tab</a></li>
+        <li><a href="#values">Values tab</a></li>
         <li><a href="#content">Content tab (Markdown)</a></li>
         <li><a href="#metadata">Metadata tab</a></li>
       </ul>
@@ -54,7 +55,7 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Editing items</p>
     <h1>Editing items</h1>
-    <p class="lead">Double-click an item (or click <code>Edit</code>) to open the item editor. Five tabs cover everything: <strong>General</strong>, <strong>Content</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first three; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
+    <p class="lead">Double-click an item (or click <code>Edit</code>) to open the item editor. Six tabs cover everything: <strong>General</strong>, <strong>Values</strong>, <strong>Content</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first four; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
 
     <h2 id="general">General tab — identity and state</h2>
     <figure class="screenshot">
@@ -64,12 +65,15 @@
     <table>
       <tr><th>Field</th><th>Purpose</th></tr>
       <tr><td><code>Group</code></td><td>Which group the item belongs to.</td></tr>
+      <tr><td><code>Type</code></td><td>Optional class for this item. Global types and types scoped to its group appear here.</td></tr>
       <tr><td><code>Title</code></td><td>The item's name. Required.</td></tr>
       <tr><td><code>Disambiguation</code></td><td>Optional qualifier that lets the same title exist more than once in one group — e.g. <em>Index (database)</em> vs. <em>Index (array)</em>.</td></tr>
       <tr><td><code>Status</code></td><td>Editorial state of the entry: <code>None</code>, <code>Draft</code>, or <code>Completed</code>.</td></tr>
       <tr><td><code>Understanding</code></td><td>How well <em>you</em> understand the concept — see the scale below.</td></tr>
       <tr><td><code>Pinned</code></td><td>Marks important items so you can filter for them instantly.</td></tr>
     </table>
+    <p>Use <code>Manage → Types...</code> to create or edit types, their descriptions, and their fields. Descriptions appear as tooltips in the type manager.</p>
+    <p>Changing an item's type removes its saved custom field values after confirmation. Deleting a type also clears its assignment and custom values on every affected item, with a confirmation showing the affected item count.</p>
 
     <h3>The understanding scale</h3>
     <p>Lexicon is a learning tool, so it tracks your personal mastery of every concept:</p>
@@ -85,6 +89,11 @@
       <span class="callout-icon">💡</span>
       <p><strong>Review workflow</strong> Filter for <em>Understanding = Recognized</em> to get an instant list of concepts you should revisit. Update the level as you learn — watching it climb is great motivation.</p>
     </div>
+
+    <h2 id="values">Values tab — custom fields</h2>
+    <p>When an item has a type, its Values tab shows that type's fields in position order. Fields can use integer, float, text, date, time, timestamp, boolean, enum, blob, or other values. Date/time values use ISO format; enum fields show their configured choices. The tab is disabled when the item has no type.</p>
+    <p>For a blob field, enter a file path or choose one with <code>Browse...</code>. Click <code>Import</code> to see its SHA-256 hash immediately, or save the item to import the entered path. This replaces that item's previous blob value. The bytes are stored under <code>blobs</code> next to <code>lexicon.db</code>; <code>Save as...</code> exports the current file.</p>
+    <p>In the main window, selecting a specific Type adds columns for these values and filters for each field. Text filters match part of a value; other fields use exact matches.</p>
 
     <h2 id="content">Content tab — write in Markdown</h2>
     <figure class="screenshot">
@@ -119,16 +128,17 @@ std::vector&lt;int&gt; a = make_data();
 std::vector&lt;int&gt; b = std::move(a); // no copy
 ```</code></pre>
 
-    <h2 id="metadata">Metadata tab — tags, flags, aliases</h2>
+    <h2 id="metadata">Metadata tab — tags, flags, aliases, properties</h2>
     <figure class="screenshot">
       <img src="../assets/img/Screenshot_Metadata.png" alt="Item editor Metadata tab with lists for tags, flags, and aliases">
-      <figcaption>Three lists, each with Add / Edit / Remove controls.</figcaption>
+      <figcaption>Tags, flags, aliases, and additional properties have Add / Edit / Remove controls.</figcaption>
     </figure>
     <table>
       <tr><th>Kind</th><th>Use for</th><th>Examples</th></tr>
       <tr><td><strong>Tags</strong></td><td>Classification — topics, versions, domains.</td><td><code>cpp20</code>, <code>templates</code>, <code>concurrency</code></td></tr>
       <tr><td><strong>Flags</strong></td><td>Workflow markers — priority or state you act on.</td><td><code>review</code>, <code>needs-example</code>, <code>important</code></td></tr>
       <tr><td><strong>Aliases</strong></td><td>Alternate names, abbreviations, spellings — all searchable.</td><td><code>RAII</code>, <code>ctor</code>, <code>k8s</code></td></tr>
+      <tr><td><strong>Properties</strong></td><td>Additional text key/value pairs specific to an item.</td><td><code>source</code> = <code>book</code></td></tr>
     </table>
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>

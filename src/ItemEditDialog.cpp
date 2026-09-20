@@ -1,10 +1,13 @@
 #include "ItemEditDialog.h"
 
+#include "BlobStore.h"
 #include "MarkdownConverter.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
 #include <QDialogButtonBox>
+#include <QDoubleValidator>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -12,9 +15,13 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpressionValidator>
+#include <QScrollArea>
+#include <QSignalBlocker>
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QSqlQuery>
@@ -80,6 +87,7 @@ void ItemEditDialog::setupUi() {
     auto* formLayout = new QFormLayout();
 
     m_groupCombo = new QComboBox(this);
+    m_typeCombo = new QComboBox(this);
     m_statusCombo = new QComboBox(this);
     m_statusCombo->addItem("None", static_cast<int>(ItemStatus::None));
     m_statusCombo->addItem("Draft", static_cast<int>(ItemStatus::Draft));
@@ -103,6 +111,7 @@ void ItemEditDialog::setupUi() {
     m_disambiguationEdit = new QLineEdit(this);
 
     formLayout->addRow("Group:", m_groupCombo);
+    formLayout->addRow("Type:", m_typeCombo);
     formLayout->addRow("Title:", m_titleEdit);
     formLayout->addRow("Disambiguation:", m_disambiguationEdit);
     formLayout->addRow("Status:", m_statusCombo);
@@ -111,9 +120,27 @@ void ItemEditDialog::setupUi() {
 
     generalLayout->addLayout(formLayout);
     generalLayout->addStretch();
-    m_tabWidget->addTab(generalTab, "General");
+    auto* generalScroll = new QScrollArea(this);
+    generalScroll->setWidgetResizable(true);
+    generalScroll->setWidget(generalTab);
+    m_tabWidget->addTab(generalScroll, "General");
 
-    // --- Tab 2: Content ---
+    // --- Tab 2: Values ---
+    auto* valuesTab = new QWidget();
+    auto* valuesLayout = new QVBoxLayout(valuesTab);
+    m_noFieldsLabel = new QLabel("This type has no fields yet.", valuesTab);
+    valuesLayout->addWidget(m_noFieldsLabel);
+    m_fieldsBox = new QGroupBox("Values", valuesTab);
+    m_fieldsLayout = new QFormLayout(m_fieldsBox);
+    valuesLayout->addWidget(m_fieldsBox);
+    valuesLayout->addStretch();
+    auto* valuesScroll = new QScrollArea(this);
+    valuesScroll->setWidgetResizable(true);
+    valuesScroll->setWidget(valuesTab);
+    m_valuesTabIndex = m_tabWidget->addTab(valuesScroll, "Values");
+    m_tabWidget->setTabEnabled(m_valuesTabIndex, false);
+
+    // --- Tab 3: Content ---
     auto* contentTab = new QWidget();
     auto* contentLayout = new QVBoxLayout(contentTab);
 
@@ -170,6 +197,9 @@ void ItemEditDialog::setupUi() {
     listsLayout->addWidget(buildListEditor("Aliases", m_aliasList, this,
                                            SLOT(addAlias()), SLOT(editAlias()), SLOT(removeAlias())),
                            1, 0, 1, 2); // Span aliases across both columns
+    listsLayout->addWidget(buildListEditor("Properties", m_propertyList, this,
+                                           SLOT(addProperty()), SLOT(editProperty()), SLOT(removeProperty())),
+                           2, 0, 1, 2);
 
     additionalLayout->addLayout(listsLayout);
     m_tabWidget->addTab(additionalTab, "Metadata");
@@ -196,6 +226,8 @@ void ItemEditDialog::setupUi() {
 
 void ItemEditDialog::connectSignals() {
     connect(m_contentEdit, &QTextEdit::textChanged, m_previewTimer, QOverload<>::of(&QTimer::start));
+    connect(m_groupCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshTypes(); });
+    connect(m_typeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshFields(); });
 }
 
 void ItemEditDialog::showEvent(QShowEvent* event) {
@@ -208,21 +240,214 @@ void ItemEditDialog::showEvent(QShowEvent* event) {
 
 
 void ItemEditDialog::setGroups(const QList<GroupRecord>& groups) {
-    m_groupCombo->clear();
-    for (const GroupRecord& group : groups) {
-        m_groupCombo->addItem(group.name, group.id);
+    {
+        const QSignalBlocker blocker(m_groupCombo);
+        m_groupCombo->clear();
+        for (const GroupRecord& group : groups) {
+            m_groupCombo->addItem(group.name, group.id);
+        }
     }
+    refreshTypes();
+}
+
+void ItemEditDialog::refreshTypes() {
+    const int previousTypeId = m_typeCombo->currentData().toInt();
+    const QSignalBlocker blocker(m_typeCombo);
+    m_typeCombo->clear();
+    m_typeCombo->addItem("None", -1);
+    const int groupId = m_groupCombo->currentData().toInt();
+    if (groupId <= 0) {
+        refreshFields();
+        return;
+    }
+    QString error;
+    const auto types = DatabaseManager::loadItemTypes(groupId, &error);
+    if (!error.isEmpty()) {
+        QMessageBox::critical(this, "Database error", error);
+        return;
+    }
+    for (const auto& type : types) {
+        const QString scope = type.groupId < 0 ? "All groups" : type.groupName;
+        m_typeCombo->addItem(QString("%1 (%2)").arg(type.name, scope), type.id);
+    }
+    const int index = m_typeCombo->findData(previousTypeId);
+    if (index >= 0) {
+        m_typeCombo->setCurrentIndex(index);
+    }
+    refreshFields();
+}
+
+QString ItemEditDialog::editorValue(int fieldId) const {
+    QWidget* editor = m_fieldEditors.value(fieldId);
+    if (auto* line = qobject_cast<QLineEdit*>(editor)) {
+        return line->text().trimmed();
+    }
+    if (auto* combo = qobject_cast<QComboBox*>(editor)) {
+        return combo->currentData().toString();
+    }
+    return {};
+}
+
+void ItemEditDialog::captureFieldValues() {
+    for (const auto& field : m_currentFields) {
+        const QString value = editorValue(field.id);
+        if (value.isEmpty()) {
+            m_pendingFieldValues.remove(field.id);
+        } else {
+            m_pendingFieldValues.insert(field.id, value);
+        }
+    }
+}
+
+void ItemEditDialog::refreshFields() {
+    captureFieldValues();
+    for (auto it = m_blobPathEditors.cbegin(); it != m_blobPathEditors.cend(); ++it) {
+        m_pendingBlobPaths.insert(it.key(), it.value()->text());
+    }
+    while (m_fieldsLayout->rowCount() > 0) {
+        m_fieldsLayout->removeRow(0);
+    }
+    m_currentFields.clear();
+    m_fieldEditors.clear();
+    m_blobPathEditors.clear();
+    m_fieldsLoadFailed = false;
+    m_fieldsBox->hide();
+    const int typeId = m_typeCombo->currentData().toInt();
+    m_tabWidget->setTabEnabled(m_valuesTabIndex, typeId > 0);
+    if (typeId <= 0) {
+        if (m_tabWidget->currentIndex() == m_valuesTabIndex) m_tabWidget->setCurrentIndex(0);
+        return;
+    }
+    QString error;
+    m_currentFields = DatabaseManager::loadItemFields(typeId, &error);
+    if (!error.isEmpty()) {
+        m_fieldsLoadFailed = true;
+        QMessageBox::critical(this, "Database error", error);
+        return;
+    }
+    for (const auto& field : m_currentFields) {
+        const QString saved = m_pendingFieldValues.value(field.id);
+        QWidget* editor = nullptr;
+        if (field.dataType == FieldDataType::Boolean || field.dataType == FieldDataType::Enum) {
+            auto* combo = new QComboBox(m_fieldsBox);
+            combo->addItem("Not set", "");
+            if (field.dataType == FieldDataType::Boolean) {
+                combo->addItem("False", "false");
+                combo->addItem("True", "true");
+            } else {
+                for (const auto& option : field.enumOptions) {
+                    combo->addItem(option, option);
+                }
+            }
+            const int index = combo->findData(saved);
+            if (index >= 0) combo->setCurrentIndex(index);
+            editor = combo;
+            m_fieldsLayout->addRow(field.name + ":", combo);
+        } else if (field.dataType == FieldDataType::Blob) {
+            auto* wrapper = new QWidget(m_fieldsBox);
+            auto* wrapperLayout = new QVBoxLayout(wrapper);
+            wrapperLayout->setContentsMargins(0, 0, 0, 0);
+            auto* currentRow = new QHBoxLayout();
+            auto* valueEdit = new QLineEdit(saved, wrapper);
+            valueEdit->setReadOnly(true);
+            valueEdit->setPlaceholderText("No file selected (SHA-256)");
+            auto* exportButton = new QPushButton("Save as...", wrapper);
+            auto* clearButton = new QPushButton("Clear", wrapper);
+            currentRow->addWidget(valueEdit, 1);
+            currentRow->addWidget(exportButton);
+            currentRow->addWidget(clearButton);
+            wrapperLayout->addLayout(currentRow);
+            auto* pathRow = new QHBoxLayout();
+            auto* pathEdit = new QLineEdit(m_pendingBlobPaths.value(field.id), wrapper);
+            pathEdit->setPlaceholderText("Path to a file to import or replace...");
+            auto* browseButton = new QPushButton("Browse...", wrapper);
+            auto* importButton = new QPushButton("Import", wrapper);
+            pathRow->addWidget(pathEdit, 1);
+            pathRow->addWidget(browseButton);
+            pathRow->addWidget(importButton);
+            wrapperLayout->addLayout(pathRow);
+            connect(browseButton, &QPushButton::clicked, this, [this, pathEdit] {
+                const QString path = QFileDialog::getOpenFileName(this, "Choose file");
+                if (!path.isEmpty()) pathEdit->setText(path);
+            });
+            connect(importButton, &QPushButton::clicked, this, [this, pathEdit, valueEdit, fieldId = field.id] {
+                const QString path = pathEdit->text().trimmed();
+                if (path.isEmpty()) return;
+                QString error;
+                const QString hash = BlobStore::importFile(path, &error);
+                if (hash.isEmpty()) QMessageBox::critical(this, "File error", error);
+                else {
+                    valueEdit->setText(hash);
+                    pathEdit->clear();
+                    m_pendingBlobPaths.remove(fieldId);
+                }
+            });
+            connect(exportButton, &QPushButton::clicked, this, [this, valueEdit] {
+                if (valueEdit->text().isEmpty()) return;
+                const QString path = QFileDialog::getSaveFileName(this, "Save file as");
+                if (path.isEmpty()) return;
+                QString error;
+                if (!BlobStore::exportFile(valueEdit->text(), path, &error)) {
+                    QMessageBox::critical(this, "File error", error);
+                }
+            });
+            connect(clearButton, &QPushButton::clicked, this, [this, valueEdit, pathEdit, fieldId = field.id] {
+                valueEdit->clear();
+                pathEdit->clear();
+                m_pendingBlobPaths.remove(fieldId);
+            });
+            editor = valueEdit;
+            m_blobPathEditors.insert(field.id, pathEdit);
+            m_fieldsLayout->addRow(field.name + ":", wrapper);
+        } else {
+            auto* line = new QLineEdit(saved, m_fieldsBox);
+            if (field.dataType == FieldDataType::Integer) {
+                line->setValidator(new QRegularExpressionValidator(QRegularExpression("-?[0-9]*"), line));
+            } else if (field.dataType == FieldDataType::Float) {
+                auto* validator = new QDoubleValidator(line);
+                validator->setLocale(QLocale::c());
+                line->setValidator(validator);
+            } else if (field.dataType == FieldDataType::Date) {
+                line->setPlaceholderText("YYYY-MM-DD");
+            } else if (field.dataType == FieldDataType::Time) {
+                line->setPlaceholderText("HH:MM:SS");
+            } else if (field.dataType == FieldDataType::Timestamp) {
+                line->setPlaceholderText("YYYY-MM-DDTHH:MM:SS");
+            }
+            editor = line;
+            m_fieldsLayout->addRow(field.name + ":", line);
+        }
+        m_fieldEditors.insert(field.id, editor);
+    }
+    m_fieldsBox->setVisible(!m_currentFields.isEmpty());
+    m_noFieldsLabel->setVisible(m_currentFields.isEmpty());
 }
 
 void ItemEditDialog::setItem(const ItemRecord& item) {
     m_itemId = item.id;
+    m_originalTypeId = item.itemTypeId;
+    m_originalFieldValues = item.fieldValues;
+    m_pendingFieldValues = item.fieldValues;
+    m_pendingBlobPaths.clear();
     m_titleEdit->setText(item.title);
     m_disambiguationEdit->setText(item.disambiguation);
 
-    const int groupIdx = m_groupCombo->findData(item.groupId);
-    if (groupIdx >= 0) {
-        m_groupCombo->setCurrentIndex(groupIdx);
+    {
+        const QSignalBlocker blocker(m_groupCombo);
+        const int groupIdx = m_groupCombo->findData(item.groupId);
+        if (groupIdx >= 0) {
+            m_groupCombo->setCurrentIndex(groupIdx);
+        }
     }
+    refreshTypes();
+    {
+        const QSignalBlocker blocker(m_typeCombo);
+        const int typeIdx = m_typeCombo->findData(item.itemTypeId);
+        if (typeIdx >= 0) {
+            m_typeCombo->setCurrentIndex(typeIdx);
+        }
+    }
+    refreshFields();
 
     const int underIdx = m_understandingCombo->findData(static_cast<int>(item.understanding));
     if (underIdx >= 0) {
@@ -241,6 +466,8 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
     setListValues(m_aliasList, item.aliases);
     setListValues(m_tagList, item.tags);
     setListValues(m_flagList, item.flags);
+    m_properties = item.properties;
+    updatePropertiesList();
 
     if (m_itemId != -1) {
         m_currentLinks = DatabaseManager::loadLinks(m_itemId);
@@ -254,6 +481,13 @@ ItemRecord ItemEditDialog::item() const {
     result.id = m_itemId;
     result.groupId = m_groupCombo->currentData().toInt();
     result.groupName = m_groupCombo->currentText();
+    result.itemTypeId = m_typeCombo->currentData().toInt();
+    for (const auto& field : m_currentFields) {
+        const QString value = editorValue(field.id);
+        if (!value.isEmpty()) {
+            result.fieldValues.insert(field.id, value);
+        }
+    }
     result.title = m_titleEdit->text().trimmed();
     result.disambiguation = m_disambiguationEdit->text().trimmed();
     result.status = static_cast<ItemStatus>(m_statusCombo->currentData().toInt());
@@ -263,7 +497,70 @@ ItemRecord ItemEditDialog::item() const {
     result.aliases = valuesFromList(m_aliasList);
     result.tags = valuesFromList(m_tagList);
     result.flags = valuesFromList(m_flagList);
+    result.properties = m_properties;
     return result;
+}
+
+void ItemEditDialog::updatePropertiesList() {
+    m_propertyList->clear();
+    for (const auto& property : m_properties) {
+        m_propertyList->addItem(QString("%1 = %2").arg(property.key, property.value));
+    }
+}
+
+bool ItemEditDialog::promptForProperty(PropertyRecord& property, int skipIndex) {
+    QDialog dialog(this);
+    dialog.setWindowTitle(skipIndex >= 0 ? "Edit property" : "Add property");
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout();
+    auto* keyEdit = new QLineEdit(property.key, &dialog);
+    auto* valueEdit = new QLineEdit(property.value, &dialog);
+    form->addRow("Key:", keyEdit);
+    form->addRow("Value:", valueEdit);
+    layout->addLayout(form);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted) return false;
+    const QString key = keyEdit->text().trimmed();
+    if (key.isEmpty()) {
+        QMessageBox::warning(this, "Validation", "Property key cannot be empty.");
+        return false;
+    }
+    for (int i = 0; i < m_properties.size(); ++i) {
+        if (i != skipIndex && m_properties.at(i).key.compare(key, Qt::CaseInsensitive) == 0) {
+            QMessageBox::warning(this, "Validation", "Property key must be unique in this item.");
+            return false;
+        }
+    }
+    property.key = key;
+    property.value = valueEdit->text();
+    return true;
+}
+
+void ItemEditDialog::addProperty() {
+    PropertyRecord property;
+    if (!promptForProperty(property)) return;
+    m_properties.push_back(property);
+    updatePropertiesList();
+}
+
+void ItemEditDialog::editProperty() {
+    const int row = m_propertyList->currentRow();
+    if (row < 0 || row >= m_properties.size()) return;
+    PropertyRecord property = m_properties.at(row);
+    if (!promptForProperty(property, row)) return;
+    m_properties[row] = property;
+    updatePropertiesList();
+    m_propertyList->setCurrentRow(row);
+}
+
+void ItemEditDialog::removeProperty() {
+    const int row = m_propertyList->currentRow();
+    if (row < 0 || row >= m_properties.size()) return;
+    m_properties.removeAt(row);
+    updatePropertiesList();
 }
 
 void ItemEditDialog::addValue(QListWidget* list, const QString& title, const QStringList& suggestions) {
@@ -727,6 +1024,10 @@ void ItemEditDialog::removeBacklink() {
 }
 
 void ItemEditDialog::validateAndAccept() {
+    if (m_fieldsLoadFailed) {
+        QMessageBox::warning(this, "Validation", "Cannot save while type fields failed to load.");
+        return;
+    }
     if (m_groupCombo->currentIndex() < 0) {
         QMessageBox::warning(this, "Validation", "Create at least one group first.");
         return;
@@ -735,6 +1036,31 @@ void ItemEditDialog::validateAndAccept() {
         QMessageBox::warning(this, "Validation", "Title cannot be empty.");
         m_titleEdit->setFocus();
         return;
+    }
+
+    if (m_itemId >= 0 && m_originalTypeId != m_typeCombo->currentData().toInt()
+        && !m_originalFieldValues.isEmpty()) {
+        const auto answer = QMessageBox::question(this, "Change type",
+            QString("Changing the type will remove %1 saved field value(s) from this item. Continue?")
+                .arg(m_originalFieldValues.size()),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes) return;
+    }
+
+    for (auto it = m_blobPathEditors.cbegin(); it != m_blobPathEditors.cend(); ++it) {
+        const QString path = it.value()->text().trimmed();
+        if (path.isEmpty()) continue;
+        QString error;
+        const QString hash = BlobStore::importFile(path, &error);
+        if (hash.isEmpty()) {
+            QMessageBox::critical(this, "File error", error);
+            return;
+        }
+        if (auto* valueEdit = qobject_cast<QLineEdit*>(m_fieldEditors.value(it.key()))) {
+            valueEdit->setText(hash);
+        }
+        it.value()->clear();
+        m_pendingBlobPaths.remove(it.key());
     }
 
     // Save item first to get an ID if it's new
@@ -750,9 +1076,10 @@ void ItemEditDialog::validateAndAccept() {
         // Find the item by group and title
         QSqlDatabase db = DatabaseManager::database();
         QSqlQuery query(db);
-        query.prepare("SELECT id FROM item WHERE group_id = ? AND title = ?;");
+        query.prepare("SELECT id FROM item WHERE group_id = ? AND title = ? AND COALESCE(disambiguation, '') = ?;");
         query.addBindValue(t.groupId);
         query.addBindValue(t.title);
+        query.addBindValue(t.disambiguation);
         if (query.exec() && query.next()) {
             m_itemId = query.value(0).toInt();
         }

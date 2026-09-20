@@ -22,9 +22,10 @@ It is designed for structured learning and technical note-taking with groups, it
 
 ## Highlights
 
-- SQLite-backed local dictionary (single-file DB)
+- SQLite-backed local dictionary with content-addressed blob files
 - Full CRUD for groups and items
 - Custom group order using a numeric position
+- Optional item types shared across groups or scoped to one group, with ordered typed fields
 - Rich item metadata:
   - aliases
   - tags
@@ -32,6 +33,7 @@ It is designed for structured learning and technical note-taking with groups, it
   - status
   - understanding level
   - pinned state
+  - additional key/value properties
 - Typed item relationships:
   - outgoing links
   - incoming links (backlinks)
@@ -40,7 +42,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
   - search in title, disambiguation, alias, tag, and flag
-  - filters for group, tag, flag, status, understanding, pinned
+  - filters for group, type, tag, flag, status, understanding, pinned
 - Pagination for large datasets
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
@@ -57,7 +59,11 @@ The main screen combines filters, searchable item table, pagination, rendered Ma
 
 ![General tab](images/Screenshot_General.png)
 
-Basic identity and state fields for an item: group, title, disambiguation, status, understanding, and pinned flag.
+Basic identity and state fields for an item: group, optional type, title, disambiguation, status, understanding, and pinned flag.
+
+### Item editor — Values tab
+
+Items with a type have a Values tab containing the fields defined by that type. Blob fields accept a file path (or Browse) and import the file when you click Import or save the item. The field stores its SHA-256 hash, and the file is kept in `blobs` next to the database.
 
 ### Item editor — Content tab
 
@@ -69,7 +75,7 @@ Markdown editor on the left, live rendered preview on the right, plus a formatti
 
 ![Metadata tab](images/Screenshot_Metadata.png)
 
-Manage tags, flags, and aliases with dedicated add/edit/remove controls.
+Manage tags, flags, aliases, and additional key/value properties with dedicated add/edit/remove controls.
 
 ### Item editor — Links tab
 
@@ -132,6 +138,7 @@ Lexicon creates a `Default` group automatically. Items added while the filter is
 At the top you can combine search and filters:
 
 - `Group`
+- `Type` (`All types` or a specific type; choices follow the selected group)
 - `Tag`
 - `Flag`
 - `Status`
@@ -178,11 +185,12 @@ Recommended workflow:
 2. Click `Add` or `Add ...`.
 3. Fill the General tab:
    - `Title` (required)
+   - optional `Type`
    - optional `Disambiguation` (useful for same title in one group)
    - `Status` (`None`, `Draft`, `Completed`)
    - `Understanding` (`Unknown` → `Mastered`)
    - `Pinned`
-4. Fill other tabs as needed.
+4. If a type is selected, fill its fields on the `Values` tab. Fill other tabs as needed.
 5. Click `Save`.
 
 ### 6) Edit item content with Markdown
@@ -201,15 +209,18 @@ Open an item and go to the `Content` tab.
 
 The preview updates automatically as you type.
 
-### 7) Maintain metadata (tags, flags, aliases)
+### 7) Maintain metadata (tags, flags, aliases, properties)
 
 In `Metadata` tab:
 
 - `Tags`: classification labels (topics, versions, domains)
 - `Flags`: custom markers (priority/state markers)
 - `Aliases`: alternate names and synonyms
+- `Properties`: additional key/value pairs for this item
 
 Each list supports `Add`, `Edit`, `Remove`.
+
+Use `Manage` → `Types...` to create types with a name, description, and availability across all groups or within one group. Each type can have ordered fields with integer, float, text, date, time, timestamp, boolean, enum, blob, or other values. Enum fields have an editable list of choices. A blob field stores a file's SHA-256 hash in SQLite and its bytes in the `blobs` directory. Deleting a type clears the Type and its custom field values on affected items; the dialog asks for confirmation.
 
 Tips:
 
@@ -278,6 +289,10 @@ Core tables:
 
 - `item_group`
 - `item`
+- `item_type`
+- `item_type_field`
+- `item_value`
+- `property`
 - `alias`
 - `tag`
 - `flag`
@@ -294,11 +309,12 @@ Design notes:
 
 - Default DB file: `lexicon.db`
 - Location: next to the executable binary
+- Blob files: `blobs/<first two hash characters>/<remaining hash characters>` next to `lexicon.db`
 
 Backup strategies:
 
 1. Close Lexicon.
-2. Copy `lexicon.db` to safe storage.
+2. Copy `lexicon.db` and the adjacent `blobs` directory to safe storage.
 3. Optionally version backups (daily/weekly snapshots).
 
 ## Troubleshooting

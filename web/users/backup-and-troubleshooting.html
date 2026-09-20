@@ -55,44 +55,47 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Backup &amp; troubleshooting</p>
     <h1>Backup &amp; troubleshooting</h1>
-    <p class="lead">Your entire lexicon lives in one file. That makes backups trivial — and makes knowing the safety rules important.</p>
+    <p class="lead">Lexicon keeps structured data in one SQLite file and optional attachment files beside it. Copy both for a complete backup.</p>
 
     <h2 id="data-location">Data location</h2>
     <table>
       <tr><th>What</th><th>Where</th></tr>
       <tr><td>Database file</td><td><code>lexicon.db</code></td></tr>
+      <tr><td>Blob attachments</td><td><code>blobs/</code> next to <code>lexicon.db</code>, organized by SHA-256 hash</td></tr>
       <tr><td>Location</td><td>The same directory as the Lexicon executable</td></tr>
       <tr><td>Format</td><td>Standard SQLite 3 — readable with any SQLite tool</td></tr>
     </table>
     <div class="callout">
       <span class="callout-icon">ℹ️</span>
-      <p><strong>Portable by design</strong> Moving your knowledge base to another machine means copying <code>lexicon.db</code> next to the executable there. That's it.</p>
+      <p><strong>Portable by design</strong> Move <code>lexicon.db</code> and the adjacent <code>blobs</code> directory together, placing them next to the executable on the other machine.</p>
     </div>
 
     <h2 id="backup">Backup strategies</h2>
     <ol class="steps">
       <li><strong>Close Lexicon.</strong> This guarantees the database is not mid-write.</li>
-      <li><strong>Copy <code>lexicon.db</code></strong> to safe storage — external drive, NAS, or a synced folder.</li>
+      <li><strong>Copy <code>lexicon.db</code> and <code>blobs/</code></strong> to safe storage — external drive, NAS, or a synced folder.</li>
       <li><strong>Version your backups</strong> — keep dated snapshots (daily or weekly) instead of overwriting a single copy:
-        <pre><code>cp lexicon.db ~/backups/lexicon-$(date +%F).db</code></pre>
+        <pre><code>mkdir -p ~/backups/lexicon-$(date +%F)
+cp lexicon.db ~/backups/lexicon-$(date +%F)/
+cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       </li>
     </ol>
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
-      <p><strong>Automate it</strong> A one-line cron job (or scheduled task on Windows) that copies the file once a day is all a personal knowledge base usually needs. If your lexicon is mission-critical, back up more often.</p>
+      <p><strong>Automate it</strong> A scheduled copy of the database and blob directory protects both metadata and attachments. If your lexicon is mission-critical, back up more often.</p>
     </div>
 
     <h2 id="safety">Deletion safety rules</h2>
     <p>Lexicon uses cascade deletion to keep the database consistent. Know the two rules before you delete anything:</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
-      <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, and all links/backlinks pointing to or from it.</p>
+      <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, properties, custom field values, and all links/backlinks pointing to or from it.</p>
     </div>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
       <p><strong>Deleting a group</strong> removes <em>every item inside it</em> — including all of their content and metadata. This is the most destructive action in the application.</p>
     </div>
-    <p>There is no undo for deletions. When in doubt, make a quick copy of <code>lexicon.db</code> first.</p>
+    <p>Deleting a type clears its assignment and custom field values on affected items after confirmation. There is no undo for deletions. Back up <code>lexicon.db</code> and <code>blobs/</code> first if unsure.</p>
 
     <h2 id="troubleshooting">Troubleshooting</h2>
 

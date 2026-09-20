@@ -8,7 +8,9 @@
 
 class QComboBox;
 class QCompleter;
+class QGridLayout;
 class QLineEdit;
+class QScrollArea;
 class QStandardItemModel;
 class QTableView;
 class QTextEdit;
@@ -134,6 +136,8 @@ private slots:
 
     void refreshAll();
     void refreshGroups();
+    void refreshTypes();
+    void refreshValueFilters();
     void refreshTags();
     void refreshFlags();
     void refreshItems();
@@ -150,6 +154,7 @@ private slots:
     void deleteSelectedItem();
 
     void openGroupManager();
+    void openTypeManager();
     void showTagsOverview();
     void showFlagsOverview();
     void showAliasesOverview();
@@ -171,6 +176,7 @@ private:
     int selectedItemId() const;
     int groupIdForNewItem();
     QList<GroupRecord> groups() const;
+    QList<ItemValueFilter> valueFilters() const;
     void showError(const QString& message);
 
 protected:
@@ -179,6 +185,12 @@ protected:
 private:
 
     QComboBox* m_groupFilter = nullptr;
+    QComboBox* m_typeFilter = nullptr;
+    QScrollArea* m_valueFilterScroll = nullptr;
+    QGridLayout* m_valueFilterLayout = nullptr;
+    QList<ItemFieldRecord> m_selectedTypeFields;
+    QMap<int, QWidget*> m_valueFilterEditors;
+    int m_valueFilterTypeId = 0;
     QComboBox* m_tagFilter = nullptr;
     QComboBox* m_flagFilter = nullptr;
     QComboBox* m_statusFilter = nullptr;

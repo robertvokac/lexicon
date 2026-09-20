@@ -56,12 +56,16 @@ add_executable(Lexicon
     src/main.cpp
     src/DatabaseManager.h
     src/DatabaseManager.cpp
+    src/BlobStore.h
+    src/BlobStore.cpp
     src/MainWindow.h
     src/MainWindow.cpp
     src/ItemEditDialog.h
     src/ItemEditDialog.cpp
     src/GroupManagerDialog.h
     src/GroupManagerDialog.cpp
+    src/ItemTypeManagerDialog.h
+    src/ItemTypeManagerDialog.cpp
     src/ValueListDialog.h
     src/ValueListDialog.cpp
     src/MarkdownConverter.h

@@ -35,11 +35,52 @@ enum class LinkType {
     Custom = 10
 };
 
+enum class FieldDataType {
+    Integer = 0,
+    Float = 1,
+    Text = 2,
+    Date = 3,
+    Time = 4,
+    Timestamp = 5,
+    Boolean = 6,
+    Enum = 7,
+    Blob = 8,
+    Other = 9
+};
+
 struct GroupRecord {
     int id = -1;
     QString name;
     QString description;
     int position = 0;
+};
+
+struct ItemTypeRecord {
+    int id = -1;
+    int groupId = -1; // -1 means available in every group
+    QString groupName;
+    QString name;
+    QString description;
+};
+
+struct ItemFieldRecord {
+    int id = -1;
+    int itemTypeId = -1;
+    QString name;
+    FieldDataType dataType = FieldDataType::Text;
+    int position = 0;
+    QStringList enumOptions;
+};
+
+struct ItemValueFilter {
+    int fieldId = -1;
+    QString value;
+    bool exact = false;
+};
+
+struct PropertyRecord {
+    QString key;
+    QString value;
 };
 
 struct LinkRecord {
@@ -59,6 +100,10 @@ struct ItemRecord {
     int id = -1;
     int groupId = -1;
     QString groupName;
+    int itemTypeId = -1; // -1 means no type
+    QString itemTypeName;
+    QMap<int, QString> fieldValues;
+    QList<PropertyRecord> properties;
     QString title;
     QString disambiguation;
     QStringList aliases;
@@ -85,8 +130,18 @@ public:
     static bool upsertGroup(const GroupRecord& group, QString* errorMessage = nullptr);
     static bool deleteGroup(int groupId, QString* errorMessage = nullptr);
 
-    static QList<ItemRecord> loadItems(int groupId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, int limit = -1, int offset = 0, int sortColumn = 2, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
-    static int countItems(int groupId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, QString* errorMessage = nullptr);
+    static QList<ItemTypeRecord> loadItemTypes(int groupId = -1, QString* errorMessage = nullptr);
+    static bool upsertItemType(const ItemTypeRecord& itemType, QString* errorMessage = nullptr);
+    static int countItemsForType(int itemTypeId, QString* errorMessage = nullptr);
+    static bool deleteItemType(int itemTypeId, QString* errorMessage = nullptr);
+
+    static QList<ItemFieldRecord> loadItemFields(int itemTypeId, QString* errorMessage = nullptr);
+    static bool upsertItemField(const ItemFieldRecord& field, QString* errorMessage = nullptr);
+    static int countFieldValues(int fieldId, QString* errorMessage = nullptr);
+    static bool deleteItemField(int fieldId, QString* errorMessage = nullptr);
+
+    static QList<ItemRecord> loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, int limit = -1, int offset = 0, int sortColumn = 3, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
+    static int countItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, QString* errorMessage = nullptr);
     static bool loadItem(int itemId, ItemRecord& outItem, QString* errorMessage = nullptr);
     static bool saveItem(const ItemRecord& item, QString* errorMessage = nullptr);
     static bool deleteItem(int itemId, QString* errorMessage = nullptr);

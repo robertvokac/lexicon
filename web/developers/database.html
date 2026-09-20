@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Database schema — Lexicon Developer Docs</title>
-<meta name="description" content="Lexicon SQLite schema reference: all tables (item_group, item, alias, tag, flag, link, log), indexes, cascade rules, and the versioned migration system.">
+<meta name="description" content="Lexicon SQLite schema reference: items, types, typed fields, properties, relationships, indexes, and migrations.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -55,14 +55,18 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Database schema</p>
     <h1>Database schema</h1>
-    <p class="lead">Lexicon stores everything in a single SQLite file, <code>lexicon.db</code>, initialized and upgraded automatically at startup. This page documents the schema as defined by the migrations in <code>DatabaseManager.cpp</code>.</p>
+    <p class="lead">Lexicon stores structured data in <code>lexicon.db</code> and blob bytes in an adjacent <code>blobs</code> directory. The database is initialized at startup; the blob directory is created when a file is imported. This page documents the schema defined by the migrations in <code>DatabaseManager.cpp</code>.</p>
 
     <h2 id="overview">Overview</h2>
-    <p>Seven domain tables plus one bookkeeping table:</p>
+    <p>Eleven domain tables plus one bookkeeping table:</p>
     <table>
       <tr><th>Table</th><th>Purpose</th></tr>
       <tr><td><code>item_group</code></td><td>Top-level buckets for items</td></tr>
       <tr><td><code>item</code></td><td>The concepts themselves: title, disambiguation, status, understanding, pinned, Markdown content</td></tr>
+      <tr><td><code>item_type</code></td><td>Optional item classes, available globally or in one group</td></tr>
+      <tr><td><code>item_type_field</code></td><td>Named, ordered fields belonging to a type</td></tr>
+      <tr><td><code>item_value</code></td><td>Typed field values belonging to items</td></tr>
+      <tr><td><code>property</code></td><td>Additional per-item key/value text properties</td></tr>
       <tr><td><code>alias</code></td><td>Alternate names per item</td></tr>
       <tr><td><code>tag</code></td><td>Classification labels per item</td></tr>
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
@@ -71,18 +75,18 @@
       <tr><td><code>db_version</code></td><td>Applied migration versions</td></tr>
     </table>
     <p>Relationships at a glance:</p>
-    <pre><code>item_group 1 ──── n item 1 ──── n alias
-                  │ ├───── n tag
-                  │ └───── n flag
-                  │
-                  └── n link n ──  (item → item, typed, directed)</code></pre>
+    <pre><code>item_group 1 ──── n item ──── 0..1 item_type ──── n item_type_field
+        │             ├───── n alias / tag / flag / property
+        └── n item_type (optional scope)
+                      item ──── n item_value ──── 1 item_type_field
+                      item ──── n link n ── item (typed, directed)</code></pre>
 
     <h2 id="migrations">Migration system</h2>
     <p>On startup, <code>DatabaseManager::initialize()</code>:</p>
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–13</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–18</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
     </ol>
     <table>
       <tr><th>Version</th><th>What it introduced</th></tr>
@@ -99,6 +103,11 @@
       <tr><td>11</td><td>Renamed <code>term</code> to <code>item</code>, including child/link columns, indexes, and log entries</td></tr>
       <tr><td>12</td><td>Added <code>item_group.position</code>, initialized from the previous name order, and indexed group order</td></tr>
       <tr><td>13</td><td>Creates the <code>Default</code> group for new items when <code>All groups</code> is selected</td></tr>
+      <tr><td>14</td><td>Creates <code>item_type</code>, optional <code>item.item_type_id</code>, and group-scope triggers</td></tr>
+      <tr><td>15</td><td>Creates <code>item_field</code>, <code>item_field_value</code>, and field-scope/cleanup triggers</td></tr>
+      <tr><td>16</td><td>Creates the per-item <code>property</code> table</td></tr>
+      <tr><td>17</td><td>Renames <code>item_field</code> to <code>item_type_field</code> and <code>item_field_value</code> to <code>item_value</code>, preserving field definitions and values</td></tr>
+      <tr><td>18</td><td>Adds optional text <code>item_type.description</code> with an empty default for existing types</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -123,13 +132,65 @@ CREATE INDEX idx_item_group_position ON item_group(position, name COLLATE NOCASE
   understanding  INTEGER NOT NULL DEFAULT 0,  -- UnderstandingLevel
   pinned         INTEGER NOT NULL DEFAULT 0,
   content        TEXT,                        -- Markdown source
-  FOREIGN KEY(group_id) REFERENCES item_group(id) ON DELETE CASCADE
+  item_type_id   INTEGER,                     -- added in migration 14
+  FOREIGN KEY(group_id) REFERENCES item_group(id) ON DELETE CASCADE,
+  FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE SET NULL
 );
 CREATE UNIQUE INDEX item_unique
   ON item(group_id, title, COALESCE(disambiguation, ''));
 CREATE INDEX idx_item_group_id ON item(group_id);
-CREATE INDEX idx_item_title  ON item(title);</code></pre>
+CREATE INDEX idx_item_title  ON item(title);
+CREATE INDEX idx_item_item_type_id ON item(item_type_id);</code></pre>
     <p>The unique index is why the same title can exist twice in one group only when the disambiguations differ.</p>
+
+    <h3><code>item_type</code> and <code>item_type_field</code></h3>
+    <pre><code>CREATE TABLE item_type (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER,                         -- NULL: available in every group
+  name     TEXT NOT NULL CHECK(TRIM(name) &lt;&gt; ''),
+  description TEXT NOT NULL DEFAULT '',    -- added in migration 18
+  FOREIGN KEY(group_id) REFERENCES item_group(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX item_type_scope_name_unique
+  ON item_type(COALESCE(group_id, 0), name COLLATE NOCASE);
+
+CREATE TABLE item_type_field (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_type_id INTEGER NOT NULL,
+  name         TEXT NOT NULL CHECK(TRIM(name) &lt;&gt; ''),
+  data_type    INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 9),
+  position     INTEGER NOT NULL DEFAULT 0,
+  enum_options TEXT NOT NULL DEFAULT '[]', -- JSON array
+  FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX item_type_field_type_name_unique
+  ON item_type_field(item_type_id, name COLLATE NOCASE);
+CREATE INDEX idx_item_type_field_type_position
+  ON item_type_field(item_type_id, position);</code></pre>
+    <p>Fields are displayed by <code>position</code>, then name and ID. <code>data_type</code> uses the stable <code>FieldDataType</code> integer enum. A type may be assigned only to items in its group, unless <code>group_id</code> is null; triggers enforce this.</p>
+
+    <h3><code>item_value</code> and <code>property</code></h3>
+    <pre><code>CREATE TABLE item_value (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id       INTEGER NOT NULL,
+  item_field_id INTEGER NOT NULL,
+  value         TEXT NOT NULL,
+  UNIQUE(item_id, item_field_id),
+  FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE,
+  FOREIGN KEY(item_field_id) REFERENCES item_type_field(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_item_value_field_id ON item_value(item_field_id);
+
+CREATE TABLE property (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id INTEGER NOT NULL,
+  "key"   TEXT NOT NULL CHECK(TRIM("key") &lt;&gt; ''),
+  value   TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX property_item_key_unique
+  ON property(item_id, "key" COLLATE NOCASE);</code></pre>
+    <p>Field values are stored as canonical text validated against their declared type. Blob values contain a lowercase SHA-256 hash. Their bytes live at <code>blobs/&lt;first 2 hex characters&gt;/&lt;remaining 62&gt;</code> next to the database. Properties are independent of item types and remain when an item changes type.</p>
 
     <h3><code>alias</code>, <code>tag</code>, <code>flag</code></h3>
     <p>Three structurally identical child tables (the value column is <code>alias</code> in <code>alias</code>, <code>name</code> in <code>tag</code> and <code>flag</code>):</p>
@@ -171,9 +232,9 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
     <h2 id="integrity">Integrity rules</h2>
     <ul>
       <li><strong>Foreign keys are enforced</strong> — <code>PRAGMA foreign_keys = ON</code> runs on every connection.</li>
-      <li><strong>Cascade deletes</strong> — deleting a group deletes its items; deleting an item deletes its aliases, tags, flags, and any links in either direction.</li>
-      <li><strong>Uniqueness</strong> — group names are globally unique; <code>(group_id, title, disambiguation)</code> is unique per item; alias/tag/flag values are unique per item.</li>
-      <li><strong>Enum stability</strong> — <code>status</code>, <code>understanding</code>, and <code>link_type</code> store raw enum integers; enum values must only ever be appended, never renumbered.</li>
+      <li><strong>Cascade deletes</strong> — deleting a group deletes its items and group-specific types; deleting an item deletes its aliases, tags, flags, properties, field values, and links. Deleting a type sets affected <code>item_type_id</code> values to null and removes their field values.</li>
+      <li><strong>Uniqueness</strong> — group names are globally unique; <code>(group_id, title, disambiguation)</code> is unique per item; alias/tag/flag values and property keys are unique per item; type names are unique within their scope.</li>
+      <li><strong>Enum stability</strong> — <code>status</code>, <code>understanding</code>, <code>link_type</code>, and <code>data_type</code> store raw enum integers; enum values must only ever be appended, never renumbered.</li>
     </ul>
 
     <h2 id="adding">Adding a migration</h2>
