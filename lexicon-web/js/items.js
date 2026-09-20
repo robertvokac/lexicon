@@ -11,18 +11,21 @@ import {
     understandingLabel, writeLocal,
 } from './utils.js';
 
+// filterKey names the widget in filterControls; filter picks how it is built.
 const BASE_COLUMNS = [
-    { key: 'id', label: 'Id', filter: 'id' },
-    { key: 'group', label: 'Group', filter: 'group' },
-    { key: 'type', label: 'Type', filter: 'type' },
-    { key: 'title', label: 'Title', filter: 'title' },
-    { key: 'disambiguation', label: 'Disambiguation', filter: 'disambiguation', configurable: true },
-    { key: 'tags', label: 'Tags', filter: 'tag', configurable: true },
-    { key: 'flags', label: 'Flags', filter: 'flag', configurable: true },
-    { key: 'aliases', label: 'Aliases', filter: 'alias', configurable: true },
-    { key: 'status', label: 'Status', filter: 'status', configurable: true },
-    { key: 'understanding', label: 'Understanding', filter: 'understanding', configurable: true },
-    { key: 'pinned', label: 'Pinned', filter: 'pinned', configurable: true },
+    { key: 'id', label: 'Id', filter: 'id', filterKey: 'id' },
+    { key: 'group', label: 'Group', filter: 'group', filterKey: 'groupId' },
+    { key: 'type', label: 'Type', filter: 'type', filterKey: 'typeId' },
+    { key: 'title', label: 'Title', filter: 'title', filterKey: 'title' },
+    { key: 'disambiguation', label: 'Disambiguation', filter: 'disambiguation',
+      filterKey: 'disambiguation', configurable: true },
+    { key: 'tags', label: 'Tags', filter: 'tag', filterKey: 'tag', configurable: true },
+    { key: 'flags', label: 'Flags', filter: 'flag', filterKey: 'flag', configurable: true },
+    { key: 'aliases', label: 'Aliases', filter: 'alias', filterKey: 'alias', configurable: true },
+    { key: 'status', label: 'Status', filter: 'status', filterKey: 'status', configurable: true },
+    { key: 'understanding', label: 'Understanding', filter: 'understanding',
+      filterKey: 'understanding', configurable: true },
+    { key: 'pinned', label: 'Pinned', filter: 'pinned', filterKey: 'pinned', configurable: true },
 ];
 const CONFIGURABLE_COLUMNS = BASE_COLUMNS.filter((column) => column.configurable)
     .map((column) => column.label);
@@ -31,7 +34,12 @@ const STORAGE = {
     pageSize: 'lexicon.web.pageSize',
     columns: 'lexicon.web.columns',
     lastItem: 'lexicon.web.lastItemId',
+    viewMode: 'lexicon.web.viewMode',
+    tableHeight: 'lexicon.web.tableHeight',
 };
+// Below this width the desktop table stops being the better way to read a
+// list, so the layout switches to cards unless the user insists otherwise.
+const COMPACT_QUERY = '(max-width: 720px)';
 
 export class MainView {
     constructor(root) {
@@ -67,6 +75,9 @@ export class MainView {
         this.pageSize = Number.parseInt(readLocal(STORAGE.pageSize, '20'), 10) || 20;
         this.sortColumn = 0;
         this.sortOrder = 'Ascending';
+        // 'auto' follows the screen width; 'table' and 'list' are explicit.
+        this.viewPreference = readLocal(STORAGE.viewMode, 'auto');
+        this.compactQuery = window.matchMedia(COMPACT_QUERY);
         this.columnVisibility = this.loadColumnVisibility();
         this.pendingRestoreItemId = Number.parseInt(readLocal(STORAGE.lastItem, '-1'), 10);
         this.build();
@@ -102,21 +113,69 @@ export class MainView {
             class: 'primary',
             title: 'Quick add the search text as a new item',
         });
-        this.addButton = button('Add ...', { class: 'secondary' });
-        this.editButton = button('Edit', { class: 'secondary', disabled: true });
-        this.deleteButton = button('Delete', { class: 'secondary', disabled: true });
+        this.addButton = button('Add ...', {
+            class: 'secondary',
+            title: 'Open the full item editor',
+        });
+        this.editButton = button('Edit', {
+            class: 'secondary',
+            title: 'Edit the selected item',
+            disabled: true,
+        });
+        this.deleteButton = button('Delete', {
+            class: 'secondary',
+            title: 'Delete the selected item',
+            disabled: true,
+        });
         this.columnsButton = button('Columns...', { class: 'secondary' });
         this.propertyFilterButton = button('Filter Properties...', { class: 'secondary' });
+
+        // On a phone the secondary actions move into this menu, so the row
+        // keeps room for the search field and quick add.
+        this.overflowPopup = el('div', { class: 'menu-popup', role: 'menu' });
+        this.overflowTrigger = button('\u22ee', {
+            class: 'overflow-trigger',
+            title: 'More actions',
+            'aria-haspopup': 'true',
+            'aria-expanded': 'false',
+            'aria-label': 'More actions',
+        });
+        this.overflowMenu = el('div', { class: 'menu overflow-menu' },
+            [this.overflowTrigger, this.overflowPopup]);
+        this.inlineActions = el('div', { class: 'action-buttons' }, [
+            this.quickAddButton, this.addButton, this.editButton,
+            this.deleteButton, this.columnsButton, this.propertyFilterButton,
+        ]);
 
         const actionBar = el('section', { class: 'action-bar' }, [
             el('label', { class: 'search-label', for: 'search-input', text: 'Search:' }),
             this.searchInput,
             this.searchSuggestions,
-            el('div', { class: 'action-buttons' }, [
-                this.quickAddButton, this.addButton, this.editButton,
-                this.deleteButton, this.columnsButton, this.propertyFilterButton,
-            ]),
+            this.inlineActions,
+            this.overflowMenu,
         ]);
+
+        // The same filter widgets, shown either in the table header or, when
+        // there is no table to put them in, stacked in this panel.
+        this.filterToggle = button('Filters', {
+            class: 'secondary filter-toggle',
+            'aria-expanded': 'false',
+        });
+        this.sortSelect = el('select', { class: 'sort-select', 'aria-label': 'Sort by' });
+        this.sortDirection = button('\u25b2', {
+            class: 'secondary sort-direction',
+            title: 'Sort ascending or descending',
+            'aria-label': 'Sort direction',
+        });
+        this.filterPanel = el('div', { class: 'filter-panel', hidden: true });
+        this.listBar = el('section', { class: 'list-bar', hidden: true }, [
+            this.filterToggle,
+            el('span', { class: 'spacer' }),
+            el('label', { class: 'sort-label', text: 'Sort:' }),
+            this.sortSelect,
+            this.sortDirection,
+        ]);
+        this.itemList = el('ul', { class: 'item-list', role: 'listbox', hidden: true });
 
         this.headerRow = el('tr', { class: 'header-row' });
         this.filterRow = el('tr', { class: 'filter-row' });
@@ -159,16 +218,33 @@ export class MainView {
             el('p', { class: 'hint', text: 'Select an item to view content...' }));
         this.linksPreview = el('div', { class: 'links-preview' });
 
-        this.root.appendChild(actionBar);
-        this.root.appendChild(el('div', { class: 'table-wrapper' }, [this.table]));
-        this.root.appendChild(pagination);
-        this.root.appendChild(el('section', { class: 'preview-area' }, [
+        this.tableWrapper = el('div', { class: 'table-wrapper' }, [this.table]);
+        this.splitter = el('div', {
+            class: 'splitter',
+            role: 'separator',
+            tabindex: '0',
+            'aria-orientation': 'horizontal',
+            'aria-label': 'Resize the item list',
+            title: 'Drag to resize. Double click to reset.',
+        });
+        this.previewArea = el('section', { class: 'preview-area' }, [
             this.contentPreview,
             this.linksPreview,
-        ]));
+        ]);
+
+        this.root.appendChild(actionBar);
+        this.root.appendChild(this.listBar);
+        this.root.appendChild(this.filterPanel);
+        this.root.appendChild(this.tableWrapper);
+        this.root.appendChild(this.itemList);
+        this.root.appendChild(pagination);
+        this.root.appendChild(this.splitter);
+        this.root.appendChild(this.previewArea);
 
         this.buildHeader();
         this.connect();
+        this.applyLayout();
+        this.restoreTableHeight();
     }
 
     // The base columns and their filter widgets are created once and keep
@@ -231,6 +307,10 @@ export class MainView {
         }
         this.updateSortIndicators();
         this.applyColumnVisibility();
+        if (this.filterPanel) {
+            this.placeFilterWidgets();
+            this.updateSortControl();
+        }
     }
 
     updateSortIndicators() {
@@ -369,6 +449,140 @@ export class MainView {
         return input;
     }
 
+    // --- Layout ----------------------------------------------------------
+    get compact() {
+        return this.compactQuery.matches;
+    }
+
+    get viewMode() {
+        if (this.viewPreference === 'table' || this.viewPreference === 'list') {
+            return this.viewPreference;
+        }
+        return this.compact ? 'list' : 'table';
+    }
+
+    setViewPreference(preference) {
+        this.viewPreference = preference;
+        writeLocal(STORAGE.viewMode, preference);
+        this.applyLayout();
+        this.renderRows();
+    }
+
+    // Moves the shared widgets between the table header and the stacked panel
+    // instead of building a second set of them.
+    placeFilterWidgets() {
+        const list = this.viewMode === 'list';
+        clear(this.filterPanel);
+        this.columns.forEach((column, index) => {
+            const widget = column.field
+                ? (this.valueFilterControls.get(column.field.id) || {}).node
+                : this.filterControls.get(column.filterKey);
+            if (!widget) return;
+            if (list) {
+                if (this.isHidden(column)) return;
+                this.filterPanel.appendChild(el('div', { class: 'filter-field' }, [
+                    el('label', { text: column.label }),
+                    widget,
+                ]));
+            } else {
+                const cell = this.filterRow.children[index];
+                if (cell && widget.parentElement !== cell) {
+                    clear(cell);
+                    cell.appendChild(widget);
+                }
+            }
+        });
+        if (list && !this.filterPanel.childElementCount) {
+            this.filterPanel.appendChild(
+                el('p', { class: 'hint', text: 'No filters are available.' }));
+        }
+    }
+
+    updateSortControl() {
+        fillSelect(this.sortSelect, this.columns.map((column, index) => ({
+            value: index,
+            label: column.label,
+        })), this.sortColumn);
+        this.sortDirection.textContent = this.sortOrder === 'Ascending' ? '\u25b2' : '\u25bc';
+    }
+
+    applyLayout() {
+        const list = this.viewMode === 'list';
+        this.root.classList.toggle('list-view', list);
+        this.root.classList.toggle('compact', this.compact);
+        this.tableWrapper.hidden = list;
+        this.itemList.hidden = !list;
+        this.listBar.hidden = !list;
+        if (!list) {
+            this.filterPanel.hidden = true;
+            this.filterToggle.setAttribute('aria-expanded', 'false');
+        }
+        // On a phone the secondary actions live behind the overflow menu.
+        const host = this.compact ? this.overflowPopup : this.inlineActions;
+        for (const action of [this.addButton, this.editButton, this.deleteButton,
+            this.columnsButton, this.propertyFilterButton]) {
+            action.classList.toggle('menu-item', this.compact);
+            if (action.parentElement !== host) host.appendChild(action);
+        }
+        this.overflowMenu.hidden = !this.compact;
+        this.placeFilterWidgets();
+        this.updateSortControl();
+        this.updatePreviewVisibility();
+    }
+
+    updatePreviewVisibility() {
+        // A large empty preview is wasted space on a phone.
+        const empty = this.selectedItemId === null;
+        // A distinct name: `empty` is the table's empty-cell style.
+        this.previewArea.classList.toggle('no-selection', empty);
+        this.splitter.hidden = this.compact || (empty && this.compact);
+    }
+
+    restoreTableHeight() {
+        const stored = Number.parseInt(readLocal(STORAGE.tableHeight, ''), 10);
+        if (Number.isFinite(stored) && stored > 80) this.setTableHeight(stored);
+    }
+
+    setTableHeight(pixels) {
+        const target = this.viewMode === 'list' ? this.itemList : this.tableWrapper;
+        target.style.flex = `0 0 ${pixels}px`;
+        this.tableHeight = pixels;
+    }
+
+    connectSplitter() {
+        const surface = () => (this.viewMode === 'list' ? this.itemList : this.tableWrapper);
+        const drag = (event) => {
+            const top = surface().getBoundingClientRect().top;
+            const height = Math.max(96, Math.round(event.clientY - top));
+            this.setTableHeight(height);
+        };
+        const stop = () => {
+            window.removeEventListener('pointermove', drag);
+            window.removeEventListener('pointerup', stop);
+            document.body.classList.remove('resizing');
+            if (this.tableHeight) writeLocal(STORAGE.tableHeight, String(this.tableHeight));
+        };
+        this.splitter.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            document.body.classList.add('resizing');
+            window.addEventListener('pointermove', drag);
+            window.addEventListener('pointerup', stop);
+        });
+        this.splitter.addEventListener('dblclick', () => {
+            surface().style.flex = '';
+            this.tableHeight = 0;
+            writeLocal(STORAGE.tableHeight, '');
+        });
+        this.splitter.addEventListener('keydown', (event) => {
+            const step = event.key === 'ArrowUp' ? -24 : event.key === 'ArrowDown' ? 24 : 0;
+            if (!step) return;
+            event.preventDefault();
+            const current = surface().getBoundingClientRect().height;
+            this.setTableHeight(Math.max(96, Math.round(current + step)));
+            writeLocal(STORAGE.tableHeight, String(this.tableHeight));
+        });
+    }
+
     connect() {
         const search = debounce(() => this.resetPaginationAndRefresh(), 250);
         this.searchInput.addEventListener('input', search);
@@ -390,6 +604,44 @@ export class MainView {
             writeLocal(STORAGE.pageSize, String(this.pageSize));
             this.resetPaginationAndRefresh();
         });
+
+        this.filterToggle.addEventListener('click', () => {
+            const open = this.filterPanel.hidden;
+            this.filterPanel.hidden = !open;
+            this.filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            this.filterToggle.classList.toggle('active', open);
+        });
+        this.sortSelect.addEventListener('change', () => {
+            this.sortColumn = Number.parseInt(this.sortSelect.value, 10) || 0;
+            this.updateSortIndicators();
+            this.updateSortControl();
+            this.resetPaginationAndRefresh();
+        });
+        this.sortDirection.addEventListener('click', () => {
+            this.sortOrder = this.sortOrder === 'Ascending' ? 'Descending' : 'Ascending';
+            this.updateSortIndicators();
+            this.updateSortControl();
+            this.resetPaginationAndRefresh();
+        });
+        this.overflowTrigger.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const open = !this.overflowMenu.classList.contains('open');
+            this.overflowMenu.classList.toggle('open', open);
+            this.overflowTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        // Any command closes the menu, and so does a tap outside it.
+        this.overflowPopup.addEventListener('click', () => this.closeOverflow());
+        document.addEventListener('click', () => this.closeOverflow());
+        this.compactQuery.addEventListener('change', () => {
+            this.applyLayout();
+            this.renderRows();
+        });
+        this.connectSplitter();
+    }
+
+    closeOverflow() {
+        this.overflowMenu.classList.remove('open');
+        this.overflowTrigger.setAttribute('aria-expanded', 'false');
     }
 
     // --- Data ------------------------------------------------------------
@@ -569,6 +821,97 @@ export class MainView {
     }
 
     renderRows() {
+        if (this.viewMode === 'list') this.renderCards();
+        else this.renderTableRows();
+        this.updateActions();
+    }
+
+    // The same rows, read as cards: a phone should not need a sideways scroll
+    // to answer "what is this item".
+    renderCards() {
+        clear(this.itemList);
+        if (!this.items.length) {
+            this.itemList.appendChild(el('li', {
+                class: 'empty',
+                text: 'No items match the current filters.',
+            }));
+            return;
+        }
+        const visible = (key) => {
+            const column = this.columns.find((candidate) => candidate.key === key);
+            return column && !this.isHidden(column);
+        };
+        for (const item of this.items) {
+            const selected = item.id === this.selectedItemId;
+            const title = visible('disambiguation') && item.disambiguation
+                ? `${item.title} [${item.disambiguation}]`
+                : item.title;
+            const meta = [item.groupName, item.itemTypeName].filter(Boolean).join(' \u00b7 ');
+            const badges = el('div', { class: 'card-badges' });
+            if (visible('status') && item.status !== 'None') {
+                badges.appendChild(el('span', { class: 'badge', text: statusLabel(item.status) }));
+            }
+            if (visible('understanding') && item.understanding !== 'Unknown') {
+                badges.appendChild(el('span', {
+                    class: 'badge',
+                    text: understandingLabel(item.understanding),
+                }));
+            }
+            if (visible('pinned') && item.pinned) {
+                badges.appendChild(el('span', { class: 'badge pinned', text: 'Pinned' }));
+            }
+            for (const [key, values] of [['tags', item.tags], ['flags', item.flags],
+                ['aliases', item.aliases]]) {
+                if (!visible(key) || !values || !values.length) continue;
+                badges.appendChild(el('span', {
+                    class: 'badge muted',
+                    text: joinValues(values),
+                }));
+            }
+            for (const column of this.columns) {
+                if (!column.field) continue;
+                const value = this.cellText(item, column);
+                if (value) {
+                    badges.appendChild(el('span', {
+                        class: 'badge muted',
+                        text: `${column.label}: ${value}`,
+                    }));
+                }
+            }
+
+            const card = el('li', {
+                class: selected ? 'item-card selected' : 'item-card',
+                tabindex: '0',
+                role: 'option',
+                'aria-selected': selected ? 'true' : 'false',
+                onclick: () => this.selectItem(item.id),
+                onkeydown: (event) => {
+                    if (event.key === 'Enter') {
+                        this.selectItem(item.id).then(() => this.editSelectedItem());
+                        event.preventDefault();
+                    }
+                },
+            }, [
+                el('div', { class: 'card-main' }, [
+                    el('div', { class: 'card-title', text: title }),
+                    meta ? el('div', { class: 'card-meta', text: meta }) : null,
+                    badges.childElementCount ? badges : null,
+                ]),
+                button('\u203a', {
+                    class: 'card-open',
+                    title: 'Edit this item',
+                    'aria-label': `Edit ${item.title}`,
+                    onclick: (event) => {
+                        event.stopPropagation();
+                        this.selectItem(item.id).then(() => this.editSelectedItem());
+                    },
+                }),
+            ]);
+            this.itemList.appendChild(card);
+        }
+    }
+
+    renderTableRows() {
         clear(this.tableBody);
         if (!this.items.length) {
             this.tableBody.appendChild(el('tr', {}, [el('td', {
@@ -576,7 +919,6 @@ export class MainView {
                 colspan: String(this.columns.length),
                 text: 'No items match the current filters.',
             })]));
-            this.updateActions();
             return;
         }
         for (const item of this.items) {
@@ -608,7 +950,6 @@ export class MainView {
             });
             this.tableBody.appendChild(row);
         }
-        this.updateActions();
     }
 
     renderPagination() {
@@ -648,6 +989,7 @@ export class MainView {
             this.sortOrder = 'Ascending';
         }
         this.updateSortIndicators();
+        this.updateSortControl();
         this.resetPaginationAndRefresh();
     }
 
@@ -656,12 +998,15 @@ export class MainView {
         this.selectedItemId = itemId;
         writeLocal(STORAGE.lastItem, String(itemId));
         const index = this.items.findIndex((item) => item.id === itemId);
-        [...this.tableBody.children].forEach((row, position) => {
+        const rows = this.viewMode === 'list' ? this.itemList.children
+                                              : this.tableBody.children;
+        [...rows].forEach((row, position) => {
             const selected = position === index;
             row.classList.toggle('selected', selected);
             row.setAttribute('aria-selected', selected ? 'true' : 'false');
         });
         this.updateActions();
+        this.updatePreviewVisibility();
         try {
             const loaded = await api.getItem(itemId, ['links', 'backlinks']);
             clear(this.contentPreview);
@@ -724,8 +1069,9 @@ export class MainView {
         await this.resetPaginationAndRefresh();
         if (this.items.length) {
             await this.selectItem(this.items[0].id);
-            const row = this.tableBody.children[0];
-            if (row) row.focus();
+            const rows = this.viewMode === 'list' ? this.itemList.children
+                                                  : this.tableBody.children;
+            if (rows[0]) rows[0].focus();
         }
     }
 
@@ -810,6 +1156,7 @@ export class MainView {
             this.selectedItemId = null;
             clear(this.contentPreview);
             clear(this.linksPreview);
+            this.updatePreviewVisibility();
             await this.refreshAll();
         } catch (error) {
             if (!error.isUnauthorized) await errorDialog(error.message);
@@ -837,6 +1184,7 @@ export class MainView {
         clearFilter('Understanding', 'understanding');
         clearFilter('Pinned', 'pinned');
         this.applyColumnVisibility();
+        this.placeFilterWidgets();
         await this.resetPaginationAndRefresh();
     }
 

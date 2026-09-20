@@ -107,6 +107,8 @@ Open <http://127.0.0.1:8080/> and log in with the user you created with
 | `lexicon.web.pageSize` | `localStorage` | Rows per page |
 | `lexicon.web.columns` | `localStorage` | Which optional columns are visible |
 | `lexicon.web.lastItemId` | `localStorage` | Reselects the last item you looked at |
+| `lexicon.web.viewMode` | `localStorage` | Table, list, or automatic |
+| `lexicon.web.tableHeight` | `localStorage` | Where you put the splitter |
 
 The token lives in `sessionStorage` on purpose: a browser restart requires a
 new sign-in. There is no long-lived "remember me" token.
@@ -133,6 +135,24 @@ Everything below behaves the same way in both:
 | `PropertyFilterDialog` (key exact, value contains, empty value matches any) | the same semantics with Add/Edit/Remove/Clear/Apply |
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |
 | Light and dark themes | the same, stored per browser |
+| Resizable split between the item list and the preview | a draggable splitter whose position is remembered |
+
+### Two readings of the same list
+
+`View -> Table view` is the desktop reading: every column, the filter row in
+the table header, sorting by clicking a header. `View -> List view` is the same
+data as cards - title, group and type, then status, understanding, pinned, tags
+and any type field values - with the filters in a stacked panel behind a
+`Filters` button and a `Sort` control beside it. Both use the same filter
+widgets, the same server-side query and the same selection.
+
+`View -> Automatic view` (the default) picks the table on a wide window and the
+list on a phone. The choice is remembered per browser, so you can have the full
+table on a phone if that is what you want.
+
+On a phone the menu opens as a drawer over the page, the secondary actions move
+behind a single overflow button so search and quick add keep the row, and the
+preview appears only once something is selected.
 
 Deliberate differences, all of them because a browser is not a desktop:
 

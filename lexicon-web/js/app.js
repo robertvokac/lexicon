@@ -218,6 +218,21 @@ class Application {
                     { label: 'All flags...', action: () => showValueOverview('flags') },
                     { label: 'All aliases...', action: () => showValueOverview('aliases') },
                     { separator: true },
+                    // The table is the desktop reading; the list is the one
+                    // that fits a phone. Automatic follows the screen.
+                    {
+                        label: 'Table view',
+                        action: () => this.view && this.view.setViewPreference('table'),
+                    },
+                    {
+                        label: 'List view',
+                        action: () => this.view && this.view.setViewPreference('list'),
+                    },
+                    {
+                        label: 'Automatic view',
+                        action: () => this.view && this.view.setViewPreference('auto'),
+                    },
+                    { separator: true },
                     { label: 'Light mode', action: () => applyTheme('light') },
                     { label: 'Dark mode', action: () => applyTheme('dark') },
                 ],
@@ -242,6 +257,10 @@ class Application {
             for (const trigger of nav.querySelectorAll('.menu-trigger')) {
                 trigger.setAttribute('aria-expanded', 'false');
             }
+            // On a phone the menu is a drawer over the page; a chosen command
+            // closes it instead of leaving it covering the content.
+            this.menuBar.classList.remove('menu-open');
+            this.menuToggle.setAttribute('aria-expanded', 'false');
         };
 
         for (const definition of definitions) {
