@@ -10,7 +10,10 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QVBoxLayout>
+
+#include <limits>
 
 GroupManagerDialog::GroupManagerDialog(QWidget* parent)
     : QDialog(parent) {
@@ -59,7 +62,7 @@ void GroupManagerDialog::loadGroups() {
 
     m_list->clear();
     for (const auto& group : m_groups) {
-        auto* item = new QListWidgetItem(group.name, m_list);
+        auto* item = new QListWidgetItem(QString("%1  %2").arg(group.position).arg(group.name), m_list);
         item->setData(Qt::UserRole, group.id);
         item->setToolTip(group.description);
     }
@@ -75,8 +78,13 @@ bool GroupManagerDialog::promptForGroup(GroupRecord& group, bool isEdit) {
     auto* descEdit = new QPlainTextEdit(&dialog);
     descEdit->setPlainText(group.description);
     descEdit->setMinimumHeight(120);
+    auto* positionEdit = new QSpinBox(&dialog);
+    positionEdit->setRange(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+    positionEdit->setValue(group.position);
+    positionEdit->setToolTip("Lower positions appear first. Groups with the same position are sorted by name.");
     formLayout->addRow("Name:", nameEdit);
     formLayout->addRow("Description:", descEdit);
+    formLayout->addRow("Position:", positionEdit);
     layout->addLayout(formLayout);
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
     layout->addWidget(buttonBox);
@@ -92,11 +100,16 @@ bool GroupManagerDialog::promptForGroup(GroupRecord& group, bool isEdit) {
     }
     group.name = nameEdit->text().trimmed();
     group.description = descEdit->toPlainText().trimmed();
+    group.position = positionEdit->value();
     return true;
 }
 
 void GroupManagerDialog::addGroup() {
     GroupRecord group;
+    if (!m_groups.isEmpty()) {
+        const int lastPosition = m_groups.last().position;
+        group.position = lastPosition == std::numeric_limits<int>::max() ? lastPosition : lastPosition + 1;
+    }
     if (!promptForGroup(group, false)) {
         return;
     }

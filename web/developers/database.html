@@ -82,7 +82,7 @@
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–11</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–12</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
     </ol>
     <table>
       <tr><th>Version</th><th>What it introduced</th></tr>
@@ -97,6 +97,7 @@
       <tr><td>9</td><td><code>link.custom_value</code></td></tr>
       <tr><td>10</td><td>Renamed <code>map</code> to <code>item_group</code> and <code>term.map_id</code> to <code>term.group_id</code></td></tr>
       <tr><td>11</td><td>Renamed <code>term</code> to <code>item</code>, including child/link columns, indexes, and log entries</td></tr>
+      <tr><td>12</td><td>Added <code>item_group.position</code>, initialized from the previous name order, and indexed group order</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -105,9 +106,11 @@
     <pre><code>CREATE TABLE item_group (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
-  description TEXT NOT NULL DEFAULT ''
+  description TEXT NOT NULL DEFAULT '',
+  position    INTEGER NOT NULL DEFAULT 0
 );
-CREATE UNIQUE INDEX item_group_name_unique ON item_group(name);</code></pre>
+CREATE UNIQUE INDEX item_group_name_unique ON item_group(name);
+CREATE INDEX idx_item_group_position ON item_group(position, name COLLATE NOCASE);</code></pre>
 
     <h3><code>item</code></h3>
     <pre><code>CREATE TABLE item (

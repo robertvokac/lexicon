@@ -24,6 +24,7 @@ It is designed for structured learning and technical note-taking with groups, it
 
 - SQLite-backed local dictionary (single-file DB)
 - Full CRUD for groups and items
+- Custom group order using a numeric position
 - Rich item metadata:
   - aliases
   - tags
@@ -121,7 +122,7 @@ Groups are top-level buckets for items (for example: `C++`, `Databases`, `Networ
 1. Open `Manage` → `Groups...`.
 2. Use:
    - `Add` to create a new group
-   - `Edit` to rename/change description
+   - `Edit` to rename a group, change its description, or set its position (lower numbers appear first)
    - `Delete` to remove a group
 3. Important: deleting a group also deletes all items in that group (cascade delete).
 

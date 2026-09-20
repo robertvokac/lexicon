@@ -217,6 +217,16 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
             "DROP INDEX idx_link_to_term_id;",
             "CREATE INDEX idx_link_to_item_id ON link(to_item_id);",
             "UPDATE log SET table_name = 'item' WHERE table_name = 'term';"
+        }},
+        {12, {
+            "ALTER TABLE item_group ADD COLUMN position INTEGER NOT NULL DEFAULT 0;",
+            "UPDATE item_group SET position = ("
+            " SELECT COUNT(*) FROM item_group AS earlier"
+            " WHERE earlier.name COLLATE NOCASE < item_group.name COLLATE NOCASE"
+            " OR (earlier.name COLLATE NOCASE = item_group.name COLLATE NOCASE"
+            " AND earlier.id < item_group.id)"
+            ");",
+            "CREATE INDEX idx_item_group_position ON item_group(position, name COLLATE NOCASE);"
         }}
     };
 
@@ -266,7 +276,7 @@ bool DatabaseManager::execStatements(const QStringList& statements, QString* err
 QList<GroupRecord> DatabaseManager::loadGroups(QString* errorMessage) {
     QList<GroupRecord> groups;
     QSqlQuery query(database());
-    if (!query.exec("SELECT id, name, description FROM item_group ORDER BY name COLLATE NOCASE;")) {
+    if (!query.exec("SELECT id, name, description, position FROM item_group ORDER BY position, name COLLATE NOCASE, id;")) {
         setError(errorMessage, query.lastError().text());
         return groups;
     }
@@ -276,6 +286,7 @@ QList<GroupRecord> DatabaseManager::loadGroups(QString* errorMessage) {
         group.id = query.value(0).toInt();
         group.name = query.value(1).toString();
         group.description = query.value(2).toString();
+        group.position = query.value(3).toInt();
         groups.push_back(group);
     }
     return groups;
@@ -295,14 +306,16 @@ bool DatabaseManager::upsertGroup(const GroupRecord& group, QString* errorMessag
     int logType = 2; // updated
 
     if (group.id < 0) {
-        query.prepare("INSERT INTO item_group(name, description) VALUES(?, ?);");
+        query.prepare("INSERT INTO item_group(name, description, position) VALUES(?, ?, ?);");
         query.addBindValue(trimmedName);
         query.addBindValue(trimmedDescription);
+        query.addBindValue(group.position);
         logType = 1; // created
     } else {
-        query.prepare("UPDATE item_group SET name = ?, description = ? WHERE id = ?;");
+        query.prepare("UPDATE item_group SET name = ?, description = ?, position = ? WHERE id = ?;");
         query.addBindValue(trimmedName);
         query.addBindValue(trimmedDescription);
+        query.addBindValue(group.position);
         query.addBindValue(group.id);
     }
 
@@ -400,7 +413,7 @@ QList<ItemRecord> DatabaseManager::loadItems(int groupId, const QString& searchT
     QString orderClause;
     switch (sortColumn) {
         case 0: orderClause = "t.id"; break;
-        case 1: orderClause = "m.name COLLATE NOCASE"; break;
+        case 1: orderClause = "m.position"; break;
         case 2: orderClause = "t.title COLLATE NOCASE"; break;
         case 3: orderClause = "COALESCE(t.disambiguation, '') COLLATE NOCASE"; break;
         case 4: orderClause = "tags COLLATE NOCASE"; break;
@@ -412,6 +425,9 @@ QList<ItemRecord> DatabaseManager::loadItems(int groupId, const QString& searchT
     }
 
     sql += "ORDER BY " + orderClause + (sortOrder == Qt::AscendingOrder ? " ASC " : " DESC ");
+    if (sortColumn == 1) {
+        sql += ", m.name COLLATE NOCASE";
+    }
     
     // Secondary sort for stability
     if (sortColumn != 2) {

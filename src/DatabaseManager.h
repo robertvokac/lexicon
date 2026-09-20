@@ -39,6 +39,7 @@ struct GroupRecord {
     int id = -1;
     QString name;
     QString description;
+    int position = 0;
 };
 
 struct LinkRecord {
