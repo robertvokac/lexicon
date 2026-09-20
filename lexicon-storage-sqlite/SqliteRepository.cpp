@@ -39,6 +39,10 @@ void require(bool condition, const std::string &message,
 void valid(const lexicon::Result<void> &result) {
   if (!result) throw Failure(result.error().message, result.error().code);
 }
+void requireChanged(const Connection &db, const char *record) {
+  if (db.changes() == 0)
+    throw Failure(std::string(record) + " not found.", lexicon::Error::Code::NotFound);
+}
 std::vector<std::string> strings(const Connection &db, const std::string &sql, int id) {
   Statement stmt(db, sql); stmt.bind(id);
   std::vector<std::string> result;
@@ -111,14 +115,14 @@ std::vector<std::string> splitJoined(const std::string &joined) {
 struct SqliteRepository::Impl {
   Connection db;
   std::string path;
-  bool unitActive = false;
+  enum class UnitState { Idle, Active, Failed } unitState = UnitState::Idle;
 };
 SqliteRepository::SqliteRepository() : impl_(std::make_unique<Impl>()) {}
 SqliteRepository::~SqliteRepository() = default;
 
 SqliteRepository::Result<void> SqliteRepository::open(const std::string &path) {
   return guarded([&] {
-    impl_->unitActive = false;
+    impl_->unitState = Impl::UnitState::Idle;
     impl_->path.clear();
     try {
       impl_->db.open(path);
@@ -185,6 +189,7 @@ SqliteRepository::Result<void> SqliteRepository::upsertGroup(const GroupRecord &
     } else {
       Statement(impl_->db, "UPDATE item_group SET name = ?, description = ?, position = ? WHERE id = ?;")
           .bind(lexicon::trim(group.name)).bind(lexicon::trim(group.description)).bind(group.position).bind(id).run();
+      requireChanged(impl_->db, "Group");
     }
     logOperation(impl_->db, "item_group", id, group.id < 0 ? 1 : 2);
     tx.commit();
@@ -194,6 +199,7 @@ SqliteRepository::Result<void> SqliteRepository::deleteGroup(int groupId) {
   return guarded([&] {
     Transaction tx(impl_->db, "lexicon_write");
     Statement(impl_->db, "DELETE FROM item_group WHERE id = ?;").bind(groupId).run();
+    requireChanged(impl_->db, "Group");
     logOperation(impl_->db, "item_group", groupId, 3); tx.commit();
   });
 }
@@ -223,6 +229,7 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemType(const ItemTypeRe
     } else {
       Statement(impl_->db, "UPDATE item_type SET group_id = ?, name = ?, description = ? WHERE id = ?;")
           .nullableId(type.groupId).bind(lexicon::trim(type.name)).bind(lexicon::trim(type.description)).bind(id).run();
+      requireChanged(impl_->db, "Type");
     }
     logOperation(impl_->db, "item_type", id, type.id < 0 ? 1 : 2); tx.commit();
   });
@@ -234,6 +241,7 @@ SqliteRepository::Result<int> SqliteRepository::countItemsForType(int itemTypeId
 SqliteRepository::Result<void> SqliteRepository::deleteItemType(int itemTypeId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
     Statement(impl_->db, "DELETE FROM item_type WHERE id = ?;").bind(itemTypeId).run();
+    requireChanged(impl_->db, "Type");
     logOperation(impl_->db, "item_type", itemTypeId, 3); tx.commit(); });
 }
 SqliteRepository::Result<std::vector<SqliteRepository::ItemFieldRecord>> SqliteRepository::loadItemFields(int itemTypeId) {
@@ -257,6 +265,7 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemField
         Statement(impl_->db, "DELETE FROM item_value WHERE item_field_id = ?;").bind(id).run();
       Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ? WHERE id = ?;")
           .bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType)).bind(field.position).bind(json).bind(id).run();
+      requireChanged(impl_->db, "Field");
     } else {
       Statement(impl_->db, "INSERT INTO item_field(item_type_id, name, data_type, position, enum_options) VALUES(?, ?, ?, ?, ?);")
           .bind(field.itemTypeId).bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType))
@@ -273,6 +282,7 @@ SqliteRepository::Result<int> SqliteRepository::countFieldValues(int fieldId) {
 SqliteRepository::Result<void> SqliteRepository::deleteItemField(int fieldId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
     Statement(impl_->db, "DELETE FROM item_field WHERE id = ?;").bind(fieldId).run();
+    requireChanged(impl_->db, "Field");
     logOperation(impl_->db, "item_field", fieldId, 3); tx.commit(); });
 }
 
@@ -378,8 +388,8 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
     }
     if (sortColumn >= 11 && typeId > 0) {
       auto fields = fieldsFor(impl_->db, typeId);
-      int index = sortColumn - 11;
-      if (index < static_cast<int>(fields.size())) {
+      const auto index = static_cast<std::size_t>(sortColumn - 11);
+      if (index < fields.size()) {
         const auto &field = fields[index];
         std::string value = "(SELECT iv.value FROM item_value iv WHERE iv.item_id = t.id AND iv.item_field_id = "
                             + std::to_string(field.id) + ")";
@@ -486,6 +496,7 @@ int saveItemNative(const Connection &db, const lexicon::ItemRecord &item) {
       .bind(item.groupId).bind(lexicon::trim(item.title)).bind(lexicon::trim(item.disambiguation))
       .bind(static_cast<int>(item.understanding)).bind(static_cast<int>(item.status)).bind(item.pinned ? 1 : 0)
       .bind(item.content).nullableId(item.itemTypeId).bind(id).run();
+    requireChanged(db, "Item");
   }
   replaceStrings(db, "alias", "alias", id, item.aliases);
   replaceStrings(db, "tag", "name", id, item.tags);
@@ -514,6 +525,7 @@ SqliteRepository::Result<int> SqliteRepository::saveItemReturningId(const ItemRe
 SqliteRepository::Result<void> SqliteRepository::deleteItem(int itemId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
     Statement(impl_->db, "DELETE FROM item WHERE id = ?;").bind(itemId).run();
+    requireChanged(impl_->db, "Item");
     logOperation(impl_->db, "item", itemId, 3); tx.commit(); });
 }
 namespace {
@@ -547,28 +559,37 @@ SqliteRepository::Result<std::vector<SqliteRepository::LinkRecord>> SqliteReposi
 SqliteRepository::Result<void> SqliteRepository::saveLink(const LinkRecord &link) {
   return guarded([&] {
     valid(lexicon::validateLink(link));
+    const std::string customValue = link.linkType == lexicon::LinkType::Custom
+                                        ? lexicon::trim(link.customValue)
+                                        : std::string{};
     Transaction tx(impl_->db, "lexicon_write");
     int id = link.id;
     if (id < 0) {
       Statement(impl_->db, "INSERT INTO link (from_item_id, to_item_id, link_type, position, custom_value) VALUES (?, ?, ?, ?, ?);")
         .bind(link.fromItemId).bind(link.toItemId).bind(static_cast<int>(link.linkType)).bind(link.position)
-        .bind(lexicon::trim(link.customValue)).run();
+        .bind(customValue).run();
       id = impl_->db.lastId();
     } else {
       Statement(impl_->db, "UPDATE link SET from_item_id = ?, to_item_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;")
         .bind(link.fromItemId).bind(link.toItemId).bind(static_cast<int>(link.linkType)).bind(link.position)
-        .bind(lexicon::trim(link.customValue)).bind(id).run();
+        .bind(customValue).bind(id).run();
+      requireChanged(impl_->db, "Link");
     }
     logOperation(impl_->db, "link", id, link.id < 0 ? 1 : 2); tx.commit();
   });
 }
 SqliteRepository::Result<void> SqliteRepository::deleteLink(int linkId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
-    logOperation(impl_->db, "link", linkId, 3);
-    Statement(impl_->db, "DELETE FROM link WHERE id = ?;").bind(linkId).run(); tx.commit(); });
+    Statement(impl_->db, "DELETE FROM link WHERE id = ?;").bind(linkId).run();
+    requireChanged(impl_->db, "Link");
+    logOperation(impl_->db, "link", linkId, 3); tx.commit(); });
 }
 SqliteRepository::Result<void> SqliteRepository::logItemRead(int itemId) {
-  return guarded([&] { logOperation(impl_->db, "item", itemId, 4); });
+  return guarded([&] {
+    Statement(impl_->db, "INSERT INTO log(table_name, record_id, log_type) "
+                         "SELECT 'item', id, 4 FROM item WHERE id = ?;").bind(itemId).run();
+    requireChanged(impl_->db, "Item");
+  });
 }
 SqliteRepository::Result<std::vector<std::string>> SqliteRepository::loadSuggestions() {
   return guarded([&] {
@@ -628,18 +649,38 @@ SqliteRepository::Result<int> SqliteRepository::findItemId(const std::string &ti
   });
 }
 SqliteRepository::Result<void> SqliteRepository::beginUnitOfWork() {
-  return guarded([&] { require(!impl_->unitActive, "Unit of work already active.");
-    impl_->db.exec("SAVEPOINT lexicon_unit"); impl_->unitActive = true; });
+  return guarded([&] {
+    require(impl_->unitState == Impl::UnitState::Idle,
+            "Unit of work is already active or its state is uncertain.",
+            lexicon::Error::Code::Storage);
+    impl_->db.exec("SAVEPOINT lexicon_unit");
+    impl_->unitState = Impl::UnitState::Active;
+  });
 }
 SqliteRepository::Result<void> SqliteRepository::commitUnitOfWork() {
-  return guarded([&] { require(impl_->unitActive, "No active unit of work.");
-    impl_->db.exec("RELEASE SAVEPOINT lexicon_unit"); impl_->unitActive = false; });
+  return guarded([&] {
+    require(impl_->unitState == Impl::UnitState::Active,
+            "No active unit of work.", lexicon::Error::Code::Storage);
+    impl_->db.exec("RELEASE SAVEPOINT lexicon_unit");
+    impl_->unitState = Impl::UnitState::Idle;
+  });
 }
-void SqliteRepository::rollbackUnitOfWork() {
-  if (!impl_->unitActive) return;
-  try { impl_->db.exec("ROLLBACK TO SAVEPOINT lexicon_unit");
-        impl_->db.exec("RELEASE SAVEPOINT lexicon_unit"); } catch (...) {}
-  impl_->unitActive = false;
+SqliteRepository::Result<void> SqliteRepository::rollbackUnitOfWork() {
+  return guarded([&] {
+    require(impl_->unitState == Impl::UnitState::Active,
+            "No active unit of work to roll back.",
+            lexicon::Error::Code::Storage);
+    try {
+      impl_->db.exec("ROLLBACK TO SAVEPOINT lexicon_unit");
+      impl_->db.exec("RELEASE SAVEPOINT lexicon_unit");
+      impl_->unitState = Impl::UnitState::Idle;
+    } catch (...) {
+      // An unknown savepoint state must never be reused as a healthy connection.
+      impl_->unitState = Impl::UnitState::Failed;
+      impl_->db.close();
+      throw;
+    }
+  });
 }
 
 namespace {

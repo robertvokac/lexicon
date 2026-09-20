@@ -90,38 +90,18 @@
     </div>
 
     <h2 id="todo">Working TODO list</h2>
-    <p>Snapshot of the maintainer's <code>TODO.md</code>, grouped by area:</p>
-
-    <h3>UI / UX</h3>
+    <p>The current <code>TODO.md</code> focuses on polish and future product features. Groups, Items, Types, Fields, typed Values, Links, multi-field search, pinned filters, Markdown editing, and themes are already implemented.</p>
+    <h3>UI polish</h3>
     <ul>
-      <li>Resizable table columns prioritizing Title, Status, and Understanding; wrap long text in Tags/Aliases/Flags; possibly hide minor columns by default.</li>
-      <li>Clearer Markdown preview panel with border/header, syntax highlighting, and visible table borders.</li>
-      <li>Dedicated panel for links/backlinks with visual separation.</li>
-      <li>Consistent toolbar/sidebar for Add / Edit / Delete with icons.</li>
-      <li><code>QSplitter</code>-based resizing between table, preview, and links areas.</li>
+      <li>Improve table column density and wrapping for long Tags, Aliases, and Flags.</li>
+      <li>Review resizing between the item table, content preview, and links area.</li>
+      <li>Add keyboard shortcuts and undo/redo across item edits.</li>
     </ul>
-
-    <h3>Features</h3>
+    <h3>Product features</h3>
     <ul>
-      <li>All relation types visible and selectable when adding links; consider bidirectional links for <em>Related</em> and <em>Contrasts</em>.</li>
-      <li>Multi-field search refinements and quick filters for pinned/unpinned items.</li>
-      <li>Markdown toolbar polish: tooltips with syntax hints, undo/redo for inserts.</li>
-      <li>Validation: require an existing group and a non-empty title before saving.</li>
-    </ul>
-
-    <h3>Database / backend</h3>
-    <ul>
-      <li>Verify relation-type mapping; consider optional <code>note</code> or <code>bidirectional</code> columns on links.</li>
-      <li>Ensure sorting and uniqueness of aliases/tags/flags.</li>
-      <li>Decide on raw Markdown vs. rendered HTML storage; keep rendering safe.</li>
-    </ul>
-
-    <h3>Nice-to-have</h3>
-    <ul>
-      <li>Export / import of items (Markdown or JSON).</li>
-      <li>Keyboard shortcuts for common actions.</li>
-      <li>Undo/redo for item edits.</li>
-      <li>Graph visualization of item relationships.</li>
+      <li>Improve search ranking so exact title matches appear first.</li>
+      <li>Export and import Items and Groups in a documented format.</li>
+      <li>Add an optional graph view of Item relationships.</li>
     </ul>
 
     <div class="callout callout-tip">

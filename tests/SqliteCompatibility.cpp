@@ -41,6 +41,12 @@ int main() {
     lexicon::LexiconApplication app(repository);
     auto groups = app.groups.loadGroups();
     if (!success(groups, "Load migrated groups")) return 1;
+    auto defaultGroup = app.groups.defaultGroupId();
+    if (!success(defaultGroup, "Resolve migrated Default") ||
+        !expect(std::any_of(groups->begin(), groups->end(),
+                            [&](const auto &group) {
+                              return group.id == *defaultGroup && group.name == "Default";
+                            }), "Migration did not preserve Default")) return 1;
     auto found = app.search.findItemId("Žluťoučký kůň", "");
     if (!success(found, "Find migrated UTF-8 term")) return 1;
     auto item = app.items.loadItem(*found);
@@ -78,6 +84,12 @@ int main() {
         !expect(settings->at("view.theme") == "tmavý", "Qt configuration changed")) return 1;
     auto groupId = app.groups.defaultGroupId();
     if (!success(groupId, "Default group")) return 1;
+    auto existingGroups = app.groups.loadGroups();
+    if (!success(existingGroups, "Load Qt v20 groups") ||
+        !expect(std::any_of(existingGroups->begin(), existingGroups->end(),
+                            [&](const auto &group) {
+                              return group.id == *groupId && group.name == "Default";
+                            }), "Qt v20 Default Group changed")) return 1;
     lexicon::ItemRecord newItem;
     newItem.groupId = *groupId;
     newItem.title = "Persistent item";
@@ -163,6 +175,7 @@ int main() {
     rollbackItem.title = "Must roll back";
     lexicon::LinkRecord badLink;
     badLink.toItemId = 999999;
+    badLink.linkType = lexicon::LinkType::Related;
     auto failed = app.items.createItem(rollbackItem, {badLink});
     if (!expect(!failed && failed.error().code == lexicon::Error::Code::Storage, "Expected foreign-key failure")) return 1;
     auto rolledBack = app.search.findItemId("Must roll back", "");

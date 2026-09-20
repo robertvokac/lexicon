@@ -38,7 +38,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - Typed item relationships:
   - outgoing links
   - incoming links (backlinks)
-  - link types like `Is A`, `Part Of`, `Depends On`, `Related`, etc.
+  - link types like `Is A`, `Part Of`, `Depends On`, `Related`, and `Custom` with a label
 - Markdown item content editor with formatting toolbar and live preview
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
@@ -269,6 +269,7 @@ Tips:
 ### 8) Create links and backlinks
 
 Use `Links` and `Backlinks` tabs in the item editor.
+`Custom` links require a nonempty Custom Value. Other link types store no Custom Value.
 
 - `Links`: create outgoing relationship from current item to a target item
 - `Backlinks`: create incoming relationship from a source item to current item

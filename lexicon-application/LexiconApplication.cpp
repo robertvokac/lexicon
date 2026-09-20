@@ -89,7 +89,11 @@ ItemService::saveItemWithLinks(const ItemRecord &item,
   if (auto begin = repository_.beginUnitOfWork(); !begin)
     return std::unexpected(begin.error());
   const auto rollback = [&](Error error) -> Result<ItemId> {
-    repository_.rollbackUnitOfWork();
+    if (auto rolledBack = repository_.rollbackUnitOfWork(); !rolledBack)
+      return std::unexpected(Error{
+          Error::Code::Storage,
+          "Operation failed: " + error.message + "; rollback failed: " +
+              rolledBack.error().message});
     return std::unexpected(std::move(error));
   };
   auto saved = repository_.saveItemReturningId(item);

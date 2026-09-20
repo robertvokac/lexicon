@@ -72,7 +72,7 @@ public:
                          const std::string &disambiguation) override;
   Result<void> beginUnitOfWork() override;
   Result<void> commitUnitOfWork() override;
-  void rollbackUnitOfWork() override;
+  Result<void> rollbackUnitOfWork() override;
   Result<std::string> importBlob(const std::string &sourcePath) override;
   Result<void> exportBlob(const std::string &hash,
                           const std::string &destinationPath) override;

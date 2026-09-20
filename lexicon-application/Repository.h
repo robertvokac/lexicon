@@ -53,7 +53,7 @@ public:
                                  const std::string &disambiguation) = 0;
   virtual Result<void> beginUnitOfWork() = 0;
   virtual Result<void> commitUnitOfWork() = 0;
-  virtual void rollbackUnitOfWork() = 0;
+  virtual Result<void> rollbackUnitOfWork() = 0;
   virtual Result<std::string> importBlob(const std::string &sourcePath) = 0;
   virtual Result<void> exportBlob(const std::string &hash,
                                   const std::string &destinationPath) = 0;

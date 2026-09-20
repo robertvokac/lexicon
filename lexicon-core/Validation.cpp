@@ -168,6 +168,12 @@ Result<void> validateItem(const ItemRecord &item,
 Result<void> validateLink(const LinkRecord &link) {
   if (link.fromItemId <= 0 || link.toItemId <= 0)
     return invalid("Both link endpoints are required.");
+  const int type = static_cast<int>(link.linkType);
+  if (type <= static_cast<int>(LinkType::None) ||
+      type > static_cast<int>(LinkType::Custom))
+    return invalid("A valid link type is required.");
+  if (link.linkType == LinkType::Custom && trim(link.customValue).empty())
+    return invalid("Custom links need a value.");
   return {};
 }
 } // namespace lexicon

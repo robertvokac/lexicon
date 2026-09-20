@@ -43,6 +43,7 @@ public:
     }
   }
   int lastId() const { return static_cast<int>(sqlite3_last_insert_rowid(get())); }
+  int changes() const { return sqlite3_changes(get()); }
 };
 
 class Statement {
