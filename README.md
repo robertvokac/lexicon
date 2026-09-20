@@ -93,18 +93,16 @@ Create and maintain incoming relationships (who references this item).
 
 ## Requirements
 
-- CMake `3.21+`
-- C++23-compatible compiler (GCC/Clang/MSVC)
-- Qt 6 with:
-  - `Widgets`
-  - `Sql`
-- SQLite Qt driver (usually included with Qt packages)
+- CMake `3.21+` and a C++23-compatible compiler
+- SQLite 3.38+ with JSON functions
+- OpenSSL `libcrypto` for SHA-256 blob identifiers
+- Qt 6 `Core` and `Widgets` only for the desktop client
 
 ### Debian/Ubuntu example
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake qt6-base-dev libqt6sql6-sqlite
+sudo apt install -y build-essential cmake libsqlite3-dev libssl-dev qt6-base-dev
 ```
 
 ## Build and run
@@ -117,48 +115,34 @@ cmake --build build --target Lexicon -j
 
 ## Architecture
 
-The build separates the application layers and a Qt conversion target:
-
-| Target | Responsibility |
+| Target | Responsibility and allowed dependencies |
 | --- | --- |
-| `lexicon-core` | Item, type, field, group, and link records; domain validation. Uses only the C++ standard library. |
-| `lexicon-application` | Item, type, group, link, and search services. Defines the `Repository` interface and coordinates an item edit with its links as one unit of work. Uses only `lexicon-core` and the C++ standard library. |
-| `lexicon-qt-bridge` | Converts UTF-8 domain records to and from Qt value objects for the existing desktop and Qt SQL code. |
-| `lexicon-storage-sqlite` | Implements `Repository` with Qt SQL, contains schema migrations, queries, transactions, and blob storage. |
-| `Lexicon` (`lexicon-qt/`) | Qt Widgets desktop client. Calls application services through a local Qt facade and contains no SQL queries. |
+| `lexicon-core` | Records, validation, and string comparison policy; standard C++ only. |
+| `lexicon-application` | Repository interface and services; depends on core only. |
+| `lexicon-storage-sqlite` | Native SQLite repository, migrations, transactions, and blob files; depends on application, SQLite C API, and OpenSSL Crypto. No Qt. |
+| `lexicon-qt-bridge` | Converts UTF-8 standard C++ values to and from Qt values; depends on core and QtCore. |
+| `Lexicon` (`lexicon-qt/`) | Qt Widgets frontend and composition root; injects `SqliteRepository` into `LexiconApplication`. No SQL in Widgets. |
 
-Text in the core and application API is UTF-8 `std::string`. Operations return `std::expected<T, lexicon::Error>`, including `std::expected<void, lexicon::Error>` for writes. A client creates a `SqliteRepository`, opens a database, then constructs `LexiconApplication` with that repository. For example:
+Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. Migration versions and schema are unchanged; old QtSql databases are covered by version 10 and version 20 compatibility fixtures.
 
-```cpp
-SqliteRepository repository;
-auto opened = repository.open(databasePath);
-if (!opened) { /* report opened.error() */ }
-lexicon::LexiconApplication lexicon(repository);
+Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding.
 
-lexicon::ItemRecord item;
-item.title = "Pointer provenance";
-auto groupId = lexicon.groups.defaultGroupId();
-if (!groupId) { /* report groupId.error() */ }
-item.groupId = *groupId;
-auto created = lexicon.items.createItem(item);
-if (!created) { /* report created.error() */ }
-const lexicon::ItemId id = *created;
-```
+Qt is limited to the frontend and conversion target so another client can use core, application, and native SQLite without Qt. A future `lexicon-http` executable would call `lexicon-application` and compose it with `lexicon-storage-sqlite`; no HTTP implementation is included here.
 
-The desktop client installs its Qt facade in `lexicon-qt/ApplicationContext.*` for existing dialogs. `ItemService::saveItemWithLinks` validates an edit and updates the item and its links in one transaction; a failed link update rolls back the item update. The schema and existing `lexicon.db` migration versions are unchanged. CMake rejects Qt links on `lexicon-core` and `lexicon-application`.
-
-The core and application libraries can be configured and tested without Qt installed:
+Qt-free backend build and tests:
 
 ```bash
-cmake -S . -B build-core -DLEXICON_BUILD_DESKTOP=OFF
-cmake --build build-core
-ctest --test-dir build-core --output-on-failure
+cmake -S . -B build-headless -DLEXICON_BUILD_DESKTOP=OFF -DBUILD_TESTING=ON \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=ON -DCMAKE_DISABLE_FIND_PACKAGE_Qt5=ON
+cmake --build build-headless -j
+ctest --test-dir build-headless --output-on-failure
 ```
 
-Run the headless application and SQLite integration test with:
+Desktop build and tests:
 
 ```bash
-cmake --build build --target lexicon-core-smoke lexicon-application-integration -j
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
@@ -374,10 +358,10 @@ Backup strategies:
 
 ## Troubleshooting
 
-### App does not start (Qt plugin/driver issue)
+### App does not start
 
 - Verify Qt runtime installation.
-- Ensure SQLite Qt SQL driver is installed.
+- Ensure native SQLite and OpenSSL Crypto libraries are installed.
 
 ### Database errors on startup
 
@@ -387,7 +371,7 @@ Backup strategies:
 ### Build fails
 
 - Confirm C++23 compiler support.
-- Confirm `Qt6::Widgets` and `Qt6::Sql` are discoverable by CMake.
+- Confirm Qt Core/Widgets, SQLite, and OpenSSL Crypto are discoverable by CMake.
 
 ## Recent updates
 

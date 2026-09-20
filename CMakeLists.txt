@@ -9,7 +9,10 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
-option(LEXICON_BUILD_DESKTOP "Build the Qt desktop client and SQLite adapter" ON)
+option(LEXICON_BUILD_DESKTOP "Build the Qt desktop client" ON)
+
+find_package(SQLite3 3.38 REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
 set(MD4QT_SRC
     3rdparty/md4qt/src/algo.cpp
@@ -69,8 +72,18 @@ target_include_directories(lexicon-application PUBLIC lexicon-application)
 target_link_libraries(lexicon-application PUBLIC lexicon-core)
 set_target_properties(lexicon-application PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
-# Keep these libraries usable by clients that do not install Qt.
-foreach(target lexicon-core lexicon-application)
+add_library(lexicon-storage-sqlite STATIC
+    lexicon-storage-sqlite/SqliteRepository.h
+    lexicon-storage-sqlite/SqliteRepository.cpp
+    lexicon-storage-sqlite/SqliteInternal.h
+    lexicon-storage-sqlite/Migrations.cpp
+)
+target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
+target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application PRIVATE SQLite::SQLite3 OpenSSL::Crypto)
+set_target_properties(lexicon-storage-sqlite PROPERTIES AUTOMOC OFF AUTORCC OFF)
+
+# The backend must remain usable when Qt is not installed.
+foreach(target lexicon-core lexicon-application lexicon-storage-sqlite)
     get_target_property(direct_links ${target} LINK_LIBRARIES)
     get_target_property(public_links ${target} INTERFACE_LINK_LIBRARIES)
     if ("${direct_links};${public_links}" MATCHES "Qt[56]?::")
@@ -79,8 +92,8 @@ foreach(target lexicon-core lexicon-application)
 endforeach()
 
 if (LEXICON_BUILD_DESKTOP)
-    find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets Sql)
-    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets Sql)
+    find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core Widgets)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Widgets)
 
     add_library(lexicon-qt-bridge STATIC
         lexicon-qt-bridge/QtRecords.h
@@ -89,18 +102,6 @@ if (LEXICON_BUILD_DESKTOP)
     )
     target_include_directories(lexicon-qt-bridge PUBLIC lexicon-qt-bridge)
     target_link_libraries(lexicon-qt-bridge PUBLIC lexicon-core Qt${QT_VERSION_MAJOR}::Core)
-
-    add_library(lexicon-storage-sqlite STATIC
-        lexicon-storage-sqlite/DatabaseManager.h
-        lexicon-storage-sqlite/DatabaseManager.cpp
-        lexicon-storage-sqlite/Migrations.cpp
-        lexicon-storage-sqlite/SqliteRepository.h
-        lexicon-storage-sqlite/SqliteRepository.cpp
-        lexicon-storage-sqlite/BlobStore.h
-        lexicon-storage-sqlite/BlobStore.cpp
-    )
-    target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
-    target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application lexicon-qt-bridge Qt${QT_VERSION_MAJOR}::Sql)
 
     add_executable(Lexicon
         lexicon-qt/main.cpp
@@ -145,9 +146,15 @@ if (BUILD_TESTING)
     set_target_properties(lexicon-core-smoke PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME core_smoke COMMAND lexicon-core-smoke)
 
-    if (LEXICON_BUILD_DESKTOP)
-        add_executable(lexicon-application-integration tests/ApplicationIntegration.cpp)
-        target_link_libraries(lexicon-application-integration PRIVATE lexicon-application lexicon-storage-sqlite)
-        add_test(NAME application_integration COMMAND lexicon-application-integration)
-    endif()
+    add_executable(lexicon-application-integration tests/ApplicationIntegration.cpp)
+    target_link_libraries(lexicon-application-integration PRIVATE lexicon-application lexicon-storage-sqlite)
+    set_target_properties(lexicon-application-integration PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME application_integration COMMAND lexicon-application-integration)
+
+    add_executable(lexicon-sqlite-compatibility tests/SqliteCompatibility.cpp)
+    target_link_libraries(lexicon-sqlite-compatibility PRIVATE lexicon-application lexicon-storage-sqlite)
+    target_compile_definitions(lexicon-sqlite-compatibility PRIVATE
+        LEXICON_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+    set_target_properties(lexicon-sqlite-compatibility PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME sqlite_compatibility COMMAND lexicon-sqlite-compatibility)
 endif()

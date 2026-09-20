@@ -1,8 +1,15 @@
 #pragma once
 #include "Repository.h"
+#include <memory>
 
 class SqliteRepository final : public lexicon::Repository {
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 public:
+  SqliteRepository();
+  ~SqliteRepository() override;
+  SqliteRepository(const SqliteRepository&) = delete;
+  SqliteRepository& operator=(const SqliteRepository&) = delete;
   template <class T> using Result = lexicon::Result<T>;
   using GroupRecord = lexicon::GroupRecord;
   using ItemTypeRecord = lexicon::ItemTypeRecord;

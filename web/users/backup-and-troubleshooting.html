@@ -99,10 +99,10 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
 
     <h2 id="troubleshooting">Troubleshooting</h2>
 
-    <h3>The app does not start (Qt plugin / driver issue)</h3>
+    <h3>The app does not start</h3>
     <ul>
       <li>Verify that the Qt 6 runtime is installed and matches the version Lexicon was built against.</li>
-      <li>Ensure the SQLite Qt SQL driver is present — on Debian/Ubuntu: <code>sudo apt install libqt6sql6-sqlite</code>.</li>
+      <li>Ensure native SQLite and OpenSSL Crypto libraries are present.</li>
     </ul>
 
     <h3>Database errors on startup</h3>
@@ -114,7 +114,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
     <h3>The build fails</h3>
     <ul>
       <li>Confirm your compiler supports <strong>C++23</strong> (recent GCC, Clang, or MSVC).</li>
-      <li>Confirm CMake can find <code>Qt6::Widgets</code> and <code>Qt6::Sql</code> — set <code>CMAKE_PREFIX_PATH</code> to your Qt installation if needed.</li>
+      <li>Confirm CMake can find <code>Qt6::Core</code> and <code>Qt6::Widgets</code>, plus SQLite and OpenSSL Crypto — set <code>CMAKE_PREFIX_PATH</code> to your Qt installation if needed.</li>
       <li>See the <a href="../developers/building.html">developer build guide</a> for platform details.</li>
     </ul>
 

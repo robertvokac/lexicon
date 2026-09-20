@@ -35,6 +35,9 @@ public:
   }
   Result<ItemRecord> loadItem(ItemId id) { return repository_.loadItem(id); }
   Result<ItemId> createItem(const ItemRecord &item);
+  Result<ItemId> createItem(const ItemRecord &item,
+                            const std::vector<LinkRecord> &links,
+                            const std::vector<LinkRecord> &backlinks = {});
   Result<void> saveItem(const ItemRecord &item);
   Result<void> deleteItem(ItemId id) { return repository_.deleteItem(id); }
   Result<void> logItemRead(ItemId id) { return repository_.logItemRead(id); }

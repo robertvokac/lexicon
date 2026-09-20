@@ -59,7 +59,7 @@
       <tr><th>Layer</th><th>Technology</th><th>Notes</th></tr>
       <tr><td>Language</td><td>C++23</td><td><code>CMAKE_CXX_STANDARD 23</code>, extensions off</td></tr>
       <tr><td>GUI</td><td>Qt 6 Widgets</td><td>Classic desktop widgets, no QML</td></tr>
-      <tr><td>Persistence</td><td>SQLite via Qt SQL</td><td>Single-file database with versioned migrations</td></tr>
+      <tr><td>Persistence</td><td>SQLite C API</td><td>Single-file database with versioned migrations</td></tr>
       <tr><td>Markdown</td><td><a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a></td><td>Vendored in <code>3rdparty/</code>, compiled into the binary</td></tr>
       <tr><td>Build system</td><td>CMake ≥ 3.21</td><td>Single <code>Lexicon</code> executable target</td></tr>
       <tr><td>License</td><td>MIT</td><td>Free for any use</td></tr>
@@ -67,30 +67,16 @@
 
     <h2>Repository layout</h2>
     <pre><code>lexicon/
-├── CMakeLists.txt        # single-target CMake build
-├── src/
-│   ├── main.cpp              # entry point: DB init + MainWindow
-│   ├── MainWindow.{h,cpp}    # main window: filters, table, pagination, preview
-│   ├── ItemEditDialog.{h,cpp}# 5-tab item editor
-│   ├── GroupManagerDialog.{h,cpp}  # group CRUD dialog
-│   ├── ValueListDialog.{h,cpp}   # read-only tag/flag/alias overviews
-│   ├── DatabaseManager.{h,cpp}   # all SQL: schema, migrations, queries
-│   └── MarkdownConverter.{h,cpp} # Markdown → HTML via md4qt
-├── 3rdparty/md4qt/       # vendored Markdown parser
-├── resources/            # application icon
-├── images/               # screenshots used by README and this site
-├── lexicon.desktop       # Linux desktop entry
-└── LICENSE               # MIT</code></pre>
+├── lexicon-core/             # records and validation
+├── lexicon-application/      # services and Repository interface
+├── lexicon-storage-sqlite/   # native SQLite and migrations
+├── lexicon-qt-bridge/        # Qt / UTF-8 conversions
+├── lexicon-qt/               # Widgets frontend
+├── tests/                    # backend and compatibility tests
+└── 3rdparty/md4qt/           # Markdown parser</code></pre>
 
     <h2>How it fits together</h2>
-    <ol class="steps">
-      <li><strong><code>main.cpp</code></strong> initializes the database (creating <code>lexicon.db</code> next to the executable and applying migrations), then shows the <code>MainWindow</code>.</li>
-      <li><strong><code>MainWindow</code></strong> drives the whole browsing experience — filters, search, the paginated item table, and the rendered preview pane.</li>
-      <li><strong>Dialogs</strong> (<code>ItemEditDialog</code>, <code>GroupManagerDialog</code>, <code>ValueListDialog</code>) handle editing and overviews.</li>
-      <li><strong><code>DatabaseManager</code></strong> is the single gateway to SQLite — a static API used by all UI classes. No SQL lives outside it.</li>
-      <li><strong><code>MarkdownConverter</code></strong> turns item content into HTML for the preview panes using md4qt.</li>
-    </ol>
-    <p>Read the full walkthrough in <a href="architecture.html">Architecture</a>.</p>
+    <p>The desktop composition root opens the native SQLite repository and injects it into <code>LexiconApplication</code>. Widgets call services; only the storage target runs SQL. Core, application, and storage build without Qt. Read the <a href="architecture.html">architecture guide</a>.</p>
 
     <h2>Jump in</h2>
     <div class="grid grid-2" style="margin-top:1.2rem">

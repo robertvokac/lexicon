@@ -68,12 +68,16 @@ Result<void> ItemService::saveItem(const ItemRecord &item) {
 }
 
 Result<ItemId> ItemService::createItem(const ItemRecord &item) {
+  return createItem(item, {}, {});
+}
+
+Result<ItemId> ItemService::createItem(
+    const ItemRecord &item, const std::vector<LinkRecord> &links,
+    const std::vector<LinkRecord> &backlinks) {
   if (item.id >= 0)
     return std::unexpected(Error{Error::Code::Validation,
                                  "A new item must not already have an ID."});
-  if (auto valid = validateForSave(repository_, item); !valid)
-    return std::unexpected(valid.error());
-  return repository_.saveItemReturningId(item);
+  return saveItemWithLinks(item, links, backlinks);
 }
 
 Result<ItemId>

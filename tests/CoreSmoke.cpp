@@ -14,5 +14,11 @@ int main() {
       lexicon::cleanedUniqueValues({" Alpha ", "alpha", "beta"});
   if (unique.size() != 2)
     return 3;
+  if (lexicon::asciiFold("ABCéÉ") != "abcéÉ")
+    return 4;
+  const auto unicode = lexicon::cleanedUniqueValues({"École", "école", "ALPHA", "alpha"});
+  if (unicode.size() != 3 ||
+      lexicon::asciiFold("École") == lexicon::asciiFold("école"))
+    return 5;
   return 0;
 }

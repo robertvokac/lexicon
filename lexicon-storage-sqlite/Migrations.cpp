@@ -1,46 +1,17 @@
-#include "DatabaseManager.h"
+#include "SqliteInternal.h"
+#include <vector>
 
-#include <QSqlError>
-#include <QSqlQuery>
-
-namespace {
-bool setError(QString* errorMessage, const QString& message) {
-    if (errorMessage) *errorMessage = message;
-    return false;
-}
-}
-
-bool DatabaseManager::applyMigrations(QString* errorMessage) {
-    QSqlDatabase db = database();
-
-    // 1. Create version table if not exists
-    {
-        QSqlQuery query(db);
-        if (!query.exec("CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);")) {
-            return setError(errorMessage, "Failed to create version table: " + query.lastError().text());
-        }
-    }
-
-    // 2. Get current version
-    int currentVersion = 0;
-    {
-        QSqlQuery query(db);
-        if (query.exec("SELECT version FROM db_version LIMIT 1;") && query.next()) {
-            currentVersion = query.value(0).toInt();
-        } else {
-            // Initial insert if table is empty
-            QSqlQuery insertVersion(db);
-            insertVersion.exec("INSERT INTO db_version (version) VALUES (0);");
-        }
-    }
-
-    // 3. Define migrations
-    struct Migration {
-        int version;
-        QStringList statements;
-    };
-
-    QList<Migration> migrations = {
+namespace storage {
+void applyMigrations(const Connection &db) {
+  db.exec("CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY);");
+  int currentVersion = 0;
+  {
+    Statement version(db, "SELECT version FROM db_version LIMIT 1;");
+    if (version.step()) currentVersion = version.integer(0);
+    else db.exec("INSERT INTO db_version (version) VALUES (0);");
+  }
+  struct Migration { int version; std::vector<std::string> statements; };
+    const std::vector<Migration> migrations = {
         {1, {
             "CREATE TABLE IF NOT EXISTS map ("
             " id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -305,45 +276,15 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }}
     };
 
-    // 4. Apply migrations
-    for (const auto& migration : migrations) {
-        if (migration.version > currentVersion) {
-            if (!db.transaction()) {
-                return setError(errorMessage, "Failed to start migration transaction: " + db.lastError().text());
-            }
 
-            if (!execStatements(migration.statements, errorMessage)) {
-                db.rollback();
-                return false;
-            }
-
-            QSqlQuery updateVersion(db);
-            updateVersion.prepare("UPDATE db_version SET version = ?;");
-            updateVersion.addBindValue(migration.version);
-            if (!updateVersion.exec()) {
-                db.rollback();
-                return setError(errorMessage, "Failed to update database version: " + updateVersion.lastError().text());
-            }
-
-            if (!db.commit()) {
-                db.rollback();
-                return setError(errorMessage, "Failed to commit migration: " + db.lastError().text());
-            }
-            currentVersion = migration.version;
-        }
-    }
-
-    return true;
+  for (const auto &migration : migrations) {
+    if (migration.version <= currentVersion) continue;
+    Transaction transaction(db, "lexicon_migration");
+    for (const auto &sql : migration.statements) db.exec(sql);
+    Statement update(db, "UPDATE db_version SET version = ?;");
+    update.bind(migration.version).run();
+    transaction.commit();
+    currentVersion = migration.version;
+  }
 }
-
-bool DatabaseManager::execStatements(const QStringList& statements, QString* errorMessage) {
-    QSqlDatabase db = database();
-    for (const QString& statement : statements) {
-        QSqlQuery query(db);
-        if (!query.exec(statement)) {
-            return setError(errorMessage, QString("Schema error: %1\nSQL: %2")
-                .arg(query.lastError().text(), statement));
-        }
-    }
-    return true;
-}
+} // namespace storage

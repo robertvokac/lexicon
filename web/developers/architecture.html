@@ -43,10 +43,10 @@
       </ul>
       <p class="sidebar-title">On this page</p>
       <ul>
-        <li><a href="#modules">Source modules</a></li>
-        <li><a href="#records">Core data structures</a></li>
-        <li><a href="#enums">Enums</a></li>
-        <li><a href="#decisions">Design decisions</a></li>
+        <li><a href="#layers">Layers</a></li>
+        <li><a href="#storage">Persistence</a></li>
+        <li><a href="#text">Text comparison</a></li>
+        <li><a href="#extension">Extension point</a></li>
       </ul>
     </nav>
   </aside>
@@ -54,161 +54,35 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Architecture</p>
     <h1>Architecture</h1>
-    <p class="lead">Lexicon follows a deliberately simple architecture: Qt Widgets UI classes on top, one static data-access class at the bottom, plain C++ record structs in between. No frameworks, no layers you have to guess about.</p>
+    <p class="lead">Qt Widgets is one frontend for a framework-independent Lexicon backend.</p>
 
-    <h2 id="modules">Source modules</h2>
+    <h2 id="layers">Layers and dependencies</h2>
     <table>
-      <tr><th>File(s)</th><th>Responsibility</th></tr>
-      <tr>
-        <td><code>main.cpp</code></td>
-        <td>Entry point. Initializes the database via <code>DatabaseManager::initialize()</code> (creating <code>lexicon.db</code> next to the executable and applying migrations), then constructs and shows <code>MainWindow</code>.</td>
-      </tr>
-      <tr>
-        <td><code>MainWindow.{h,cpp}</code></td>
-        <td>The largest UI class. Owns filters, the paginated and sortable item table (including Type), the rendered content pane, the menu bar (groups and types managers, global overviews, theme switch), and the Add/Edit/Delete actions.</td>
-      </tr>
-      <tr>
-        <td><code>ItemEditDialog.{h,cpp}</code></td>
-        <td>The six-tab item editor: General (identity and type), Values (custom fields and blob imports), Content (Markdown editor with live preview), Metadata (tags, flags, aliases, and properties), Links, and Backlinks.</td>
-      </tr>
-      <tr>
-        <td><code>GroupManagerDialog.{h,cpp}</code></td>
-        <td>CRUD dialog for groups (add, rename/describe, delete).</td>
-      </tr>
-      <tr>
-        <td><code>ItemTypeManagerDialog.{h,cpp}</code></td>
-        <td>CRUD dialog for global or group-specific item types and their ordered, typed fields.</td>
-      </tr>
-      <tr>
-        <td><code>BlobStore.{h,cpp}</code></td>
-        <td>Imports and exports blob field files by SHA-256 hash under a directory next to the database.</td>
-      </tr>
-      <tr>
-        <td><code>ValueListDialog.{h,cpp}</code></td>
-        <td>Read-only overview dialog used for the <em>All tags / All flags / All aliases</em> views, showing values with usage counts.</td>
-      </tr>
-      <tr>
-        <td><code>DatabaseManager.{h,cpp}</code></td>
-        <td>The persistence layer: connection setup, migrations, filtered item listing, CRUD for groups, items, types, fields and links, metadata handling, usage statistics, and operation logging.</td>
-      </tr>
-      <tr>
-        <td><code>MarkdownConverter.{h,cpp}</code></td>
-        <td>Thin wrapper around the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a> parser: converts Markdown item content to HTML for the preview panes.</td>
-      </tr>
-      <tr>
-        <td><code>3rdparty/md4qt/</code></td>
-        <td>Vendored Markdown parser (CommonMark + GFM extensions such as tables, strikethrough, autolinks, footnotes). Compiled directly into the executable — no external dependency to install.</td>
-      </tr>
+      <tr><th>Target</th><th>Responsibility and dependencies</th></tr>
+      <tr><td><code>lexicon-core</code></td><td>Records, validation, and comparison policy. Standard C++ only.</td></tr>
+      <tr><td><code>lexicon-application</code></td><td>Services and the <code>Repository</code> interface. Depends on core only.</td></tr>
+      <tr><td><code>lexicon-storage-sqlite</code></td><td>Native SQLite implementation of <code>Repository</code>. Depends on application, SQLite C API, and OpenSSL Crypto. No Qt.</td></tr>
+      <tr><td><code>lexicon-qt-bridge</code></td><td>Qt and UTF-8 standard C++ value conversions. Depends on core and QtCore.</td></tr>
+      <tr><td><code>Lexicon</code> (<code>lexicon-qt/</code>)</td><td>Qt Widgets frontend and desktop composition root. Injects the SQLite repository into application services. Contains no SQL.</td></tr>
     </table>
+    <pre><code>lexicon-core
+      ↑
+lexicon-application ← lexicon-storage-sqlite
+      ↑                         ↑
+lexicon-qt-bridge          SQLite C API
+      ↑
+lexicon-qt (Qt Widgets; composition root)</code></pre>
+    <p>Core, application, and SQLite storage can be configured, built, and tested without Qt. CMake rejects Qt links in these targets.</p>
 
-    <h2 id="records">Core data structures</h2>
-    <p>UI and data layer communicate through plain structs defined in <code>DatabaseManager.h</code>:</p>
-    <pre><code>struct GroupRecord {
-    int id = -1;
-    QString name;
-    QString description;
-    int position = 0;
-};
+    <h2 id="storage">Repository and transaction ownership</h2>
+    <p>Application services use the <code>Repository</code> interface and return <code>std::expected&lt;T, Error&gt;</code>. Only the storage implementation owns <code>sqlite3</code> connections and prepared statements. RAII finalizes statements and rolls back unfinished savepoints. The application defines the item and links unit of work in <code>ItemService::saveItemWithLinks</code>; repository writes use nested savepoints.</p>
+    <p><code>Migrations.cpp</code> retains the existing schema and migration versions. Databases created by the former QtSql implementation remain compatible, including enum options stored as compact JSON arrays. Blob bytes live beside the database under <code>blobs/</code> and use SHA-256 identifiers.</p>
 
-struct ItemTypeRecord {
-    int id = -1;
-    int groupId = -1;
-    QString name;
-    QString description;
-};
-struct ItemFieldRecord {
-    int id = -1;
-    int itemTypeId = -1;
-    QString name;
-    FieldDataType dataType = FieldDataType::Text;
-    int position = 0;
-    QStringList enumOptions;
-};
-struct PropertyRecord { QString key; QString value; };
+    <h2 id="text">UTF-8 and comparison</h2>
+    <p>Core, application, and storage use UTF-8 <code>std::string</code>. Qt conversions occur at the desktop boundary. Case-insensitive matching folds ASCII letters only; non-ASCII UTF-8 bytes compare exactly. This matches SQLite <code>NOCASE</code>, <code>LOWER</code>, and default <code>LIKE</code>. Exact lookups and constraints without <code>NOCASE</code> remain byte-exact. The backend does not implement Unicode case folding.</p>
 
-struct ItemRecord {
-    int id = -1;
-    int groupId = -1;
-    QString groupName;
-    int itemTypeId = -1;  // no type
-    QString itemTypeName;
-    QMap&lt;int, QString&gt; fieldValues; // item_field.id → value
-    QList&lt;PropertyRecord&gt; properties;
-    QString title;
-    QString disambiguation;
-    QStringList aliases;
-    QStringList tags;
-    QStringList flags;
-    ItemStatus status = ItemStatus::None;
-    UnderstandingLevel understanding = UnderstandingLevel::Unknown;
-    bool pinned = false;
-    QString content;          // Markdown source
-};
-
-struct LinkRecord {
-    int id = -1;
-    int fromItemId = -1;
-    int toItemId = -1;
-    LinkType linkType = LinkType::None;
-    int position = 0;
-    QString fromItemTitle;    // optional, filled for UI display
-    QString toItemTitle;
-};
-
-struct UsageValueRecord {     // rows of the tag/flag/alias overviews
-    QString value;
-    int usageCount = 0;
-};</code></pre>
-
-    <h2 id="enums">Enums</h2>
-    <p>Four enums encode the domain vocabulary. Their integer values are stored directly in SQLite, so <strong>they must never be renumbered</strong> — only appended to.</p>
-    <pre><code>enum class ItemStatus {
-    None = 0, Draft = 1, Completed = 2
-};
-
-enum class UnderstandingLevel {
-    Unknown = 0,      // Never encountered
-    Recognized = 1,   // Seen before, can identify
-    Understood = 2,   // Conceptually grasped
-    Practiced = 3,    // Can apply in real situations
-    Mastered = 4      // Fully internalized, can teach or innovate
-};
-
-enum class LinkType {
-    None = 0, IsA = 1, PartOf = 2, Uses = 3, DependsOn = 4,
-    Implements = 5, Related = 6, Contrasts = 7,
-    AlternativeTo = 8, ParentOf = 9, Custom = 10
-};
-
-enum class FieldDataType {
-    Integer = 0, Float = 1, Text = 2, Date = 3, Time = 4,
-    Timestamp = 5, Boolean = 6, Enum = 7, Blob = 8, Other = 9
-};</code></pre>
-
-    <h2 id="decisions">Design decisions</h2>
-    <h3>Static data-access API</h3>
-    <p><code>DatabaseManager</code> exposes only static methods over Qt's default database connection. There is no ORM and no repository hierarchy — every operation is an explicit, reviewable SQL statement. Errors are reported through an optional <code>QString* errorMessage</code> out-parameter combined with a <code>bool</code> return value:</p>
-    <pre><code>QString error;
-if (!DatabaseManager::saveItem(item, &amp;error)) {
-    QMessageBox::warning(this, "Save failed", error);
-}</code></pre>
-
-    <h3>Filtering and paging in SQL</h3>
-    <p><code>loadItems()</code> takes the whole filter state (group, type, search text, per-column text and field values, property key/value pairs, tag, flag, understanding, status, pinned), plus <code>limit</code>/<code>offset</code> and the sort column/order, and translates them into one SQL query. The UI never filters in memory, which is what keeps large lexicons fast. A matching <code>countItems()</code> powers the pagination bar.</p>
-
-    <h3>Operation log</h3>
-    <p>Every create, update, delete — and item read — is recorded in the <code>log</code> table with a type code (<code>1</code>=created, <code>2</code>=updated, <code>3</code>=deleted, <code>4</code>=read) and a timestamp. Nothing consumes the log in the UI yet; it is groundwork for future features such as recent-activity views or spaced-repetition hints.</p>
-
-    <h3>Referential integrity in the database</h3>
-    <p>Foreign keys are switched on with <code>PRAGMA foreign_keys = ON</code> at connection time. Dependent rows (aliases, tags, flags, properties, field values, links) cascade on deletion. Deleting a type sets affected items' type IDs to null and clears their field values — see the <a href="database.html">schema reference</a>.</p>
-
-    <h3>Vendored Markdown parser</h3>
-    <p>md4qt is compiled into the binary from <code>3rdparty/</code> rather than linked as an external package. That keeps the dependency list at exactly "Qt", which makes the project easy to build on any platform.</p>
-
-    <div class="page-nav">
-      <a class="prev" href="building.html"><span class="dir">← Previous</span>Building from source</a>
-      <a class="next" href="database.html"><span class="dir">Next →</span>Database schema</a>
-    </div>
+    <h2 id="extension">Future client</h2>
+    <p>A future <code>lexicon-http</code> executable can compose <code>lexicon-application</code> with <code>lexicon-storage-sqlite</code> without linking Qt. No server is part of the current application.</p>
   </main>
 
 </div>

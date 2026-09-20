@@ -6,6 +6,8 @@
 
 namespace lexicon {
 std::string trim(std::string_view value);
+// ASCII letters are case-insensitive; non-ASCII UTF-8 bytes compare exactly.
+std::string asciiFold(std::string_view value);
 std::vector<std::string>
 cleanedUniqueValues(const std::vector<std::string> &values);
 bool validFieldValue(const ItemFieldRecord &field, std::string_view value);

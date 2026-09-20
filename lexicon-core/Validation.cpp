@@ -1,7 +1,6 @@
 #include "Validation.h"
 
 #include <algorithm>
-#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <cmath>
@@ -12,13 +11,6 @@ namespace {
 lexicon::Result<void> invalid(std::string message) {
   return std::unexpected(
       lexicon::Error{lexicon::Error::Code::Validation, std::move(message)});
-}
-
-std::string asciiFold(std::string value) {
-  std::transform(
-      value.begin(), value.end(), value.begin(),
-      [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-  return value;
 }
 
 bool dateValid(std::string_view value) {
@@ -47,12 +39,20 @@ bool timeValid(std::string_view value) {
 } // namespace
 
 namespace lexicon {
+std::string asciiFold(std::string_view value) {
+  std::string folded(value);
+  for (char &byte : folded)
+    if (byte >= 'A' && byte <= 'Z') byte = static_cast<char>(byte + ('a' - 'A'));
+  return folded;
+}
 std::string trim(std::string_view value) {
-  while (!value.empty() &&
-         std::isspace(static_cast<unsigned char>(value.front())))
+  const auto whitespace = [](char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+           ch == '\f' || ch == '\v';
+  };
+  while (!value.empty() && whitespace(value.front()))
     value.remove_prefix(1);
-  while (!value.empty() &&
-         std::isspace(static_cast<unsigned char>(value.back())))
+  while (!value.empty() && whitespace(value.back()))
     value.remove_suffix(1);
   return std::string(value);
 }

@@ -80,12 +80,12 @@
 
     <h2 id="guidelines">Coding guidelines</h2>
     <ul>
-      <li><strong>Match the existing style.</strong> The project uses straightforward Qt Widgets C++ — follow the naming and layout conventions you see in <code>src/</code>.</li>
+      <li><strong>Match the existing style.</strong> The project uses straightforward Qt Widgets C++ — follow the naming and layout conventions in the relevant layer.</li>
       <li><strong>C++23, no extensions.</strong> The build sets <code>CMAKE_CXX_STANDARD 23</code> with compiler extensions off; keep code portable across GCC, Clang, and MSVC.</li>
-      <li><strong>All SQL belongs in <code>DatabaseManager</code>.</strong> UI classes must not talk to the database directly — extend the static API instead.</li>
+      <li><strong>SQL belongs in <code>lexicon-storage-sqlite</code>.</strong> UI classes call application services through the repository boundary.</li>
       <li><strong>Schema changes are append-only migrations.</strong> Never modify a shipped migration; add a new version instead (see <a href="database.html#adding">Adding a migration</a>).</li>
       <li><strong>Never renumber enums.</strong> <code>ItemStatus</code>, <code>UnderstandingLevel</code>, and <code>LinkType</code> values are persisted in SQLite.</li>
-      <li><strong>Report errors, don't swallow them.</strong> Follow the <code>bool</code> + <code>QString* errorMessage</code> pattern used throughout the data layer.</li>
+      <li><strong>Report errors, don't swallow them.</strong> Return <code>std::expected&lt;T, Error&gt;</code> from public application and repository operations.</li>
     </ul>
 
     <h2 id="license">License</h2>

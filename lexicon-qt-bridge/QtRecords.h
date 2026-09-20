@@ -5,8 +5,7 @@
 #include <QString>
 #include <QStringList>
 
-// Qt value objects retained for the existing Widgets client and Qt SQL
-// implementation.
+// Qt value objects retained for the Widgets client.
 enum class SortOrder { Ascending, Descending };
 enum class ItemStatus { None = 0, Draft = 1, Completed = 2 };
 enum class UnderstandingLevel {

@@ -55,19 +55,20 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Building from source</p>
     <h1>Building from source</h1>
-    <p class="lead">Lexicon is a single CMake target with two Qt module dependencies. If you have Qt 6 and a C++23 compiler, you're three commands away from a running binary.</p>
+    <p class="lead">Lexicon has a Qt-free backend and a Qt Widgets desktop executable. CMake builds both configurations.</p>
 
     <h2 id="prerequisites">Prerequisites</h2>
     <table>
       <tr><th>Tool</th><th>Minimum</th><th>Notes</th></tr>
       <tr><td>CMake</td><td>3.21</td><td>Required by <code>cmake_minimum_required</code></td></tr>
       <tr><td>Compiler</td><td>C++23 support</td><td>GCC 13+, Clang 16+, or MSVC 19.3x recommended</td></tr>
-      <tr><td>Qt</td><td>Qt 6 (Qt 5 fallback)</td><td>Modules: <code>Widgets</code>, <code>Sql</code>. The build prefers Qt 6 and falls back to Qt 5 if Qt 6 is absent.</td></tr>
-      <tr><td>SQLite driver</td><td>—</td><td>The Qt SQLite plugin (<code>QSQLITE</code>) must be available at runtime</td></tr>
+      <tr><td>Qt</td><td>Qt 6 (Qt 5 fallback)</td><td>Desktop modules: <code>Core</code> and <code>Widgets</code>. The build prefers Qt 6 and falls back to Qt 5 if Qt 6 is absent.</td></tr>
+      <tr><td>SQLite</td><td>3.38+</td><td>Native C library with JSON functions</td></tr>
+      <tr><td>OpenSSL</td><td>Crypto</td><td>SHA-256 blob identifiers</td></tr>
     </table>
     <p>Debian/Ubuntu one-liner:</p>
     <pre><code>sudo apt update
-sudo apt install -y build-essential cmake qt6-base-dev libqt6sql6-sqlite</code></pre>
+sudo apt install -y build-essential cmake qt6-base-dev libsqlite3-dev libssl-dev</code></pre>
 
     <h2 id="build">Standard build</h2>
     <pre><code>git clone https://github.com/robertvokac/lexicon.git
@@ -75,7 +76,7 @@ cd lexicon
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target Lexicon -j
 ./build/Lexicon</code></pre>
-    <p>The build compiles the application sources <em>and</em> the vendored md4qt Markdown parser (about 35 translation units from <code>3rdparty/md4qt/src</code>) into one executable. <code>AUTOMOC</code> and <code>AUTORCC</code> are enabled, so Qt meta-object code is generated automatically.</p>
+    <p>The desktop target compiles the vendored md4qt Markdown parser. The backend libraries also build without Qt; <code>AUTOMOC</code> applies only to Qt targets.</p>
 
     <div class="callout">
       <span class="callout-icon">ℹ️</span>

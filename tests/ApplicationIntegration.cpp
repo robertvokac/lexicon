@@ -1,8 +1,8 @@
 #include "LexiconApplication.h"
 #include "SqliteRepository.h"
 
-#include <QCoreApplication>
-#include <QTemporaryDir>
+#include <filesystem>
+#include <chrono>
 
 #include <algorithm>
 #include <iostream>
@@ -22,16 +22,15 @@ bool condition(bool ok, const char *message) {
 }
 } // namespace
 
-int main(int argc, char **argv) {
-  QCoreApplication runtime(argc, argv);
-  QTemporaryDir directory;
-  if (!condition(directory.isValid(), "Temporary directory failed"))
-    return 1;
-
-  const QByteArray path = directory.filePath("lexicon.db").toUtf8();
+int main() {
+  namespace fs = std::filesystem;
+  const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto directory = fs::temp_directory_path() / ("lexicon-integration-" + std::to_string(unique));
+  fs::create_directories(directory);
+  struct Cleanup { fs::path path; ~Cleanup() { std::error_code ec; fs::remove_all(path, ec); } } cleanup{directory};
+  const auto path = (directory / "lexicon.db").string();
   SqliteRepository repository;
-  if (!check(repository.open(
-                 {path.constData(), static_cast<std::size_t>(path.size())}),
+  if (!check(repository.open(path),
              "Database migration"))
     return 1;
   lexicon::LexiconApplication application(repository);
