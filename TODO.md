@@ -28,7 +28,7 @@ This file tracks features, improvements, and fixes for the Lexicon application.
     - Use `QSplitter` to allow resizing between table, preview, and links.
     - Improve spacing and alignment for readability.
   
-- [ ] Bug: Adding new term, if no map is selected, uses the first map
+- [ ] Bug: Adding new term, if no group is selected, uses the first group
 
 ---
 
@@ -48,7 +48,7 @@ This file tracks features, improvements, and fixes for the Lexicon application.
     - Possibly support undo/redo for Markdown inserts.
 
 - [ ] **Validation:**
-    - Ensure a map exists before adding a term.
+    - Ensure a group exists before adding a term.
     - Check title is not empty before saving.
 
 ---

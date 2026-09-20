@@ -184,6 +184,14 @@ bool DatabaseManager::applyMigrations(QString* errorMessage) {
         }},
         {9, {
             "ALTER TABLE link ADD COLUMN custom_value TEXT NOT NULL DEFAULT '';"
+        }},
+        {10, {
+            "ALTER TABLE map RENAME TO item_group;",
+            "ALTER TABLE term RENAME COLUMN map_id TO group_id;",
+            "DROP INDEX map_name_unique;",
+            "CREATE UNIQUE INDEX item_group_name_unique ON item_group(name);",
+            "DROP INDEX idx_term_map_id;",
+            "CREATE INDEX idx_term_group_id ON term(group_id);"
         }}
     };
 
@@ -230,47 +238,47 @@ bool DatabaseManager::execStatements(const QStringList& statements, QString* err
     return true;
 }
 
-QList<MapRecord> DatabaseManager::loadMaps(QString* errorMessage) {
-    QList<MapRecord> maps;
+QList<GroupRecord> DatabaseManager::loadGroups(QString* errorMessage) {
+    QList<GroupRecord> groups;
     QSqlQuery query(database());
-    if (!query.exec("SELECT id, name, description FROM map ORDER BY name COLLATE NOCASE;")) {
+    if (!query.exec("SELECT id, name, description FROM item_group ORDER BY name COLLATE NOCASE;")) {
         setError(errorMessage, query.lastError().text());
-        return maps;
+        return groups;
     }
 
     while (query.next()) {
-        MapRecord map;
-        map.id = query.value(0).toInt();
-        map.name = query.value(1).toString();
-        map.description = query.value(2).toString();
-        maps.push_back(map);
+        GroupRecord group;
+        group.id = query.value(0).toInt();
+        group.name = query.value(1).toString();
+        group.description = query.value(2).toString();
+        groups.push_back(group);
     }
-    return maps;
+    return groups;
 }
 
-bool DatabaseManager::upsertMap(const MapRecord& map, QString* errorMessage) {
+bool DatabaseManager::upsertGroup(const GroupRecord& group, QString* errorMessage) {
     QSqlDatabase db = database();
     if (!db.transaction()) {
         return setError(errorMessage, db.lastError().text());
     }
 
     QSqlQuery query(db);
-    const QString trimmedName = map.name.trimmed();
-    const QString trimmedDescription = map.description.trimmed();
+    const QString trimmedName = group.name.trimmed();
+    const QString trimmedDescription = group.description.trimmed();
 
-    int mapId = map.id;
+    int groupId = group.id;
     int logType = 2; // updated
 
-    if (map.id < 0) {
-        query.prepare("INSERT INTO map(name, description) VALUES(?, ?);");
+    if (group.id < 0) {
+        query.prepare("INSERT INTO item_group(name, description) VALUES(?, ?);");
         query.addBindValue(trimmedName);
         query.addBindValue(trimmedDescription);
         logType = 1; // created
     } else {
-        query.prepare("UPDATE map SET name = ?, description = ? WHERE id = ?;");
+        query.prepare("UPDATE item_group SET name = ?, description = ? WHERE id = ?;");
         query.addBindValue(trimmedName);
         query.addBindValue(trimmedDescription);
-        query.addBindValue(map.id);
+        query.addBindValue(group.id);
     }
 
     if (!query.exec()) {
@@ -278,11 +286,11 @@ bool DatabaseManager::upsertMap(const MapRecord& map, QString* errorMessage) {
         return setError(errorMessage, query.lastError().text());
     }
 
-    if (map.id < 0) {
-        mapId = query.lastInsertId().toInt();
+    if (group.id < 0) {
+        groupId = query.lastInsertId().toInt();
     }
 
-    if (!logOperation("map", mapId, logType, errorMessage)) {
+    if (!logOperation("item_group", groupId, logType, errorMessage)) {
         db.rollback();
         return false;
     }
@@ -294,21 +302,21 @@ bool DatabaseManager::upsertMap(const MapRecord& map, QString* errorMessage) {
     return true;
 }
 
-bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
+bool DatabaseManager::deleteGroup(int groupId, QString* errorMessage) {
     QSqlDatabase db = database();
     if (!db.transaction()) {
         return setError(errorMessage, db.lastError().text());
     }
 
     QSqlQuery query(db);
-    query.prepare("DELETE FROM map WHERE id = ?;");
-    query.addBindValue(mapId);
+    query.prepare("DELETE FROM item_group WHERE id = ?;");
+    query.addBindValue(groupId);
     if (!query.exec()) {
         db.rollback();
         return setError(errorMessage, query.lastError().text());
     }
 
-    if (!logOperation("map", mapId, 3, errorMessage)) {
+    if (!logOperation("item_group", groupId, 3, errorMessage)) {
         db.rollback();
         return false;
     }
@@ -320,22 +328,22 @@ bool DatabaseManager::deleteMap(int mapId, QString* errorMessage) {
     return true;
 }
 
-QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
+QList<TermRecord> DatabaseManager::loadTerms(int groupId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
     QList<TermRecord> terms;
 
     QString sql =
-        "SELECT t.id, m.name, t.map_id, t.title, t.disambiguation, "
+        "SELECT t.id, m.name, t.group_id, t.title, t.disambiguation, "
         "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.term_id = t.id), '') AS aliases, "
         "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.term_id = t.id), '') AS tags, "
         "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.term_id = t.id), '') AS flags, "
         "t.understanding, t.status, t.pinned "
         "FROM term t "
-        "JOIN map m ON m.id = t.map_id "
+        "JOIN item_group m ON m.id = t.group_id "
         "WHERE 1 = 1 ";
 
     QString filters;
-    if (mapId > 0) {
-        filters += "AND t.map_id = ? ";
+    if (groupId > 0) {
+        filters += "AND t.group_id = ? ";
     }
     if (understandingFilter >= 0) {
         filters += "AND t.understanding = ? ";
@@ -363,7 +371,7 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
 
     sql += filters;
 
-    // Mapping columns: 0:Id, 1:Map, 2:Title, 3:Disambiguation, 4:Tags, 5:Flags, 6:Aliases, 7:Status, 8:Understanding
+    // Mapping columns: 0:Id, 1:Group, 2:Title, 3:Disambiguation, 4:Tags, 5:Flags, 6:Aliases, 7:Status, 8:Understanding
     QString orderClause;
     switch (sortColumn) {
         case 0: orderClause = "t.id"; break;
@@ -396,8 +404,8 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
 
     QSqlQuery query(database());
     query.prepare(sql);
-    if (mapId > 0) {
-        query.addBindValue(mapId);
+    if (groupId > 0) {
+        query.addBindValue(groupId);
     }
     if (understandingFilter >= 0) {
         query.addBindValue(understandingFilter);
@@ -434,8 +442,8 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     while (query.next()) {
         TermRecord term;
         term.id = query.value(0).toInt();
-        term.mapName = query.value(1).toString();
-        term.mapId = query.value(2).toInt();
+        term.groupName = query.value(1).toString();
+        term.groupId = query.value(2).toInt();
         term.title = query.value(3).toString();
         term.disambiguation = query.value(4).toString();
         term.aliases = query.value(5).toString().split(", ", Qt::SkipEmptyParts);
@@ -450,11 +458,11 @@ QList<TermRecord> DatabaseManager::loadTerms(int mapId, const QString& searchTex
     return terms;
 }
 
-int DatabaseManager::countTerms(int mapId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
+int DatabaseManager::countTerms(int groupId, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
     QString sql = "SELECT COUNT(*) FROM term t WHERE 1 = 1 ";
 
-    if (mapId > 0) {
-        sql += "AND t.map_id = ? ";
+    if (groupId > 0) {
+        sql += "AND t.group_id = ? ";
     }
     if (understandingFilter >= 0) {
         sql += "AND t.understanding = ? ";
@@ -482,8 +490,8 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
 
     QSqlQuery query(database());
     query.prepare(sql);
-    if (mapId > 0) {
-        query.addBindValue(mapId);
+    if (groupId > 0) {
+        query.addBindValue(groupId);
     }
     if (understandingFilter >= 0) {
         query.addBindValue(understandingFilter);
@@ -522,8 +530,8 @@ int DatabaseManager::countTerms(int mapId, const QString& searchText, const QStr
 bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMessage) {
     QSqlQuery query(database());
     query.prepare(
-        "SELECT t.id, t.map_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status, t.pinned, COALESCE(t.content, '') "
-        "FROM term t JOIN map m ON m.id = t.map_id WHERE t.id = ?;");
+        "SELECT t.id, t.group_id, m.name, t.title, COALESCE(t.disambiguation, ''), t.understanding, t.status, t.pinned, COALESCE(t.content, '') "
+        "FROM term t JOIN item_group m ON m.id = t.group_id WHERE t.id = ?;");
     query.addBindValue(termId);
 
     if (!query.exec()) {
@@ -534,8 +542,8 @@ bool DatabaseManager::loadTerm(int termId, TermRecord& outTerm, QString* errorMe
     }
 
     outTerm.id = query.value(0).toInt();
-    outTerm.mapId = query.value(1).toInt();
-    outTerm.mapName = query.value(2).toString();
+    outTerm.groupId = query.value(1).toInt();
+    outTerm.groupName = query.value(2).toString();
     outTerm.title = query.value(3).toString();
     outTerm.disambiguation = query.value(4).toString();
     outTerm.understanding = static_cast<UnderstandingLevel>(query.value(5).toInt());
@@ -596,8 +604,8 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
     int logType = 2; // updated
     QSqlQuery query(db);
     if (term.id < 0) {
-        query.prepare("INSERT INTO term(map_id, title, disambiguation, understanding, status, pinned, content) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?);");
-        query.addBindValue(term.mapId);
+        query.prepare("INSERT INTO term(group_id, title, disambiguation, understanding, status, pinned, content) VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?);");
+        query.addBindValue(term.groupId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
         query.addBindValue(static_cast<int>(term.understanding));
@@ -611,8 +619,8 @@ bool DatabaseManager::saveTerm(const TermRecord& term, QString* errorMessage) {
         termId = query.lastInsertId().toInt();
         logType = 1; // created
     } else {
-        query.prepare("UPDATE term SET map_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ?, content = ? WHERE id = ?;");
-        query.addBindValue(term.mapId);
+        query.prepare("UPDATE term SET group_id = ?, title = ?, disambiguation = NULLIF(?, ''), understanding = ?, status = ?, pinned = ?, content = ? WHERE id = ?;");
+        query.addBindValue(term.groupId);
         query.addBindValue(term.title.trimmed());
         query.addBindValue(normalizeNullable(term.disambiguation));
         query.addBindValue(static_cast<int>(term.understanding));

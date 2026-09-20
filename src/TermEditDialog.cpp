@@ -79,7 +79,7 @@ void TermEditDialog::setupUi() {
     auto* generalLayout = new QVBoxLayout(generalTab);
     auto* formLayout = new QFormLayout();
 
-    m_mapCombo = new QComboBox(this);
+    m_groupCombo = new QComboBox(this);
     m_statusCombo = new QComboBox(this);
     m_statusCombo->addItem("None", static_cast<int>(TermStatus::None));
     m_statusCombo->addItem("Draft", static_cast<int>(TermStatus::Draft));
@@ -102,7 +102,7 @@ void TermEditDialog::setupUi() {
     m_titleEdit = new QLineEdit(this);
     m_disambiguationEdit = new QLineEdit(this);
 
-    formLayout->addRow("Map:", m_mapCombo);
+    formLayout->addRow("Group:", m_groupCombo);
     formLayout->addRow("Title:", m_titleEdit);
     formLayout->addRow("Disambiguation:", m_disambiguationEdit);
     formLayout->addRow("Status:", m_statusCombo);
@@ -207,10 +207,10 @@ void TermEditDialog::showEvent(QShowEvent* event) {
 }
 
 
-void TermEditDialog::setMaps(const QList<MapRecord>& maps) {
-    m_mapCombo->clear();
-    for (const MapRecord& map : maps) {
-        m_mapCombo->addItem(map.name, map.id);
+void TermEditDialog::setGroups(const QList<GroupRecord>& groups) {
+    m_groupCombo->clear();
+    for (const GroupRecord& group : groups) {
+        m_groupCombo->addItem(group.name, group.id);
     }
 }
 
@@ -219,9 +219,9 @@ void TermEditDialog::setTerm(const TermRecord& term) {
     m_titleEdit->setText(term.title);
     m_disambiguationEdit->setText(term.disambiguation);
 
-    const int mapIdx = m_mapCombo->findData(term.mapId);
-    if (mapIdx >= 0) {
-        m_mapCombo->setCurrentIndex(mapIdx);
+    const int groupIdx = m_groupCombo->findData(term.groupId);
+    if (groupIdx >= 0) {
+        m_groupCombo->setCurrentIndex(groupIdx);
     }
 
     const int underIdx = m_understandingCombo->findData(static_cast<int>(term.understanding));
@@ -252,8 +252,8 @@ void TermEditDialog::setTerm(const TermRecord& term) {
 TermRecord TermEditDialog::term() const {
     TermRecord result;
     result.id = m_termId;
-    result.mapId = m_mapCombo->currentData().toInt();
-    result.mapName = m_mapCombo->currentText();
+    result.groupId = m_groupCombo->currentData().toInt();
+    result.groupName = m_groupCombo->currentText();
     result.title = m_titleEdit->text().trimmed();
     result.disambiguation = m_disambiguationEdit->text().trimmed();
     result.status = static_cast<TermStatus>(m_statusCombo->currentData().toInt());
@@ -727,8 +727,8 @@ void TermEditDialog::removeBacklink() {
 }
 
 void TermEditDialog::validateAndAccept() {
-    if (m_mapCombo->currentIndex() < 0) {
-        QMessageBox::warning(this, "Validation", "Create at least one map first.");
+    if (m_groupCombo->currentIndex() < 0) {
+        QMessageBox::warning(this, "Validation", "Create at least one group first.");
         return;
     }
     if (m_titleEdit->text().trimmed().isEmpty()) {
@@ -747,11 +747,11 @@ void TermEditDialog::validateAndAccept() {
 
     // If it was a new term, we need to load its ID (it might have been -1)
     if (m_termId == -1) {
-        // Find the term by map and title
+        // Find the term by group and title
         QSqlDatabase db = DatabaseManager::database();
         QSqlQuery query(db);
-        query.prepare("SELECT id FROM term WHERE map_id = ? AND title = ?;");
-        query.addBindValue(t.mapId);
+        query.prepare("SELECT id FROM term WHERE group_id = ? AND title = ?;");
+        query.addBindValue(t.groupId);
         query.addBindValue(t.title);
         if (query.exec() && query.next()) {
             m_termId = query.value(0).toInt();

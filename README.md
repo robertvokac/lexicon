@@ -4,7 +4,7 @@
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 
 Lexicon is a desktop knowledge dictionary built with Qt Widgets and SQLite.
-It is designed for structured learning and technical note-taking with maps, terms, metadata, and typed links between concepts.
+It is designed for structured learning and technical note-taking with groups, terms, metadata, and typed links between concepts.
 
 ## Table of contents
 
@@ -23,7 +23,7 @@ It is designed for structured learning and technical note-taking with maps, term
 ## Highlights
 
 - SQLite-backed local dictionary (single-file DB)
-- Full CRUD for maps and terms
+- Full CRUD for groups and terms
 - Rich term metadata:
   - aliases
   - tags
@@ -39,7 +39,7 @@ It is designed for structured learning and technical note-taking with maps, term
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
   - search in title, disambiguation, alias, tag, and flag
-  - filters for map, tag, flag, status, understanding, pinned
+  - filters for group, tag, flag, status, understanding, pinned
 - Pagination for large datasets
 - Column sorting in the term table
 - Theme switch: light mode and dark mode
@@ -56,7 +56,7 @@ The main screen combines filters, searchable term table, pagination, rendered Ma
 
 ![General tab](images/Screenshot_General.png)
 
-Basic identity and state fields for a term: map, title, disambiguation, status, understanding, and pinned flag.
+Basic identity and state fields for a term: group, title, disambiguation, status, understanding, and pinned flag.
 
 ### Term editor — Content tab
 
@@ -114,22 +114,22 @@ cmake --build build --target Lexicon -j
 2. Lexicon creates/opens `lexicon.db` automatically in the executable directory.
 3. Database migrations are applied automatically on startup.
 
-### 2) Create and manage maps
+### 2) Create and manage groups
 
-Maps are top-level buckets for terms (for example: `C++`, `Databases`, `Networking`).
+Groups are top-level buckets for terms (for example: `C++`, `Databases`, `Networking`).
 
-1. Open `Manage` → `Maps...`.
+1. Open `Manage` → `Groups...`.
 2. Use:
-   - `Add` to create a new map
+   - `Add` to create a new group
    - `Edit` to rename/change description
-   - `Delete` to remove a map
-3. Important: deleting a map also deletes all terms in that map (cascade delete).
+   - `Delete` to remove a group
+3. Important: deleting a group also deletes all terms in that group (cascade delete).
 
 ### 3) Explore terms in the main window
 
 At the top you can combine search and filters:
 
-- `Map`
+- `Group`
 - `Tag`
 - `Flag`
 - `Status`
@@ -172,11 +172,11 @@ You have two add options in the main toolbar:
 
 Recommended workflow:
 
-1. Select the target map.
+1. Select the target group.
 2. Click `Add` or `Add ...`.
 3. Fill the General tab:
    - `Title` (required)
-   - optional `Disambiguation` (useful for same title in one map)
+   - optional `Disambiguation` (useful for same title in one group)
    - `Status` (`None`, `Draft`, `Completed`)
    - `Understanding` (`Unknown` → `Mastered`)
    - `Pinned`
@@ -265,7 +265,7 @@ Theme preference is persisted between sessions.
 ### 11) Editing and deletion safety notes
 
 - Deleting a term removes its aliases/tags/flags and related links due to cascade rules.
-- Deleting a map removes all contained terms.
+- Deleting a group removes all contained terms.
 - Keep regular backups if your lexicon is mission-critical.
 
 ## Database model
@@ -274,7 +274,7 @@ Lexicon initializes and migrates schema automatically.
 
 Core tables:
 
-- `map`
+- `item_group`
 - `term`
 - `alias`
 - `tag`
@@ -286,7 +286,7 @@ Design notes:
 
 - Foreign keys enabled
 - Cascade delete used for dependent records
-- Unique constraints for map names and per-term value deduplication
+- Unique constraints for group names and per-term value deduplication
 
 ## Data location and backup
 

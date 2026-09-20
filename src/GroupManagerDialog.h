@@ -9,27 +9,27 @@ class QListWidget;
 class QPushButton;
 class QTextEdit;
 
-class MapManagerDialog : public QDialog {
+class GroupManagerDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit MapManagerDialog(QWidget* parent = nullptr);
+    explicit GroupManagerDialog(QWidget* parent = nullptr);
 
 signals:
-    void mapsChanged();
+    void groupsChanged();
 
 private slots:
-    void loadMaps();
-    void addMap();
-    void editMap();
-    void deleteMap();
+    void loadGroups();
+    void addGroup();
+    void editGroup();
+    void deleteGroup();
     void selectionChanged();
 
 private:
     void setupUi();
-    bool promptForMap(MapRecord& map, bool isEdit);
+    bool promptForGroup(GroupRecord& group, bool isEdit);
 
-    QList<MapRecord> m_maps;
+    QList<GroupRecord> m_groups;
     QListWidget* m_list = nullptr;
     QPushButton* m_editButton = nullptr;
     QPushButton* m_deleteButton = nullptr;

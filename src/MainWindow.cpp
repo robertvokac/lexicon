@@ -1,6 +1,6 @@
 #include "MainWindow.h"
 
-#include "MapManagerDialog.h"
+#include "GroupManagerDialog.h"
 #include "TermEditDialog.h"
 #include "ValueListDialog.h"
 
@@ -50,7 +50,7 @@ void MainWindow::setupUi() {
     auto* rootLayout = new QVBoxLayout(centralWidget);
 
     auto* filterRowLayout = new QHBoxLayout();
-    m_mapFilter = new QComboBox(centralWidget);
+    m_groupFilter = new QComboBox(centralWidget);
     m_tagFilter = new QComboBox(centralWidget);
     m_flagFilter = new QComboBox(centralWidget);
     m_statusFilter = new QComboBox(centralWidget);
@@ -78,8 +78,8 @@ void MainWindow::setupUi() {
     m_understandingFilter->setItemData(4, "Can apply in real situations", Qt::ToolTipRole);
     m_understandingFilter->setItemData(5, "Fully internalized, can teach or innovate", Qt::ToolTipRole);
 
-    filterRowLayout->addWidget(new QLabel("Map:", centralWidget));
-    filterRowLayout->addWidget(m_mapFilter);
+    filterRowLayout->addWidget(new QLabel("Group:", centralWidget));
+    filterRowLayout->addWidget(m_groupFilter);
     filterRowLayout->addWidget(new QLabel("Tag:", centralWidget));
     filterRowLayout->addWidget(m_tagFilter);
     filterRowLayout->addWidget(new QLabel("Flag:", centralWidget));
@@ -118,7 +118,7 @@ void MainWindow::setupUi() {
 
     m_tableView = new QTableView(centralWidget);
     m_model = new QStandardItemModel(this);
-    m_model->setHorizontalHeaderLabels({"Id", "Map", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"});
+    m_model->setHorizontalHeaderLabels({"Id", "Group", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"});
     m_tableView->setModel(m_model);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -180,7 +180,7 @@ void MainWindow::setupUi() {
     m_completer->setFilterMode(Qt::MatchContains);
     m_searchEdit->setCompleter(m_completer);
 
-    connect(m_mapFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_groupFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_tagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_flagFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_statusFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
@@ -222,8 +222,8 @@ void MainWindow::setupMenus() {
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
 
     auto* manageMenu = menuBar()->addMenu("Manage");
-    auto* mapsAction = manageMenu->addAction("Maps...");
-    connect(mapsAction, &QAction::triggered, this, &MainWindow::openMapManager);
+    auto* groupsAction = manageMenu->addAction("Groups...");
+    connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
 
     auto* viewMenu = menuBar()->addMenu("View");
     auto* tagsAction = viewMenu->addAction("All tags...");
@@ -240,7 +240,7 @@ void MainWindow::setupMenus() {
 }
 
 void MainWindow::refreshAll() {
-    refreshMaps();
+    refreshGroups();
     refreshTags();
     refreshFlags();
     refreshSuggestions();
@@ -248,27 +248,27 @@ void MainWindow::refreshAll() {
     updateActions();
 }
 
-void MainWindow::refreshMaps() {
+void MainWindow::refreshGroups() {
     QString error;
-    m_maps = DatabaseManager::loadMaps(&error);
+    m_groups = DatabaseManager::loadGroups(&error);
     if (!error.isEmpty()) {
         showError(error);
         return;
     }
 
-    const QVariant currentMap = m_mapFilter->currentData();
+    const QVariant currentGroup = m_groupFilter->currentData();
 
-    m_mapFilter->blockSignals(true);
-    m_mapFilter->clear();
-    m_mapFilter->addItem("All maps", 0);
-    for (const auto& map : m_maps) {
-        m_mapFilter->addItem(map.name, map.id);
+    m_groupFilter->blockSignals(true);
+    m_groupFilter->clear();
+    m_groupFilter->addItem("All groups", 0);
+    for (const auto& group : m_groups) {
+        m_groupFilter->addItem(group.name, group.id);
     }
-    const int idx = m_mapFilter->findData(currentMap);
+    const int idx = m_groupFilter->findData(currentGroup);
     if (idx >= 0) {
-        m_mapFilter->setCurrentIndex(idx);
+        m_groupFilter->setCurrentIndex(idx);
     }
-    m_mapFilter->blockSignals(false);
+    m_groupFilter->blockSignals(false);
 }
 
 void MainWindow::refreshTags() {
@@ -317,7 +317,7 @@ void MainWindow::refreshFlags() {
 
 void MainWindow::refreshTerms() {
     QString error;
-    int mapId = m_mapFilter->currentData().toInt();
+    int groupId = m_groupFilter->currentData().toInt();
     QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     int understandingFilter = m_understandingFilter->currentData().toInt();
@@ -336,7 +336,7 @@ void MainWindow::refreshTerms() {
         }
     }
     
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countTerms(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -349,7 +349,7 @@ void MainWindow::refreshTerms() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto terms = DatabaseManager::loadTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto terms = DatabaseManager::loadTerms(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -368,7 +368,7 @@ void MainWindow::refreshTerms() {
         idItem->setData(term.id, Qt::DisplayRole);
         idItem->setData(term.id, Qt::UserRole);
         row << idItem
-            << new QStandardItem(term.mapName)
+            << new QStandardItem(term.groupName)
             << new QStandardItem(term.title)
             << new QStandardItem(term.disambiguation)
             << new QStandardItem(term.tags.join(", "))
@@ -441,7 +441,7 @@ void MainWindow::nextPage() {
 
 void MainWindow::lastPage() {
     QString error;
-    const int mapId = m_mapFilter->currentData().toInt();
+    const int groupId = m_groupFilter->currentData().toInt();
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     const int understandingFilter = m_understandingFilter->currentData().toInt();
@@ -449,7 +449,7 @@ void MainWindow::lastPage() {
     const int pinnedFilter = m_pinnedFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countTerms(mapId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countTerms(groupId, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -484,24 +484,24 @@ int MainWindow::selectedTermId() const {
     return m_model->item(index.row(), 0)->data(Qt::UserRole).toInt();
 }
 
-QList<MapRecord> MainWindow::maps() const {
-    return m_maps;
+QList<GroupRecord> MainWindow::groups() const {
+    return m_groups;
 }
 
 void MainWindow::addTerm() {
-    if (m_maps.isEmpty()) {
-        QMessageBox::information(this, "Lexicon", "Create a map first.");
-        openMapManager();
-        if (m_maps.isEmpty()) {
+    if (m_groups.isEmpty()) {
+        QMessageBox::information(this, "Lexicon", "Create a group first.");
+        openGroupManager();
+        if (m_groups.isEmpty()) {
             return;
         }
     }
 
     TermEditDialog dialog(this);
-    dialog.setMaps(m_maps);
+    dialog.setGroups(m_groups);
     TermRecord draft;
-    if (m_mapFilter->currentData().toInt() > 0) {
-        draft.mapId = m_mapFilter->currentData().toInt();
+    if (m_groupFilter->currentData().toInt() > 0) {
+        draft.groupId = m_groupFilter->currentData().toInt();
     }
     draft.title = m_searchEdit->text().trimmed();
     dialog.setTerm(draft);
@@ -524,10 +524,10 @@ void MainWindow::quickAdd() {
         return;
     }
 
-    if (m_maps.isEmpty()) {
-        QMessageBox::information(this, "Lexicon", "Create a map first.");
-        openMapManager();
-        if (m_maps.isEmpty()) {
+    if (m_groups.isEmpty()) {
+        QMessageBox::information(this, "Lexicon", "Create a group first.");
+        openGroupManager();
+        if (m_groups.isEmpty()) {
             return;
         }
     }
@@ -535,18 +535,18 @@ void MainWindow::quickAdd() {
     TermRecord term;
     term.title = text;
     
-    // Choose map: current filter or first available
-    int mapId = m_mapFilter->currentData().toInt();
-    if (mapId <= 0 && !m_maps.isEmpty()) {
-        mapId = m_maps.first().id;
+    // Choose group: current filter or first available
+    int groupId = m_groupFilter->currentData().toInt();
+    if (groupId <= 0 && !m_groups.isEmpty()) {
+        groupId = m_groups.first().id;
     }
-    
-    if (mapId <= 0) {
-         QMessageBox::warning(this, "Lexicon", "No map available for quick add.");
+
+    if (groupId <= 0) {
+        QMessageBox::warning(this, "Lexicon", "No group available for quick add.");
          return;
     }
     
-    term.mapId = mapId;
+    term.groupId = groupId;
 
     QString error;
     if (!DatabaseManager::saveTerm(term, &error)) {
@@ -572,7 +572,7 @@ void MainWindow::editSelectedTerm() {
     }
 
     TermEditDialog dialog(this);
-    dialog.setMaps(m_maps);
+    dialog.setGroups(m_groups);
     dialog.setTerm(term);
     if (dialog.exec() != QDialog::Accepted) {
         return;
@@ -606,9 +606,9 @@ void MainWindow::deleteSelectedTerm() {
     refreshAll();
 }
 
-void MainWindow::openMapManager() {
-    MapManagerDialog dialog(this);
-    connect(&dialog, &MapManagerDialog::mapsChanged, this, &MainWindow::refreshAll);
+void MainWindow::openGroupManager() {
+    GroupManagerDialog dialog(this);
+    connect(&dialog, &GroupManagerDialog::groupsChanged, this, &MainWindow::refreshAll);
     dialog.exec();
     refreshAll();
 }
@@ -819,21 +819,21 @@ void MainWindow::updateLinksDisplay(int termId) {
 void MainWindow::onLinkActivated(const QUrl& link) {
     QString termTitle = QUrl::fromPercentEncoding(link.toString().toUtf8());
 
-    m_mapFilter->blockSignals(true);
+    m_groupFilter->blockSignals(true);
     m_tagFilter->blockSignals(true);
     m_flagFilter->blockSignals(true);
     m_statusFilter->blockSignals(true);
     m_understandingFilter->blockSignals(true);
     m_searchEdit->blockSignals(true);
 
-    m_mapFilter->setCurrentIndex(0);
+    m_groupFilter->setCurrentIndex(0);
     m_tagFilter->setCurrentIndex(0);
     m_flagFilter->setCurrentIndex(0);
     m_statusFilter->setCurrentIndex(0);
     m_understandingFilter->setCurrentIndex(0);
     m_searchEdit->setText(termTitle);
 
-    m_mapFilter->blockSignals(false);
+    m_groupFilter->blockSignals(false);
     m_tagFilter->blockSignals(false);
     m_flagFilter->blockSignals(false);
     m_statusFilter->blockSignals(false);

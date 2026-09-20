@@ -133,7 +133,7 @@ private slots:
     void setDarkTheme();
 
     void refreshAll();
-    void refreshMaps();
+    void refreshGroups();
     void refreshTags();
     void refreshFlags();
     void refreshTerms();
@@ -149,7 +149,7 @@ private slots:
     void editSelectedTerm();
     void deleteSelectedTerm();
 
-    void openMapManager();
+    void openGroupManager();
     void showTagsOverview();
     void showFlagsOverview();
     void showAliasesOverview();
@@ -169,7 +169,7 @@ private:
     void setupUi();
     void setupMenus();
     int selectedTermId() const;
-    QList<MapRecord> maps() const;
+    QList<GroupRecord> groups() const;
     void showError(const QString& message);
 
 protected:
@@ -177,7 +177,7 @@ protected:
 
 private:
 
-    QComboBox* m_mapFilter = nullptr;
+    QComboBox* m_groupFilter = nullptr;
     QComboBox* m_tagFilter = nullptr;
     QComboBox* m_flagFilter = nullptr;
     QComboBox* m_statusFilter = nullptr;
@@ -203,5 +203,5 @@ private:
     int m_pageSize = 20;
     int m_lastTermId = -1;
 
-    QList<MapRecord> m_maps;
+    QList<GroupRecord> m_groups;
 };

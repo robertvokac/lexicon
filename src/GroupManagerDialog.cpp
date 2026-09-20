@@ -1,4 +1,4 @@
-#include "MapManagerDialog.h"
+#include "GroupManagerDialog.h"
 
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -12,14 +12,14 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-MapManagerDialog::MapManagerDialog(QWidget* parent)
+GroupManagerDialog::GroupManagerDialog(QWidget* parent)
     : QDialog(parent) {
     setupUi();
-    loadMaps();
+    loadGroups();
 }
 
-void MapManagerDialog::setupUi() {
-    setWindowTitle("Manage maps");
+void GroupManagerDialog::setupUi() {
+    setWindowTitle("Manage groups");
     resize(480, 420);
 
     auto* layout = new QVBoxLayout(this);
@@ -40,40 +40,40 @@ void MapManagerDialog::setupUi() {
 
     layout->addLayout(buttonsLayout);
 
-    connect(addButton, &QPushButton::clicked, this, &MapManagerDialog::addMap);
-    connect(m_editButton, &QPushButton::clicked, this, &MapManagerDialog::editMap);
-    connect(m_deleteButton, &QPushButton::clicked, this, &MapManagerDialog::deleteMap);
-    connect(closeButton, &QPushButton::clicked, this, &MapManagerDialog::accept);
-    connect(m_list, &QListWidget::itemSelectionChanged, this, &MapManagerDialog::selectionChanged);
+    connect(addButton, &QPushButton::clicked, this, &GroupManagerDialog::addGroup);
+    connect(m_editButton, &QPushButton::clicked, this, &GroupManagerDialog::editGroup);
+    connect(m_deleteButton, &QPushButton::clicked, this, &GroupManagerDialog::deleteGroup);
+    connect(closeButton, &QPushButton::clicked, this, &GroupManagerDialog::accept);
+    connect(m_list, &QListWidget::itemSelectionChanged, this, &GroupManagerDialog::selectionChanged);
 
     selectionChanged();
 }
 
-void MapManagerDialog::loadMaps() {
+void GroupManagerDialog::loadGroups() {
     QString error;
-    m_maps = DatabaseManager::loadMaps(&error);
+    m_groups = DatabaseManager::loadGroups(&error);
     if (!error.isEmpty()) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
 
     m_list->clear();
-    for (const auto& map : m_maps) {
-        auto* item = new QListWidgetItem(map.name, m_list);
-        item->setData(Qt::UserRole, map.id);
-        item->setToolTip(map.description);
+    for (const auto& group : m_groups) {
+        auto* item = new QListWidgetItem(group.name, m_list);
+        item->setData(Qt::UserRole, group.id);
+        item->setToolTip(group.description);
     }
     selectionChanged();
 }
 
-bool MapManagerDialog::promptForMap(MapRecord& map, bool isEdit) {
+bool GroupManagerDialog::promptForGroup(GroupRecord& group, bool isEdit) {
     QDialog dialog(this);
-    dialog.setWindowTitle(isEdit ? "Edit map" : "Add map");
+    dialog.setWindowTitle(isEdit ? "Edit group" : "Add group");
     auto* layout = new QVBoxLayout(&dialog);
     auto* formLayout = new QFormLayout();
-    auto* nameEdit = new QLineEdit(map.name, &dialog);
+    auto* nameEdit = new QLineEdit(group.name, &dialog);
     auto* descEdit = new QPlainTextEdit(&dialog);
-    descEdit->setPlainText(map.description);
+    descEdit->setPlainText(group.description);
     descEdit->setMinimumHeight(120);
     formLayout->addRow("Name:", nameEdit);
     formLayout->addRow("Description:", descEdit);
@@ -87,74 +87,74 @@ bool MapManagerDialog::promptForMap(MapRecord& map, bool isEdit) {
         return false;
     }
     if (nameEdit->text().trimmed().isEmpty()) {
-        QMessageBox::warning(this, "Validation", "Map name cannot be empty.");
+        QMessageBox::warning(this, "Validation", "Group name cannot be empty.");
         return false;
     }
-    map.name = nameEdit->text().trimmed();
-    map.description = descEdit->toPlainText().trimmed();
+    group.name = nameEdit->text().trimmed();
+    group.description = descEdit->toPlainText().trimmed();
     return true;
 }
 
-void MapManagerDialog::addMap() {
-    MapRecord map;
-    if (!promptForMap(map, false)) {
+void GroupManagerDialog::addGroup() {
+    GroupRecord group;
+    if (!promptForGroup(group, false)) {
         return;
     }
 
     QString error;
-    if (!DatabaseManager::upsertMap(map, &error)) {
+    if (!DatabaseManager::upsertGroup(group, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
-    loadMaps();
-    emit mapsChanged();
+    loadGroups();
+    emit groupsChanged();
 }
 
-void MapManagerDialog::editMap() {
+void GroupManagerDialog::editGroup() {
     const int row = m_list->currentRow();
-    if (row < 0 || row >= m_maps.size()) {
+    if (row < 0 || row >= m_groups.size()) {
         return;
     }
 
-    MapRecord map = m_maps.at(row);
-    if (!promptForMap(map, true)) {
+    GroupRecord group = m_groups.at(row);
+    if (!promptForGroup(group, true)) {
         return;
     }
 
     QString error;
-    if (!DatabaseManager::upsertMap(map, &error)) {
+    if (!DatabaseManager::upsertGroup(group, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
-    loadMaps();
-    emit mapsChanged();
+    loadGroups();
+    emit groupsChanged();
 }
 
-void MapManagerDialog::deleteMap() {
+void GroupManagerDialog::deleteGroup() {
     const int row = m_list->currentRow();
-    if (row < 0 || row >= m_maps.size()) {
+    if (row < 0 || row >= m_groups.size()) {
         return;
     }
 
-    const auto& map = m_maps.at(row);
+    const auto& group = m_groups.at(row);
     const auto answer = QMessageBox::question(
         this,
-        "Delete map",
-        QString("Delete map '%1'? All terms inside it will also be deleted.").arg(map.name));
+        "Delete group",
+        QString("Delete group '%1'? All terms inside it will also be deleted.").arg(group.name));
     if (answer != QMessageBox::Yes) {
         return;
     }
 
     QString error;
-    if (!DatabaseManager::deleteMap(map.id, &error)) {
+    if (!DatabaseManager::deleteGroup(group.id, &error)) {
         QMessageBox::critical(this, "Database error", error);
         return;
     }
-    loadMaps();
-    emit mapsChanged();
+    loadGroups();
+    emit groupsChanged();
 }
 
-void MapManagerDialog::selectionChanged() {
+void GroupManagerDialog::selectionChanged() {
     const bool hasSelection = m_list->currentRow() >= 0;
     m_editButton->setEnabled(hasSelection);
     m_deleteButton->setEnabled(hasSelection);

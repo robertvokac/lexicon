@@ -35,7 +35,7 @@ enum class LinkType {
     Custom = 10
 };
 
-struct MapRecord {
+struct GroupRecord {
     int id = -1;
     QString name;
     QString description;
@@ -56,8 +56,8 @@ struct LinkRecord {
 
 struct TermRecord {
     int id = -1;
-    int mapId = -1;
-    QString mapName;
+    int groupId = -1;
+    QString groupName;
     QString title;
     QString disambiguation;
     QStringList aliases;
@@ -79,12 +79,12 @@ public:
     static bool initialize(const QString& dbPath, QString* errorMessage = nullptr);
     static QSqlDatabase database();
 
-    static QList<MapRecord> loadMaps(QString* errorMessage = nullptr);
-    static bool upsertMap(const MapRecord& map, QString* errorMessage = nullptr);
-    static bool deleteMap(int mapId, QString* errorMessage = nullptr);
+    static QList<GroupRecord> loadGroups(QString* errorMessage = nullptr);
+    static bool upsertGroup(const GroupRecord& group, QString* errorMessage = nullptr);
+    static bool deleteGroup(int groupId, QString* errorMessage = nullptr);
 
-    static QList<TermRecord> loadTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, int limit = -1, int offset = 0, int sortColumn = 2, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
-    static int countTerms(int mapId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, QString* errorMessage = nullptr);
+    static QList<TermRecord> loadTerms(int groupId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, int limit = -1, int offset = 0, int sortColumn = 2, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
+    static int countTerms(int groupId, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, QString* errorMessage = nullptr);
     static bool loadTerm(int termId, TermRecord& outTerm, QString* errorMessage = nullptr);
     static bool saveTerm(const TermRecord& term, QString* errorMessage = nullptr);
     static bool deleteTerm(int termId, QString* errorMessage = nullptr);

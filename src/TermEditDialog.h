@@ -24,7 +24,7 @@ class TermEditDialog : public QDialog {
 public:
     explicit TermEditDialog(QWidget* parent = nullptr);
 
-    void setMaps(const QList<MapRecord>& maps);
+    void setGroups(const QList<GroupRecord>& groups);
     void setTerm(const TermRecord& term);
     TermRecord term() const;
 
@@ -83,7 +83,7 @@ private:
 
     int m_termId = -1;
 
-    QComboBox* m_mapCombo = nullptr;
+    QComboBox* m_groupCombo = nullptr;
     QComboBox* m_statusCombo = nullptr;
     QComboBox* m_understandingCombo = nullptr;
     QCheckBox* m_pinnedCheck = nullptr;

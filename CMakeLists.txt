@@ -60,8 +60,8 @@ add_executable(Lexicon
     src/MainWindow.cpp
     src/TermEditDialog.h
     src/TermEditDialog.cpp
-    src/MapManagerDialog.h
-    src/MapManagerDialog.cpp
+    src/GroupManagerDialog.h
+    src/GroupManagerDialog.cpp
     src/ValueListDialog.h
     src/ValueListDialog.cpp
     src/MarkdownConverter.h
