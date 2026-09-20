@@ -1,6 +1,7 @@
 #pragma once
 #include "Records.h"
 #include "Result.h"
+#include "BlobMaintenance.h"
 
 namespace lexicon {
 class Repository {
@@ -57,5 +58,9 @@ public:
   virtual Result<std::string> importBlob(const std::string &sourcePath) = 0;
   virtual Result<void> exportBlob(const std::string &hash,
                                   const std::string &destinationPath) = 0;
+  virtual Result<BlobMaintenanceReport> scanBlobStorage(BlobScanDepth depth) = 0;
+  virtual Result<BlobGarbageCollectionResult> collectUnusedBlobs(
+      const BlobMaintenanceReport &scan) = 0;
+  virtual Result<BlobIssue> verifyBlob(const std::string &hash) = 0;
 };
 } // namespace lexicon

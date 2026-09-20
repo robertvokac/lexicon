@@ -10,6 +10,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
 option(LEXICON_BUILD_DESKTOP "Build the Qt desktop client" ON)
+include(CTest)
 
 find_package(SQLite3 3.38 REQUIRED)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
@@ -64,6 +65,7 @@ target_include_directories(lexicon-core PUBLIC lexicon-core)
 set_target_properties(lexicon-core PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
 add_library(lexicon-application STATIC
+    lexicon-application/BlobMaintenance.h
     lexicon-application/Repository.h
     lexicon-application/LexiconApplication.h
     lexicon-application/LexiconApplication.cpp
@@ -119,6 +121,8 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/GroupManagerDialog.cpp
         lexicon-qt/ItemTypeManagerDialog.h
         lexicon-qt/ItemTypeManagerDialog.cpp
+        lexicon-qt/BlobMaintenanceDialog.h
+        lexicon-qt/BlobMaintenanceDialog.cpp
         lexicon-qt/ValueListDialog.h
         lexicon-qt/ValueListDialog.cpp
         lexicon-qt/MarkdownConverter.h
@@ -137,9 +141,23 @@ if (LEXICON_BUILD_DESKTOP)
     if (WIN32)
         set_target_properties(Lexicon PROPERTIES WIN32_EXECUTABLE TRUE)
     endif()
+
+    if (BUILD_TESTING)
+        add_executable(lexicon-blob-gui-smoke
+            tests/BlobGuiSmoke.cpp
+            lexicon-qt/BlobMaintenanceDialog.h
+            lexicon-qt/BlobMaintenanceDialog.cpp
+            lexicon-qt/ApplicationContext.cpp
+        )
+        target_include_directories(lexicon-blob-gui-smoke PRIVATE lexicon-qt)
+        target_link_libraries(lexicon-blob-gui-smoke PRIVATE
+            lexicon-application lexicon-storage-sqlite lexicon-qt-bridge
+            Qt${QT_VERSION_MAJOR}::Widgets)
+        add_test(NAME blob_gui_smoke COMMAND lexicon-blob-gui-smoke)
+        set_tests_properties(blob_gui_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    endif()
 endif()
 
-include(CTest)
 if (BUILD_TESTING)
     add_executable(lexicon-core-smoke tests/CoreSmoke.cpp)
     target_link_libraries(lexicon-core-smoke PRIVATE lexicon-application)
@@ -162,4 +180,9 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-repository-correctness PRIVATE lexicon-application lexicon-storage-sqlite)
     set_target_properties(lexicon-repository-correctness PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME repository_correctness COMMAND lexicon-repository-correctness)
+
+    add_executable(lexicon-blob-maintenance tests/BlobMaintenance.cpp)
+    target_link_libraries(lexicon-blob-maintenance PRIVATE lexicon-application lexicon-storage-sqlite)
+    set_target_properties(lexicon-blob-maintenance PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME blob_maintenance COMMAND lexicon-blob-maintenance)
 endif()

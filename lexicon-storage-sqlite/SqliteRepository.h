@@ -76,4 +76,8 @@ public:
   Result<std::string> importBlob(const std::string &sourcePath) override;
   Result<void> exportBlob(const std::string &hash,
                           const std::string &destinationPath) override;
+  Result<lexicon::BlobMaintenanceReport> scanBlobStorage(lexicon::BlobScanDepth depth) override;
+  Result<lexicon::BlobGarbageCollectionResult> collectUnusedBlobs(
+      const lexicon::BlobMaintenanceReport &scan) override;
+  Result<lexicon::BlobIssue> verifyBlob(const std::string &hash) override;
 };

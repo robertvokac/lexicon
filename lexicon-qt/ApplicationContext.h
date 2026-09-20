@@ -247,6 +247,13 @@ private:
 class QtBlobService {
 public:
   explicit QtBlobService(lexicon::BlobService &core) : core_(core) {}
+  lexicon::Result<lexicon::BlobMaintenanceReport> scanStorage(lexicon::BlobScanDepth depth) {
+    return core_.scanStorage(depth);
+  }
+  lexicon::Result<lexicon::BlobGarbageCollectionResult> collectUnusedBlobs(
+      const lexicon::BlobMaintenanceReport &scan) {
+    return core_.collectUnusedBlobs(scan);
+  }
   QString importFile(const QString &path, QString *error = nullptr) {
     return qtbridge::value<QString>(core_.importFile(qtbridge::toCore(path)),
                                     error);

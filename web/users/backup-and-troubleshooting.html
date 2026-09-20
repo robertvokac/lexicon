@@ -71,6 +71,7 @@
     </div>
 
     <h2 id="backup">Backup strategies</h2>
+    <p><strong>The SQLite database and Blob directory together form the complete Lexicon data set.</strong> Backing up only the database is not sufficient when Blob Fields are used. Prefer a backup while Lexicon is closed or a coordinated snapshot while data is not changing.</p>
     <ol class="steps">
       <li><strong>Close Lexicon.</strong> This guarantees the database is not mid-write.</li>
       <li><strong>Copy <code>lexicon.db</code> and <code>blobs/</code></strong> to safe storage — external drive, NAS, or a synced folder.</li>
@@ -86,6 +87,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
     </div>
 
     <h2 id="safety">Deletion safety rules</h2>
+    <p>Blob files are deduplicated by SHA-256: multiple Item values can refer to the same physical file. Removing a value, Item, Field, or Type leaves the file in place. Use <strong>Tools → Blob maintenance…</strong> to scan for unused files. A normal Scan checks references and paths; Full integrity check also hashes file contents. Missing means a referenced file is absent; Hash mismatch means its contents are corrupt. Restore these from backup rather than deleting them. Only the explicitly confirmed Delete unused blobs action removes canonical, still-unreferenced files after rechecking references and contents. Unexpected files and symlinks are reported but not collected.</p>
     <p>Lexicon uses cascade deletion to keep the database consistent. Know the two rules before you delete anything:</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>

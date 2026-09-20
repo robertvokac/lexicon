@@ -175,6 +175,17 @@ public:
   Result<void> exportFile(const std::string &hash, const std::string &path) {
     return repository_.exportBlob(hash, path);
   }
+  Result<BlobMaintenanceReport> scanStorage(
+      BlobScanDepth depth = BlobScanDepth::Structural) {
+    return repository_.scanBlobStorage(depth);
+  }
+  Result<BlobGarbageCollectionResult> collectUnusedBlobs(
+      const BlobMaintenanceReport &scan) {
+    return repository_.collectUnusedBlobs(scan);
+  }
+  Result<BlobIssue> verifyBlob(const std::string &hash) {
+    return repository_.verifyBlob(hash);
+  }
 
 private:
   Repository &repository_;

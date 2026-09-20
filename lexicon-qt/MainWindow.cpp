@@ -6,6 +6,7 @@
 #include "ValueListDialog.h"
 #include "FilterHeaderView.h"
 #include "PropertyFilterDialog.h"
+#include "BlobMaintenanceDialog.h"
 
 #include "MarkdownConverter.h"
 #include <QAction>
@@ -282,6 +283,13 @@ void MainWindow::setupMenus() {
     auto* typesAction = manageMenu->addAction("Types...");
     connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
     connect(typesAction, &QAction::triggered, this, &MainWindow::openTypeManager);
+
+    auto* toolsMenu = menuBar()->addMenu("Tools");
+    auto* maintenanceAction = toolsMenu->addAction("Blob maintenance...");
+    connect(maintenanceAction, &QAction::triggered, this, [this] {
+        BlobMaintenanceDialog dialog(this);
+        dialog.exec();
+    });
 
     auto* viewMenu = menuBar()->addMenu("View");
     auto* tagsAction = viewMenu->addAction("All tags...");

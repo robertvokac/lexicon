@@ -351,9 +351,36 @@ Design notes:
 - Location: next to the executable binary
 - Blob files: `blobs/<first two hash characters>/<remaining hash characters>` next to `lexicon.db`
 
+**The SQLite database and Blob directory together form the complete Lexicon data set.**
+Backing up only `lexicon.db` is insufficient when Blob Fields are used.
+
+### Blob lifecycle and maintenance
+
+Blob identity is the lowercase hexadecimal SHA-256 digest of the file bytes. Identical
+files share one physical Blob, even when multiple Items or Blob Fields reference it.
+Import writes a temporary file, checks its digest, then installs the complete file at
+the canonical path. An existing healthy file with the same digest is reused.
+
+Clearing a Blob value or deleting an Item, Field, or Type removes database references
+but deliberately retains the physical file. An **orphan** is a canonical Blob file
+with no current Blob Field value referencing its hash. This permits recovery from
+accidental edits and protects shared files. Only **Tools → Blob maintenance… →
+Delete unused blobs…**, after an explicit scan and confirmation, removes orphans.
+There is no scheduled or automatic Blob garbage collection.
+
+The **Scan** action checks current database references, canonical paths, sizes,
+missing files, and unused files without reading every Blob's contents. **Full
+integrity check** additionally recalculates SHA-256 for each canonical file.
+**Missing** means a Blob Field references bytes absent from the expected path.
+**Hash mismatch** means the bytes at a canonical path do not match its hash.
+Unexpected files, directories, and symlinks are reported separately. Missing and
+corrupt Blobs are never deleted or repaired by GC; investigate them and restore
+them from a complete backup. GC refreshes database references and rehashes each
+candidate immediately before removal. Failed and skipped deletions are reported.
+
 Backup strategies:
 
-1. Close Lexicon.
+1. Close Lexicon, or take a coordinated snapshot while data is not changing.
 2. Copy `lexicon.db` and the adjacent `blobs` directory to safe storage.
 3. Optionally version backups (daily/weekly snapshots).
 

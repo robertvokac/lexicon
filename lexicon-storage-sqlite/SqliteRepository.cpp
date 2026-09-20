@@ -3,9 +3,11 @@
 #include "Validation.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <openssl/evp.h>
 #include <set>
 #include <random>
@@ -13,6 +15,10 @@
 #include <utility>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 using storage::Connection;
@@ -685,6 +691,9 @@ SqliteRepository::Result<void> SqliteRepository::rollbackUnitOfWork() {
 
 namespace {
 namespace fs = std::filesystem;
+// The desktop uses one event loop. This also coordinates Blob operations made
+// through multiple repositories in the same process.
+std::mutex blobStorageMutex;
 fs::path utf8Path(const std::string &value) {
   return fs::path(std::u8string(reinterpret_cast<const char8_t *>(value.data()), value.size()));
 }
@@ -701,6 +710,172 @@ bool validHash(const std::string &hash) {
   return hash.size() == 64 && std::all_of(hash.begin(), hash.end(), [](char ch) {
     return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
   });
+}
+fs::path blobRoot(const std::string &databasePath) {
+  return utf8Path(databasePath).parent_path() / "blobs";
+}
+fs::path blobPath(const fs::path &root, const std::string &hash) {
+  return root / hash.substr(0, 2) / hash.substr(2);
+}
+bool hexPrefix(const std::string &prefix) {
+  return prefix.size() == 2 && std::all_of(prefix.begin(), prefix.end(), [](char ch) {
+    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+  });
+}
+fs::file_status noFollow(const fs::path &path) {
+  std::error_code error;
+  auto status = fs::symlink_status(path, error);
+  if (error && error != std::errc::no_such_file_or_directory)
+    throw Failure("Cannot inspect Blob path: " + error.message());
+  return status;
+}
+std::string hashFile(const fs::path &path, std::ostream *copy = nullptr) {
+  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+  if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
+    throw Failure("Cannot initialize SHA-256.");
+  char buffer[1024 * 1024];
+#ifdef _WIN32
+  HANDLE descriptor = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                                  nullptr, OPEN_EXISTING,
+                                  FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
+                                  nullptr);
+  if (descriptor == INVALID_HANDLE_VALUE) throw Failure("Cannot open Blob file.");
+  struct Handle {
+    HANDLE value;
+    ~Handle() { CloseHandle(value); }
+  } handle{descriptor};
+  BY_HANDLE_FILE_INFORMATION metadata{};
+  if (!GetFileInformationByHandle(descriptor, &metadata) ||
+      (metadata.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)))
+    throw Failure("Blob path is not a regular file.");
+  for (;;) {
+    DWORD count = 0;
+    if (!ReadFile(descriptor, buffer, sizeof(buffer), &count, nullptr))
+      throw Failure("Cannot read Blob file completely.");
+    if (count == 0) break;
+    if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
+      throw Failure("Cannot hash Blob file.");
+    if (copy) { copy->write(buffer, count); if (!*copy) throw Failure("Cannot copy Blob file."); }
+  }
+#else
+  int descriptor = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (descriptor < 0) throw Failure("Cannot open regular Blob file: " + std::to_string(errno));
+  struct Descriptor {
+    int value;
+    ~Descriptor() { ::close(value); }
+  } handle{descriptor};
+  struct stat metadata {};
+  if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode))
+    throw Failure("Blob path is not a regular file.");
+  for (;;) {
+    const auto count = ::read(descriptor, buffer, sizeof(buffer));
+    if (count < 0 && errno == EINTR) continue;
+    if (count < 0) throw Failure("Cannot read Blob file completely.");
+    if (count == 0) break;
+    if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
+      throw Failure("Cannot hash Blob file.");
+    if (copy) { copy->write(buffer, count); if (!*copy) throw Failure("Cannot copy Blob file."); }
+  }
+#endif
+  unsigned char bytes[EVP_MAX_MD_SIZE]; unsigned length = 0;
+  if (EVP_DigestFinal_ex(digest.get(), bytes, &length) != 1)
+    throw Failure("Cannot finish SHA-256.");
+  return hexDigest(bytes, length);
+}
+void requireSafeRoot(const fs::path &root) {
+  auto status = noFollow(root);
+  require(status.type() == fs::file_type::directory, "Blob root is not a directory.",
+          lexicon::Error::Code::Storage);
+}
+void requireSafePrefix(const fs::path &root, const std::string &hash) {
+  requireSafeRoot(root);
+  require(noFollow(root / hash.substr(0, 2)).type() == fs::file_type::directory,
+          "Blob prefix is not a directory.", lexicon::Error::Code::Storage);
+}
+struct LiveBlobs {
+  std::set<std::string> hashes;
+  std::set<std::string> invalid;
+  std::size_t references = 0;
+};
+LiveBlobs liveBlobs(const Connection &db) {
+  LiveBlobs live;
+  Statement values(db, "SELECT iv.value FROM item_value iv "
+                       "JOIN item_field f ON f.id = iv.item_field_id "
+                       "JOIN item i ON i.id = iv.item_id AND i.item_type_id = f.item_type_id "
+                       "WHERE f.data_type = 8;");
+  while (values.step()) {
+    auto hash = values.text(0);
+    ++live.references;
+    if (validHash(hash)) live.hashes.insert(std::move(hash));
+    else live.invalid.insert(std::move(hash));
+  }
+  return live;
+}
+lexicon::BlobMaintenanceReport scanBlobs(const Connection &db, const fs::path &root,
+                                         lexicon::BlobScanDepth depth) {
+  using lexicon::BlobIssueType;
+  lexicon::BlobMaintenanceReport report;
+  report.depth = depth;
+  auto live = liveBlobs(db);
+  report.referenceCount = live.references;
+  report.referencedBlobCount = live.hashes.size();
+  for (const auto &hash : live.invalid)
+    report.issues.push_back({BlobIssueType::InvalidReference, hash, {}, 0,
+                             "Blob field contains a noncanonical SHA-256 value."});
+  std::set<std::string> present;
+  auto rootStatus = noFollow(root);
+  if (rootStatus.type() != fs::file_type::not_found) {
+    if (rootStatus.type() != fs::file_type::directory) {
+      report.issues.push_back({BlobIssueType::UnexpectedFile, {}, "blobs", 0,
+                               "Blob root is not a real directory."});
+    } else {
+      for (const auto &prefixEntry : fs::directory_iterator(root)) {
+        const auto prefix = prefixEntry.path().filename().string();
+        const auto prefixStatus = noFollow(prefixEntry.path());
+        if (!hexPrefix(prefix) || prefixStatus.type() != fs::file_type::directory) {
+          report.issues.push_back({BlobIssueType::UnexpectedFile, {}, prefix, 0,
+                                   "Unexpected entry in Blob root."});
+          continue;
+        }
+        for (const auto &entry : fs::directory_iterator(prefixEntry.path())) {
+          const auto name = entry.path().filename().string();
+          const auto relative = prefix + "/" + name;
+          const auto status = noFollow(entry.path());
+          const auto hash = prefix + name;
+          if (status.type() != fs::file_type::regular || !validHash(hash) || name.size() != 62) {
+            report.issues.push_back({BlobIssueType::UnexpectedFile, {}, relative, 0,
+                                     "Unexpected Blob entry; it will never be collected automatically."});
+            continue;
+          }
+          const auto size = fs::file_size(entry.path());
+          ++report.physicalBlobCount;
+          report.totalBytes += size;
+          present.insert(hash);
+          if (depth == lexicon::BlobScanDepth::FullIntegrity && hashFile(entry.path()) != hash) {
+            ++report.corruptedBlobCount;
+            report.issues.push_back({BlobIssueType::HashMismatch, hash, relative, size,
+                                     "File contents do not match the SHA-256 path."});
+          } else if (!live.hashes.contains(hash)) {
+            ++report.orphanedBlobCount;
+            report.orphanedBytes += size;
+            report.issues.push_back({BlobIssueType::Orphaned, hash, relative, size,
+                                     depth == lexicon::BlobScanDepth::Structural
+                                       ? "Unreferenced; content has not been checked yet."
+                                       : "Unreferenced canonical Blob."});
+          }
+        }
+      }
+    }
+  }
+  for (const auto &hash : live.hashes) {
+    if (!present.contains(hash)) {
+      ++report.missingBlobCount;
+      report.issues.push_back({BlobIssueType::Missing, hash,
+                               hash.substr(0, 2) + "/" + hash.substr(2), 0,
+                               "Referenced Blob file is missing."});
+    }
+  }
+  return report;
 }
 fs::path temporaryPath(const fs::path &directory) {
   auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -719,9 +894,11 @@ struct TemporaryFile {
 } // namespace
 SqliteRepository::Result<std::string> SqliteRepository::importBlob(const std::string &sourcePath) {
   return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
     impl_->db.get();
-    fs::path root = utf8Path(impl_->path).parent_path() / "blobs";
+    fs::path root = blobRoot(impl_->path);
     fs::create_directories(root);
+    requireSafeRoot(root);
     std::ifstream source(utf8Path(sourcePath), std::ios::binary);
     if (!source) throw Failure("Cannot read file.");
     TemporaryFile temp{temporaryPath(root)};
@@ -747,32 +924,54 @@ SqliteRepository::Result<std::string> SqliteRepository::importBlob(const std::st
     unsigned char bytes[EVP_MAX_MD_SIZE]; unsigned length = 0;
     if (EVP_DigestFinal_ex(digest.get(), bytes, &length) != 1) throw Failure("Cannot finish SHA-256.");
     auto hash = hexDigest(bytes, length);
-    fs::path target = root / hash.substr(0, 2) / hash.substr(2);
+    // The temporary file is complete and checked before it can acquire its
+    // canonical name. The same hash may be used by any number of Item values.
+    require(hashFile(temp.path) == hash, "Imported Blob changed while being written.",
+            lexicon::Error::Code::Storage);
+    fs::path target = blobPath(root, hash);
     fs::create_directories(target.parent_path());
-    if (!fs::exists(target)) {
-      try {
-        fs::rename(temp.path, target);
+    requireSafePrefix(root, hash);
+    if (noFollow(target).type() == fs::file_type::not_found) {
+#ifdef _WIN32
+      // MoveFileEx without REPLACE_EXISTING installs the complete file once.
+      if (MoveFileExW(temp.path.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
         temp.keep();
+      else if (noFollow(target).type() == fs::file_type::not_found)
+        throw Failure("Cannot install Blob file.");
+#else
+      try {
+        // Link creation is atomic and will never replace an existing Blob.
+        fs::create_hard_link(temp.path, target);
       } catch (const fs::filesystem_error &) {
-        if (!fs::exists(target)) throw;
+        if (noFollow(target).type() == fs::file_type::not_found) throw;
       }
+#endif
     }
+    require(noFollow(target).type() == fs::file_type::regular && hashFile(target) == hash,
+            "Existing Blob has unexpected contents or type.", lexicon::Error::Code::Storage);
     return hash;
   });
 }
 SqliteRepository::Result<void> SqliteRepository::exportBlob(const std::string &hash, const std::string &destinationPath) {
   return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
     impl_->db.get();
     require(validHash(hash), "Invalid blob identifier.");
-    fs::path sourcePath = utf8Path(impl_->path).parent_path() / "blobs" / hash.substr(0, 2) / hash.substr(2);
-    std::ifstream source(sourcePath, std::ios::binary);
-    if (!source) throw Failure("Cannot read blob.");
+    const auto root = blobRoot(impl_->path);
+    if (noFollow(root).type() == fs::file_type::not_found ||
+        noFollow(root / hash.substr(0, 2)).type() == fs::file_type::not_found)
+      throw Failure("Referenced Blob file is missing.", lexicon::Error::Code::NotFound);
+    requireSafePrefix(root, hash);
+    fs::path sourcePath = blobPath(root, hash);
+    require(noFollow(sourcePath).type() == fs::file_type::regular,
+            "Referenced Blob file is missing.", lexicon::Error::Code::NotFound);
     fs::path target = utf8Path(destinationPath);
     TemporaryFile temp{temporaryPath(target.parent_path())};
     std::ofstream output(temp.path, std::ios::binary);
     if (!output) throw Failure("Cannot create output file.");
-    output << source.rdbuf();
-    if (!source.eof() && source.fail()) throw Failure("Cannot copy blob.");
+    require(hashFile(sourcePath, &output) == hash,
+            "Blob contents do not match its SHA-256 identifier.",
+            lexicon::Error::Code::Storage);
     output.close();
     if (!output) throw Failure("Cannot finish output file.");
 #ifdef _WIN32
@@ -783,5 +982,111 @@ SqliteRepository::Result<void> SqliteRepository::exportBlob(const std::string &h
     fs::rename(temp.path, target);
 #endif
     temp.keep();
+  });
+}
+
+SqliteRepository::Result<lexicon::BlobMaintenanceReport>
+SqliteRepository::scanBlobStorage(lexicon::BlobScanDepth depth) {
+  return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
+    return scanBlobs(impl_->db, blobRoot(impl_->path), depth);
+  });
+}
+
+SqliteRepository::Result<lexicon::BlobIssue>
+SqliteRepository::verifyBlob(const std::string &hash) {
+  return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
+    require(validHash(hash), "Invalid Blob identifier.");
+    auto root = blobRoot(impl_->path);
+    auto path = blobPath(root, hash);
+    const auto relative = hash.substr(0, 2) + "/" + hash.substr(2);
+    const auto rootType = noFollow(root).type();
+    if (rootType == fs::file_type::not_found)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::Missing, hash, relative, 0,
+                                "Blob file is missing."};
+    if (rootType != fs::file_type::directory)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::UnexpectedFile, hash, "blobs", 0,
+                                "Blob root is not a real directory."};
+    const auto prefixType = noFollow(path.parent_path()).type();
+    if (prefixType == fs::file_type::not_found)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::Missing, hash, relative, 0,
+                                "Blob file is missing."};
+    if (prefixType != fs::file_type::directory)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::UnexpectedFile, hash, relative, 0,
+                                "Blob prefix is not a real directory."};
+    const auto fileType = noFollow(path).type();
+    if (fileType == fs::file_type::not_found)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::Missing, hash, relative, 0,
+                                "Blob file is missing."};
+    if (fileType != fs::file_type::regular)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::UnexpectedFile, hash, relative, 0,
+                                "Blob path is not a regular file."};
+    auto size = fs::file_size(path);
+    if (hashFile(path) != hash)
+      return lexicon::BlobIssue{lexicon::BlobIssueType::HashMismatch, hash, relative, size,
+                                "Blob contents do not match the SHA-256 path."};
+    return lexicon::BlobIssue{lexicon::BlobIssueType::Healthy, hash, relative, size,
+                              "Blob contents match the SHA-256 path."};
+  });
+}
+
+SqliteRepository::Result<lexicon::BlobGarbageCollectionResult>
+SqliteRepository::collectUnusedBlobs(const lexicon::BlobMaintenanceReport &scan) {
+  return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
+    lexicon::BlobGarbageCollectionResult result;
+    const auto root = blobRoot(impl_->path);
+    std::set<std::string> candidates;
+    for (const auto &issue : scan.issues)
+      if (issue.type == lexicon::BlobIssueType::Orphaned && validHash(issue.hash))
+        candidates.insert(issue.hash);
+    result.candidates = candidates.size();
+    if (candidates.empty()) return result;
+    // A write transaction excludes other SQLite writers from the live-set
+    // check through the filesystem sweep, including writers in other processes.
+    impl_->db.exec("BEGIN IMMEDIATE;");
+    struct Rollback {
+      const Connection &db;
+      ~Rollback() { try { db.exec("ROLLBACK;"); } catch (...) {} }
+    } rollback{impl_->db};
+    auto live = liveBlobs(impl_->db);
+    for (const auto &hash : candidates) {
+      const auto relative = hash.substr(0, 2) + "/" + hash.substr(2);
+      if (live.hashes.contains(hash)) { ++result.skipped; continue; }
+      const auto path = blobPath(root, hash);
+      try {
+        if (noFollow(root).type() != fs::file_type::directory ||
+            noFollow(path.parent_path()).type() != fs::file_type::directory ||
+            noFollow(path).type() != fs::file_type::regular) {
+          ++result.skipped;
+          result.issues.push_back({lexicon::BlobIssueType::UnexpectedFile, hash, relative, 0,
+                                   "Candidate is no longer a regular canonical Blob."});
+          continue;
+        }
+        const auto size = fs::file_size(path);
+        if (hashFile(path) != hash) {
+          ++result.skipped;
+          result.issues.push_back({lexicon::BlobIssueType::HashMismatch, hash, relative, size,
+                                   "Candidate failed SHA-256 revalidation."});
+          continue;
+        }
+        // Keep physical files when Item values disappear. Only this explicit
+        // operation may remove a still-unreferenced canonical Blob.
+        std::error_code error;
+        if (!fs::remove(path, error) || error) {
+          ++result.failed;
+          result.issues.push_back({lexicon::BlobIssueType::Orphaned, hash, relative, size,
+                                   error ? error.message() : "Deletion did not remove the file."});
+        } else {
+          ++result.deleted;
+          result.deletedBytes += size;
+        }
+      } catch (const std::exception &error) {
+        ++result.failed;
+        result.issues.push_back({lexicon::BlobIssueType::Orphaned, hash, relative, 0, error.what()});
+      }
+    }
+    return result;
   });
 }
