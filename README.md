@@ -359,7 +359,12 @@ Backing up only `lexicon.db` is insufficient when Blob Fields are used.
 Blob identity is the lowercase hexadecimal SHA-256 digest of the file bytes. Identical
 files share one physical Blob, even when multiple Items or Blob Fields reference it.
 Import writes a temporary file, checks its digest, then installs the complete file at
-the canonical path. An existing healthy file with the same digest is reused.
+the canonical path. Temporary files are created exclusively so an existing path
+cannot be opened or truncated by mistake. An existing healthy file with the same
+digest is reused. Saving an Item with Blob values checks the canonical files and
+their SHA-256 hashes inside the Item's database transaction. If GC removed an
+unreferenced import before Item save, the save fails and rolls back; it cannot
+commit a new dangling Blob reference.
 
 Clearing a Blob value or deleting an Item, Field, or Type removes database references
 but deliberately retains the physical file. An **orphan** is a canonical Blob file

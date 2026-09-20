@@ -24,6 +24,11 @@ bool hasIssue(const lexicon::BlobMaintenanceReport &report, lexicon::BlobIssueTy
   for (const auto &issue : report.issues) if (issue.type == type) return true;
   return false;
 }
+bool hasTemporaryFile(const fs::path &directory) {
+  for (const auto &entry : fs::directory_iterator(directory))
+    if (entry.path().filename().string().rfind(".lexicon-", 0) == 0) return true;
+  return false;
+}
 }
 
 int main() {
@@ -50,6 +55,26 @@ int main() {
   if (!success(fields, "Load fields") || !expect(fields->size() == 1, "Expected one field")) return 1;
   field.id = fields->front().id;
 
+  // GC wins between import and Item save: the save must roll back instead of
+  // committing a dangling reference.
+  const auto raceSource = directory / "race-source";
+  write(raceSource, "gc first");
+  auto raceHash = app.blobs.importFile(raceSource.string());
+  if (!success(raceHash, "Import before GC race")) return 1;
+  auto raceScan = app.blobs.scanStorage();
+  if (!success(raceScan, "Scan before GC race")) return 1;
+  auto raceGc = app.blobs.collectUnusedBlobs(*raceScan);
+  if (!success(raceGc, "GC before Item save") ||
+      !expect(raceGc->deleted == 1, "GC did not win the import-save race")) return 1;
+  lexicon::ItemRecord raceItem;
+  raceItem.groupId = *group; raceItem.itemTypeId = field.itemTypeId;
+  raceItem.title = "Must not commit"; raceItem.fieldValues[field.id] = *raceHash;
+  auto racedSave = app.items.createItem(raceItem);
+  auto racedLookup = app.search.findItemId(raceItem.title);
+  if (!expect(!racedSave && racedSave.error().code == lexicon::Error::Code::NotFound &&
+              !racedLookup && racedLookup.error().code == lexicon::Error::Code::NotFound,
+              "Item committed a Blob reference after GC removed its file")) return 1;
+
   const auto source = directory / "source";
   write(source, "shared bytes");
   auto hash = app.blobs.importFile(source.string());
@@ -64,9 +89,12 @@ int main() {
   auto invalidExport = app.blobs.exportFile("../bad", (directory / "export").string());
   if (!expect(!invalidExport && invalidExport.error().code == lexicon::Error::Code::Validation,
               "Invalid export hash was accepted")) return 1;
-  for (const auto &entry : fs::directory_iterator(directory / "blobs"))
-    if (!expect(entry.path().filename() == hash->substr(0, 2),
-                "Temporary Blob survived import")) return 1;
+  if (!expect(!hasTemporaryFile(directory / "blobs"),
+              "Temporary Blob survived import")) return 1;
+  const auto exported = directory / "export";
+  if (!success(app.blobs.exportFile(*hash, exported.string()), "Export Blob") ||
+      !expect(fs::file_size(exported) == 12 && !hasTemporaryFile(directory),
+              "Export left an incomplete temporary file")) return 1;
 
   lexicon::ItemRecord first;
   first.groupId = *group; first.itemTypeId = field.itemTypeId;
@@ -114,9 +142,19 @@ int main() {
       !expect(scan->physicalBlobCount == 0 && scan->orphanedBlobCount == 0,
               "GC left a canonical Blob")) return 1;
 
-  // Valid identifiers in Item values remain untouched when their bytes are absent.
+  // Create a valid reference, then simulate external loss of its physical file.
+  auto restored = app.blobs.importFile(source.string());
+  if (!success(restored, "Restore before missing-file test")) return 1;
   second.fieldValues[field.id] = *hash;
-  if (!success(app.items.saveItem(second), "Create missing reference")) return 1;
+  if (!success(app.items.saveItem(second), "Create valid reference")) return 1;
+  fs::remove(canonical);
+  second.title = "Must roll back missing Blob";
+  auto missingSave = app.items.saveItem(second);
+  auto missingReload = app.items.loadItem(*secondId);
+  if (!success(missingReload, "Reload after missing save") ||
+      !expect(!missingSave && missingSave.error().code == lexicon::Error::Code::NotFound &&
+              missingReload->title == "B", "Missing Blob save did not roll back")) return 1;
+  second.title = "B";
   scan = app.blobs.scanStorage();
   if (!success(scan, "Scan missing Blob") ||
       !expect(scan->missingBlobCount == 1 && hasIssue(*scan, lexicon::BlobIssueType::Missing),
@@ -136,6 +174,13 @@ int main() {
   auto reimport = app.blobs.importFile(source.string());
   if (!success(reimport, "Restore Blob") || !expect(*reimport == *hash, "Restore changed hash")) return 1;
   write(canonical, "corrupt");
+  second.title = "Must roll back corruption";
+  auto corruptSave = app.items.saveItem(second);
+  auto corruptReload = app.items.loadItem(*secondId);
+  if (!success(corruptReload, "Reload after corrupt save") ||
+      !expect(!corruptSave && corruptSave.error().code == lexicon::Error::Code::Storage &&
+              corruptReload->title == "B", "Corrupted Blob save did not roll back")) return 1;
+  second.title = "B";
   auto full = app.blobs.scanStorage(lexicon::BlobScanDepth::FullIntegrity);
   if (!success(full, "Full integrity scan") ||
       !expect(full->corruptedBlobCount == 1 && hasIssue(*full, lexicon::BlobIssueType::HashMismatch),
@@ -147,6 +192,7 @@ int main() {
   auto corruptExport = app.blobs.exportFile(*hash, (directory / "export").string());
   if (!expect(!corruptExport && corruptExport.error().code == lexicon::Error::Code::Storage,
               "Corrupted Blob export succeeded")) return 1;
+  if (!expect(!hasTemporaryFile(directory), "Failed export left a temporary file")) return 1;
   auto corruptGc = app.blobs.collectUnusedBlobs(*full);
   if (!success(corruptGc, "GC with corruption") ||
       !expect(corruptGc->deleted == 0 && fs::exists(canonical), "GC deleted corruption")) return 1;

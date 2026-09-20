@@ -7,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <mutex>
 #include <openssl/evp.h>
 #include <set>
@@ -484,7 +485,9 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
 }
 
 namespace {
-int saveItemNative(const Connection &db, const lexicon::ItemRecord &item) {
+void verifySavedBlobs(const Connection &db, const std::string &databasePath, int itemId);
+int saveItemNative(const Connection &db, const std::string &databasePath,
+                   const lexicon::ItemRecord &item) {
   auto fields = item.itemTypeId > 0 ? fieldsFor(db, item.itemTypeId) : std::vector<lexicon::ItemFieldRecord>{};
   valid(lexicon::validateItem(item, fields));
   Transaction tx(db, "lexicon_write");
@@ -518,15 +521,18 @@ int saveItemNative(const Connection &db, const lexicon::ItemRecord &item) {
     property.bind(id).bind(lexicon::trim(entry.key)).bind(entry.value).run(); property.reset();
   }
   logOperation(db, "item", id, item.id < 0 ? 1 : 2);
+  // The INSERT/UPDATE above holds SQLite's writer lock. GC cannot sweep while
+  // these just-written Blob references are checked and committed.
+  verifySavedBlobs(db, databasePath, id);
   tx.commit();
   return id;
 }
 } // namespace
 SqliteRepository::Result<void> SqliteRepository::saveItem(const ItemRecord &item) {
-  return guarded([&] { saveItemNative(impl_->db, item); });
+  return guarded([&] { saveItemNative(impl_->db, impl_->path, item); });
 }
 SqliteRepository::Result<int> SqliteRepository::saveItemReturningId(const ItemRecord &item) {
-  return guarded([&] { return saveItemNative(impl_->db, item); });
+  return guarded([&] { return saveItemNative(impl_->db, impl_->path, item); });
 }
 SqliteRepository::Result<void> SqliteRepository::deleteItem(int itemId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
@@ -729,7 +735,8 @@ fs::file_status noFollow(const fs::path &path) {
     throw Failure("Cannot inspect Blob path: " + error.message());
   return status;
 }
-std::string hashFile(const fs::path &path, std::ostream *copy = nullptr) {
+std::string hashFile(const fs::path &path,
+                     const std::function<void(const char *, std::size_t)> &copy = {}) {
   std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
   if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
     throw Failure("Cannot initialize SHA-256.");
@@ -755,7 +762,7 @@ std::string hashFile(const fs::path &path, std::ostream *copy = nullptr) {
     if (count == 0) break;
     if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
       throw Failure("Cannot hash Blob file.");
-    if (copy) { copy->write(buffer, count); if (!*copy) throw Failure("Cannot copy Blob file."); }
+    if (copy) copy(buffer, static_cast<std::size_t>(count));
   }
 #else
   int descriptor = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
@@ -774,7 +781,7 @@ std::string hashFile(const fs::path &path, std::ostream *copy = nullptr) {
     if (count == 0) break;
     if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
       throw Failure("Cannot hash Blob file.");
-    if (copy) { copy->write(buffer, count); if (!*copy) throw Failure("Cannot copy Blob file."); }
+    if (copy) copy(buffer, static_cast<std::size_t>(count));
   }
 #endif
   unsigned char bytes[EVP_MAX_MD_SIZE]; unsigned length = 0;
@@ -791,6 +798,40 @@ void requireSafePrefix(const fs::path &root, const std::string &hash) {
   requireSafeRoot(root);
   require(noFollow(root / hash.substr(0, 2)).type() == fs::file_type::directory,
           "Blob prefix is not a directory.", lexicon::Error::Code::Storage);
+}
+void verifySavedBlobs(const Connection &db, const std::string &databasePath, int itemId) {
+  Statement values(db, "SELECT DISTINCT iv.value FROM item_value iv "
+                       "JOIN item_field f ON f.id = iv.item_field_id "
+                       "JOIN item i ON i.id = iv.item_id AND i.item_type_id = f.item_type_id "
+                       "WHERE iv.item_id = ? AND f.data_type = 8;");
+  values.bind(itemId);
+  const auto root = blobRoot(databasePath);
+  while (values.step()) {
+    const auto hash = values.text(0);
+    require(validHash(hash), "Item contains an invalid Blob identifier.");
+    const auto prefix = root / hash.substr(0, 2);
+    const auto path = blobPath(root, hash);
+    const auto rootType = noFollow(root).type();
+    if (rootType == fs::file_type::not_found)
+      throw Failure("Referenced Blob file is missing: " + hash,
+                    lexicon::Error::Code::NotFound);
+    require(rootType == fs::file_type::directory, "Blob root is not a real directory.",
+            lexicon::Error::Code::Storage);
+    const auto prefixType = noFollow(prefix).type();
+    if (prefixType == fs::file_type::not_found)
+      throw Failure("Referenced Blob file is missing: " + hash,
+                    lexicon::Error::Code::NotFound);
+    require(prefixType == fs::file_type::directory, "Blob prefix is not a real directory.",
+            lexicon::Error::Code::Storage);
+    const auto fileType = noFollow(path).type();
+    if (fileType == fs::file_type::not_found)
+      throw Failure("Referenced Blob file is missing: " + hash,
+                    lexicon::Error::Code::NotFound);
+    require(fileType == fs::file_type::regular, "Blob path is not a regular file.",
+            lexicon::Error::Code::Storage);
+    require(hashFile(path) == hash, "Blob contents do not match its SHA-256 identifier: " + hash,
+            lexicon::Error::Code::Storage);
+  }
 }
 struct LiveBlobs {
   std::set<std::string> hashes;
@@ -877,18 +918,79 @@ lexicon::BlobMaintenanceReport scanBlobs(const Connection &db, const fs::path &r
   }
   return report;
 }
-fs::path temporaryPath(const fs::path &directory) {
-  auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
-  auto nonce = std::random_device{}();
-  for (int i = 0; i < 100; ++i) {
-    auto path = directory / (".lexicon-" + std::to_string(seed) + "-" + std::to_string(nonce) + "-" + std::to_string(i));
-    if (!fs::exists(path)) return path;
-  }
-  throw Failure("Cannot allocate temporary blob path.");
-}
 struct TemporaryFile {
   fs::path path;
-  ~TemporaryFile() { if (!path.empty()) { std::error_code ignored; fs::remove(path, ignored); } }
+#ifdef _WIN32
+  HANDLE descriptor = INVALID_HANDLE_VALUE;
+#else
+  int descriptor = -1;
+#endif
+  explicit TemporaryFile(const fs::path &directory) {
+    const auto seed = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto nonce = std::random_device{}();
+    for (int i = 0; i < 100; ++i) {
+      auto candidate = directory / (".lexicon-" + std::to_string(seed) + "-" +
+                                    std::to_string(nonce) + "-" + std::to_string(i));
+#ifdef _WIN32
+      descriptor = CreateFileW(candidate.c_str(), GENERIC_WRITE, 0, nullptr,
+                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+      if (descriptor == INVALID_HANDLE_VALUE) {
+        const auto error = GetLastError();
+        if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) continue;
+        throw Failure("Cannot exclusively create temporary file.");
+      }
+#else
+      descriptor = ::open(candidate.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+      if (descriptor < 0) {
+        if (errno == EEXIST) continue;
+        throw Failure("Cannot exclusively create temporary file: " + std::to_string(errno));
+      }
+#endif
+      path = std::move(candidate);
+      return;
+    }
+    throw Failure("Cannot allocate temporary file path.");
+  }
+  TemporaryFile(const TemporaryFile &) = delete;
+  TemporaryFile &operator=(const TemporaryFile &) = delete;
+  ~TemporaryFile() {
+#ifdef _WIN32
+    if (descriptor != INVALID_HANDLE_VALUE) CloseHandle(descriptor);
+#else
+    if (descriptor >= 0) ::close(descriptor);
+#endif
+    if (!path.empty()) { std::error_code ignored; fs::remove(path, ignored); }
+  }
+  void write(const char *bytes, std::size_t length) {
+    while (length != 0) {
+#ifdef _WIN32
+      DWORD count = 0;
+      const auto requested = static_cast<DWORD>(std::min<std::size_t>(length, 1024 * 1024));
+      if (!WriteFile(descriptor, bytes, requested, &count, nullptr) || count == 0)
+        throw Failure("Cannot write temporary file.");
+#else
+      const auto count = ::write(descriptor, bytes, length);
+      if (count < 0 && errno == EINTR) continue;
+      if (count <= 0) throw Failure("Cannot write temporary file.");
+#endif
+      bytes += count;
+      length -= static_cast<std::size_t>(count);
+    }
+  }
+  void close() {
+#ifdef _WIN32
+    if (descriptor == INVALID_HANDLE_VALUE) return;
+    const bool flushed = FlushFileBuffers(descriptor) != 0;
+    const bool closed = CloseHandle(descriptor) != 0;
+    descriptor = INVALID_HANDLE_VALUE;
+#else
+    if (descriptor < 0) return;
+    const bool flushed = ::fsync(descriptor) == 0;
+    const bool closed = ::close(descriptor) == 0;
+    descriptor = -1;
+#endif
+    if (!flushed || !closed) throw Failure("Cannot finish temporary file.");
+  }
   void keep() { path.clear(); }
 };
 } // namespace
@@ -901,9 +1003,7 @@ SqliteRepository::Result<std::string> SqliteRepository::importBlob(const std::st
     requireSafeRoot(root);
     std::ifstream source(utf8Path(sourcePath), std::ios::binary);
     if (!source) throw Failure("Cannot read file.");
-    TemporaryFile temp{temporaryPath(root)};
-    std::ofstream output(temp.path, std::ios::binary);
-    if (!output) throw Failure("Cannot create temporary blob file.");
+    TemporaryFile temp(root);
     std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
     if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
       throw Failure("Cannot initialize SHA-256.");
@@ -914,13 +1014,11 @@ SqliteRepository::Result<std::string> SqliteRepository::importBlob(const std::st
       if (count > 0) {
         if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
           throw Failure("Cannot hash blob.");
-        output.write(buffer, count);
-        if (!output) throw Failure("Cannot write blob.");
+        temp.write(buffer, static_cast<std::size_t>(count));
       }
     }
     if (!source.eof()) throw Failure("Cannot read file completely.");
-    output.close();
-    if (!output) throw Failure("Cannot finish writing blob.");
+    temp.close();
     unsigned char bytes[EVP_MAX_MD_SIZE]; unsigned length = 0;
     if (EVP_DigestFinal_ex(digest.get(), bytes, &length) != 1) throw Failure("Cannot finish SHA-256.");
     auto hash = hexDigest(bytes, length);
@@ -966,14 +1064,13 @@ SqliteRepository::Result<void> SqliteRepository::exportBlob(const std::string &h
     require(noFollow(sourcePath).type() == fs::file_type::regular,
             "Referenced Blob file is missing.", lexicon::Error::Code::NotFound);
     fs::path target = utf8Path(destinationPath);
-    TemporaryFile temp{temporaryPath(target.parent_path())};
-    std::ofstream output(temp.path, std::ios::binary);
-    if (!output) throw Failure("Cannot create output file.");
-    require(hashFile(sourcePath, &output) == hash,
+    TemporaryFile temp(target.parent_path());
+    require(hashFile(sourcePath, [&](const char *bytes, std::size_t count) {
+              temp.write(bytes, count);
+            }) == hash,
             "Blob contents do not match its SHA-256 identifier.",
             lexicon::Error::Code::Storage);
-    output.close();
-    if (!output) throw Failure("Cannot finish output file.");
+    temp.close();
 #ifdef _WIN32
     if (!MoveFileExW(temp.path.c_str(), target.c_str(),
                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
