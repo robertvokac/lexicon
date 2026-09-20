@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>User Guide — Lexicon</title>
+<meta name="description" content="Lexicon User Guide: learn how to install the desktop knowledge dictionary and organize your knowledge with groups, terms, metadata, and links.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html" class="active">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">See also</p>
+      <ul>
+        <li><a href="../screenshots.html">Screenshots</a></li>
+        <li><a href="../developers/index.html">Developer Docs</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / Users</p>
+    <h1>User Guide</h1>
+    <p class="lead">Welcome! This guide takes you from installing Lexicon to running a well-organized, interlinked knowledge dictionary.</p>
+
+    <h2>What is Lexicon?</h2>
+    <p>Lexicon is a free, open-source desktop application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>terms</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
+    <p>All data is stored locally in a single SQLite file — no account, no cloud, no telemetry. You own your knowledge.</p>
+
+    <figure class="screenshot">
+      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filters, term table, and rendered content">
+      <figcaption>The main window: everything you need on one screen.</figcaption>
+    </figure>
+
+    <h2>Core concepts</h2>
+    <p>Five ideas are enough to understand the whole application:</p>
+    <table>
+      <tr><th>Concept</th><th>What it is</th><th>Example</th></tr>
+      <tr><td><strong>Group</strong></td><td>A top-level bucket that groups related terms.</td><td><code>C++</code>, <code>Databases</code>, <code>Networking</code></td></tr>
+      <tr><td><strong>Term</strong></td><td>A single concept with a title, Markdown content, and metadata.</td><td><code>Move semantics</code>, <code>B-tree index</code></td></tr>
+      <tr><td><strong>Tag / Flag</strong></td><td>Labels for classification (tags) and workflow markers (flags).</td><td>Tags: <code>cpp20</code>, <code>templates</code> · Flags: <code>review</code>, <code>needs-example</code></td></tr>
+      <tr><td><strong>Alias</strong></td><td>An alternate name or synonym that also matches in search.</td><td><code>RAII</code> for <em>Resource Acquisition Is Initialization</em></td></tr>
+      <tr><td><strong>Link</strong></td><td>A typed relationship between two terms (with automatic backlinks).</td><td><code>std::vector</code> — <em>Is A</em> → <code>container</code></td></tr>
+    </table>
+
+    <h2>Quick start checklist</h2>
+    <ol class="steps">
+      <li><strong><a href="installation.html">Install and launch Lexicon</a>.</strong> The database file is created automatically on first start.</li>
+      <li><strong><a href="getting-started.html">Create your first group</a></strong> via <code>Manage → Groups...</code> — for example <code>C++</code>.</li>
+      <li><strong>Add a few terms</strong> with the <code>Add</code> button and fill in their titles.</li>
+      <li><strong><a href="editing-terms.html">Write content in Markdown</a></strong> in the Content tab and watch the live preview.</li>
+      <li><strong><a href="links-and-relationships.html">Connect related terms</a></strong> with typed links to grow your concept graph.</li>
+      <li><strong><a href="backup-and-troubleshooting.html">Set up a backup habit</a></strong> — copying one file is all it takes.</li>
+    </ol>
+
+    <h2>Guide chapters</h2>
+    <div class="grid grid-2" style="margin-top:1.2rem">
+      <a class="card card-link" href="installation.html">
+        <h3>📦 Installation</h3>
+        <p>Requirements, building on Debian/Ubuntu, Windows, and macOS, and what happens on first launch.</p>
+      </a>
+      <a class="card card-link" href="getting-started.html">
+        <h3>🚀 Getting started</h3>
+        <p>Create groups, explore the main window, and add your first terms the recommended way.</p>
+      </a>
+      <a class="card card-link" href="editing-terms.html">
+        <h3>✍️ Editing terms</h3>
+        <p>The term editor in depth: General fields, the Markdown editor, and metadata management.</p>
+      </a>
+      <a class="card card-link" href="links-and-relationships.html">
+        <h3>🔗 Links &amp; relationships</h3>
+        <p>Build a concept graph with typed links and backlinks — Is A, Part Of, Depends On, and more.</p>
+      </a>
+      <a class="card card-link" href="search-and-navigation.html">
+        <h3>🔎 Search &amp; navigation</h3>
+        <p>Search, filters, sorting, pagination, global overviews, and switching between light and dark mode.</p>
+      </a>
+      <a class="card card-link" href="backup-and-troubleshooting.html">
+        <h3>🛟 Backup &amp; troubleshooting</h3>
+        <p>Where your data lives, how to back it up, deletion safety rules, and fixes for common problems.</p>
+      </a>
+    </div>
+
+    <div class="page-nav">
+      <a class="next" href="installation.html"><span class="dir">Next →</span>Installation</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

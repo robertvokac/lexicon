@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editing terms — Lexicon User Guide</title>
+<meta name="description" content="The Lexicon term editor in depth: General fields, statuses and understanding levels, the Markdown content editor with live preview, and metadata (tags, flags, aliases).">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-terms.html" class="active">Editing terms</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#general">General tab</a></li>
+        <li><a href="#content">Content tab (Markdown)</a></li>
+        <li><a href="#metadata">Metadata tab</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Editing terms</p>
+    <h1>Editing terms</h1>
+    <p class="lead">Double-click a term (or click <code>Edit</code>) to open the term editor. Five tabs cover everything: <strong>General</strong>, <strong>Content</strong>, <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Backlinks</strong>. This chapter covers the first three; links get <a href="links-and-relationships.html">their own chapter</a>.</p>
+
+    <h2 id="general">General tab — identity and state</h2>
+    <figure class="screenshot">
+      <img src="../assets/img/Screenshot_General.png" alt="Term editor General tab with group, title, disambiguation, status, understanding, and pinned fields">
+      <figcaption>The General tab: where a term gets its identity.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Field</th><th>Purpose</th></tr>
+      <tr><td><code>Group</code></td><td>Which group the term belongs to.</td></tr>
+      <tr><td><code>Title</code></td><td>The term's name. Required.</td></tr>
+      <tr><td><code>Disambiguation</code></td><td>Optional qualifier that lets the same title exist more than once in one group — e.g. <em>Index (database)</em> vs. <em>Index (array)</em>.</td></tr>
+      <tr><td><code>Status</code></td><td>Editorial state of the entry: <code>None</code>, <code>Draft</code>, or <code>Completed</code>.</td></tr>
+      <tr><td><code>Understanding</code></td><td>How well <em>you</em> understand the concept — see the scale below.</td></tr>
+      <tr><td><code>Pinned</code></td><td>Marks important terms so you can filter for them instantly.</td></tr>
+    </table>
+
+    <h3>The understanding scale</h3>
+    <p>Lexicon is a learning tool, so it tracks your personal mastery of every concept:</p>
+    <table>
+      <tr><th>Level</th><th>Meaning</th></tr>
+      <tr><td><span class="pill">Unknown</span></td><td>Never encountered the concept.</td></tr>
+      <tr><td><span class="pill">Recognized</span></td><td>Seen before, can identify it.</td></tr>
+      <tr><td><span class="pill">Understood</span></td><td>Conceptually grasped.</td></tr>
+      <tr><td><span class="pill">Practiced</span></td><td>Can apply it in real situations.</td></tr>
+      <tr><td><span class="pill">Mastered</span></td><td>Fully internalized — can teach or innovate.</td></tr>
+    </table>
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Review workflow</strong> Filter for <em>Understanding = Recognized</em> to get an instant list of concepts you should revisit. Update the level as you learn — watching it climb is great motivation.</p>
+    </div>
+
+    <h2 id="content">Content tab — write in Markdown</h2>
+    <figure class="screenshot">
+      <img src="../assets/img/Screenshot_Content.png" alt="Term editor Content tab with Markdown source on the left and rendered preview on the right">
+      <figcaption>Markdown source on the left, live rendered preview on the right.</figcaption>
+    </figure>
+    <p>The Content tab is a split view: the <strong>left pane</strong> holds the raw Markdown, the <strong>right pane</strong> renders it as HTML. The preview updates automatically as you type.</p>
+    <p>The formatting toolbar inserts Markdown for you:</p>
+    <ul>
+      <li><strong>Bold</strong> and <em>italic</em></li>
+      <li>H2 / H3 / H4 headings</li>
+      <li>Bullet lists and quotes</li>
+      <li>Horizontal rules</li>
+      <li>Inline code and fenced code blocks</li>
+      <li>Links and tables</li>
+    </ul>
+    <p>A typical term might look like this:</p>
+    <pre><code>## Definition
+
+**Move semantics** transfer resources instead of copying them.
+
+## Key points
+
+- introduced in C++11
+- enabled by rvalue references (`T&amp;&amp;`)
+- `std::move` is just a cast
+
+## Example
+
+```cpp
+std::vector&lt;int&gt; a = make_data();
+std::vector&lt;int&gt; b = std::move(a); // no copy
+```</code></pre>
+
+    <h2 id="metadata">Metadata tab — tags, flags, aliases</h2>
+    <figure class="screenshot">
+      <img src="../assets/img/Screenshot_Metadata.png" alt="Term editor Metadata tab with lists for tags, flags, and aliases">
+      <figcaption>Three lists, each with Add / Edit / Remove controls.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Kind</th><th>Use for</th><th>Examples</th></tr>
+      <tr><td><strong>Tags</strong></td><td>Classification — topics, versions, domains.</td><td><code>cpp20</code>, <code>templates</code>, <code>concurrency</code></td></tr>
+      <tr><td><strong>Flags</strong></td><td>Workflow markers — priority or state you act on.</td><td><code>review</code>, <code>needs-example</code>, <code>important</code></td></tr>
+      <tr><td><strong>Aliases</strong></td><td>Alternate names, abbreviations, spellings — all searchable.</td><td><code>RAII</code>, <code>ctor</code>, <code>k8s</code></td></tr>
+    </table>
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Keep vocabulary consistent</strong> Prefer one canonical spelling per tag (e.g. always <code>cpp20</code>, never a mix with <code>c++20</code>). The <a href="search-and-navigation.html#overviews">global overviews</a> show every tag, flag, and alias with usage counts — perfect for spotting duplicates.</p>
+    </div>
+
+    <div class="callout">
+      <span class="callout-icon">ℹ️</span>
+      <p><strong>Tags vs. flags</strong> If it describes <em>what the term is about</em>, it's a tag. If it describes <em>what you still need to do with it</em>, it's a flag.</p>
+    </div>
+
+    <div class="page-nav">
+      <a class="prev" href="getting-started.html"><span class="dir">← Previous</span>Getting started</a>
+      <a class="next" href="links-and-relationships.html"><span class="dir">Next →</span>Links &amp; relationships</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

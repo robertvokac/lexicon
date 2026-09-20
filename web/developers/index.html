@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Developer Docs — Lexicon</title>
+<meta name="description" content="Lexicon developer documentation: technology stack, repository layout, building with CMake and Qt 6, architecture, SQLite schema, and contributing.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="../users/index.html">Users</a>
+      <a href="index.html" class="active">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">Developer Docs</p>
+      <ul>
+        <li><a href="index.html" class="active">Overview</a></li>
+        <li><a href="building.html">Building from source</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="database.html">Database schema</a></li>
+        <li><a href="roadmap.html">Roadmap &amp; TODO</a></li>
+        <li><a href="contributing.html">Contributing</a></li>
+      </ul>
+      <p class="sidebar-title">See also</p>
+      <ul>
+        <li><a href="../users/index.html">User Guide</a></li>
+        <li><a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">Source on GitHub</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / Developers</p>
+    <h1>Developer Docs</h1>
+    <p class="lead">Everything you need to build, understand, and extend Lexicon. The codebase is small, focused, and easy to get into — a classic Qt Widgets desktop application with a clean data layer.</p>
+
+    <h2>Technology stack</h2>
+    <table>
+      <tr><th>Layer</th><th>Technology</th><th>Notes</th></tr>
+      <tr><td>Language</td><td>C++23</td><td><code>CMAKE_CXX_STANDARD 23</code>, extensions off</td></tr>
+      <tr><td>GUI</td><td>Qt 6 Widgets</td><td>Classic desktop widgets, no QML</td></tr>
+      <tr><td>Persistence</td><td>SQLite via Qt SQL</td><td>Single-file database with versioned migrations</td></tr>
+      <tr><td>Markdown</td><td><a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a></td><td>Vendored in <code>3rdparty/</code>, compiled into the binary</td></tr>
+      <tr><td>Build system</td><td>CMake ≥ 3.21</td><td>Single <code>Lexicon</code> executable target</td></tr>
+      <tr><td>License</td><td>MIT</td><td>Free for any use</td></tr>
+    </table>
+
+    <h2>Repository layout</h2>
+    <pre><code>lexicon/
+├── CMakeLists.txt        # single-target CMake build
+├── src/
+│   ├── main.cpp              # entry point: DB init + MainWindow
+│   ├── MainWindow.{h,cpp}    # main window: filters, table, pagination, preview
+│   ├── TermEditDialog.{h,cpp}# 5-tab term editor
+│   ├── GroupManagerDialog.{h,cpp}  # group CRUD dialog
+│   ├── ValueListDialog.{h,cpp}   # read-only tag/flag/alias overviews
+│   ├── DatabaseManager.{h,cpp}   # all SQL: schema, migrations, queries
+│   └── MarkdownConverter.{h,cpp} # Markdown → HTML via md4qt
+├── 3rdparty/md4qt/       # vendored Markdown parser
+├── resources/            # application icon
+├── images/               # screenshots used by README and this site
+├── lexicon.desktop       # Linux desktop entry
+└── LICENSE               # MIT</code></pre>
+
+    <h2>How it fits together</h2>
+    <ol class="steps">
+      <li><strong><code>main.cpp</code></strong> initializes the database (creating <code>lexicon.db</code> next to the executable and applying migrations), then shows the <code>MainWindow</code>.</li>
+      <li><strong><code>MainWindow</code></strong> drives the whole browsing experience — filters, search, the paginated term table, and the rendered preview pane.</li>
+      <li><strong>Dialogs</strong> (<code>TermEditDialog</code>, <code>GroupManagerDialog</code>, <code>ValueListDialog</code>) handle editing and overviews.</li>
+      <li><strong><code>DatabaseManager</code></strong> is the single gateway to SQLite — a static API used by all UI classes. No SQL lives outside it.</li>
+      <li><strong><code>MarkdownConverter</code></strong> turns term content into HTML for the preview panes using md4qt.</li>
+    </ol>
+    <p>Read the full walkthrough in <a href="architecture.html">Architecture</a>.</p>
+
+    <h2>Jump in</h2>
+    <div class="grid grid-2" style="margin-top:1.2rem">
+      <a class="card card-link" href="building.html">
+        <h3>🔨 Building from source</h3>
+        <p>Prerequisites, CMake configuration, build types, and IDE setup for Linux, Windows, and macOS.</p>
+      </a>
+      <a class="card card-link" href="architecture.html">
+        <h3>🏗️ Architecture</h3>
+        <p>Source files and their responsibilities, core data structures, enums, and design decisions.</p>
+      </a>
+      <a class="card card-link" href="database.html">
+        <h3>🗄️ Database schema</h3>
+        <p>All seven tables, indexes, cascade rules, and the versioned migration system — with full DDL.</p>
+      </a>
+      <a class="card card-link" href="roadmap.html">
+        <h3>🗺️ Roadmap &amp; TODO</h3>
+        <p>Planned features like CSV/JSON export, static HTML export, and an HTTP server — plus the working TODO list.</p>
+      </a>
+      <a class="card card-link" href="contributing.html">
+        <h3>🤝 Contributing</h3>
+        <p>How to report issues, propose changes, and submit pull requests — plus licensing details.</p>
+      </a>
+      <a class="card card-link" href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">
+        <h3>🐙 GitHub repository</h3>
+        <p>Browse the source, open issues, and star the project.</p>
+      </a>
+    </div>
+
+    <div class="page-nav">
+      <a class="next" href="building.html"><span class="dir">Next →</span>Building from source</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

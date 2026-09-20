@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building from source — Lexicon Developer Docs</title>
+<meta name="description" content="Build Lexicon from source: CMake configuration, Qt 6 setup on Linux, Windows, and macOS, debug builds, and IDE integration.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="../users/index.html">Users</a>
+      <a href="index.html" class="active">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">Developer Docs</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="building.html" class="active">Building from source</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="database.html">Database schema</a></li>
+        <li><a href="roadmap.html">Roadmap &amp; TODO</a></li>
+        <li><a href="contributing.html">Contributing</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#build">Standard build</a></li>
+        <li><a href="#configs">Build configurations</a></li>
+        <li><a href="#platforms">Platform notes</a></li>
+        <li><a href="#ide">IDE setup</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Building from source</p>
+    <h1>Building from source</h1>
+    <p class="lead">Lexicon is a single CMake target with two Qt module dependencies. If you have Qt 6 and a C++23 compiler, you're three commands away from a running binary.</p>
+
+    <h2 id="prerequisites">Prerequisites</h2>
+    <table>
+      <tr><th>Tool</th><th>Minimum</th><th>Notes</th></tr>
+      <tr><td>CMake</td><td>3.21</td><td>Required by <code>cmake_minimum_required</code></td></tr>
+      <tr><td>Compiler</td><td>C++23 support</td><td>GCC 13+, Clang 16+, or MSVC 19.3x recommended</td></tr>
+      <tr><td>Qt</td><td>Qt 6 (Qt 5 fallback)</td><td>Modules: <code>Widgets</code>, <code>Sql</code>. The build prefers Qt 6 and falls back to Qt 5 if Qt 6 is absent.</td></tr>
+      <tr><td>SQLite driver</td><td>—</td><td>The Qt SQLite plugin (<code>QSQLITE</code>) must be available at runtime</td></tr>
+    </table>
+    <p>Debian/Ubuntu one-liner:</p>
+    <pre><code>sudo apt update
+sudo apt install -y build-essential cmake qt6-base-dev libqt6sql6-sqlite</code></pre>
+
+    <h2 id="build">Standard build</h2>
+    <pre><code>git clone https://github.com/robertvokac/lexicon.git
+cd lexicon
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target Lexicon -j
+./build/Lexicon</code></pre>
+    <p>The build compiles the application sources <em>and</em> the vendored md4qt Markdown parser (about 35 translation units from <code>3rdparty/md4qt/src</code>) into one executable. <code>AUTOMOC</code> and <code>AUTORCC</code> are enabled, so Qt meta-object code is generated automatically.</p>
+
+    <div class="callout">
+      <span class="callout-icon">ℹ️</span>
+      <p><strong>Runtime side effect</strong> The first run creates <code>lexicon.db</code> in the directory of the executable — for a development build that means inside <code>build/</code>. Delete that file whenever you want a fresh database.</p>
+    </div>
+
+    <h2 id="configs">Build configurations</h2>
+    <table>
+      <tr><th>Configuration</th><th>Command</th><th>Use for</th></tr>
+      <tr><td>Release</td><td><code>-DCMAKE_BUILD_TYPE=Release</code></td><td>Day-to-day use</td></tr>
+      <tr><td>Debug</td><td><code>-DCMAKE_BUILD_TYPE=Debug</code></td><td>Development, debugging with gdb/lldb</td></tr>
+      <tr><td>RelWithDebInfo</td><td><code>-DCMAKE_BUILD_TYPE=RelWithDebInfo</code></td><td>Profiling and crash analysis</td></tr>
+    </table>
+    <p>If CMake cannot find Qt, point it at your installation:</p>
+    <pre><code>cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.y/gcc_64</code></pre>
+
+    <h2 id="platforms">Platform notes</h2>
+    <h3>Linux</h3>
+    <ul>
+      <li>Distribution Qt packages work fine; no vendor SDK needed.</li>
+      <li>The <code>lexicon.desktop</code> file in the repository can be installed for menu integration.</li>
+    </ul>
+    <h3>Windows</h3>
+    <ul>
+      <li>The target is declared <code>WIN32_EXECUTABLE</code>, so Release builds start without a console window.</li>
+      <li>Use the Qt Online Installer and configure with <code>-DCMAKE_PREFIX_PATH=C:\Qt\6.x.y\msvc2019_64</code>.</li>
+      <li>With multi-config generators (Visual Studio), pass <code>--config Release</code> to <code>cmake --build</code>.</li>
+      <li>Run <code>windeployqt</code> on the built executable to gather the required Qt DLLs for distribution.</li>
+      <li>An application icon resource (<code>resources.rc</code>) is included in the repository.</li>
+    </ul>
+    <h3>macOS</h3>
+    <ul>
+      <li>Install Qt via Homebrew (<code>brew install qt@6</code>) and pass <code>-DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)"</code>.</li>
+    </ul>
+
+    <h2 id="ide">IDE setup</h2>
+    <ul>
+      <li><strong>Qt Creator</strong> — open <code>CMakeLists.txt</code> directly; kits handle Qt discovery for you.</li>
+      <li><strong>CLion</strong> — open the project root; set <code>CMAKE_PREFIX_PATH</code> in <em>Settings → Build → CMake</em> if Qt isn't found. (The repository contains an <code>.idea/</code> folder from CLion development.)</li>
+      <li><strong>VS Code</strong> — use the <em>CMake Tools</em> extension; select a kit with your C++23 compiler and add the Qt path to <code>cmake.configureSettings</code>.</li>
+    </ul>
+
+    <div class="page-nav">
+      <a class="prev" href="index.html"><span class="dir">← Previous</span>Overview</a>
+      <a class="next" href="architecture.html"><span class="dir">Next →</span>Architecture</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

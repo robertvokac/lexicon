@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture — Lexicon Developer Docs</title>
+<meta name="description" content="Lexicon application architecture: source files and responsibilities, core data structures (TermRecord, GroupRecord, LinkRecord), enums, and design decisions.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="../users/index.html">Users</a>
+      <a href="index.html" class="active">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">Developer Docs</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="building.html">Building from source</a></li>
+        <li><a href="architecture.html" class="active">Architecture</a></li>
+        <li><a href="database.html">Database schema</a></li>
+        <li><a href="roadmap.html">Roadmap &amp; TODO</a></li>
+        <li><a href="contributing.html">Contributing</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#modules">Source modules</a></li>
+        <li><a href="#records">Core data structures</a></li>
+        <li><a href="#enums">Enums</a></li>
+        <li><a href="#decisions">Design decisions</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Architecture</p>
+    <h1>Architecture</h1>
+    <p class="lead">Lexicon follows a deliberately simple architecture: Qt Widgets UI classes on top, one static data-access class at the bottom, plain C++ record structs in between. No frameworks, no layers you have to guess about.</p>
+
+    <h2 id="modules">Source modules</h2>
+    <table>
+      <tr><th>File(s)</th><th>Responsibility</th></tr>
+      <tr>
+        <td><code>main.cpp</code></td>
+        <td>Entry point. Initializes the database via <code>DatabaseManager::initialize()</code> (creating <code>lexicon.db</code> next to the executable and applying migrations), then constructs and shows <code>MainWindow</code>.</td>
+      </tr>
+      <tr>
+        <td><code>MainWindow.{h,cpp}</code></td>
+        <td>The largest UI class. Owns the filter row (group/tag/flag/status/understanding/pinned/search), the paginated and sortable term table, the pagination bar, the rendered content pane with links/backlinks summary, the menu bar (groups manager, global overviews, theme switch), and the Add/Edit/Delete actions.</td>
+      </tr>
+      <tr>
+        <td><code>TermEditDialog.{h,cpp}</code></td>
+        <td>The five-tab term editor: General (identity and state), Content (Markdown editor with toolbar and live preview), Metadata (tags/flags/aliases lists), Links, and Backlinks (typed relationships).</td>
+      </tr>
+      <tr>
+        <td><code>GroupManagerDialog.{h,cpp}</code></td>
+        <td>CRUD dialog for groups (add, rename/describe, delete).</td>
+      </tr>
+      <tr>
+        <td><code>ValueListDialog.{h,cpp}</code></td>
+        <td>Read-only overview dialog used for the <em>All tags / All flags / All aliases</em> views, showing values with usage counts.</td>
+      </tr>
+      <tr>
+        <td><code>DatabaseManager.{h,cpp}</code></td>
+        <td>The entire persistence layer: connection setup, pragma configuration, schema migrations, and every query the app runs (term listing with filters/paging/sorting, CRUD for groups/terms/links, metadata handling, usage statistics, operation logging).</td>
+      </tr>
+      <tr>
+        <td><code>MarkdownConverter.{h,cpp}</code></td>
+        <td>Thin wrapper around the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a> parser: converts Markdown term content to HTML for the preview panes.</td>
+      </tr>
+      <tr>
+        <td><code>3rdparty/md4qt/</code></td>
+        <td>Vendored Markdown parser (CommonMark + GFM extensions such as tables, strikethrough, autolinks, footnotes). Compiled directly into the executable — no external dependency to install.</td>
+      </tr>
+    </table>
+
+    <h2 id="records">Core data structures</h2>
+    <p>UI and data layer communicate through plain structs defined in <code>DatabaseManager.h</code>:</p>
+    <pre><code>struct GroupRecord {
+    int id = -1;
+    QString name;
+    QString description;
+};
+
+struct TermRecord {
+    int id = -1;
+    int groupId = -1;
+    QString groupName;
+    QString title;
+    QString disambiguation;
+    QStringList aliases;
+    QStringList tags;
+    QStringList flags;
+    TermStatus status = TermStatus::None;
+    UnderstandingLevel understanding = UnderstandingLevel::Unknown;
+    bool pinned = false;
+    QString content;          // Markdown source
+};
+
+struct LinkRecord {
+    int id = -1;
+    int fromTermId = -1;
+    int toTermId = -1;
+    LinkType linkType = LinkType::None;
+    int position = 0;
+    QString fromTermTitle;    // optional, filled for UI display
+    QString toTermTitle;
+};
+
+struct UsageValueRecord {     // rows of the tag/flag/alias overviews
+    QString value;
+    int usageCount = 0;
+};</code></pre>
+
+    <h2 id="enums">Enums</h2>
+    <p>Three enums encode the domain vocabulary. Their integer values are stored directly in SQLite, so <strong>they must never be renumbered</strong> — only appended to.</p>
+    <pre><code>enum class TermStatus {
+    None = 0, Draft = 1, Completed = 2
+};
+
+enum class UnderstandingLevel {
+    Unknown = 0,      // Never encountered
+    Recognized = 1,   // Seen before, can identify
+    Understood = 2,   // Conceptually grasped
+    Practiced = 3,    // Can apply in real situations
+    Mastered = 4      // Fully internalized, can teach or innovate
+};
+
+enum class LinkType {
+    None = 0, IsA = 1, PartOf = 2, Uses = 3, DependsOn = 4,
+    Implements = 5, Related = 6, Contrasts = 7,
+    AlternativeTo = 8, ParentOf = 9
+};</code></pre>
+
+    <h2 id="decisions">Design decisions</h2>
+    <h3>Static data-access API</h3>
+    <p><code>DatabaseManager</code> exposes only static methods over Qt's default database connection. There is no ORM and no repository hierarchy — every operation is an explicit, reviewable SQL statement. Errors are reported through an optional <code>QString* errorMessage</code> out-parameter combined with a <code>bool</code> return value:</p>
+    <pre><code>QString error;
+if (!DatabaseManager::saveTerm(term, &amp;error)) {
+    QMessageBox::warning(this, "Save failed", error);
+}</code></pre>
+
+    <h3>Filtering and paging in SQL</h3>
+    <p><code>loadTerms()</code> takes the whole filter state (group, search text, tag, flag, understanding, status, pinned), plus <code>limit</code>/<code>offset</code> and the sort column/order, and translates them into one SQL query. The UI never filters in memory, which is what keeps large lexicons fast. A matching <code>countTerms()</code> powers the pagination bar.</p>
+
+    <h3>Operation log</h3>
+    <p>Every create, update, delete — and term read — is recorded in the <code>log</code> table with a type code (<code>1</code>=created, <code>2</code>=updated, <code>3</code>=deleted, <code>4</code>=read) and a timestamp. Nothing consumes the log in the UI yet; it is groundwork for future features such as recent-activity views or spaced-repetition hints.</p>
+
+    <h3>Referential integrity in the database</h3>
+    <p>Foreign keys are switched on with <code>PRAGMA foreign_keys = ON</code> at connection time, and dependent rows (aliases, tags, flags, links) are declared <code>ON DELETE CASCADE</code>. Deletion consistency is the database's job, not scattered application code — see the <a href="database.html">schema reference</a>.</p>
+
+    <h3>Vendored Markdown parser</h3>
+    <p>md4qt is compiled into the binary from <code>3rdparty/</code> rather than linked as an external package. That keeps the dependency list at exactly "Qt", which makes the project easy to build on any platform.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="building.html"><span class="dir">← Previous</span>Building from source</a>
+      <a class="next" href="database.html"><span class="dir">Next →</span>Database schema</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

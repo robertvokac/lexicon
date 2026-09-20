@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backup &amp; troubleshooting — Lexicon User Guide</title>
+<meta name="description" content="Where Lexicon stores your data, how to back up the SQLite database, deletion safety rules, and solutions for common startup and build problems.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="backup-and-troubleshooting.html" class="active">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#data-location">Data location</a></li>
+        <li><a href="#backup">Backup strategies</a></li>
+        <li><a href="#safety">Deletion safety</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Backup &amp; troubleshooting</p>
+    <h1>Backup &amp; troubleshooting</h1>
+    <p class="lead">Your entire lexicon lives in one file. That makes backups trivial — and makes knowing the safety rules important.</p>
+
+    <h2 id="data-location">Data location</h2>
+    <table>
+      <tr><th>What</th><th>Where</th></tr>
+      <tr><td>Database file</td><td><code>lexicon.db</code></td></tr>
+      <tr><td>Location</td><td>The same directory as the Lexicon executable</td></tr>
+      <tr><td>Format</td><td>Standard SQLite 3 — readable with any SQLite tool</td></tr>
+    </table>
+    <div class="callout">
+      <span class="callout-icon">ℹ️</span>
+      <p><strong>Portable by design</strong> Moving your knowledge base to another machine means copying <code>lexicon.db</code> next to the executable there. That's it.</p>
+    </div>
+
+    <h2 id="backup">Backup strategies</h2>
+    <ol class="steps">
+      <li><strong>Close Lexicon.</strong> This guarantees the database is not mid-write.</li>
+      <li><strong>Copy <code>lexicon.db</code></strong> to safe storage — external drive, NAS, or a synced folder.</li>
+      <li><strong>Version your backups</strong> — keep dated snapshots (daily or weekly) instead of overwriting a single copy:
+        <pre><code>cp lexicon.db ~/backups/lexicon-$(date +%F).db</code></pre>
+      </li>
+    </ol>
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Automate it</strong> A one-line cron job (or scheduled task on Windows) that copies the file once a day is all a personal knowledge base usually needs. If your lexicon is mission-critical, back up more often.</p>
+    </div>
+
+    <h2 id="safety">Deletion safety rules</h2>
+    <p>Lexicon uses cascade deletion to keep the database consistent. Know the two rules before you delete anything:</p>
+    <div class="callout callout-danger">
+      <span class="callout-icon">⚠️</span>
+      <p><strong>Deleting a term</strong> also removes its aliases, tags, flags, and all links/backlinks pointing to or from it.</p>
+    </div>
+    <div class="callout callout-danger">
+      <span class="callout-icon">⚠️</span>
+      <p><strong>Deleting a group</strong> removes <em>every term inside it</em> — including all of their content and metadata. This is the most destructive action in the application.</p>
+    </div>
+    <p>There is no undo for deletions. When in doubt, make a quick copy of <code>lexicon.db</code> first.</p>
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+
+    <h3>The app does not start (Qt plugin / driver issue)</h3>
+    <ul>
+      <li>Verify that the Qt 6 runtime is installed and matches the version Lexicon was built against.</li>
+      <li>Ensure the SQLite Qt SQL driver is present — on Debian/Ubuntu: <code>sudo apt install libqt6sql6-sqlite</code>.</li>
+    </ul>
+
+    <h3>Database errors on startup</h3>
+    <ul>
+      <li>Check that the directory containing the executable is <strong>writable</strong> — Lexicon needs to create and update <code>lexicon.db</code> there.</li>
+      <li>Make sure <code>lexicon.db</code> is <strong>not locked</strong> by another process (another running Lexicon instance, a DB browser, or a sync tool holding the file).</li>
+    </ul>
+
+    <h3>The build fails</h3>
+    <ul>
+      <li>Confirm your compiler supports <strong>C++23</strong> (recent GCC, Clang, or MSVC).</li>
+      <li>Confirm CMake can find <code>Qt6::Widgets</code> and <code>Qt6::Sql</code> — set <code>CMAKE_PREFIX_PATH</code> to your Qt installation if needed.</li>
+      <li>See the <a href="../developers/building.html">developer build guide</a> for platform details.</li>
+    </ul>
+
+    <h3>Still stuck?</h3>
+    <p>Open an issue on <a href="https://github.com/robertvokac/lexicon/issues" target="_blank" rel="noopener">GitHub</a> with your OS, Qt version, and the exact error message.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="search-and-navigation.html"><span class="dir">← Previous</span>Search &amp; navigation</a>
+      <a class="next" href="../developers/index.html"><span class="dir">Next →</span>Developer Docs</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

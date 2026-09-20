@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Installation — Lexicon User Guide</title>
+<meta name="description" content="How to install Lexicon: requirements, building from source on Linux, Windows, and macOS, and what happens on first launch.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html" class="active">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">See also</p>
+      <ul>
+        <li><a href="../developers/building.html">Developer build guide</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Installation</p>
+    <h1>Installation</h1>
+    <p class="lead">Lexicon is built from source with CMake and Qt 6. It runs on Linux, Windows, and macOS.</p>
+
+    <h2>Requirements</h2>
+    <table>
+      <tr><th>Component</th><th>Version / notes</th></tr>
+      <tr><td>CMake</td><td>3.21 or newer</td></tr>
+      <tr><td>C++ compiler</td><td>C++23-compatible — recent GCC, Clang, or MSVC</td></tr>
+      <tr><td>Qt 6</td><td>With the <code>Widgets</code> and <code>Sql</code> modules</td></tr>
+      <tr><td>SQLite Qt driver</td><td>Usually included with Qt packages (<code>libqt6sql6-sqlite</code> on Debian/Ubuntu)</td></tr>
+    </table>
+
+    <h2>Linux (Debian / Ubuntu)</h2>
+    <ol class="steps">
+      <li>
+        <strong>Install the build tools and Qt 6:</strong>
+        <pre><code>sudo apt update
+sudo apt install -y build-essential cmake qt6-base-dev libqt6sql6-sqlite</code></pre>
+      </li>
+      <li>
+        <strong>Get the source code:</strong>
+        <pre><code>git clone https://github.com/robertvokac/lexicon.git
+cd lexicon</code></pre>
+      </li>
+      <li>
+        <strong>Configure and build:</strong>
+        <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target Lexicon -j</code></pre>
+      </li>
+      <li>
+        <strong>Run it:</strong>
+        <pre><code>./build/Lexicon</code></pre>
+      </li>
+    </ol>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Desktop integration</strong> The repository ships a <code>lexicon.desktop</code> file. Copy it to <code>~/.local/share/applications/</code> (and adjust the paths inside) to launch Lexicon from your application menu.</p>
+    </div>
+
+    <h2>Windows</h2>
+    <ol class="steps">
+      <li><strong>Install Qt 6</strong> using the official Qt Online Installer, including the <em>MSVC</em> or <em>MinGW</em> toolchain matching your compiler.</li>
+      <li><strong>Install CMake</strong> (3.21+) and make sure it is on your <code>PATH</code>.</li>
+      <li>
+        <strong>Configure and build</strong> from a shell where Qt is discoverable (e.g. the <em>Qt command prompt</em>), pointing CMake to your Qt installation:
+        <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.7.0\msvc2019_64
+cmake --build build --target Lexicon --config Release</code></pre>
+      </li>
+      <li><strong>Run</strong> <code>build\Release\Lexicon.exe</code>. On Windows, Lexicon builds as a GUI application (no console window).</li>
+    </ol>
+
+    <h2>macOS</h2>
+    <ol class="steps">
+      <li>
+        <strong>Install the prerequisites</strong> with Homebrew:
+        <pre><code>brew install cmake qt@6</code></pre>
+      </li>
+      <li>
+        <strong>Configure, build, and run:</strong>
+        <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
+cmake --build build --target Lexicon -j
+./build/Lexicon</code></pre>
+      </li>
+    </ol>
+
+    <h2>First launch</h2>
+    <p>There is no setup wizard — Lexicon takes care of itself:</p>
+    <ul>
+      <li>On startup, Lexicon <strong>creates or opens</strong> the database file <code>lexicon.db</code> in the same directory as the executable.</li>
+      <li>Database <strong>migrations are applied automatically</strong>, so upgrading to a newer Lexicon version never requires manual steps.</li>
+      <li>Your <strong>theme preference</strong> (light/dark) is remembered between sessions.</li>
+    </ul>
+
+    <div class="callout">
+      <span class="callout-icon">ℹ️</span>
+      <p><strong>Where is my data?</strong> Everything is stored in the single file <code>lexicon.db</code> next to the executable. See <a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a> for backup strategies.</p>
+    </div>
+
+    <div class="page-nav">
+      <a class="prev" href="index.html"><span class="dir">← Previous</span>Overview</a>
+      <a class="next" href="getting-started.html"><span class="dir">Next →</span>Getting started</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

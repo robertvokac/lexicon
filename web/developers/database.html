@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database schema — Lexicon Developer Docs</title>
+<meta name="description" content="Lexicon SQLite schema reference: all tables (item_group, term, alias, tag, flag, link, log), indexes, cascade rules, and the versioned migration system.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="../users/index.html">Users</a>
+      <a href="index.html" class="active">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">Developer Docs</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="building.html">Building from source</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="database.html" class="active">Database schema</a></li>
+        <li><a href="roadmap.html">Roadmap &amp; TODO</a></li>
+        <li><a href="contributing.html">Contributing</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#migrations">Migration system</a></li>
+        <li><a href="#tables">Table reference</a></li>
+        <li><a href="#integrity">Integrity rules</a></li>
+        <li><a href="#adding">Adding a migration</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Database schema</p>
+    <h1>Database schema</h1>
+    <p class="lead">Lexicon stores everything in a single SQLite file, <code>lexicon.db</code>, initialized and upgraded automatically at startup. This page documents the schema as defined by the migrations in <code>DatabaseManager.cpp</code>.</p>
+
+    <h2 id="overview">Overview</h2>
+    <p>Seven domain tables plus one bookkeeping table:</p>
+    <table>
+      <tr><th>Table</th><th>Purpose</th></tr>
+      <tr><td><code>item_group</code></td><td>Top-level buckets for terms</td></tr>
+      <tr><td><code>term</code></td><td>The concepts themselves: title, disambiguation, status, understanding, pinned, Markdown content</td></tr>
+      <tr><td><code>alias</code></td><td>Alternate names per term</td></tr>
+      <tr><td><code>tag</code></td><td>Classification labels per term</td></tr>
+      <tr><td><code>flag</code></td><td>Workflow markers per term</td></tr>
+      <tr><td><code>link</code></td><td>Typed, directed relationships between terms</td></tr>
+      <tr><td><code>log</code></td><td>Operation log (create/update/delete/read events)</td></tr>
+      <tr><td><code>db_version</code></td><td>Applied migration versions</td></tr>
+    </table>
+    <p>Relationships at a glance:</p>
+    <pre><code>item_group 1 ──── n term 1 ──── n alias
+                  │ ├───── n tag
+                  │ └───── n flag
+                  │
+                  └── n link n ──  (term → term, typed, directed)</code></pre>
+
+    <h2 id="migrations">Migration system</h2>
+    <p>On startup, <code>DatabaseManager::initialize()</code>:</p>
+    <ol class="steps">
+      <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
+      <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–10</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+    </ol>
+    <table>
+      <tr><th>Version</th><th>What it introduced</th></tr>
+      <tr><td>1</td><td>Core tables: <code>map</code>, <code>term</code>, <code>alias</code>, <code>tag</code>, <code>flag</code> + unique and lookup indexes</td></tr>
+      <tr><td>2</td><td><code>term.status</code></td></tr>
+      <tr><td>3</td><td><code>term.understanding</code></td></tr>
+      <tr><td>4</td><td><code>term.pinned</code></td></tr>
+      <tr><td>5</td><td><code>log</code> table</td></tr>
+      <tr><td>6</td><td><code>term.content</code> (Markdown source)</td></tr>
+      <tr><td>7</td><td><code>link</code> table + indexes</td></tr>
+      <tr><td>8</td><td><code>link.position</code> (ordering)</td></tr>
+      <tr><td>9</td><td><code>link.custom_value</code></td></tr>
+      <tr><td>10</td><td>Renamed <code>map</code> to <code>item_group</code> and <code>term.map_id</code> to <code>term.group_id</code></td></tr>
+    </table>
+
+    <h2 id="tables">Table reference</h2>
+
+    <h3><code>item_group</code></h3>
+    <pre><code>CREATE TABLE item_group (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX item_group_name_unique ON item_group(name);</code></pre>
+
+    <h3><code>term</code></h3>
+    <pre><code>CREATE TABLE term (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id       INTEGER NOT NULL,
+  title          TEXT NOT NULL,
+  disambiguation TEXT,
+  status         INTEGER NOT NULL DEFAULT 0,  -- TermStatus
+  understanding  INTEGER NOT NULL DEFAULT 0,  -- UnderstandingLevel
+  pinned         INTEGER NOT NULL DEFAULT 0,
+  content        TEXT,                        -- Markdown source
+  FOREIGN KEY(group_id) REFERENCES item_group(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX term_unique
+  ON term(group_id, title, COALESCE(disambiguation, ''));
+CREATE INDEX idx_term_group_id ON term(group_id);
+CREATE INDEX idx_term_title  ON term(title);</code></pre>
+    <p>The unique index is why the same title can exist twice in one group only when the disambiguations differ.</p>
+
+    <h3><code>alias</code>, <code>tag</code>, <code>flag</code></h3>
+    <p>Three structurally identical child tables (the value column is <code>alias</code> in <code>alias</code>, <code>name</code> in <code>tag</code> and <code>flag</code>):</p>
+    <pre><code>CREATE TABLE alias (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  term_id INTEGER NOT NULL,
+  alias   TEXT NOT NULL,
+  UNIQUE(term_id, alias),
+  FOREIGN KEY(term_id) REFERENCES term(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_alias_term_id ON alias(term_id);
+CREATE INDEX idx_alias_alias   ON alias(alias);</code></pre>
+    <p>The per-term <code>UNIQUE</code> constraint deduplicates values; updates are implemented as replace-all per term (<code>replaceStringValues()</code>).</p>
+
+    <h3><code>link</code></h3>
+    <pre><code>CREATE TABLE link (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_term_id INTEGER NOT NULL,
+  to_term_id   INTEGER NOT NULL,
+  link_type    INTEGER NOT NULL DEFAULT 0,  -- LinkType
+  position     INTEGER NOT NULL DEFAULT 0,  -- ordering within a term
+  custom_value TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(from_term_id) REFERENCES term(id) ON DELETE CASCADE,
+  FOREIGN KEY(to_term_id)   REFERENCES term(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_link_from_term_id ON link(from_term_id);
+CREATE INDEX idx_link_to_term_id   ON link(to_term_id);</code></pre>
+    <p>Links are directed: querying by <code>from_term_id</code> yields a term's outgoing links, querying by <code>to_term_id</code> yields its backlinks. <code>link_type</code> stores the <code>LinkType</code> enum value (<a href="architecture.html#enums">see Architecture</a>).</p>
+
+    <h3><code>log</code></h3>
+    <pre><code>CREATE TABLE log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_name  TEXT NOT NULL,
+  record_id   INTEGER NOT NULL,
+  log_type    INTEGER NOT NULL,  -- 1=created, 2=updated, 3=deleted, 4=read
+  happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);</code></pre>
+
+    <h2 id="integrity">Integrity rules</h2>
+    <ul>
+      <li><strong>Foreign keys are enforced</strong> — <code>PRAGMA foreign_keys = ON</code> runs on every connection.</li>
+      <li><strong>Cascade deletes</strong> — deleting a group deletes its terms; deleting a term deletes its aliases, tags, flags, and any links in either direction.</li>
+      <li><strong>Uniqueness</strong> — group names are globally unique; <code>(group_id, title, disambiguation)</code> is unique per term; alias/tag/flag values are unique per term.</li>
+      <li><strong>Enum stability</strong> — <code>status</code>, <code>understanding</code>, and <code>link_type</code> store raw enum integers; enum values must only ever be appended, never renumbered.</li>
+    </ul>
+
+    <h2 id="adding">Adding a migration</h2>
+    <p>To evolve the schema, follow the pattern in <code>DatabaseManager::initialize()</code>:</p>
+    <ol class="steps">
+      <li>Append a new <code>{version, statements}</code> entry to the <code>migrations</code> list with the <strong>next sequential version number</strong>. Never edit an already-shipped migration — existing databases have already recorded it as applied.</li>
+      <li>Use idempotent DDL where possible (<code>CREATE TABLE IF NOT EXISTS</code>, <code>CREATE INDEX IF NOT EXISTS</code>) and <code>ALTER TABLE ... ADD COLUMN</code> for extensions.</li>
+      <li>Update the record structs and queries in <code>DatabaseManager</code> to read/write the new columns.</li>
+      <li>Test by launching with an old <code>lexicon.db</code> copy and with no database at all — both paths must succeed.</li>
+    </ol>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Inspecting your data</strong> Since it's plain SQLite, you can explore your lexicon with any tool: <code>sqlite3 lexicon.db ".schema"</code>, DB Browser for SQLite, or DataGrip. Close Lexicon first to avoid lock conflicts.</p>
+    </div>
+
+    <div class="page-nav">
+      <a class="prev" href="architecture.html"><span class="dir">← Previous</span>Architecture</a>
+      <a class="next" href="roadmap.html"><span class="dir">Next →</span>Roadmap &amp; TODO</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

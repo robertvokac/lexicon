@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contributing — Lexicon Developer Docs</title>
+<meta name="description" content="How to contribute to Lexicon: reporting issues, proposing changes, pull request workflow, coding guidelines, and the MIT license.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="../users/index.html">Users</a>
+      <a href="index.html" class="active">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">Developer Docs</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="building.html">Building from source</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="database.html">Database schema</a></li>
+        <li><a href="roadmap.html">Roadmap &amp; TODO</a></li>
+        <li><a href="contributing.html" class="active">Contributing</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#issues">Reporting issues</a></li>
+        <li><a href="#prs">Pull requests</a></li>
+        <li><a href="#guidelines">Coding guidelines</a></li>
+        <li><a href="#license">License</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Contributing</p>
+    <h1>Contributing</h1>
+    <p class="lead">Contributions of all sizes are welcome — bug reports, documentation fixes, and code. The codebase is compact, so the barrier to entry is low.</p>
+
+    <h2 id="issues">Reporting issues</h2>
+    <p>Found a bug or have a feature idea? Open an issue on the <a href="https://github.com/robertvokac/lexicon/issues" target="_blank" rel="noopener">GitHub issue tracker</a>. A useful bug report includes:</p>
+    <ul>
+      <li>your operating system and Qt version,</li>
+      <li>steps to reproduce the problem,</li>
+      <li>what you expected vs. what actually happened,</li>
+      <li>the exact error message, if any.</li>
+    </ul>
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Check the plan first</strong> Before proposing a feature, skim the <a href="roadmap.html">Roadmap &amp; TODO</a> — it may already be planned, and your issue can then reference and refine it.</p>
+    </div>
+
+    <h2 id="prs">Pull requests</h2>
+    <ol class="steps">
+      <li><strong>Fork</strong> the repository on GitHub and clone your fork.</li>
+      <li><strong>Create a branch</strong> for your change: <code>git checkout -b fix/table-sorting</code>.</li>
+      <li><strong>Make the change</strong>, keeping it focused — one topic per pull request.</li>
+      <li><strong>Build and test manually</strong>: run the app, exercise the affected workflow, and verify migrations still apply cleanly on both a fresh and an existing <code>lexicon.db</code>.</li>
+      <li><strong>Open the pull request</strong> with a clear description of what changed and why.</li>
+    </ol>
+
+    <h2 id="guidelines">Coding guidelines</h2>
+    <ul>
+      <li><strong>Match the existing style.</strong> The project uses straightforward Qt Widgets C++ — follow the naming and layout conventions you see in <code>src/</code>.</li>
+      <li><strong>C++23, no extensions.</strong> The build sets <code>CMAKE_CXX_STANDARD 23</code> with compiler extensions off; keep code portable across GCC, Clang, and MSVC.</li>
+      <li><strong>All SQL belongs in <code>DatabaseManager</code>.</strong> UI classes must not talk to the database directly — extend the static API instead.</li>
+      <li><strong>Schema changes are append-only migrations.</strong> Never modify a shipped migration; add a new version instead (see <a href="database.html#adding">Adding a migration</a>).</li>
+      <li><strong>Never renumber enums.</strong> <code>TermStatus</code>, <code>UnderstandingLevel</code>, and <code>LinkType</code> values are persisted in SQLite.</li>
+      <li><strong>Report errors, don't swallow them.</strong> Follow the <code>bool</code> + <code>QString* errorMessage</code> pattern used throughout the data layer.</li>
+    </ul>
+
+    <h2 id="license">License</h2>
+    <p>Lexicon is released under the <strong>MIT License</strong> — you may use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software, provided the copyright notice and permission notice appear in all copies. The software is provided "as is", without warranty of any kind.</p>
+    <p>By submitting a contribution you agree that it will be licensed under the same terms. Read the full text in <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">LICENSE</a>.</p>
+    <p>Third-party code: the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a> Markdown parser retains its own license, found under <code>3rdparty/</code>.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="roadmap.html"><span class="dir">← Previous</span>Roadmap &amp; TODO</a>
+      <a class="next" href="../index.html"><span class="dir">Next →</span>Back to Home</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

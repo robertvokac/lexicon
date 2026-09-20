@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search &amp; navigation — Lexicon User Guide</title>
+<meta name="description" content="Master Lexicon's search and navigation: full-text search fields, filters, column sorting, pagination, global overviews of tags/flags/aliases, and theme switching.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-terms.html">Editing terms</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html" class="active">Search &amp; navigation</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#search">Free-text search</a></li>
+        <li><a href="#filters">Filters</a></li>
+        <li><a href="#sorting">Sorting &amp; pagination</a></li>
+        <li><a href="#overviews">Global overviews</a></li>
+        <li><a href="#themes">Light &amp; dark mode</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Search &amp; navigation</p>
+    <h1>Search &amp; navigation</h1>
+    <p class="lead">A knowledge base is only as good as your ability to find things in it. Lexicon combines free-text search, six filters, sorting, and pagination — all working together.</p>
+
+    <h2 id="search">Free-text search</h2>
+    <p>The <code>Search</code> box at the top of the main window matches against <strong>five fields</strong> at once:</p>
+    <ul>
+      <li>title</li>
+      <li>disambiguation</li>
+      <li>aliases</li>
+      <li>tags</li>
+      <li>flags</li>
+    </ul>
+    <p>Because aliases are searched too, a well-maintained alias list means you find <em>Resource Acquisition Is Initialization</em> just by typing <code>RAII</code>.</p>
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Search-to-create</strong> If a search comes up empty, click <code>Add</code> — the new term's title is prefilled from your search text. Searching and capturing become one motion.</p>
+    </div>
+
+    <h2 id="filters">Filters</h2>
+    <p>Filters combine with search (and with each other) to narrow the term table:</p>
+    <table>
+      <tr><th>Filter</th><th>Narrows to</th></tr>
+      <tr><td><code>Group</code></td><td>Terms in one group (e.g. only <em>Databases</em>)</td></tr>
+      <tr><td><code>Tag</code></td><td>Terms carrying a specific tag</td></tr>
+      <tr><td><code>Flag</code></td><td>Terms carrying a specific flag</td></tr>
+      <tr><td><code>Status</code></td><td><code>None</code> / <code>Draft</code> / <code>Completed</code></td></tr>
+      <tr><td><code>Understanding</code></td><td>One of the five understanding levels</td></tr>
+      <tr><td><code>Pinned</code></td><td>Pinned or unpinned terms only</td></tr>
+    </table>
+    <p>Some practical combinations:</p>
+    <ul>
+      <li><strong>"What should I study next?"</strong> — Group = <em>C++</em>, Understanding = <em>Recognized</em></li>
+      <li><strong>"What's unfinished?"</strong> — Status = <em>Draft</em></li>
+      <li><strong>"My review queue"</strong> — Flag = <em>review</em></li>
+      <li><strong>"The essentials"</strong> — Pinned = <em>yes</em></li>
+    </ul>
+
+    <h2 id="sorting">Sorting &amp; pagination</h2>
+    <p>Click any <strong>column header</strong> in the term table to sort by that column; click again to reverse the order. Combined with the pagination bar (<code>&lt;&lt; First</code>, <code>&lt; Prev</code>, <code>Next &gt;</code>, <code>Last &gt;&gt;</code>, and a <code>Page size</code> selector), the table stays fast even with thousands of terms.</p>
+
+    <h2 id="overviews">Global overviews</h2>
+    <p>Three read-only overviews show your entire vocabulary with usage counts:</p>
+    <ul>
+      <li><code>View → All tags...</code></li>
+      <li><code>View → All flags...</code></li>
+      <li><code>View → All aliases...</code></li>
+    </ul>
+    <p>Use them to audit your labeling: spot near-duplicate tags (<code>sql</code> vs. <code>SQL</code>), find flags that were never cleaned up, and check which aliases actually get used.</p>
+
+    <h2 id="themes">Light &amp; dark mode</h2>
+    <p>Switch the application theme from the menu:</p>
+    <ul>
+      <li><code>View → Light mode</code></li>
+      <li><code>View → Dark mode</code></li>
+    </ul>
+    <p>Your preference is persisted between sessions.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="links-and-relationships.html"><span class="dir">← Previous</span>Links &amp; relationships</a>
+      <a class="next" href="backup-and-troubleshooting.html"><span class="dir">Next →</span>Backup &amp; troubleshooting</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

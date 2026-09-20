@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lexicon — Desktop Knowledge Dictionary</title>
+<meta name="description" content="Lexicon is a free, open-source desktop knowledge dictionary built with Qt Widgets and SQLite. Structured learning and technical note-taking with groups, terms, metadata, and typed links between concepts.">
+<link rel="icon" type="image/png" href="assets/img/appicon.png">
+<link rel="stylesheet" href="css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="index.html"><img class="brand-icon" src="assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="index.html" class="active">Home</a>
+      <a href="screenshots.html">Screenshots</a>
+      <a href="users/index.html">Users</a>
+      <a href="developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="container">
+      <img class="hero-icon" src="assets/img/appicon.png" alt="Lexicon application icon">
+      <h1>Lexicon</h1>
+      <p class="tagline">A desktop knowledge dictionary for structured learning and technical note-taking — groups, terms, rich metadata, and typed links between concepts.</p>
+      <div class="badges">
+        <span class="badge">MIT License</span>
+        <span class="badge">C++23</span>
+        <span class="badge">Qt 6 Widgets</span>
+        <span class="badge">SQLite</span>
+        <span class="badge">Linux · Windows · macOS</span>
+      </div>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="users/index.html">Get started</a>
+        <a class="btn btn-ghost" href="developers/index.html">Developer docs</a>
+        <a class="btn btn-ghost" href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">View source on GitHub</a>
+      </div>
+      <figure class="hero-shot screenshot">
+        <img src="assets/img/Screenshot.png" alt="Lexicon main window — filters, term table, pagination, and rendered Markdown content">
+        <figcaption>The main window: filters, searchable term table, pagination, and live Markdown preview.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2>Why Lexicon?</h2>
+      <p class="section-lead">Your knowledge deserves more than a flat pile of notes. Lexicon organizes what you learn into a structured, searchable, interlinked dictionary — stored locally in a single SQLite file.</p>
+      <div class="grid grid-3">
+        <div class="card">
+          <span class="card-emoji">🗄️</span>
+          <h3>Local-first storage</h3>
+          <p>Everything lives in one SQLite database file on your disk. No cloud, no account, no lock-in — back it up by copying a single file.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🗺️</span>
+          <h3>Groups and terms</h3>
+          <p>Group terms into top-level groups such as <em>C++</em>, <em>Databases</em>, or <em>Networking</em>, with full create/edit/delete support.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🏷️</span>
+          <h3>Rich metadata</h3>
+          <p>Every term carries aliases, tags, flags, a status, an understanding level, and a pinned state — so you always know where you stand.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🔗</span>
+          <h3>Typed relationships</h3>
+          <p>Connect concepts with links and backlinks typed as <em>Is A</em>, <em>Part Of</em>, <em>Depends On</em>, <em>Related</em>, and more — building a real concept graph.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">✍️</span>
+          <h3>Markdown editor</h3>
+          <p>Write term content in Markdown with a formatting toolbar and a live rendered preview, powered by the md4qt parser.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🔎</span>
+          <h3>Fast search &amp; filters</h3>
+          <p>Search across titles, disambiguations, aliases, tags, and flags. Combine filters for group, tag, flag, status, understanding, and pinned.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">📄</span>
+          <h3>Built for large datasets</h3>
+          <p>Pagination controls and sortable columns keep even very large lexicons fast and easy to browse.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">📊</span>
+          <h3>Global overviews</h3>
+          <p>Read-only overviews of all tags, flags, and aliases with usage counts help you keep your vocabulary consistent.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🌗</span>
+          <h3>Light and dark mode</h3>
+          <p>Switch themes from the View menu — your preference is remembered between sessions. This website has it too, try the moon button above.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="container">
+      <h2>Choose your path</h2>
+      <p class="section-lead">The documentation is split into two sections, depending on what you want to do with Lexicon.</p>
+      <div class="grid grid-2">
+        <div class="card audience-card">
+          <span class="card-emoji">🙋</span>
+          <h3>For Users</h3>
+          <p>Everything you need to install Lexicon and organize your knowledge like a pro.</p>
+          <ul>
+            <li>Installation and first launch</li>
+            <li>Creating groups and terms</li>
+            <li>The Markdown content editor</li>
+            <li>Tags, flags, aliases, links &amp; backlinks</li>
+            <li>Search, filtering, backup, and troubleshooting</li>
+          </ul>
+          <a class="btn btn-primary" href="users/index.html">Open the User Guide</a>
+        </div>
+        <div class="card audience-card">
+          <span class="card-emoji">🧑‍💻</span>
+          <h3>For Developers</h3>
+          <p>Dive into the codebase, build from source, and contribute.</p>
+          <ul>
+            <li>Building with CMake and Qt 6</li>
+            <li>Application architecture and source layout</li>
+            <li>SQLite schema and the migration system</li>
+            <li>Roadmap and TODO list</li>
+            <li>Contributing guidelines and license</li>
+          </ul>
+          <a class="btn btn-primary" href="developers/index.html">Open the Developer Docs</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2>Up and running in a minute</h2>
+      <p class="section-lead">Lexicon builds from source with CMake and Qt 6. On Debian or Ubuntu it takes three commands:</p>
+      <pre><code>sudo apt install -y build-essential cmake qt6-base-dev libqt6sql6-sqlite
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --target Lexicon -j
+./build/Lexicon</code></pre>
+      <p style="text-align:center"><a href="users/installation.html">Full installation guide →</a></p>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="container">
+      <h2>See it in action</h2>
+      <p class="section-lead">The term editor gives every concept five focused tabs: General, Content, Metadata, Links, and Backlinks.</p>
+      <div class="grid grid-2">
+        <figure class="screenshot">
+          <img src="assets/img/Screenshot_Content.png" alt="Term editor Content tab — Markdown editor with live preview">
+          <figcaption>Markdown editor with live preview</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/img/Screenshot_Links.png" alt="Term editor Links tab — typed outgoing relationships">
+          <figcaption>Typed links between concepts</figcaption>
+        </figure>
+      </div>
+      <p style="text-align:center; margin-top:1.5rem"><a class="btn btn-ghost" href="screenshots.html">Browse all screenshots</a></p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2>What's next</h2>
+      <p class="section-lead">Lexicon is actively developed. Highlights from the roadmap:</p>
+      <div class="grid grid-3">
+        <div class="card"><h3>📤 Export to CSV / JSON</h3><p>Take your data anywhere with structured exports.</p></div>
+        <div class="card"><h3>🌐 Static HTML export</h3><p>Publish your lexicon as a browsable static website.</p></div>
+        <div class="card"><h3>🖧 Built-in HTTP server</h3><p>Serve your knowledge base to other devices on your network.</p></div>
+      </div>
+      <p style="text-align:center; margin-top:1.5rem"><a href="developers/roadmap.html">Full roadmap and TODO list →</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h4>Lexicon</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="screenshots.html">Screenshots</a></li>
+          <li><a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">Source code</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Users</h4>
+        <ul>
+          <li><a href="users/index.html">User Guide</a></li>
+          <li><a href="users/installation.html">Installation</a></li>
+          <li><a href="users/getting-started.html">Getting started</a></li>
+          <li><a href="users/backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Developers</h4>
+        <ul>
+          <li><a href="developers/index.html">Developer Docs</a></li>
+          <li><a href="developers/building.html">Building from source</a></li>
+          <li><a href="developers/database.html">Database schema</a></li>
+          <li><a href="developers/contributing.html">Contributing</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Lexicon is free and open-source software released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>

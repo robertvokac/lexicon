@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roadmap &amp; TODO — Lexicon Developer Docs</title>
+<meta name="description" content="Lexicon roadmap: CSV/JSON export, static HTML export, HTTP server, improved search ranking — plus the working TODO list and recent updates.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="../users/index.html">Users</a>
+      <a href="index.html" class="active">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">Developer Docs</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="building.html">Building from source</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="database.html">Database schema</a></li>
+        <li><a href="roadmap.html" class="active">Roadmap &amp; TODO</a></li>
+        <li><a href="contributing.html">Contributing</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#recent">Recently shipped</a></li>
+        <li><a href="#roadmap">Roadmap</a></li>
+        <li><a href="#todo">Working TODO list</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Roadmap &amp; TODO</p>
+    <h1>Roadmap &amp; TODO</h1>
+    <p class="lead">Lexicon is young and actively developed. This page tracks where it is heading — a great place to look if you want to <a href="contributing.html">contribute</a>.</p>
+
+    <h2 id="recent">Recently shipped</h2>
+    <ul>
+      <li>Term table supports <strong>sorting by clicking column headers</strong>.</li>
+      <li><strong><code>New term</code> prefills the title</strong> from the current search text — search-to-create in one motion.</li>
+    </ul>
+
+    <h2 id="roadmap">Roadmap</h2>
+    <div class="grid grid-2" style="margin-top:1rem">
+      <div class="card">
+        <h3>📤 Export to CSV / JSON</h3>
+        <p>Structured exports of groups and terms, so data can flow into spreadsheets, scripts, and other tools.</p>
+      </div>
+      <div class="card">
+        <h3>🌐 Export to static HTML</h3>
+        <p>Publish a whole lexicon as a browsable static website — sharing your knowledge base without sharing the app.</p>
+      </div>
+      <div class="card">
+        <h3>🖧 HTTP server</h3>
+        <p>A built-in server to browse your lexicon from other devices on the local network.</p>
+      </div>
+      <div class="card">
+        <h3>🔎 Better search ranking</h3>
+        <p>Exact matches should surface first; ranking improvements are planned for the search pipeline.</p>
+      </div>
+      <div class="card">
+        <h3>🧱 More unique indexes</h3>
+        <p>Additional database constraints to guarantee consistency as the schema grows.</p>
+      </div>
+      <div class="card">
+        <h3>🕸️ Graph visualization</h3>
+        <p>A visual view of the term relationship graph — the natural payoff of typed links.</p>
+      </div>
+    </div>
+
+    <h2 id="todo">Working TODO list</h2>
+    <p>Snapshot of the maintainer's <code>TODO.md</code>, grouped by area:</p>
+
+    <h3>UI / UX</h3>
+    <ul>
+      <li>Resizable table columns prioritizing Title, Status, and Understanding; wrap long text in Tags/Aliases/Flags; possibly hide minor columns by default.</li>
+      <li>Clearer Markdown preview panel with border/header, syntax highlighting, and visible table borders.</li>
+      <li>Dedicated panel for links/backlinks with visual separation.</li>
+      <li>Consistent toolbar/sidebar for Add / Edit / Delete with icons.</li>
+      <li><code>QSplitter</code>-based resizing between table, preview, and links areas.</li>
+      <li>Bug: adding a term with no group selected falls back to the first group.</li>
+    </ul>
+
+    <h3>Features</h3>
+    <ul>
+      <li>All relation types visible and selectable when adding links; consider bidirectional links for <em>Related</em> and <em>Contrasts</em>.</li>
+      <li>Multi-field search refinements and quick filters for pinned/unpinned terms.</li>
+      <li>Markdown toolbar polish: tooltips with syntax hints, undo/redo for inserts.</li>
+      <li>Validation: require an existing group and a non-empty title before saving.</li>
+    </ul>
+
+    <h3>Database / backend</h3>
+    <ul>
+      <li>Verify relation-type mapping; consider optional <code>note</code> or <code>bidirectional</code> columns on links.</li>
+      <li>Ensure sorting and uniqueness of aliases/tags/flags.</li>
+      <li>Decide on raw Markdown vs. rendered HTML storage; keep rendering safe.</li>
+    </ul>
+
+    <h3>Nice-to-have</h3>
+    <ul>
+      <li>Export / import of terms (Markdown or JSON).</li>
+      <li>Keyboard shortcuts for common actions.</li>
+      <li>Undo/redo for term edits.</li>
+      <li>Graph visualization of term relationships.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Want one of these?</strong> Pick an item, open an issue to claim it, and see <a href="contributing.html">Contributing</a> for the workflow. Small, focused pull requests are the easiest to review and merge.</p>
+    </div>
+
+    <div class="page-nav">
+      <a class="prev" href="database.html"><span class="dir">← Previous</span>Database schema</a>
+      <a class="next" href="contributing.html"><span class="dir">Next →</span>Contributing</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
