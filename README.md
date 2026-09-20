@@ -42,7 +42,7 @@ It is designed for structured learning and technical note-taking with groups, it
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
   - search in title, disambiguation, alias, tag, and flag
-  - filters for group, type, tag, flag, status, understanding, pinned
+  - per-column filters above the table headers, including type fields
 - Pagination for large datasets
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
@@ -124,7 +124,7 @@ cmake --build build --target Lexicon -j
 ### 2) Create and manage groups
 
 Groups are top-level buckets for items (for example: `C++`, `Databases`, `Networking`).
-Lexicon creates a `Default` group automatically. Items added while the filter is set to `All groups` go there.
+Lexicon creates a `Default` group automatically. With `All groups` selected, new items go there unless the Type filter selects a type scoped to another group.
 
 1. Open `Manage` → `Groups...`.
 2. Use:
@@ -135,16 +135,18 @@ Lexicon creates a `Default` group automatically. Items added while the filter is
 
 ### 3) Explore items in the main window
 
-At the top you can combine search and filters:
+Use the row above the table's column names to combine filters:
 
+- `Id`, `Title`, `Disambiguation`, and `Aliases` text filters
 - `Group`
 - `Type` (`All types` or a specific type; choices follow the selected group)
-- `Tag`
-- `Flag`
+- `Tags`
+- `Flags`
 - `Status`
 - `Understanding`
 - `Pinned`
-- free-text `Search`
+
+Selecting a type adds filters above its value columns. The separate `Search` box searches across multiple fields.
 
 Search matches these fields:
 
@@ -179,9 +181,11 @@ You have two add options in the main toolbar:
 - `Add`: quick add path; title is prefilled from current search text
 - `Add ...`: full add dialog path
 
+Both actions use the selected Type filter for the new item. With `All groups` selected, a group-scoped type also determines the new item's group.
+
 Recommended workflow:
 
-1. Select the target group, or leave `All groups` selected to use `Default`.
+1. Select the target group, or leave `All groups` selected to use `Default` when no group-scoped type is selected.
 2. Click `Add` or `Add ...`.
 3. Fill the General tab:
    - `Title` (required)

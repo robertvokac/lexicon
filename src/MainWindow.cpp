@@ -4,6 +4,7 @@
 #include "ItemTypeManagerDialog.h"
 #include "ItemEditDialog.h"
 #include "ValueListDialog.h"
+#include "FilterHeaderView.h"
 
 #include "MarkdownConverter.h"
 #include <QAction>
@@ -14,7 +15,6 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QHeaderView>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -22,7 +22,8 @@
 #include <QMenuBar>
 #include <QCloseEvent>
 #include <QSettings>
-#include <QScrollArea>
+#include <QRegularExpressionValidator>
+#include <QScrollBar>
 #include <QSignalBlocker>
 #include <QPalette>
 #include <QMessageBox>
@@ -68,7 +69,6 @@ void MainWindow::setupUi() {
     auto* centralWidget = new QWidget(this);
     auto* rootLayout = new QVBoxLayout(centralWidget);
 
-    auto* filterRowLayout = new QHBoxLayout();
     m_groupFilter = new QComboBox(centralWidget);
     m_typeFilter = new QComboBox(centralWidget);
     m_typeFilter->addItem("All types", 0);
@@ -93,35 +93,25 @@ void MainWindow::setupUi() {
     m_pinnedFilter->addItem("Pinned", 1);
     m_pinnedFilter->addItem("Not Pinned", 0);
 
+    m_idFilter = new QLineEdit(centralWidget);
+    m_idFilter->setObjectName("idColumnFilter");
+    m_idFilter->setPlaceholderText("ID...");
+    m_idFilter->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]*"), m_idFilter));
+    m_titleFilter = new QLineEdit(centralWidget);
+    m_titleFilter->setObjectName("titleColumnFilter");
+    m_titleFilter->setPlaceholderText("Title...");
+    m_disambiguationFilter = new QLineEdit(centralWidget);
+    m_disambiguationFilter->setObjectName("disambiguationColumnFilter");
+    m_disambiguationFilter->setPlaceholderText("Disambiguation...");
+    m_aliasFilter = new QLineEdit(centralWidget);
+    m_aliasFilter->setObjectName("aliasColumnFilter");
+    m_aliasFilter->setPlaceholderText("Alias...");
+
     m_understandingFilter->setItemData(1, "Never encountered", Qt::ToolTipRole);
     m_understandingFilter->setItemData(2, "Seen before, can identify", Qt::ToolTipRole);
     m_understandingFilter->setItemData(3, "Conceptually grasped", Qt::ToolTipRole);
     m_understandingFilter->setItemData(4, "Can apply in real situations", Qt::ToolTipRole);
     m_understandingFilter->setItemData(5, "Fully internalized, can teach or innovate", Qt::ToolTipRole);
-
-    filterRowLayout->addWidget(new QLabel("Group:", centralWidget));
-    filterRowLayout->addWidget(m_groupFilter);
-    filterRowLayout->addWidget(new QLabel("Type:", centralWidget));
-    filterRowLayout->addWidget(m_typeFilter);
-    filterRowLayout->addWidget(new QLabel("Tag:", centralWidget));
-    filterRowLayout->addWidget(m_tagFilter);
-    filterRowLayout->addWidget(new QLabel("Flag:", centralWidget));
-    filterRowLayout->addWidget(m_flagFilter);
-    filterRowLayout->addWidget(new QLabel("Status:", centralWidget));
-    filterRowLayout->addWidget(m_statusFilter);
-    filterRowLayout->addWidget(new QLabel("Understanding:", centralWidget));
-    filterRowLayout->addWidget(m_understandingFilter);
-    filterRowLayout->addWidget(new QLabel("Pinned:", centralWidget));
-    filterRowLayout->addWidget(m_pinnedFilter);
-    filterRowLayout->addStretch(1);
-
-    m_valueFilterScroll = new QScrollArea(centralWidget);
-    m_valueFilterScroll->setWidgetResizable(true);
-    m_valueFilterScroll->setMaximumHeight(120);
-    auto* valueFilterPanel = new QWidget(m_valueFilterScroll);
-    m_valueFilterLayout = new QGridLayout(valueFilterPanel);
-    m_valueFilterScroll->setWidget(valueFilterPanel);
-    m_valueFilterScroll->hide();
 
     auto* searchRowLayout = new QHBoxLayout();
     m_searchEdit = new QLineEdit(centralWidget);
@@ -147,14 +137,25 @@ void MainWindow::setupUi() {
     searchRowLayout->addWidget(columnsButton);
     searchRowLayout->addStretch(1);
 
-    rootLayout->addLayout(filterRowLayout);
-    rootLayout->addWidget(m_valueFilterScroll);
     rootLayout->addLayout(searchRowLayout);
 
     m_tableView = new QTableView(centralWidget);
     m_model = new QStandardItemModel(this);
     m_model->setHorizontalHeaderLabels({"Id", "Group", "Type", "Title", "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"});
     m_tableView->setModel(m_model);
+    m_filterHeader = new FilterHeaderView(m_tableView);
+    m_tableView->setHorizontalHeader(m_filterHeader);
+    m_filterHeader->setFilterWidget(0, m_idFilter);
+    m_filterHeader->setFilterWidget(1, m_groupFilter);
+    m_filterHeader->setFilterWidget(2, m_typeFilter);
+    m_filterHeader->setFilterWidget(3, m_titleFilter);
+    m_filterHeader->setFilterWidget(4, m_disambiguationFilter);
+    m_filterHeader->setFilterWidget(5, m_tagFilter);
+    m_filterHeader->setFilterWidget(6, m_flagFilter);
+    m_filterHeader->setFilterWidget(7, m_aliasFilter);
+    m_filterHeader->setFilterWidget(8, m_statusFilter);
+    m_filterHeader->setFilterWidget(9, m_understandingFilter);
+    m_filterHeader->setFilterWidget(10, m_pinnedFilter);
     m_tableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_tableView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_tableView->setAlternatingRowColors(true);
@@ -165,6 +166,8 @@ void MainWindow::setupUi() {
     m_tableView->horizontalHeader()->setSectionsClickable(true);
     m_tableView->horizontalHeader()->setSortIndicatorShown(true);
     connect(m_tableView->horizontalHeader(), &QHeaderView::sortIndicatorChanged, this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_tableView->horizontalScrollBar(), &QScrollBar::valueChanged,
+            m_filterHeader, [this] { m_filterHeader->updateFilterPositions(); });
     rootLayout->addWidget(m_tableView, 1);
 
     auto* paginationLayout = new QHBoxLayout();
@@ -229,6 +232,10 @@ void MainWindow::setupUi() {
     connect(m_statusFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_understandingFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
     connect(m_pinnedFilter, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_idFilter, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_titleFilter, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_disambiguationFilter, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
+    connect(m_aliasFilter, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
     connect(m_firstButton, &QPushButton::clicked, this, &MainWindow::firstPage);
     connect(m_prevButton, &QPushButton::clicked, this, &MainWindow::prevPage);
@@ -303,6 +310,7 @@ void MainWindow::applyColumnVisibility() {
         m_tableView->setColumnHidden(kFirstConfigurableColumn + i,
                                      !m_columnVisibility.value(name, true));
     }
+    m_filterHeader->updateFilterPositions();
 }
 
 void MainWindow::openColumnVisibilityDialog() {
@@ -335,7 +343,35 @@ void MainWindow::openColumnVisibilityDialog() {
         return;
     }
     m_columnVisibility = visibility;
-    applyColumnVisibility();
+    if (!visibility.value("Disambiguation")) {
+        const QSignalBlocker blocker(m_disambiguationFilter);
+        m_disambiguationFilter->clear();
+    }
+    if (!visibility.value("Tags")) {
+        const QSignalBlocker blocker(m_tagFilter);
+        m_tagFilter->setCurrentIndex(0);
+    }
+    if (!visibility.value("Flags")) {
+        const QSignalBlocker blocker(m_flagFilter);
+        m_flagFilter->setCurrentIndex(0);
+    }
+    if (!visibility.value("Aliases")) {
+        const QSignalBlocker blocker(m_aliasFilter);
+        m_aliasFilter->clear();
+    }
+    if (!visibility.value("Status")) {
+        const QSignalBlocker blocker(m_statusFilter);
+        m_statusFilter->setCurrentIndex(0);
+    }
+    if (!visibility.value("Understanding")) {
+        const QSignalBlocker blocker(m_understandingFilter);
+        m_understandingFilter->setCurrentIndex(0);
+    }
+    if (!visibility.value("Pinned")) {
+        const QSignalBlocker blocker(m_pinnedFilter);
+        m_pinnedFilter->setCurrentIndex(0);
+    }
+    resetPaginationAndRefresh();
 }
 
 void MainWindow::refreshAll() {
@@ -388,6 +424,7 @@ void MainWindow::refreshTypes() {
         const QString scope = type.groupId < 0 ? "All groups" : type.groupName;
         m_typeFilter->addItem(QString("%1 (%2)").arg(type.name, scope), type.id);
         m_typeFilter->setItemData(m_typeFilter->count() - 1, type.description, Qt::ToolTipRole);
+        m_typeFilter->setItemData(m_typeFilter->count() - 1, type.groupId, Qt::UserRole + 1);
     }
     const int index = m_typeFilter->findData(currentTypeId);
     if (index >= 0) {
@@ -414,19 +451,17 @@ void MainWindow::refreshValueFilters() {
         showError(error);
         return;
     }
+    for (int index = 0; index < m_selectedTypeFields.size(); ++index) {
+        m_filterHeader->removeFilterWidget(11 + index);
+    }
     m_selectedTypeFields = fields;
     m_valueFilterTypeId = typeId;
     m_valueFilterEditors.clear();
-    while (auto* entry = m_valueFilterLayout->takeAt(0)) {
-        delete entry->widget();
-        delete entry;
-    }
     for (int index = 0; index < fields.size(); ++index) {
         const auto& field = fields.at(index);
-        auto* label = new QLabel(field.name + ":", m_valueFilterScroll);
         QWidget* editor = nullptr;
         if (field.dataType == FieldDataType::Boolean || field.dataType == FieldDataType::Enum) {
-            auto* combo = new QComboBox(m_valueFilterScroll);
+            auto* combo = new QComboBox();
             combo->addItem("Any", QString());
             if (field.dataType == FieldDataType::Boolean) {
                 combo->addItem("False", "false");
@@ -439,17 +474,16 @@ void MainWindow::refreshValueFilters() {
             connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), this, &MainWindow::resetPaginationAndRefresh);
             editor = combo;
         } else {
-            auto* line = new QLineEdit(previousValues.value(field.id), m_valueFilterScroll);
-            line->setPlaceholderText("Filter value...");
-            line->setMinimumWidth(130);
+            auto* line = new QLineEdit(previousValues.value(field.id));
+            line->setPlaceholderText("Filter " + field.name + "...");
             connect(line, &QLineEdit::textChanged, this, &MainWindow::resetPaginationAndRefresh);
             editor = line;
         }
-        m_valueFilterLayout->addWidget(label, index / 3, (index % 3) * 2);
-        m_valueFilterLayout->addWidget(editor, index / 3, (index % 3) * 2 + 1);
+        editor->setObjectName(QString("valueColumnFilter_%1").arg(field.id));
+        m_filterHeader->setFilterWidget(11 + index, editor);
         m_valueFilterEditors.insert(field.id, editor);
     }
-    m_valueFilterScroll->setVisible(typeId > 0 && !fields.isEmpty());
+    m_filterHeader->updateFilterPositions();
 }
 
 QList<ItemValueFilter> MainWindow::valueFilters() const {
@@ -464,6 +498,15 @@ QList<ItemValueFilter> MainWindow::valueFilters() const {
         filters.push_back({field.id, value, exact});
     }
     return filters;
+}
+
+ItemColumnFilters MainWindow::columnFilters() const {
+    return {
+        m_idFilter->text().trimmed(),
+        m_titleFilter->text().trimmed(),
+        m_disambiguationFilter->text().trimmed(),
+        m_aliasFilter->text().trimmed()
+    };
 }
 
 void MainWindow::refreshTags() {
@@ -515,6 +558,7 @@ void MainWindow::refreshItems() {
     int groupId = m_groupFilter->currentData().toInt();
     const int typeId = m_typeFilter->currentData().toInt();
     const auto fieldFilters = valueFilters();
+    const auto textFilters = columnFilters();
     QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     int understandingFilter = m_understandingFilter->currentData().toInt();
@@ -533,7 +577,7 @@ void MainWindow::refreshItems() {
         }
     }
     
-    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -546,7 +590,7 @@ void MainWindow::refreshItems() {
     const int sortSection = m_tableView->horizontalHeader()->sortIndicatorSection();
     const Qt::SortOrder sortOrder = m_tableView->horizontalHeader()->sortIndicatorOrder();
 
-    const auto items = DatabaseManager::loadItems(groupId, typeId, fieldFilters, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
+    const auto items = DatabaseManager::loadItems(groupId, typeId, fieldFilters, searchText, textFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, m_pageSize, m_currentPage * m_pageSize, sortSection, sortOrder, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -607,8 +651,14 @@ void MainWindow::refreshItems() {
 
     applyColumnVisibility();
     m_tableView->resizeColumnsToContents();
+    for (int column = 0; column < m_model->columnCount(); ++column) {
+        if (!m_tableView->isColumnHidden(column) && m_tableView->columnWidth(column) < 115) {
+            m_tableView->setColumnWidth(column, 115);
+        }
+    }
     m_tableView->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Fixed);
-    m_tableView->setColumnWidth(10, 60);
+    m_tableView->setColumnWidth(10, 115);
+    m_filterHeader->updateFilterPositions();
 
     m_pageLabel->setText(QString("Page %1 of %2 (%3 total)").arg(m_currentPage + 1).arg(totalPages).arg(totalCount));
     m_firstButton->setEnabled(m_currentPage > 0);
@@ -653,6 +703,7 @@ void MainWindow::lastPage() {
     const int groupId = m_groupFilter->currentData().toInt();
     const int typeId = m_typeFilter->currentData().toInt();
     const auto fieldFilters = valueFilters();
+    const auto textFilters = columnFilters();
     const QString tagFilter = m_tagFilter->currentIndex() > 0 ? m_tagFilter->currentText() : QString();
     const QString flagFilter = m_flagFilter->currentIndex() > 0 ? m_flagFilter->currentText() : QString();
     const int understandingFilter = m_understandingFilter->currentData().toInt();
@@ -660,7 +711,7 @@ void MainWindow::lastPage() {
     const int pinnedFilter = m_pinnedFilter->currentData().toInt();
     const QString searchText = m_searchEdit->text().trimmed();
 
-    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
+    int totalCount = DatabaseManager::countItems(groupId, typeId, fieldFilters, searchText, textFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter, &error);
     if (!error.isEmpty()) {
         showError(error);
         return;
@@ -704,6 +755,10 @@ int MainWindow::groupIdForNewItem() {
     if (selectedGroupId > 0) {
         return selectedGroupId;
     }
+    const int typeGroupId = m_typeFilter->currentData(Qt::UserRole + 1).toInt();
+    if (typeGroupId > 0) {
+        return typeGroupId;
+    }
 
     QString error;
     const int groupId = DatabaseManager::defaultGroupId(&error);
@@ -724,6 +779,8 @@ void MainWindow::addItem() {
     dialog.setGroups(m_groups);
     ItemRecord draft;
     draft.groupId = groupId;
+    const int typeId = m_typeFilter->currentData().toInt();
+    if (typeId > 0) draft.itemTypeId = typeId;
     draft.title = m_searchEdit->text().trimmed();
     dialog.setItem(draft);
 
@@ -747,6 +804,8 @@ void MainWindow::quickAdd() {
         return;
     }
     item.groupId = groupId;
+    const int typeId = m_typeFilter->currentData().toInt();
+    if (typeId > 0) item.itemTypeId = typeId;
 
     QString error;
     if (!DatabaseManager::saveItem(item, &error)) {
@@ -1023,24 +1082,44 @@ void MainWindow::onLinkActivated(const QUrl& link) {
     QString itemTitle = QUrl::fromPercentEncoding(link.toString().toUtf8());
 
     m_groupFilter->blockSignals(true);
+    m_typeFilter->blockSignals(true);
     m_tagFilter->blockSignals(true);
     m_flagFilter->blockSignals(true);
     m_statusFilter->blockSignals(true);
     m_understandingFilter->blockSignals(true);
+    m_pinnedFilter->blockSignals(true);
+    m_idFilter->blockSignals(true);
+    m_titleFilter->blockSignals(true);
+    m_disambiguationFilter->blockSignals(true);
+    m_aliasFilter->blockSignals(true);
     m_searchEdit->blockSignals(true);
 
     m_groupFilter->setCurrentIndex(0);
+    m_typeFilter->setCurrentIndex(0);
     m_tagFilter->setCurrentIndex(0);
     m_flagFilter->setCurrentIndex(0);
     m_statusFilter->setCurrentIndex(0);
     m_understandingFilter->setCurrentIndex(0);
+    m_pinnedFilter->setCurrentIndex(0);
+    m_idFilter->clear();
+    m_titleFilter->clear();
+    m_disambiguationFilter->clear();
+    m_aliasFilter->clear();
     m_searchEdit->setText(itemTitle);
+    refreshTypes();
+    refreshValueFilters();
 
     m_groupFilter->blockSignals(false);
+    m_typeFilter->blockSignals(false);
     m_tagFilter->blockSignals(false);
     m_flagFilter->blockSignals(false);
     m_statusFilter->blockSignals(false);
     m_understandingFilter->blockSignals(false);
+    m_pinnedFilter->blockSignals(false);
+    m_idFilter->blockSignals(false);
+    m_titleFilter->blockSignals(false);
+    m_disambiguationFilter->blockSignals(false);
+    m_aliasFilter->blockSignals(false);
     m_searchEdit->blockSignals(false);
 
     resetPaginationAndRefresh();

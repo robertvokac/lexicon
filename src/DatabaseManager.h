@@ -78,6 +78,13 @@ struct ItemValueFilter {
     bool exact = false;
 };
 
+struct ItemColumnFilters {
+    QString id;
+    QString title;
+    QString disambiguation;
+    QString alias;
+};
+
 struct PropertyRecord {
     QString key;
     QString value;
@@ -142,8 +149,8 @@ public:
     static int countFieldValues(int fieldId, QString* errorMessage = nullptr);
     static bool deleteItemField(int fieldId, QString* errorMessage = nullptr);
 
-    static QList<ItemRecord> loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, int limit = -1, int offset = 0, int sortColumn = 3, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
-    static int countItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, QString* errorMessage = nullptr);
+    static QList<ItemRecord> loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, int limit = -1, int offset = 0, int sortColumn = 3, Qt::SortOrder sortOrder = Qt::AscendingOrder, QString* errorMessage = nullptr);
+    static int countItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QString& tagFilter = QString(), const QString& flagFilter = QString(), int understandingFilter = -1, int statusFilter = -1, int pinnedFilter = -1, QString* errorMessage = nullptr);
     static bool loadItem(int itemId, ItemRecord& outItem, QString* errorMessage = nullptr);
     static bool saveItem(const ItemRecord& item, QString* errorMessage = nullptr);
     static bool deleteItem(int itemId, QString* errorMessage = nullptr);

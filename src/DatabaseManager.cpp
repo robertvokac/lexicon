@@ -78,6 +78,25 @@ bool validFieldValue(const ItemFieldRecord& field, const QString& value) {
     }
     return false;
 }
+
+void appendColumnFilters(QString& sql, const ItemColumnFilters& filters) {
+    if (!filters.id.isEmpty()) sql += "AND t.id = ? ";
+    if (!filters.title.isEmpty()) sql += "AND INSTR(LOWER(t.title), LOWER(?)) > 0 ";
+    if (!filters.disambiguation.isEmpty()) {
+        sql += "AND INSTR(LOWER(COALESCE(t.disambiguation, '')), LOWER(?)) > 0 ";
+    }
+    if (!filters.alias.isEmpty()) {
+        sql += "AND EXISTS (SELECT 1 FROM alias a WHERE a.item_id = t.id "
+               "AND INSTR(LOWER(a.alias), LOWER(?)) > 0) ";
+    }
+}
+
+void bindColumnFilters(QSqlQuery& query, const ItemColumnFilters& filters) {
+    if (!filters.id.isEmpty()) query.addBindValue(filters.id);
+    if (!filters.title.isEmpty()) query.addBindValue(filters.title);
+    if (!filters.disambiguation.isEmpty()) query.addBindValue(filters.disambiguation);
+    if (!filters.alias.isEmpty()) query.addBindValue(filters.alias);
+}
 }
 
 bool DatabaseManager::initialize(const QString& dbPath, QString* errorMessage) {
@@ -846,7 +865,7 @@ bool DatabaseManager::deleteItemField(int fieldId, QString* errorMessage) {
     return true;
 }
 
-QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
+QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, int limit, int offset, int sortColumn, Qt::SortOrder sortOrder, QString* errorMessage) {
     QList<ItemRecord> items;
 
     QString sql =
@@ -873,6 +892,7 @@ QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QLis
             ? "AND EXISTS (SELECT 1 FROM item_value iv WHERE iv.item_id = t.id AND iv.item_field_id = ? AND iv.value = ?) "
             : "AND EXISTS (SELECT 1 FROM item_value iv WHERE iv.item_id = t.id AND iv.item_field_id = ? AND INSTR(LOWER(iv.value), LOWER(?)) > 0) ";
     }
+    appendColumnFilters(filters, columnFilters);
     if (understandingFilter >= 0) {
         filters += "AND t.understanding = ? ";
     }
@@ -962,6 +982,7 @@ QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QLis
         query.addBindValue(filter.fieldId);
         query.addBindValue(filter.value);
     }
+    bindColumnFilters(query, columnFilters);
     if (understandingFilter >= 0) {
         query.addBindValue(understandingFilter);
     }
@@ -1037,7 +1058,7 @@ QList<ItemRecord> DatabaseManager::loadItems(int groupId, int typeId, const QLis
     return items;
 }
 
-int DatabaseManager::countItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
+int DatabaseManager::countItems(int groupId, int typeId, const QList<ItemValueFilter>& valueFilters, const QString& searchText, const ItemColumnFilters& columnFilters, const QString& tagFilter, const QString& flagFilter, int understandingFilter, int statusFilter, int pinnedFilter, QString* errorMessage) {
     QString sql = "SELECT COUNT(*) FROM item t WHERE 1 = 1 ";
 
     if (groupId > 0) {
@@ -1051,6 +1072,7 @@ int DatabaseManager::countItems(int groupId, int typeId, const QList<ItemValueFi
             ? "AND EXISTS (SELECT 1 FROM item_value iv WHERE iv.item_id = t.id AND iv.item_field_id = ? AND iv.value = ?) "
             : "AND EXISTS (SELECT 1 FROM item_value iv WHERE iv.item_id = t.id AND iv.item_field_id = ? AND INSTR(LOWER(iv.value), LOWER(?)) > 0) ";
     }
+    appendColumnFilters(sql, columnFilters);
     if (understandingFilter >= 0) {
         sql += "AND t.understanding = ? ";
     }
@@ -1087,6 +1109,7 @@ int DatabaseManager::countItems(int groupId, int typeId, const QList<ItemValueFi
         query.addBindValue(filter.fieldId);
         query.addBindValue(filter.value);
     }
+    bindColumnFilters(query, columnFilters);
     if (understandingFilter >= 0) {
         query.addBindValue(understandingFilter);
     }

@@ -59,7 +59,7 @@
 
     <h2 id="groups">1. Create and manage groups</h2>
     <p>Groups are top-level buckets for items. Think of them as the volumes of your personal encyclopedia — for example <code>C++</code>, <code>Databases</code>, or <code>Networking</code>.</p>
-    <p>When the group filter is set to <code>All groups</code>, new items go to <code>Default</code>. You can select another group before adding an item.</p>
+    <p>When the Group filter is set to <code>All groups</code>, new items go to <code>Default</code> unless the Type filter selects a type scoped to another group. You can select a group before adding an item.</p>
     <ol class="steps">
       <li>Open <code>Manage → Groups...</code> from the menu bar.</li>
       <li>Click <strong>Add</strong> to create a new group. Give it a short, unique name and an optional description. New groups start after existing groups.</li>
@@ -80,13 +80,13 @@
     <h2 id="main-window">2. Explore the main window</h2>
     <figure class="screenshot">
       <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filter row, item table, pagination controls, and content preview">
-      <figcaption>The main window: filter row on top, item table in the middle, rendered content and relationships below.</figcaption>
+      <figcaption>The main window: filters above the column names, with content and relationships below the table.</figcaption>
     </figure>
     <p>The main window is organized top-to-bottom:</p>
     <table>
       <tr><th>Area</th><th>What it does</th></tr>
-      <tr><td><strong>Filter row</strong></td><td>Combine <code>Group</code>, <code>Type</code>, <code>Tag</code>, <code>Flag</code>, <code>Status</code>, <code>Understanding</code>, <code>Pinned</code>, and free-text <code>Search</code> to narrow the table.</td></tr>
-      <tr><td><strong>Item table</strong></td><td>Select a row to preview it below; double-click to edit; click column headers to sort.</td></tr>
+      <tr><td><strong>Search and actions</strong></td><td>Search across titles, disambiguations, aliases, tags, and flags; add, edit, or delete items.</td></tr>
+      <tr><td><strong>Item table</strong></td><td>Filter each column in the row above its name, click a column name to sort, select a row to preview it below, or double-click to edit.</td></tr>
       <tr><td><strong>Pagination bar</strong></td><td>Browse large result sets page by page with a configurable page size.</td></tr>
       <tr><td><strong>Content pane</strong></td><td>Shows the selected item's Markdown rendered as HTML, followed by a links/backlinks summary.</td></tr>
     </table>
@@ -97,9 +97,10 @@
       <li><strong><code>Add</code></strong> — the quick path. The title is prefilled from your current search text, which is perfect for the "searched it, didn't exist, so let's create it" workflow.</li>
       <li><strong><code>Add ...</code></strong> — the full dialog path, opening the complete item editor.</li>
     </ul>
+    <p>Both actions assign the type selected above the Type column. A group-scoped type also determines the group when <code>All groups</code> is selected.</p>
     <p>Recommended workflow:</p>
     <ol class="steps">
-      <li><strong>Select the target group</strong> in the filter row, or leave <code>All groups</code> selected to use <code>Default</code>.</li>
+      <li><strong>Select the target group</strong> above the Group column, or leave <code>All groups</code> selected to use <code>Default</code> when no group-scoped type is selected.</li>
       <li>Click <strong>Add</strong> or <strong>Add ...</strong>.</li>
       <li>Fill in the <strong>General tab</strong>: <code>Title</code> (required), optional <code>Type</code>, <code>Disambiguation</code>, <code>Status</code>, <code>Understanding</code>, and <code>Pinned</code>. If you select a type, enter its custom field values on the <strong>Values tab</strong>. Define types and their fields under <code>Manage → Types...</code>.</li>
       <li>Optionally add <strong>content, metadata, and links</strong> in the other tabs — or come back later.</li>

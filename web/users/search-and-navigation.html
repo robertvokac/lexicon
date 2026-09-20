@@ -56,7 +56,7 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Search &amp; navigation</p>
     <h1>Search &amp; navigation</h1>
-    <p class="lead">A knowledge base is only as good as your ability to find things in it. Lexicon combines free-text search, seven filters, sorting, and pagination — all working together.</p>
+    <p class="lead">A knowledge base is only as good as your ability to find things in it. Lexicon combines free-text search, filters above the table columns, sorting, and pagination.</p>
 
     <h2 id="search">Free-text search</h2>
     <p>The <code>Search</code> box at the top of the main window matches against <strong>five fields</strong> at once:</p>
@@ -74,13 +74,15 @@
     </div>
 
     <h2 id="filters">Filters</h2>
-    <p>Filters combine with search (and with each other) to narrow the item table:</p>
+    <p>The filter row sits above the column names in the item table. Each control filters the column directly below it; filters also combine with the separate Search box.</p>
     <table>
       <tr><th>Filter</th><th>Narrows to</th></tr>
+      <tr><td><code>Id</code></td><td>One exact item ID</td></tr>
       <tr><td><code>Group</code></td><td>Items in one group (e.g. only <em>Databases</em>)</td></tr>
-      <tr><td><code>Type</code></td><td>Items assigned a specific type, or all items with <code>All types</code>. The choices follow the selected group; global types are available in every group. Selecting a type also displays its field values as columns and adds filters for those values.</td></tr>
-      <tr><td><code>Tag</code></td><td>Items carrying a specific tag</td></tr>
-      <tr><td><code>Flag</code></td><td>Items carrying a specific flag</td></tr>
+      <tr><td><code>Type</code></td><td>Items assigned a specific type, or all items with <code>All types</code>. The choices follow the selected group; global types are available in every group. Selecting a type also displays its field values as columns, adds filters for those values, and uses that type for new items.</td></tr>
+      <tr><td><code>Title</code> / <code>Disambiguation</code> / <code>Aliases</code></td><td>Items containing the entered text in that column</td></tr>
+      <tr><td><code>Tags</code></td><td>Items carrying a specific tag</td></tr>
+      <tr><td><code>Flags</code></td><td>Items carrying a specific flag</td></tr>
       <tr><td><code>Status</code></td><td><code>None</code> / <code>Draft</code> / <code>Completed</code></td></tr>
       <tr><td><code>Understanding</code></td><td>One of the five understanding levels</td></tr>
       <tr><td><code>Pinned</code></td><td>Pinned or unpinned items only</td></tr>
@@ -95,7 +97,7 @@
 
     <h2 id="sorting">Sorting &amp; pagination</h2>
     <p>Click any <strong>column header</strong> in the item table to sort by that column; click again to reverse the order. Combined with the pagination bar (<code>&lt;&lt; First</code>, <code>&lt; Prev</code>, <code>Next &gt;</code>, <code>Last &gt;&gt;</code>, and a <code>Page size</code> selector), the table stays fast even with thousands of items.</p>
-    <p>Click <code>Columns...</code> to choose whether Disambiguation, Tags, Flags, Aliases, Status, Understanding, and Pinned appear in the table. All are visible by default, and your choices are saved in the database.</p>
+    <p>Click <code>Columns...</code> to choose whether Disambiguation, Tags, Flags, Aliases, Status, Understanding, and Pinned appear in the table. All are visible by default, and your choices are saved in the database. Hiding a column clears its filter.</p>
 
     <h2 id="overviews">Global overviews</h2>
     <p>Three read-only overviews show your entire vocabulary with usage counts:</p>

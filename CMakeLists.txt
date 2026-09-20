@@ -60,6 +60,8 @@ add_executable(Lexicon
     src/BlobStore.cpp
     src/MainWindow.h
     src/MainWindow.cpp
+    src/FilterHeaderView.h
+    src/FilterHeaderView.cpp
     src/ItemEditDialog.h
     src/ItemEditDialog.cpp
     src/GroupManagerDialog.h

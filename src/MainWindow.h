@@ -8,13 +8,12 @@
 
 class QComboBox;
 class QCompleter;
-class QGridLayout;
 class QLineEdit;
-class QScrollArea;
 class QStandardItemModel;
 class QTableView;
 class QTextEdit;
 class QTextBrowser;
+class FilterHeaderView;
 
 #include <QSyntaxHighlighter>
 #include <QRegularExpression>
@@ -180,6 +179,7 @@ private:
     int groupIdForNewItem();
     QList<GroupRecord> groups() const;
     QList<ItemValueFilter> valueFilters() const;
+    ItemColumnFilters columnFilters() const;
     void showError(const QString& message);
 
 protected:
@@ -189,8 +189,7 @@ private:
 
     QComboBox* m_groupFilter = nullptr;
     QComboBox* m_typeFilter = nullptr;
-    QScrollArea* m_valueFilterScroll = nullptr;
-    QGridLayout* m_valueFilterLayout = nullptr;
+    FilterHeaderView* m_filterHeader = nullptr;
     QList<ItemFieldRecord> m_selectedTypeFields;
     QMap<int, QWidget*> m_valueFilterEditors;
     int m_valueFilterTypeId = 0;
@@ -199,6 +198,10 @@ private:
     QComboBox* m_statusFilter = nullptr;
     QComboBox* m_understandingFilter = nullptr;
     QComboBox* m_pinnedFilter = nullptr;
+    QLineEdit* m_idFilter = nullptr;
+    QLineEdit* m_titleFilter = nullptr;
+    QLineEdit* m_disambiguationFilter = nullptr;
+    QLineEdit* m_aliasFilter = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;
