@@ -517,6 +517,28 @@ body.resizing { cursor: row-resize; user-select: none; }
 }
 
 .dialog-wide { width: min(1000px, calc(100vw - 24px)); }
+
+/* The item editor keeps one position and one size whatever the tab holds,
+   like the desktop dialog. A centred dialog whose height follows its content
+   moves its title and buttons every time a tab is switched. */
+.dialog-item-editor {
+    margin-top: 4vh;
+    margin-bottom: auto;
+    height: min(780px, 92vh);
+}
+
+.dialog-item-editor .dialog-form { height: 100%; max-height: none; }
+/* The tab strip stays put; only the active tab scrolls. */
+.dialog-item-editor .dialog-body { display: flex; overflow: hidden; }
+.dialog-item-editor .tabs { flex: 1 1 auto; min-height: 0; }
+/* The strip keeps its full height; flex would otherwise squeeze it. */
+.dialog-item-editor .tab-list { flex: 0 0 auto; }
+.dialog-item-editor .tab-panels { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* The Markdown editor and preview use the height the frame gives them. */
+.dialog-item-editor #panel-content:not([hidden]) { height: 100%; }
+.dialog-item-editor .content-panel { display: flex; flex-direction: column; height: 100%; }
+.dialog-item-editor .content-split { flex: 1 1 auto; min-height: 220px; }
+.dialog-item-editor .markdown-source { height: 100%; min-height: 0; resize: none; }
 .dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 
 .dialog-form {
@@ -677,11 +699,13 @@ body.resizing { cursor: row-resize; user-select: none; }
     .content-split { grid-template-columns: minmax(0, 1fr); }
 
     .dialog,
-    .dialog-wide {
+    .dialog-wide,
+    .dialog-item-editor {
         width: 100vw;
         max-width: 100vw;
         height: 100%;
         max-height: 100%;
+        margin: 0;
         border-radius: 0;
         border: 0;
     }

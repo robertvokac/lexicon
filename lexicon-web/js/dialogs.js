@@ -13,9 +13,10 @@ function nextId(prefix) {
 // the dialog is cancelled. onAccept may return undefined to keep it open, which
 // is how validation errors are reported without losing the user's input.
 export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'Cancel',
-    onAccept, extraActions = [], wide = false, showAccept = true, initialFocus }) {
+    onAccept, extraActions = [], wide = false, showAccept = true, initialFocus, className }) {
     return new Promise((resolve) => {
-        const dialog = el('dialog', { class: wide ? 'dialog dialog-wide' : 'dialog' });
+        const classes = ['dialog', wide ? 'dialog-wide' : '', className || ''];
+        const dialog = el('dialog', { class: classes.filter(Boolean).join(' ') });
         const form = el('form', { method: 'dialog', class: 'dialog-form' });
         const errorLine = el('p', { class: 'dialog-error', role: 'alert', hidden: true });
         let settled = null;

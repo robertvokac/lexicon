@@ -659,6 +659,9 @@ export async function openItemEditor({ itemId, draft, groups }) {
         body: tabStrip.node,
         acceptLabel: 'Save',
         wide: true,
+        // A fixed frame, like the desktop dialog: switching tabs must not move
+        // the title, the tab strip or the buttons.
+        className: 'dialog-item-editor',
         initialFocus: titleInput,
         onAccept: async ({ fail }) => {
             if (!titleInput.value.trim()) {
