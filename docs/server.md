@@ -79,6 +79,10 @@ with terminal echo disabled and is never a command line argument, so it does
 not reach the shell history or the process list. `LexiconServer auth show`
 prints the configured user name and the hash parameters, never the hash.
 
+The server reads the credentials once, at startup. After changing the password
+restart it; the restart also ends every existing session, so anyone signed in
+with the old password is signed out.
+
 Credentials are stored in `lexicon-auth.json` next to the database (override
 with `--auth-file`). Changing the password rewrites that file, so the write
 goes through an exclusively created temporary file with an unpredictable name
@@ -203,6 +207,85 @@ or pass --allow-insecure-http to override.
 `--allow-insecure-http` exists for closed test networks and prints a loud
 warning. Never use it on the Internet.
 
+## Running as a service
+
+A systemd unit for a server behind a reverse proxy on the same machine:
+
+```ini
+# /etc/systemd/system/lexicon.service
+[Unit]
+Description=Lexicon REST server
+After=network.target
+
+[Service]
+User=robert
+ExecStart=/usr/local/bin/LexiconServer \
+    --database /home/robert/lexicon/lexicon.db \
+    --allowed-origin https://lexicon.example.com \
+    --trusted-proxy 127.0.0.1 --quiet
+Restart=on-failure
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/robert/lexicon
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`ReadWritePaths` is the directory that holds the database, the credentials
+file and `blobs/`; nothing else needs to be writable. The server stops cleanly
+on `SIGTERM` and `SIGINT`. Run it as the user who owns the database, never as
+root: everything it creates is owner-only (see [Security model](#security-model)).
+
+Only one server can listen on a port. A second `LexiconServer` on the same
+port exits with `Cannot bind ADDR:PORT. Is another LexiconServer, or another
+program, already listening on that port?` instead of silently sharing it.
+
+## Using the desktop client at the same time
+
+The server and the Qt client can open the same `lexicon.db` at once; SQLite
+arbitrates. Two rules make that work rather than merely not crash:
+
+- **Every connection waits up to 5 seconds for a lock** (`sqlite3_busy_timeout`)
+  instead of failing the moment the other process is writing.
+- **Every write transaction starts with `BEGIN IMMEDIATE`.** A deferred
+  transaction takes the write lock only at its first write; two of them that
+  both read first can end up each holding a read lock and waiting for the
+  other, a deadlock SQLite resolves by failing one of them at once, without
+  waiting. Taking the write lock up front makes writers queue instead.
+
+Measured with two servers on one database and six clients writing as fast as
+they could for 30 seconds: before, 98.6 % of the writes failed with `database
+is locked`; after, 3 of 2,178 (0.1 %) did, each one a save that had queued
+for the full 5 seconds behind the others. A person typing in one client while
+another person types in the other never gets near that. When it does happen
+the save answers 500 in the web client and shows the storage error on the
+desktop, and nothing is half written: trying again is safe.
+
+Neither client pushes changes to the other. The web client shows a desktop
+edit on its next search or reload; the desktop client shows a web edit when it
+reloads its list.
+
+Keep the database on a local disk. SQLite's locks are only as good as the file
+system's, and on network shares (NFS, SMB) they are not reliable enough for
+two processes to write safely.
+
+## Backups while the server runs
+
+`lexicon.db` and the `blobs/` directory next to it are the complete data set.
+Copying `lexicon.db` with `cp` while something writes to it can capture half a
+commit. Use SQLite's online backup, which takes the proper locks:
+
+```bash
+sqlite3 ~/lexicon/lexicon.db ".backup '/backup/lexicon-$(date +%F).db'"
+rsync -a ~/lexicon/blobs/ /backup/blobs/
+```
+
+Blob files are content addressed and never rewritten, so copying them live is
+safe. `lexicon-auth.json` holds only a password hash; back it up or recreate
+it with `auth set-user`.
+
 ## Paths and text encoding
 
 Every path inside Lexicon is a UTF-8 `std::string`. Conversion between those
@@ -273,6 +356,22 @@ with any characters the file system accepts.
   table, with a global backstop against address rotation. Over the threshold,
   logins answer 429 with `Retry-After`; a successful login clears the client's
   counter.
+- **NUL bytes.** A user name or password containing a NUL character is refused
+  at login and by `auth set-user`. scrypt keys an HMAC, and HMAC pads its key
+  with zero bytes, so `secret` and `secret` followed by NUL derive the same
+  hash; without the check, a password with trailing NULs would be accepted as
+  the real one.
+- **Files.** On POSIX the server runs with umask `077`, so everything it creates
+  (a new database and its journal, blob directories, upload staging files) is
+  readable by its owner only. The credentials file and blob files are written
+  `0600` explicitly as well. Files that already exist keep their permissions.
+- **Browsers.** The API answers cross-origin requests only for the exact origins
+  given with `--allowed-origin`; a request carrying any other `Origin` is
+  refused with 403 before authentication, which is also what defeats DNS
+  rebinding: a hostile page that points its own host name at `127.0.0.1` still
+  sends its own origin. The token is a `Bearer` header, never a cookie, so a
+  page the browser merely visits cannot ride on a signed-in session. The web
+  client restricts script to its own files with a Content Security Policy.
 - **Authentication is checked before the body is read,** so an unauthenticated
   request never buys server memory.
 - **Logging.** One line per request with method, path and status. Headers,
@@ -288,15 +387,56 @@ with any characters the file system accepts.
   timeouts, rejected malformed IDs and JSON, no endpoint that accepts a
   server-side path, no shell execution, and no SQL reachable through HTTP.
 
+### How it was attacked
+
+Beyond the tests in `tests/ServerAuth.cpp` (logout, expiry, rate limits, CORS,
+request hygiene, opaque storage errors, NUL bytes), the server was run against
+a copy of a real database and probed without the password:
+
+- every protected route and method with no `Authorization` header and with
+  forged ones: random tokens, `Basic` credentials, a lower-case scheme, a tab
+  separator, two tokens in one header, a header folded over two lines;
+- path tricks aimed at the authentication check: `..` and `%2e%2e`, encoded
+  slashes, `%00`, doubled slashes, `;` parameters, upper case, a token in the
+  query string, and direct requests for `lexicon.db`, `lexicon-auth.json` and
+  `/etc/passwd`;
+- unusual methods (`TRACE`, `PROPFIND`, `CONNECT`, lower case, an embedded
+  NUL) and `X-HTTP-Method-Override` style headers;
+- protocol shapes: HTTP/1.0 and 0.9, absolute-form targets, a pipelined
+  second request, and a `Content-Length` plus `Transfer-Encoding` smuggling
+  attempt;
+- logins with `null`, array, object, boolean and number passwords, missing
+  fields, SQL-looking passwords, and NUL-padded user names and passwords -
+  the last one found the NUL issue above, now fixed;
+- a login from a DNS rebinding page, which carries a foreign `Origin` and
+  gets 403;
+- 113,326 randomly malformed requests against a build with AddressSanitizer
+  and UndefinedBehaviorSanitizer, which stayed up and reported nothing.
+
+None of the 481 requests in the first five groups returned data or a token.
+In the web client, markup and script in item titles, in Markdown content and
+in `javascript:` links render as text or are stripped by the sanitizer, and a
+script, an `onerror` handler and `eval` injected straight into the running page
+are all blocked by the Content Security Policy in both Chrome and Firefox.
+
+Login time does not reveal whether a user name exists: an unknown name runs
+the same scrypt derivation as a wrong password.
+
 ## Known limitations
 
 - One user account, by design.
+- The rate limit slows guessing; it does not make a weak password safe. The
+  defaults allow 10 failures per address and 200 in total per 15 minutes,
+  about 19,000 guesses a day from many addresses. Use a long random password,
+  and change any password that has been shown to anyone with `auth set-user`.
 - Sessions live in memory only, so a restart signs every client out.
 - The global login backstop means a determined attacker rotating addresses can
   make logins answer 429 for the length of the window. Raise
   `--login-max-failures-total`, or set it to 0, if that trade-off is wrong for
   your deployment.
-- Writes are serialized; this is not a multi-user concurrent server.
+- Writes are serialized; this is not a multi-user concurrent server. A save
+  that waits more than 5 seconds for the database lock fails and must be
+  repeated (see [Using the desktop client at the same time](#using-the-desktop-client-at-the-same-time)).
 - Logins queue behind `--login-max-parallel-hashes`. That is the intended
   trade: bounded memory and CPU under a login flood, at the cost of a slower
   sign-in while one is in progress. Authenticated requests are unaffected.
