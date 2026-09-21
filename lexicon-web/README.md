@@ -13,6 +13,9 @@ runs.**
 lexicon-web/
 ├── index.html            application shell and login form
 ├── config.example.js     optional deployment configuration
+├── favicon.svg           tab icon, the desktop icon redrawn as a vector
+├── favicon-32.png        the same for browsers without SVG icons
+├── apple-touch-icon.png  home screen icon for iOS
 ├── README.md             this file
 ├── css/
 │   └── lexicon.css       both themes, layout and responsive rules

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The desktop icon (resources/appicon.png) redrawn on a 64-unit grid so
+       its edges land on whole pixels at 16 and 32 px. -->
+  <rect x="8" y="4" width="48" height="56" rx="8" fill="#3b5998"/>
+  <rect x="8" y="48" width="48" height="4" fill="#8aa2d4"/>
+  <rect x="16" y="8" width="32" height="40" fill="#ffffff"/>
+  <rect x="20" y="13" width="24" height="5" rx="2" fill="#3b5998"/>
+  <rect x="20" y="23" width="20" height="3" rx="1.5" fill="#a0a0a0"/>
+  <rect x="20" y="29" width="24" height="3" rx="1.5" fill="#a0a0a0"/>
+  <rect x="20" y="35" width="16" height="3" rx="1.5" fill="#a0a0a0"/>
+  <rect x="20" y="41" width="20" height="3" rx="1.5" fill="#a0a0a0"/>
+</svg>
