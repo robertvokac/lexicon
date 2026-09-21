@@ -5,6 +5,7 @@
 
 #include "FilePath.h"
 #include "Security.h"
+#include "Utf8Path.h"
 #include "ServerConfig.h"
 #include "TempFile.h"
 
@@ -355,6 +356,18 @@ void checkConfigurationGuards(Checks &checks) {
                 "an unknown option is refused");
   checks.expect(!lexicon::http::parseCommandLine({"--port"}).has_value(),
                 "a missing option value is refused");
+  // Arguments arrive as UTF-8 on every platform, and a conversion failure is
+  // reported rather than turned into an empty argument.
+  char program[] = "LexiconServer";
+  char option[] = "--port";
+  char value[] = "9001";
+  char *argv[] = {program, option, value};
+  auto passed = lexicon::http::commandLineArguments(3, argv);
+  checks.expect(passed.has_value(), "the command line is readable");
+  if (passed)
+    checks.expect(passed->size() == 2 && (*passed)[0] == "--port" &&
+                      (*passed)[1] == "9001",
+                  "argv is passed through without argv[0]");
   const auto authCommand = lexicon::http::parseCommandLine({"auth", "set-user"});
   checks.expect(authCommand.has_value() &&
                     authCommand->command == lexicon::http::Command::AuthSetUser,
@@ -672,8 +685,15 @@ void checkTextConversions(Checks &checks) {
                          std::string("UTF-16 matches UTF-8: ") + sample.what);
     // And the result is the path the file system layer would build.
     checks.expectEqual(
-        lexicon::http::toUtf8(lexicon::http::fromUtf8(sample.utf8)),
+        lexicon::pathToUtf8(lexicon::utf8Path(sample.utf8)),
         sample.utf8, std::string("round trips as a path: ") + sample.what);
+  }
+  // The core conversion both the storage and the server layer use.
+  for (const auto &sample : all) {
+    const auto path = lexicon::utf8Path(sample.utf8);
+    checks.expectEqual(lexicon::pathToUtf8(path), sample.utf8,
+                       std::string("core path conversion round trips: ") +
+                           sample.what);
   }
   // An unpaired surrogate is reported rather than silently replaced.
   const std::u16string highOnly(1, static_cast<char16_t>(0xd83d));
@@ -699,7 +719,7 @@ void checkTextConversions(Checks &checks) {
 void checkNonAsciiPaths(Checks &checks) {
   const auto root =
       std::filesystem::temp_directory_path() /
-      lexicon::http::fromUtf8(
+      lexicon::utf8Path(
           "lexicon-Ji\u0159\u00ed-\u017elu\u0165ou\u010dk\u00fd-" +
           std::to_string(
               std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -709,14 +729,14 @@ void checkNonAsciiPaths(Checks &checks) {
     checks.expect(false, "the non-ASCII test directory can be created");
     return;
   }
-  const auto database = lexicon::http::toUtf8(root / "lexikon-databáze.db");
+  const auto database = lexicon::pathToUtf8(root / "lexikon-databáze.db");
 
   lexicon::http::ServerConfig config;
   config.databasePath = database;
   const auto authFile = config.resolvedAuthFilePath();
   checks.expect(authFile.find("Ji\u0159\u00ed") != std::string::npos,
                 "the credentials path keeps its non-ASCII directory: " + authFile);
-  checks.expect(std::filesystem::exists(lexicon::http::fromUtf8(authFile)
+  checks.expect(std::filesystem::exists(lexicon::utf8Path(authFile)
                                             .parent_path()),
                 "that directory is the one that exists on disk");
 
@@ -737,28 +757,28 @@ void checkNonAsciiPaths(Checks &checks) {
   if (loaded)
     checks.expectEqual(loaded->username, "jiří",
                        "a non-ASCII user name round-trips");
-  checks.expect(std::filesystem::exists(lexicon::http::fromUtf8(authFile)),
+  checks.expect(std::filesystem::exists(lexicon::utf8Path(authFile)),
                 "the credentials file is where the path said it would be");
 
   // The staging file the blob endpoints use must land in the same directory.
   auto staging = lexicon::http::TempFile::create(
-      lexicon::http::toUtf8(root));
+      lexicon::pathToUtf8(root));
   checks.expect(staging.has_value(), "a temporary file is created there");
   if (staging) {
     const char payload[] = "obsah";
     checks.expect(staging->write(payload, sizeof(payload) - 1).has_value(),
                   "the temporary file accepts content");
-    const auto target = lexicon::http::toUtf8(root / "výstup.bin");
+    const auto target = lexicon::pathToUtf8(root / "výstup.bin");
     checks.expect(staging->replace(target).has_value(),
                   "it installs atomically under a non-ASCII path");
-    checks.expect(std::filesystem::exists(lexicon::http::fromUtf8(target)),
+    checks.expect(std::filesystem::exists(lexicon::utf8Path(target)),
                   "the installed file exists");
   }
 
   // Round trip every path through the boundary helpers unchanged.
-  const auto sample = lexicon::http::toUtf8(root / "kůň" / "žlutý.db");
+  const auto sample = lexicon::pathToUtf8(root / "kůň" / "žlutý.db");
   checks.expectEqual(
-      lexicon::http::toUtf8(lexicon::http::fromUtf8(sample)), sample,
+      lexicon::pathToUtf8(lexicon::utf8Path(sample)), sample,
       "paths survive the UTF-8 boundary unchanged");
 
   std::error_code ignored;

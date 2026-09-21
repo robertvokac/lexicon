@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <csignal>
+#include <iterator>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -39,22 +40,63 @@ void requestShutdown(int) {
     server->stop();
 }
 
-// Reads one line without echoing it, so the password never appears on screen
-// and never reaches the shell history or the process list.
-bool readSecret(const std::string &prompt, std::string &value) {
+// Reads one line of input as UTF-8. With `echo` false the characters are not
+// shown, so a password never appears on screen and never reaches the shell
+// history or the process list.
+//
+// A Windows console does not hand over UTF-8: the narrow console input is the
+// input code page, so a real console is read wide and converted here, the same
+// way the command line is. Redirected input is defined to be UTF-8 already and
+// is read as bytes, which is what a pipe or a file from any other tool gives.
+bool readLine(const std::string &prompt, std::string &value, bool echo) {
   std::cout << prompt << std::flush;
+  value.clear();
 #ifdef _WIN32
   HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
   DWORD mode = 0;
-  const bool interactive = GetConsoleMode(input, &mode) != 0;
-  if (interactive)
+  const bool console = GetConsoleMode(input, &mode) != 0;
+  if (!console) {
+    const bool redirected = static_cast<bool>(std::getline(std::cin, value));
+    if (!echo)
+      std::cout << '\n';
+    return redirected;
+  }
+  if (!echo)
     SetConsoleMode(input, mode & ~static_cast<DWORD>(ENABLE_ECHO_INPUT));
-  const bool ok = static_cast<bool>(std::getline(std::cin, value));
-  if (interactive)
+  std::wstring line;
+  bool ok = true;
+  for (;;) {
+    wchar_t buffer[256];
+    DWORD read = 0;
+    if (!ReadConsoleW(input, buffer, static_cast<DWORD>(std::size(buffer)),
+                      &read, nullptr)) {
+      ok = false;
+      break;
+    }
+    if (read == 0) // End of input, for instance Ctrl+Z.
+      break;
+    line.append(buffer, read);
+    if (line.find(L'\n') != std::wstring::npos)
+      break;
+  }
+  if (!echo) {
     SetConsoleMode(input, mode);
+    std::cout << '\n';
+  }
+  while (!line.empty() && (line.back() == L'\n' || line.back() == L'\r'))
+    line.pop_back();
+  if (!ok)
+    return false;
+  auto converted = lexicon::http::wideToUtf8(line);
+  if (!converted) {
+    std::cerr << converted.error().message << '\n';
+    return false;
+  }
+  value = std::move(*converted);
+  return true;
 #else
   termios original{};
-  const bool interactive = ::isatty(STDIN_FILENO) != 0 &&
+  const bool interactive = !echo && ::isatty(STDIN_FILENO) != 0 &&
                            ::tcgetattr(STDIN_FILENO, &original) == 0;
   if (interactive) {
     termios quiet = original;
@@ -64,17 +106,17 @@ bool readSecret(const std::string &prompt, std::string &value) {
   const bool ok = static_cast<bool>(std::getline(std::cin, value));
   if (interactive)
     ::tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
-#endif
-  std::cout << '\n';
+  if (!echo)
+    std::cout << '\n';
   return ok;
+#endif
 }
 
 int authSetUser(const ServerConfig &config) {
   const auto path = config.resolvedAuthFilePath();
   std::cout << "Configuring the Lexicon server user in " << path << ".\n";
   std::string username;
-  std::cout << "User name: " << std::flush;
-  if (!std::getline(std::cin, username)) {
+  if (!readLine("User name: ", username, true)) {
     std::cerr << "Aborted.\n";
     return 1;
   }
@@ -85,8 +127,8 @@ int authSetUser(const ServerConfig &config) {
   }
   std::string password;
   std::string confirmation;
-  if (!readSecret("Password: ", password) ||
-      !readSecret("Repeat password: ", confirmation)) {
+  if (!readLine("Password: ", password, false) ||
+      !readLine("Repeat password: ", confirmation, false)) {
     std::cerr << "Aborted.\n";
     return 1;
   }
@@ -199,7 +241,11 @@ int main(int argc, char *argv[]) {
   SetConsoleOutputCP(CP_UTF8);
 #endif
   const auto arguments = lexicon::http::commandLineArguments(argc, argv);
-  auto parsed = lexicon::http::parseCommandLine(arguments);
+  if (!arguments) {
+    std::cerr << arguments.error().message << '\n';
+    return 2;
+  }
+  auto parsed = lexicon::http::parseCommandLine(*arguments);
   if (!parsed) {
     std::cerr << parsed.error().message << "\n\n"
               << lexicon::http::usageText();

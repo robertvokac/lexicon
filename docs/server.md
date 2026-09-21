@@ -220,9 +220,14 @@ Windows, where two lossy conversions sit on the way in:
   C:\Users\Jiri\...` with a hacek on the r arrives with the hacek silently
   dropped, naming a directory that does not exist.
 
-So `LexiconServer` takes its arguments from `GetCommandLineW` and converts
-them to UTF-8 itself, and sets the console output code page to UTF-8 so a path
-printed back is readable. A database, credentials file, blob store and upload
+A Windows console is a third: its narrow input is the console input code page,
+often 437, which cannot spell a Czech name at all.
+
+So `LexiconServer` takes its arguments from `GetCommandLineW`, reads an
+interactive console with `ReadConsoleW`, and converts both to UTF-8 itself. It
+also sets the console output code page to UTF-8 so a path printed back is
+readable. Redirected input is defined to be UTF-8 already and is read as bytes,
+which is what a pipe or a file from any other tool provides. A database, credentials file, blob store and upload
 staging file therefore all work under a path like
 `C:\Users\Jiri\Lexicon\lexikon-databaze.db` spelled with any characters the
 file system accepts.
@@ -281,13 +286,18 @@ file system accepts.
   trade: bounded memory and CPU under a login flood, at the cost of a slower
   sign-in while one is in progress. Authenticated requests are unaffected.
 - The Windows build is cross-compiled with MinGW-w64 and exercised under Wine:
-  `auth set-user`, `auth show`, the REST API, a blob upload and download and a
-  UTF-8 item all work with the database under a path like
-  `Uzivatele\Jiri\Lexicon\lexikon-databaze.db`. Wine covers the encoding and
-  file replacement behaviour convincingly; it does not prove NTFS ACL
-  semantics, and nothing here has been run on real Windows with MSVC. That
-  remains the one platform claim in this document that is not backed by an
-  execution.
+  `auth set-user` and `auth show` through a pipe, the REST API, a blob upload
+  and download, and an item with Czech text, all with the database under a
+  path like `Uzivatele\Jiri\Lexicon\lexikon-databaze.db` and a user name and
+  password carrying diacritics.
+- Two things there are **not** backed by an execution. The interactive
+  `ReadConsoleW` branch of `auth set-user` is compile-checked only: Wine gives
+  a console under a pseudo terminal, but it does not deliver piped input to
+  `ReadConsoleW`, so the branch cannot be driven from a script. The UTF-16 to
+  UTF-8 conversion it depends on is covered by tests; the console call and its
+  mode handling are not. NTFS ACL semantics are likewise not something Wine
+  proves. Both want a real Windows machine, which is the one validation this
+  document still owes.
 - Blob storage maintenance (scan, verify, garbage collect) stays in the desktop
   client and on the server machine. It is local file system maintenance, so it
   is deliberately not reachable over HTTP.

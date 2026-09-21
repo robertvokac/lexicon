@@ -1,6 +1,6 @@
 #include "RestServer.h"
 
-#include "FilePath.h"
+#include "Utf8Path.h"
 #include "TempFile.h"
 #include "Transport.h"
 
@@ -169,9 +169,9 @@ std::string queryValue(const Request &request, const char *key) {
 } // namespace
 
 std::string RestServer::Impl::databaseDirectory() const {
-  const auto database = fromUtf8(config.databasePath);
+  const auto database = utf8Path(config.databasePath);
   const auto directory = database.parent_path();
-  return directory.empty() ? std::string(".") : toUtf8(directory);
+  return directory.empty() ? std::string(".") : pathToUtf8(directory);
 }
 
 std::optional<Json> RestServer::Impl::jsonBody(const Request &request,
@@ -1224,7 +1224,7 @@ void RestServer::Impl::registerRoutes() {
       respondError(response, exported.error(), "exportBlob");
       return;
     }
-    auto stream = std::make_shared<std::ifstream>(fromUtf8(staging->path()),
+    auto stream = std::make_shared<std::ifstream>(utf8Path(staging->path()),
                                                   std::ios::binary);
     if (!*stream) {
       respondError(response,
@@ -1233,7 +1233,7 @@ void RestServer::Impl::registerRoutes() {
       return;
     }
     std::error_code sizeError;
-    const auto size = fs::file_size(fromUtf8(staging->path()), sizeError);
+    const auto size = fs::file_size(utf8Path(staging->path()), sizeError);
     if (sizeError) {
       respondError(response,
                    Error{Error::Code::Storage, "Cannot size the exported blob."},

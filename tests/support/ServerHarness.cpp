@@ -67,7 +67,7 @@ ServerHarness::ServerHarness(HarnessOptions options)
     startupError_ = "Cannot create the temporary directory.";
     return;
   }
-  databasePath_ = lexicon::http::toUtf8(directory_ / "lexicon.db");
+  databasePath_ = lexicon::pathToUtf8(directory_ / "lexicon.db");
   if (auto opened = repository_.open(databasePath_); !opened) {
     startupError_ = opened.error().message;
     return;
@@ -87,8 +87,8 @@ ServerHarness::ServerHarness(HarnessOptions options)
 
   lexicon::http::ServerConfig config;
   if (options_.tls) {
-    const auto certificate = lexicon::http::toUtf8(directory_ / "server-cert.pem");
-    const auto key = lexicon::http::toUtf8(directory_ / "server-key.pem");
+    const auto certificate = lexicon::pathToUtf8(directory_ / "server-cert.pem");
+    const auto key = lexicon::pathToUtf8(directory_ / "server-key.pem");
     if (!writeSelfSignedCertificate(certificate, key)) {
       startupError_ = "Cannot create the test certificate.";
       return;

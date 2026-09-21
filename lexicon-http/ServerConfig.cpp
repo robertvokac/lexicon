@@ -1,6 +1,6 @@
 #include "ServerConfig.h"
 
-#include "FilePath.h"
+#include "Utf8Path.h"
 
 #include <charconv>
 #include <filesystem>
@@ -55,9 +55,9 @@ bool looksLikeOrigin(const std::string &origin) {
 std::string ServerConfig::resolvedAuthFilePath() const {
   if (!authFilePath.empty())
     return authFilePath;
-  const auto database = fromUtf8(databasePath);
+  const auto database = utf8Path(databasePath);
   const auto directory = database.parent_path();
-  return toUtf8(directory.empty() ? fs::path("lexicon-auth.json")
+  return pathToUtf8(directory.empty() ? fs::path("lexicon-auth.json")
                                   : directory / "lexicon-auth.json");
 }
 

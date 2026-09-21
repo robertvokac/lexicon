@@ -64,6 +64,8 @@ set(MD4QT_SRC
 add_library(lexicon-core STATIC
     lexicon-core/Records.h
     lexicon-core/Result.h
+    lexicon-core/Utf8Path.h
+    lexicon-core/Utf8Path.cpp
     lexicon-core/Validation.h
     lexicon-core/Validation.cpp
 )

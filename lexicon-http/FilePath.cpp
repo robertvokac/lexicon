@@ -13,24 +13,6 @@ std::unexpected<Error> invalid(std::string message) {
 }
 } // namespace
 
-// std::string and std::u8string hold the same bytes in different character
-// containers, so the bytes are copied rather than reinterpreted: char8_t is
-// not char, and pointer punning between them is not something to rely on.
-std::filesystem::path fromUtf8(std::string_view value) {
-  std::u8string text(value.size(), u8'\0');
-  if (!value.empty())
-    std::memcpy(text.data(), value.data(), value.size());
-  return std::filesystem::path(std::move(text));
-}
-
-std::string toUtf8(const std::filesystem::path &value) {
-  const auto text = value.u8string();
-  std::string result(text.size(), '\0');
-  if (!text.empty())
-    std::memcpy(result.data(), text.data(), text.size());
-  return result;
-}
-
 Result<std::string> utf16ToUtf8(std::u16string_view value) {
   std::string result;
   result.reserve(value.size());
@@ -67,27 +49,41 @@ Result<std::string> utf16ToUtf8(std::u16string_view value) {
   return result;
 }
 
-std::vector<std::string> commandLineArguments(int argc, char **argv) {
+#ifdef _WIN32
+Result<std::string> wideToUtf8(std::wstring_view value) {
+  // wchar_t is 16 bit here; copying element by element keeps the values and
+  // avoids reinterpreting one character type as another.
+  std::u16string text;
+  text.reserve(value.size());
+  for (const wchar_t unit : value)
+    text.push_back(static_cast<char16_t>(unit));
+  return utf16ToUtf8(text);
+}
+#endif
+
+Result<std::vector<std::string>> commandLineArguments(int argc, char **argv) {
 #ifdef _WIN32
   static_cast<void>(argc);
   static_cast<void>(argv);
-  std::vector<std::string> arguments;
   int count = 0;
   LPWSTR *wide = CommandLineToArgvW(GetCommandLineW(), &count);
   if (!wide)
-    return arguments;
+    return std::unexpected(
+        Error{Error::Code::Validation, "Cannot read the Windows command line."});
+  struct Release {
+    LPWSTR *value;
+    ~Release() { LocalFree(value); }
+  } release{wide};
+  std::vector<std::string> arguments;
   for (int index = 1; index < count; ++index) {
-    // wchar_t is 16 bit here; copying element by element keeps the values and
-    // avoids reinterpreting one character type as another.
-    std::u16string text;
-    for (const wchar_t *unit = wide[index]; *unit != L'\0'; ++unit)
-      text.push_back(static_cast<char16_t>(*unit));
-    if (auto converted = utf16ToUtf8(text))
-      arguments.push_back(std::move(*converted));
-    else
-      arguments.emplace_back(); // Rejected later as an empty argument.
+    auto converted = wideToUtf8(wide[index]);
+    if (!converted)
+      return std::unexpected(
+          Error{converted.error().code,
+                "Cannot convert the command line to UTF-8: " +
+                    converted.error().message});
+    arguments.push_back(std::move(*converted));
   }
-  LocalFree(wide);
   return arguments;
 #else
   // POSIX hands over the bytes the user typed, which are already UTF-8 on any

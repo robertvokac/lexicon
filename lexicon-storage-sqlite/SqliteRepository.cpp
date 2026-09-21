@@ -1,5 +1,6 @@
 #include "SqliteRepository.h"
 #include "SqliteInternal.h"
+#include "Utf8Path.h"
 #include "Validation.h"
 
 #include <algorithm>
@@ -701,9 +702,7 @@ namespace fs = std::filesystem;
 // The desktop uses one event loop. This also coordinates Blob operations made
 // through multiple repositories in the same process.
 std::mutex blobStorageMutex;
-fs::path utf8Path(const std::string &value) {
-  return fs::path(std::u8string(reinterpret_cast<const char8_t *>(value.data()), value.size()));
-}
+using lexicon::utf8Path;
 std::string hexDigest(const unsigned char *bytes, unsigned length) {
   static constexpr char digits[] = "0123456789abcdef";
   std::string text;
@@ -878,7 +877,7 @@ lexicon::BlobMaintenanceReport scanBlobs(const Connection &db, const fs::path &r
                                "Blob root is not a real directory."});
     } else {
       for (const auto &prefixEntry : fs::directory_iterator(root)) {
-        const auto prefix = prefixEntry.path().filename().string();
+        const auto prefix = lexicon::pathToUtf8(prefixEntry.path().filename());
         const auto prefixStatus = noFollow(prefixEntry.path());
         if (!hexPrefix(prefix) || prefixStatus.type() != fs::file_type::directory) {
           report.issues.push_back({BlobIssueType::UnexpectedFile, {}, prefix, 0,
@@ -886,7 +885,7 @@ lexicon::BlobMaintenanceReport scanBlobs(const Connection &db, const fs::path &r
           continue;
         }
         for (const auto &entry : fs::directory_iterator(prefixEntry.path())) {
-          const auto name = entry.path().filename().string();
+          const auto name = lexicon::pathToUtf8(entry.path().filename());
           const auto relative = prefix + "/" + name;
           const auto status = noFollow(entry.path());
           const auto hash = prefix + name;
