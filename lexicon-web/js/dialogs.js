@@ -32,24 +32,36 @@ export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'C
             }));
         }
         actions.appendChild(el('span', { class: 'spacer' }));
+        let accepting = false;
+        const accept = async () => {
+            if (accepting) return; // A second Enter while saving is ignored.
+            accepting = true;
+            showDialogError(errorLine, '');
+            try {
+                const value = onAccept ? await onAccept({
+                    fail: (message) => showDialogError(errorLine, message),
+                }) : true;
+                if (value === undefined) return; // Validation failed.
+                settled = value;
+                dialog.close();
+            } catch (error) {
+                showDialogError(errorLine, error.message || String(error));
+            } finally {
+                accepting = false;
+            }
+        };
         if (showAccept) {
-            actions.appendChild(button(acceptLabel, {
-                class: 'primary',
-                onclick: async () => {
-                    showDialogError(errorLine, '');
-                    try {
-                        const value = onAccept ? await onAccept({
-                            fail: (message) => showDialogError(errorLine, message),
-                        }) : true;
-                        if (value === undefined) return; // Validation failed.
-                        settled = value;
-                        dialog.close();
-                    } catch (error) {
-                        showDialogError(errorLine, error.message || String(error));
-                    }
-                },
-            }));
+            // The submit button, so Enter in a single-line field accepts the
+            // dialog the way the desktop's default button does. A textarea
+            // keeps Enter for new lines.
+            actions.appendChild(button(acceptLabel, { class: 'primary', type: 'submit' }));
         }
+        // Without this, a form with method="dialog" closes on Enter as if
+        // cancelled, and whatever was typed is lost.
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (showAccept) accept();
+        });
         actions.appendChild(button(cancelLabel, {
             class: 'secondary',
             onclick: () => { settled = null; dialog.close(); },
