@@ -6,7 +6,8 @@ import { confirmDialog, errorDialog, field, listEditor, openDialog, promptDialog
 import { renderMarkdown } from './markdown.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
-    LINK_TYPES, linkDescription, splitItemTitle, typeDisplayName, UNDERSTANDING_LEVELS,
+    LINK_TYPES, linkDescription, LITERAL_TEXT, splitItemTitle, typeDisplayName,
+    UNDERSTANDING_LEVELS,
 } from './utils.js';
 
 const MARKDOWN_ACTIONS = [
@@ -173,7 +174,9 @@ function blobEditor(fieldRecord, initialHash, onChange) {
 }
 
 function fieldEditor(fieldRecord, storedValue, onChange) {
-    const common = { class: 'field-editor', 'data-field-id': String(fieldRecord.id) };
+    const common = {
+        class: 'field-editor', 'data-field-id': String(fieldRecord.id), ...LITERAL_TEXT,
+    };
     switch (fieldRecord.dataType) {
     case 'Boolean': {
         const select = el('select', common);
@@ -235,12 +238,15 @@ async function linkDialog({ title, label, link, itemTitles }) {
         value: link.targetTitle || '',
         list: 'item-title-suggestions',
         autocomplete: 'off',
+        ...LITERAL_TEXT,
     });
     const suggestions = el('datalist', { id: 'item-title-suggestions' });
     fillDatalist(suggestions, itemTitles);
     const typeSelect = el('select', {});
     fillSelect(typeSelect, LINK_TYPES, link.linkType || 'Related');
-    const customValue = el('input', { type: 'text', value: link.customValue || '' });
+    const customValue = el('input', {
+        type: 'text', value: link.customValue || '', ...LITERAL_TEXT,
+    });
     const position = el('input', { type: 'number', step: '1', value: String(link.position || 0) });
 
     const syncCustom = () => { customValue.disabled = typeSelect.value !== 'Custom'; };
@@ -290,8 +296,8 @@ async function linkDialog({ title, label, link, itemTitles }) {
 }
 
 async function propertyDialog(title, property, existing, skipIndex) {
-    const key = el('input', { type: 'text', value: property.key || '' });
-    const value = el('input', { type: 'text', value: property.value || '' });
+    const key = el('input', { type: 'text', value: property.key || '', ...LITERAL_TEXT });
+    const value = el('input', { type: 'text', value: property.value || '', ...LITERAL_TEXT });
     return openDialog({
         title,
         body: el('div', {}, [field('Key:', key), field('Value:', value)]),
@@ -373,8 +379,12 @@ export async function openItemEditor({ itemId, draft, groups }) {
     fillSelect(groupSelect, groups.map((group) => ({ value: group.id, label: group.name })),
         record.groupId);
     const typeSelect = el('select', {});
-    const titleInput = el('input', { type: 'text', value: record.title, required: true, maxlength: '2000' });
-    const disambiguationInput = el('input', { type: 'text', value: record.disambiguation || '' });
+    const titleInput = el('input', {
+        type: 'text', value: record.title, required: true, maxlength: '2000', ...LITERAL_TEXT,
+    });
+    const disambiguationInput = el('input', {
+        type: 'text', value: record.disambiguation || '', ...LITERAL_TEXT,
+    });
     const statusSelect = el('select', {});
     fillSelect(statusSelect, ITEM_STATUSES, record.status);
     const understandingSelect = el('select', {});
@@ -394,7 +404,9 @@ export async function openItemEditor({ itemId, draft, groups }) {
     ]);
 
     // --- Content ---------------------------------------------------------
-    const contentArea = el('textarea', { class: 'markdown-source', rows: '18', placeholder: 'Markdown content...' });
+    const contentArea = el('textarea', {
+        class: 'markdown-source', rows: '18', placeholder: 'Markdown content...', ...LITERAL_TEXT,
+    });
     contentArea.value = record.content || '';
     const preview = el('div', { class: 'markdown-preview', 'aria-live': 'polite' });
     const refreshPreview = debounce(() => renderMarkdown(preview, contentArea.value), 300);

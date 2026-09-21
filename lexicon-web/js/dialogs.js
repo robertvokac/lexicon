@@ -1,6 +1,6 @@
 // Modal dialogs built on the native <dialog> element: Escape cancels, focus is
 // trapped by the browser and returns to the opener on close.
-import { button, clear, el, fillDatalist } from './utils.js';
+import { button, clear, el, fillDatalist, LITERAL_TEXT } from './utils.js';
 
 let datalistCounter = 0;
 
@@ -132,7 +132,9 @@ export function errorDialog(message) {
 
 // The web equivalent of Qt's QInputDialog with a completer.
 export function promptDialog(title, labelText, initialValue = '', suggestions = []) {
-    const input = el('input', { type: 'text', value: initialValue, autocomplete: 'off' });
+    const input = el('input', {
+        type: 'text', value: initialValue, autocomplete: 'off', ...LITERAL_TEXT,
+    });
     let list = null;
     if (suggestions.length) {
         list = el('datalist', { id: nextId('suggestions') });

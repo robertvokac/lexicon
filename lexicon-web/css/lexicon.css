@@ -720,6 +720,10 @@ body.resizing { cursor: row-resize; user-select: none; }
     /* Touch first: every target goes back to a finger-sized minimum. */
     :root { --control: var(--touch); }
 
+    /* iOS zooms the page into any field whose text is smaller than 16px, and
+       does not zoom back out. At 16px it leaves the page alone. */
+    input, select, textarea, .blob-hash { font-size: 16px; }
+
     .menu-toggle { display: inline-block; min-height: var(--touch); min-width: var(--touch); }
     .menu-bar { padding: 4px 8px; gap: 6px; }
 

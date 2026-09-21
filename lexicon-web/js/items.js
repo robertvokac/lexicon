@@ -7,7 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, ITEM_STATUSES, joinValues,
-    linkDescription, readLocal, statusLabel, typeDisplayName, UNDERSTANDING_LEVELS,
+    linkDescription, LITERAL_TEXT, readLocal, statusLabel, typeDisplayName, UNDERSTANDING_LEVELS,
     understandingLabel, writeLocal,
 } from './utils.js';
 
@@ -107,6 +107,7 @@ export class MainView {
             placeholder: 'Search title, disambiguation, alias, tag, or flag...',
             list: 'search-suggestions',
             autocomplete: 'off',
+            ...LITERAL_TEXT,
         });
         this.searchSuggestions = el('datalist', { id: 'search-suggestions' });
         this.quickAddButton = button('Add', {
@@ -342,6 +343,7 @@ export class MainView {
                 placeholder,
                 'aria-label': `${placeholder} filter`,
                 value: this.filters[key],
+                ...LITERAL_TEXT,
                 ...options,
             });
             const update = debounce(() => {

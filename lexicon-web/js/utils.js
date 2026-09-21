@@ -25,6 +25,11 @@ export function el(tag, options = {}, children = []) {
     return node;
 }
 
+// Lexicon text is identifiers and code: std::move, #include "a.h". A phone
+// keyboard must not capitalize, autocorrect or spell-check it into something
+// else.
+export const LITERAL_TEXT = { autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' };
+
 export function clear(node) {
     while (node.firstChild) node.removeChild(node.firstChild);
 }
