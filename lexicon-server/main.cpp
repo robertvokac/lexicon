@@ -19,6 +19,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
 #endif
@@ -243,6 +244,12 @@ int main(int argc, char *argv[]) {
 #ifdef _WIN32
   // So a path printed back to the operator is readable rather than mojibake.
   SetConsoleOutputCP(CP_UTF8);
+#else
+  // Everything this process creates - a new database and its journal, blob
+  // directories, staging files - holds private notes, so none of it should be
+  // readable by other accounts on a shared machine. The credentials file and
+  // blob files were already 0600; this covers the rest.
+  ::umask(077);
 #endif
   const auto arguments = lexicon::http::commandLineArguments(argc, argv);
   if (!arguments) {
