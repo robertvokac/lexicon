@@ -5,11 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
     <meta name="referrer" content="no-referrer">
+    <!-- The session token lives in sessionStorage, so script injection is the
+         one way to steal it. Only this site's own files may run: no inline
+         script or handlers, no eval, no plugins, no base rewriting, no native
+         form submission. connect-src stays open because the API URL is the
+         user's choice. frame-ancestors cannot be set here; the static host
+         sends it as a header (see README.md). -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: http: https:; connect-src 'self' http: https:; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Lexicon</title>
     <link rel="stylesheet" href="css/lexicon.css">
     <!-- Optional deployment configuration. Copy config.example.js to config.js
          and set apiBaseUrl; the file is loaded only if it exists. -->
-    <script src="config.js" onerror="this.remove()"></script>
+    <script src="config.js"></script>
 </head>
 <body>
     <header id="menu-bar" class="menu-bar" hidden>
@@ -23,7 +31,9 @@
     </header>
 
     <main id="login-view" class="login-view" hidden>
-        <form id="login-form" class="login-card" autocomplete="on">
+        <!-- POST, so that even a submission without JavaScript could never put
+             the password into a URL, a history entry or an access log. -->
+        <form id="login-form" class="login-card" autocomplete="on" method="post">
             <h1>Lexicon</h1>
             <p class="hint">Sign in to your Lexicon server.</p>
             <div class="form-row">
