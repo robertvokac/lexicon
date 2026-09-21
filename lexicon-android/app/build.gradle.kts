@@ -55,6 +55,13 @@ android {
             versionNameSuffix = "-debug"
             // The emulator reaches a LexiconServer on the development machine here.
             buildConfigField("String", "DEFAULT_SERVER_URL", "\"http://10.0.2.2:8628\"")
+            // -Plexicon.minifyDebug shrinks a debug build with the release R8
+            // rules, to try them against a local development server, which
+            // only debug builds may reach.
+            if (providers.gradleProperty("lexicon.minifyDebug").isPresent) {
+                isMinifyEnabled = true
+                proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            }
         }
         release {
             isMinifyEnabled = true
