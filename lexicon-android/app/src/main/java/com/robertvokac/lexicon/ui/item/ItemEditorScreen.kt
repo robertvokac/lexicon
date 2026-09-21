@@ -114,7 +114,7 @@ fun ItemEditorScreen(viewModel: ItemEditorViewModel, onClose: (savedItemId: Int?
                     } else {
                         Button(
                             onClick = viewModel::save,
-                            enabled = !state.loading && state.loadError == null,
+                            enabled = !state.loading && state.loadError == null && !state.uploading,
                             modifier = Modifier.padding(end = 8.dp),
                         ) { Text("Save") }
                     }

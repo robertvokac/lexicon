@@ -102,6 +102,7 @@ class RealServerFlowTest {
         compose.waitUntilGone(hasText("Quick add"))
         val created = runBlocking { container.api.queryItems(ItemQuery(searchText = title)).items.single() }
         assertEquals("Default", created.groupName)
+        val createdId = checkNotNull(created.id)
 
         // A Blob type, so the item can carry a file.
         val (typeId, fieldId) = runBlocking {
@@ -112,8 +113,9 @@ class RealServerFlowTest {
         // Search on the server, open, edit.
         compose.onNode(hasSetTextAction() and hasContentDescription("Search items")).performTextReplacement(title)
         compose.onNode(hasSetTextAction() and hasContentDescription("Search items")).performImeAction()
-        compose.waitFor(hasText(title) and hasClickAction())
-        compose.onNode(hasText(title) and hasClickAction()).performClick()
+        // The row, not the search field that holds the same text.
+        compose.waitFor(hasText(title) and hasClickAction() and !hasSetTextAction())
+        compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction()).performClick()
         compose.waitForText("This item has no content yet.")
         compose.onNodeWithContentDescription("Edit item").performClick()
         compose.waitFor(hasSetTextAction() and hasText("Title"))
@@ -128,11 +130,14 @@ class RealServerFlowTest {
         source.writeBytes(bytes)
         nextUri = Uri.fromFile(source)
         compose.onNode(hasText("Upload…") and hasClickAction()).performClick()
-        compose.waitForText("upload.bin", substring = true)
+        // "upload.bin (293.0 KB)" once the upload has finished.
+        compose.waitForText("upload.bin (", substring = true)
         compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        // Back on the item page once the save has gone through.
+        compose.waitUntilGone(hasContentDescription("Close editor"))
         compose.waitForText("Save as…")
 
-        val saved = runBlocking { container.api.item(created.id!!).item }
+        val saved = runBlocking { container.api.item(createdId).item }
         assertEquals(typeId, saved.itemTypeId)
         val hash = saved.fieldValue(fieldId)
         assertEquals(64, hash.length)

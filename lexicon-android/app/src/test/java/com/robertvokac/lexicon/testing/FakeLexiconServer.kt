@@ -59,6 +59,9 @@ class FakeLexiconServer : Dispatcher() {
     @Volatile var slowQuery: String? = null
     @Volatile var slowQueryMillis = 1_500L
 
+    /** Blob uploads answer only after this long. */
+    @Volatile var blobDelayMillis = 0L
+
     fun start(): FakeLexiconServer {
         server.dispatcher = this
         server.start()
@@ -93,6 +96,7 @@ class FakeLexiconServer : Dispatcher() {
         requests.filter { it.method == method && it.url.encodedPath == path }
 
     override fun dispatch(request: RecordedRequest): MockResponse {
+        if (request.url.encodedPath.endsWith("/blobs") && blobDelayMillis > 0) Thread.sleep(blobDelayMillis)
         val slow = slowQuery
         if (slow != null && request.url.encodedPath.endsWith("/items/query") && request.body?.utf8()?.contains("\"searchText\":\"$slow\"") == true) {
             Thread.sleep(slowQueryMillis)

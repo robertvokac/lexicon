@@ -86,6 +86,9 @@ data class EditorState(
 ) {
     val isNew: Boolean get() = itemId == null
     val saving: Boolean get() = save == SaveStatus.Saving
+
+    /** A file is on its way to the server; saving now would leave it out. */
+    val uploading: Boolean get() = blobs.values.any { it.busy }
 }
 
 /** Where a new item starts: from the list, Quick Add's "More", or a share. */
@@ -453,6 +456,7 @@ class ItemEditorViewModel(
         val current = _state.value
         if (current.saving || current.loading || current.loadError != null) return
         val problem = when {
+            current.uploading -> "A file is still being transferred. Save when it has finished."
             current.fieldsLoadFailed -> "Cannot save while type fields failed to load."
             current.fields.groupId == null -> "Create at least one group first."
             current.fields.title.isBlank() -> "Title cannot be empty."

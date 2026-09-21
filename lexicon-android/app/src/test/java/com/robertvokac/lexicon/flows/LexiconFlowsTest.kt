@@ -7,6 +7,8 @@ import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
@@ -336,6 +338,29 @@ class LexiconFlowsTest {
         compose.onNode(hasText("Save as…") and hasClickAction()).performClick()
         compose.waitForCondition { saved.size() == bytes.size }
         assertArrayEquals(bytes, saved.toByteArray())
+    }
+
+    @Test
+    fun saveWaitsForARunningUpload() {
+        val type = fake.addType("Document")
+        fake.addField(checkNotNull(type.id), "Attachment", FieldDataType.Blob)
+        fake.addItem(Item(title = "Spec", itemTypeId = type.id))
+        val source = Uri.parse("content://com.example.documents/slow.pdf")
+        val resolver = ApplicationProvider.getApplicationContext<LexiconApplication>().contentResolver
+        shadowOf(resolver).registerInputStream(source, ByteArrayInputStream(ByteArray(10_000) { 1 }))
+        fake.blobDelayMillis = 2_000
+
+        login()
+        openItem("Spec", waitFor = "Not set")
+        openEditor()
+        compose.onNode(hasText("Values") and hasClickAction()).performClick()
+        nextUri = source
+        compose.onNode(hasText("Upload\u2026") and hasClickAction()).performClick()
+        compose.waitForText("Uploading", substring = true)
+        // Saving now would leave the file out of the item.
+        compose.onNode(hasText("Save") and hasClickAction()).assertIsNotEnabled()
+        compose.waitForText("slow.pdf (", substring = true)
+        compose.onNode(hasText("Save") and hasClickAction()).assertIsEnabled()
     }
 
     @Test
