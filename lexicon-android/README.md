@@ -1,0 +1,400 @@
+# Lexicon for Android
+
+A native Android client for Lexicon, written in Kotlin with Jetpack Compose. It
+talks to `LexiconServer` over the versioned REST API (`/api/v1`) and nothing
+else.
+
+**The Android client contains no Lexicon database. LexiconServer is the source
+of truth.** Groups, types, fields, items, values, metadata, links, backlinks,
+blobs, validation, filtering and transactions all live on the server; the app
+shows them and sends back what the person changes. There is no local replica,
+no offline queue and no synchronization. Lists and pages are loaded on demand
+and held in memory only while a screen shows them.
+
+```text
+                    LexiconApplication
+                           ↑
+                 lexicon-storage-sqlite
+                           ↑
+                     LexiconServer
+                           ↑
+                      REST / JSON
+               ┌───────────┼────────────┐
+               ▼           ▼            ▼
+         lexicon-web    Android     other clients
+                     (this project)
+```
+
+The Qt desktop client is unchanged: it links `LexiconApplication` directly and
+opens SQLite itself.
+
+## Contents
+
+- [Toolchain](#toolchain)
+- [Build](#build)
+- [Run against a server](#run-against-a-server)
+- [Using the app](#using-the-app)
+- [Security](#security)
+- [Feature parity](#feature-parity)
+- [Tests](#tests)
+- [Release signing](#release-signing)
+- [Limitations](#limitations)
+- [Source layout](#source-layout)
+
+## Toolchain
+
+| | |
+| --- | --- |
+| Application ID and namespace | `com.robertvokac.lexicon` (the project's domain, `lexicon.robertvokac.com`, reversed) |
+| `minSdk` | 26 (Android 8.0) |
+| `targetSdk`, `compileSdk` | 37 (Android 17, SDK platform `android-37.0`) |
+| Build tools | 36.1.0 |
+| Android Gradle Plugin | 9.4.1, with its built-in Kotlin support |
+| Kotlin | 2.4.20 (Compose compiler and serialization plugins of the same version) |
+| Gradle | 9.7.1 through the wrapper; the distribution's SHA-256 is pinned |
+| JDK | 17 or newer to run Gradle (developed with OpenJDK 21); bytecode targets Java 17 |
+
+The current AndroidX and Compose releases require `compileSdk` 37, which is why
+the build uses it. Install it with
+`sdkmanager "platforms;android-37.0" "build-tools;36.1.0"` if Android Studio has
+not already.
+
+### Libraries
+
+Every version is pinned in [`gradle/libs.versions.toml`](gradle/libs.versions.toml),
+and [`gradle/verification-metadata.xml`](gradle/verification-metadata.xml) pins
+the SHA-256 of every artifact Gradle resolves, so a dependency cannot change
+without the build failing. After changing a version, regenerate it with:
+
+```bash
+./gradlew --write-verification-metadata sha256 help assembleDebug assembleRelease \
+  assembleDebugAndroidTest testDebugUnitTest lint
+```
+
+| Purpose | Library | License |
+| --- | --- | --- |
+| UI | Jetpack Compose BOM 2026.09.00 (UI 1.12.1, Material 3 1.4.0, Material icons 1.7.8), Material 3 adaptive 1.3.0 | Apache-2.0 |
+| Screens and state | Activity Compose 1.13.0, Lifecycle 2.11.0, Navigation Compose 2.10.1, Core KTX 1.19.0 | Apache-2.0 |
+| Preferences | DataStore Preferences 1.2.1 | Apache-2.0 |
+| HTTP | OkHttp 5.5.0 | Apache-2.0 |
+| JSON | kotlinx.serialization 1.11.0 | Apache-2.0 |
+| Coroutines | kotlinx.coroutines 1.11.0 | Apache-2.0 |
+| Markdown parsing | commonmark-java 0.30.0 with the GFM tables, strikethrough and autolink extensions (autolink-java 0.12.0) | BSD-2-Clause, MIT |
+
+Retrofit is not used: one small client class covers every endpoint. Markdown is
+parsed by commonmark-java and drawn with native Compose text; see
+[Markdown](#markdown).
+
+Tests additionally use JUnit 4.13.2, Robolectric 4.17 (with the Android 15
+framework jar resolved and verified by Gradle, and run offline), OkHttp's
+MockWebServer and okhttp-tls 5.5.0, kotlinx-coroutines-test, and the AndroidX
+Test and Compose UI test libraries.
+
+## Build
+
+The project is independent of the CMake build of the rest of the repository.
+
+```bash
+cd lexicon-android
+./gradlew test            # JVM unit, Robolectric and Compose UI tests
+./gradlew lint            # Android lint; any warning fails the build
+./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease # minified with R8, unsigned unless a keystore is configured
+```
+
+Android Studio opens the `lexicon-android` directory as a project. The SDK
+location comes from `ANDROID_HOME` or a `local.properties` file with
+`sdk.dir=...`; that file is machine specific and ignored by Git.
+
+## Run against a server
+
+### Emulator and a server on the development machine
+
+Start a server on your machine as [`docs/server.md`](../docs/server.md)
+describes:
+
+```bash
+LexiconServer auth set-user --database ~/lexicon/lexicon.db
+LexiconServer --database ~/lexicon/lexicon.db     # 127.0.0.1:8628
+```
+
+The Android emulator reaches the machine's loopback address as `10.0.2.2`. A
+**debug** build proposes `http://10.0.2.2:8628` on its login screen and may use
+plain HTTP to exactly these development hosts: `10.0.2.2`, `10.0.3.2`
+(Genymotion), `localhost` and `127.0.0.1`
+([`src/debug/res/xml/network_security_config.xml`](app/src/debug/res/xml/network_security_config.xml)).
+
+```bash
+./gradlew installDebug
+adb shell am start -n com.robertvokac.lexicon/.MainActivity
+```
+
+A phone on USB can use the same server through `adb reverse tcp:8628 tcp:8628`
+and `http://127.0.0.1:8628`.
+
+### Production: HTTPS
+
+Release builds only speak HTTPS, and trust exactly the certificates Android
+trusts. Put the server behind a reverse proxy with a certificate from a public
+CA, or let it terminate TLS itself; both are in
+[`docs/server.md`](../docs/server.md#http-https-and-reverse-proxies):
+
+```bash
+LexiconServer --listen 0.0.0.0 --port 8443 \
+  --tls-cert /etc/lexicon/fullchain.pem --tls-key /etc/lexicon/privkey.pem
+```
+
+Then sign in with `https://api.example.com:8443`, or `https://api.example.com`
+behind a proxy. A path prefix such as `https://example.com/lexicon` works; a
+pasted `.../api/v1` is trimmed. The app does not need `--allowed-origin`: that
+is for browsers, and the app sends no `Origin` header.
+
+A self-signed certificate is refused with a TLS error. There is no switch to
+accept it; install a proper certificate instead.
+
+## Using the app
+
+- **Login.** Server URL, user name and password. The app first calls
+  `GET /api/v1/health` and refuses a server that does not report API version 1,
+  then logs in. Wrong credentials, a refused connection, a TLS failure, an
+  incompatible server and too many attempts each get their own message.
+- **Items.** The main screen: a search field, the active filters as chips, and
+  the items as a list, loaded a page at a time as you scroll. Pull down to
+  refresh. Tap an item to read it; long-press, or use its ⋮ button, to edit or
+  delete it.
+- **Search.** Title, disambiguation, aliases, tags and flags, as on the desktop.
+  The query runs on the server a moment after typing stops; typing on cancels
+  the request that is still running.
+- **Filters and sort.** The filter button opens a sheet with every filter of the
+  desktop's filter row: group, type and the selected type's fields, ID, title,
+  disambiguation, alias, tag, flag, status, understanding, pinned, and property
+  filters, plus the sort column (including the type's fields) and direction.
+  The badge counts active filters; **Clear filters** resets them.
+- **Quick Add.** The **Add** button asks for a title and adds the item to the
+  selected group, or the group of a selected group-scoped type, or `Default` —
+  the same rule as the desktop's Add. Items already named like that anywhere
+  are shown first, and nothing is added until you choose **Add anyway**.
+  **More…** opens the full editor instead, the desktop's Add ….
+- **Item page.** Title, group and type, status, understanding, pinned, tags,
+  flags, aliases, values (with **Save as…** for blobs), properties, the rendered
+  Markdown content, links and backlinks. Links open the item they point to.
+  Opening an item records one read (`POST /items/{id}/read`), once per opening.
+- **Editor.** General, Content, Values, Metadata, Links and Backlinks, as tabs of
+  one screen. Everything, including both link directions, is saved in one
+  request, which the server commits as one unit of work. Changing the type
+  asks first when field values would be lost, with their number. A failed save
+  keeps everything typed and says why; leaving with unsaved changes asks first.
+- **Manage.** Groups (add, edit, delete, with the desktop's warning that the
+  items go too) and types with their fields (the item and value counts come from
+  the server before anything destructive happens).
+- **Overview.** All tags, all flags and all aliases with their usage counts.
+- **Settings.** Server, session, theme (system, light, dark), page size and
+  versions.
+
+On a large screen (840 dp and wider) the item list and the selected item sit
+side by side, and the type list sits beside the selected type's fields.
+
+### Share to Lexicon
+
+Other apps can share text or a link to Lexicon through the Android share sheet
+(`ACTION_SEND`, `text/plain`). The app opens the editor for a new item with:
+
+- the shared subject, such as a page title, as the title;
+- a shared URL as the content, written as a Markdown link (`<https://...>`);
+- other shared text as the content, and its first line as the title when there
+  is no subject.
+
+Nothing is saved until you tap **Save**. After saving, or closing the editor,
+you are back in the app that shared. Shared text is limited to 64,000
+characters and cleaned of control characters.
+
+### Quick Add shortcut
+
+Long-press the launcher icon for **Quick add**, which opens the app straight
+into Quick Add.
+
+### Blobs
+
+A Blob field is uploaded from the system document picker and saved with the
+system's "create document" picker (the Storage Access Framework). The app never
+asks for storage permissions and never touches file paths: the picker grants
+access to the one document chosen. Uploads stream from the document with a
+progress line; `413` from the server (`--max-blob-bytes`) is reported as such. A
+download that fails or is cancelled deletes the incomplete document again.
+
+Blob maintenance — scanning, verifying and garbage collecting the blob
+directory — remains a local desktop and server administration feature. The REST
+API does not expose it and neither does the app.
+
+### Markdown
+
+Content is stored as Markdown source, edited as plain text with the desktop's
+formatting toolbar (bold, italic, H2–H4, lists, quote, rule, inline code, code
+block with a remembered language, link, table), and previewed natively:
+commonmark-java parses GitHub-flavoured Markdown into a small immutable model
+that Compose draws. There is no WebView and no HTML rendering: raw HTML in the
+source is shown as text, images are shown as links rather than fetched, and a
+link is followed only if its scheme is `http`, `https`, `mailto` or `tel` (the
+web client's list), through a browsable `VIEW` intent. `javascript:`, `intent:`, `file:`, `content:` and every
+other scheme are shown as plain text. C++ code blocks are highlighted as on the
+desktop. Long notes are parsed off the main thread, the preview renders a moment
+after typing stops, and the item page composes only the visible blocks.
+
+## Security
+
+- **Password.** Held in the login screen's text field while typed, sent once to
+  `POST /auth/login`, and cleared as soon as the server answers with a session.
+  It is never stored, logged or put into saved instance state. The field is a
+  Material secure text field (masked, no copy) marked as a password for
+  Android autofill; the user name field is marked as a user name.
+- **Session token.** Stored in its own DataStore file, encrypted with
+  AES-256-GCM under a key generated in **Android Keystore**
+  (`lexicon.session.v1`, non-exportable, randomized IVs). The server URL and
+  user name are bound to the ciphertext as associated data, so a token cannot be
+  moved to another server by editing the file. Anything that does not decrypt —
+  altered data, a restored backup, a key the system invalidated — is discarded
+  and the person signs in again. If the key cannot be used at all, the session
+  lasts only until the app closes; the token is never written in the clear.
+- **Expired sessions.** A `401` drops the local session once, deletes the stored
+  token and shows the login screen. Nothing is retried. The screens underneath
+  stay alive, so signing in again as the same person continues where the
+  session ended, with unsaved editor text intact; signing in as someone else, or
+  logging out, discards them.
+- **Logout** forgets the token locally first, then calls `POST /auth/logout`
+  with a 10 second limit; a server that cannot be reached does not keep anyone
+  signed in.
+- **Changing the server** logs out and requires a new sign-in.
+- **Transport.** Release builds permit no cleartext traffic at all and trust
+  only the system certificate store; there is no trust-all manager, no hostname
+  verifier override and no bundled CA. Debug builds add plain HTTP to the
+  development hosts listed above and nothing else. The app also refuses, before
+  any request, a plain `http://` URL to any other host — the same rule
+  LexiconServer applies when it refuses to serve passwords over plaintext
+  HTTP — and URLs with `file:`, `content:`, `javascript:` and other schemes,
+  user info, queries or fragments.
+- **Redirects** are never followed. A `3xx` answer is reported with its target
+  and nothing is sent there, so neither the Bearer token nor a password can be
+  carried to another host (`ApiClientTest.redirectsAreRefusedAndCredentialsNeverLeaveForAnotherHost`).
+- **Logging.** The app logs no requests, responses, headers or bodies in any
+  build. `LoginRequest`, `LoginResponse`, `Session` and the stored session
+  redact secrets in `toString()`.
+- **Backups.** Preferences (server URL, user name, theme, page size) may be
+  backed up. The session file is excluded from cloud backup and device transfer
+  ([`data_extraction_rules.xml`](app/src/main/res/xml/data_extraction_rules.xml),
+  and [`backup_rules.xml`](app/src/main/res/xml/backup_rules.xml) for Android 11
+  and older); its Keystore key never leaves the device anyway.
+- **Exported components.** Only `MainActivity`, for the launcher, the share
+  sheet and the Quick Add shortcut. Incoming intents are validated in
+  `LaunchIntents`: only `ACTION_SEND` with `text/plain` and the Quick Add action
+  are understood, extras are size-bounded and cleaned, and an intent can only
+  open a screen, never save. The merged manifest also contains the AndroidX
+  startup provider (not exported) and the profile installer receiver
+  (protected by `android.permission.DUMP`).
+- **Screenshots.** `FLAG_SECURE` is not set. The password is always masked and no
+  secret is ever displayed, so blocking screenshots would only get in the way of
+  someone sharing a screenshot of their own notes.
+- **Server messages** are shown as the server sends them; the server never puts
+  SQL, paths or secrets in them (see [`docs/rest-api.md`](../docs/rest-api.md#errors)).
+
+## Feature parity
+
+The goal is the same knowledge operations, terminology and server semantics as
+the Qt and web clients, with an Android interaction model.
+
+| Area | Android |
+| --- | --- |
+| Login, logout, API version check | Yes |
+| Items list with paging | Yes, loaded page by page while scrolling (page size 20, 50 or 100) |
+| Search | Yes, on the server |
+| Column filters, type field filters, property filters | Yes, in the filter sheet |
+| Sorting by any column, including type fields | Yes |
+| Quick Add (Default group rule) and Add … | Yes, with the web client's duplicate check |
+| Item editor: General, Content, Values, Metadata, Links, Backlinks | Yes, one screen with six tabs |
+| Markdown editing with toolbar and preview | Yes |
+| Values for every data type | Integer, Float, Text, Date, Time, Timestamp (native pickers), Boolean, Enum, Blob, Other |
+| Tags, flags, aliases, properties | Yes, with usage suggestions |
+| Links and backlinks, including Custom | Yes, with a server-side item search |
+| Blob upload and download | Yes, through the system document picker |
+| Groups, types and fields management | Yes, with the desktop's warnings and counts |
+| All tags / flags / aliases | Yes |
+| Light, dark, system theme | Yes, stored on the device only |
+| Share to Lexicon, Quick Add shortcut | Android only |
+| Tablet and landscape | Two panes from 840 dp |
+
+Deliberate differences:
+
+- The desktop table's **column visibility** setting has no counterpart: a list
+  row shows title, group and type, status and understanding, pinned, tags and
+  flags, and the selected type's values; every column stays filterable and
+  sortable.
+- The search field has **no autocomplete list**; the results below it update as
+  you type.
+- The desktop and web clients **reopen the last selected item** at start; the
+  app starts at the list.
+- **Blob maintenance** is not available, as described above.
+
+## Tests
+
+| Command | What runs |
+| --- | --- |
+| `./gradlew test` | JVM tests: JSON models and symbolic enums, error envelopes, URL validation, API version check, the HTTP client against MockWebServer (Bearer header, 401 handling without retry, redirects, TLS failure, cancellation, blob streaming), token encryption, the session state machine, query building, editor rules, field formats, Markdown safety, C++ highlighting, share parsing; Robolectric ViewModel paging tests; Compose UI flows against an in-memory server (login, search, Quick Add, duplicates, reading, editing, failed saves, filters, links, blob round trip, groups, types and fields, overviews, logout, session expiry, share and shortcut intents, tablet layout, theme) |
+| `LEXICON_SERVER_BINARY=/path/to/LexiconServer ./gradlew test` | Also `ServerIntegrationTest`: a temporary real LexiconServer with a throwaway user, driven through the app's REST layer (login, groups, types, fields, item with values, links and backlinks, blob upload and download, update, validation errors, filtered and paged queries, counts, delete, 413 for an oversized blob, logout) |
+| `scripts/run-device-tests.sh /path/to/LexiconServer` | The instrumented tests on a connected emulator or device, against a temporary real server: Keystore encryption, the full UI flow including a blob round trip through document URIs, and Share to Lexicon |
+
+No test contacts the Internet; Robolectric runs offline with the framework jar
+Gradle resolved.
+
+## Release signing
+
+No key is in the repository. To sign release builds, keep a keystore outside the
+repository and describe it in `lexicon-android/keystore.properties`, which Git
+ignores:
+
+```properties
+storeFile=/home/you/keys/lexicon-release.jks
+storePassword=...
+keyAlias=lexicon
+keyPassword=...
+```
+
+```bash
+keytool -genkeypair -v -keystore ~/keys/lexicon-release.jks -alias lexicon \
+  -keyalg RSA -keysize 4096 -validity 10000
+./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk
+```
+
+Without the file `assembleRelease` produces `app-release-unsigned.apk`, which can
+be signed afterwards with `apksigner`. Release builds are minified and shrunk
+with R8.
+
+## Limitations
+
+- Online only. Without the server the app shows why and offers to retry; it
+  never queues changes. An edit whose save fails stays in the editor.
+- Unsaved editor changes survive rotation, the session expiring and, for notes
+  up to about 200,000 characters, the system ending the app in the background.
+  Longer notes reload from the server after process death.
+- Neither client pushes changes to the other; the app shows another client's
+  edit on its next load or refresh.
+- One user, as the server has one user.
+- Plain HTTP works only in debug builds and only to the development hosts.
+
+## Source layout
+
+```text
+app/src/main/java/com/robertvokac/lexicon/
+  MainActivity.kt, LexiconApplication.kt, AppContainer.kt   composition root
+  api/        ApiClient (the only HTTP code), LexiconApi, errors, ServerUrl
+  model/      REST models and symbolic enums
+  auth/       SessionManager, TokenStore, Keystore AES-GCM cipher
+  storage/    SettingsStore (preferences)
+  share/      Share and shortcut intent parsing
+  ui/         LexiconRoot (session gating, navigation, drawer)
+    items/    list, filter sheet, Quick Add
+    item/     item page, editor and its tabs, blob transfer, item picker
+    markdown/ parsing, rendering, formatting, C++ highlighting, safe links
+    groups/, types/, overview/, settings/, login/, theme/, common/
+app/src/test/          JVM, Robolectric and Compose UI tests, fake server
+app/src/androidTest/   instrumented tests for a device or emulator
+scripts/run-device-tests.sh
+```

@@ -4,7 +4,7 @@
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
 
 Lexicon is a knowledge dictionary for structured learning and technical note-taking, with groups, items, metadata, and typed links between concepts.
-It has two clients over one long-lived core: a Qt Widgets desktop application, and a static web client talking to a Qt-free REST server. Both store everything in the same SQLite database.
+It has three clients over one long-lived core: a Qt Widgets desktop application, and a static web client and a native Android app, both talking to a Qt-free REST server. All of them work on the same SQLite database, which only the desktop client and the server open.
 
 ## Table of contents
 
@@ -50,6 +50,7 @@ It has two clients over one long-lived core: a Qt Widgets desktop application, a
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
 - A Qt-free REST server and an independently deployable static web client with the same capabilities
+- A native Android client (Kotlin, Jetpack Compose) for the same server
 
 ## Screenshots
 
@@ -141,6 +142,7 @@ Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 | `lexicon-http` | HTTP/JSON adapter: transport conversions, authentication, sessions, CORS, TLS, routes. Depends on application, vendored cpp-httplib and nlohmann/json, and OpenSSL. No Qt. |
 | `LexiconServer` (`lexicon-server/`) | Server composition root; injects `SqliteRepository` into `LexiconApplication` and serves `lexicon-http`. No Qt. |
 | `lexicon-web/` | Static HTML, CSS and vanilla JavaScript client. No C++, no framework, no build step. Talks only REST. |
+| `lexicon-android/` | Native Android client in Kotlin and Jetpack Compose, a separate Gradle project outside the CMake build. No database of its own, no C++. Talks only REST. |
 
 Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. Migration versions and schema are unchanged; old QtSql databases are covered by version 10 and version 20 compatibility fixtures.
 
@@ -162,7 +164,7 @@ Qt is limited to the frontend and conversion target so another client can use co
                         lexicon.db              REST / JSON
                                                      |
                                                      v
-                                          static lexicon-web
+                                     static lexicon-web, lexicon-android
 ```
 
 **`LexiconServer` never serves `lexicon-web`.** The server answers versioned REST/JSON under `/api/v1` and nothing else; the web client is static content deployed separately, possibly on a completely different host.
@@ -214,6 +216,13 @@ and dark themes - and adapts to phones with a responsive layout.
 - [`docs/server.md`](docs/server.md) - build, run, TLS, reverse proxies, the security model
 - [`docs/rest-api.md`](docs/rest-api.md) - every endpoint, the JSON shapes, the error format
 - [`lexicon-web/README.md`](lexicon-web/README.md) - static deployment and browser storage
+
+`lexicon-android/` is the Android client: Kotlin, Jetpack Compose and Material 3,
+with the same items, filters, editor, group and type management and overviews
+as the other clients, a two-pane layout on tablets, and Share to Lexicon from
+other apps. It keeps no Lexicon database; the server is the source of truth.
+
+- [`lexicon-android/README.md`](lexicon-android/README.md) - build, run, security, feature parity
 
 ## Extensive user manual
 
