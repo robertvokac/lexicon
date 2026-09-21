@@ -530,7 +530,9 @@ body.resizing { cursor: row-resize; user-select: none; }
 .dialog-item-editor .dialog-form { height: 100%; max-height: none; }
 /* The tab strip stays put; only the active tab scrolls. */
 .dialog-item-editor .dialog-body { display: flex; overflow: hidden; }
-.dialog-item-editor .tabs { flex: 1 1 auto; min-height: 0; }
+/* min-width: 0, or the flex item grows to the width of the widest thing in it
+   - the six tabs in a row, a long code line - and a phone clips the rest. */
+.dialog-item-editor .tabs { flex: 1 1 auto; min-height: 0; min-width: 0; }
 /* The strip keeps its full height; flex would otherwise squeeze it. */
 .dialog-item-editor .tab-list { flex: 0 0 auto; }
 .dialog-item-editor .tab-panels { flex: 1 1 auto; min-height: 0; overflow: auto; }
