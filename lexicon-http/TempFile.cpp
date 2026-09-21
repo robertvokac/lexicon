@@ -1,5 +1,6 @@
 #include "TempFile.h"
 
+#include "FilePath.h"
 #include "Security.h"
 
 #include <filesystem>
@@ -21,10 +22,6 @@ namespace {
 namespace fs = std::filesystem;
 std::unexpected<Error> storage(std::string message) {
   return std::unexpected(Error{Error::Code::Storage, std::move(message)});
-}
-fs::path utf8Path(const std::string &value) {
-  return fs::path(std::u8string(reinterpret_cast<const char8_t *>(value.data()),
-                                value.size()));
 }
 
 #ifdef _WIN32
@@ -129,7 +126,7 @@ TempFile &TempFile::operator=(TempFile &&other) noexcept {
 }
 
 Result<TempFile> TempFile::create(const std::string &directory) {
-  const auto base = directory.empty() ? fs::path(".") : utf8Path(directory);
+  const auto base = directory.empty() ? fs::path(".") : fromUtf8(directory);
 #ifdef _WIN32
   OwnerOnlyAcl security;
 #endif
@@ -139,7 +136,8 @@ Result<TempFile> TempFile::create(const std::string &directory) {
       return std::unexpected(suffix.error());
     const auto candidate = base / (".lexicon-http-" + base64UrlEncode(*suffix));
     TempFile file;
-    file.path_ = candidate.string();
+    // Kept as UTF-8, which is what every caller in this layer expects.
+    file.path_ = toUtf8(candidate);
 #ifdef _WIN32
     HANDLE handle = CreateFileW(candidate.c_str(), GENERIC_WRITE, 0,
                                 security.attributes(), CREATE_NEW,
@@ -225,8 +223,8 @@ Result<void> TempFile::replace(const std::string &targetPath,
   if (auto closed = close(); !closed)
     return closed;
 
-  const auto source = utf8Path(path_);
-  const auto target = utf8Path(targetPath);
+  const auto source = fromUtf8(path_);
+  const auto target = fromUtf8(targetPath);
 #ifdef _WIN32
   // ReplaceFileW is the documented way to swap an existing file in place; it
   // does not create a missing target, so a first write falls back to
@@ -281,7 +279,7 @@ void TempFile::discard() noexcept {
 #endif
   if (!path_.empty()) {
     std::error_code ignored;
-    fs::remove(utf8Path(path_), ignored);
+    fs::remove(fromUtf8(path_), ignored);
     path_.clear();
   }
 }

@@ -3,8 +3,10 @@
 #include "support/HttpTestClient.h"
 #include "support/ServerHarness.h"
 
+#include "FilePath.h"
 #include "Security.h"
 #include "ServerConfig.h"
+#include "TempFile.h"
 
 #include <nlohmann/json.hpp>
 
@@ -633,6 +635,77 @@ void checkTls(Checks &checks) {
                      "a TLS session reaches the domain endpoints");
 }
 
+// A database under a path the active code page cannot spell is the ordinary
+// case for anyone whose user name is not ASCII.
+void checkNonAsciiPaths(Checks &checks) {
+  const auto root =
+      std::filesystem::temp_directory_path() /
+      lexicon::http::fromUtf8(
+          "lexicon-Ji\u0159\u00ed-\u017elu\u0165ou\u010dk\u00fd-" +
+          std::to_string(
+              std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::error_code error;
+  std::filesystem::create_directories(root, error);
+  if (error) {
+    checks.expect(false, "the non-ASCII test directory can be created");
+    return;
+  }
+  const auto database = lexicon::http::toUtf8(root / "lexikon-databáze.db");
+
+  lexicon::http::ServerConfig config;
+  config.databasePath = database;
+  const auto authFile = config.resolvedAuthFilePath();
+  checks.expect(authFile.find("Ji\u0159\u00ed") != std::string::npos,
+                "the credentials path keeps its non-ASCII directory: " + authFile);
+  checks.expect(std::filesystem::exists(lexicon::http::fromUtf8(authFile)
+                                            .parent_path()),
+                "that directory is the one that exists on disk");
+
+  // Write, rewrite and read credentials through the non-ASCII path.
+  auto hashed = lexicon::http::hashPassword(
+      "passphrase", lexicon::http::ScryptParameters::forTests());
+  checks.expect(hashed.has_value(), "the non-ASCII test password hashes");
+  checks.expect(
+      lexicon::http::writeCredentialsFile(authFile, {"jiří", *hashed})
+          .has_value(),
+      "credentials are written under a non-ASCII path");
+  checks.expect(
+      lexicon::http::writeCredentialsFile(authFile, {"jiří", *hashed})
+          .has_value(),
+      "and rewritten there");
+  auto loaded = lexicon::http::readCredentialsFile(authFile);
+  checks.expect(loaded.has_value(), "credentials are read back");
+  if (loaded)
+    checks.expectEqual(loaded->username, "jiří",
+                       "a non-ASCII user name round-trips");
+  checks.expect(std::filesystem::exists(lexicon::http::fromUtf8(authFile)),
+                "the credentials file is where the path said it would be");
+
+  // The staging file the blob endpoints use must land in the same directory.
+  auto staging = lexicon::http::TempFile::create(
+      lexicon::http::toUtf8(root));
+  checks.expect(staging.has_value(), "a temporary file is created there");
+  if (staging) {
+    const char payload[] = "obsah";
+    checks.expect(staging->write(payload, sizeof(payload) - 1).has_value(),
+                  "the temporary file accepts content");
+    const auto target = lexicon::http::toUtf8(root / "výstup.bin");
+    checks.expect(staging->replace(target).has_value(),
+                  "it installs atomically under a non-ASCII path");
+    checks.expect(std::filesystem::exists(lexicon::http::fromUtf8(target)),
+                  "the installed file exists");
+  }
+
+  // Round trip every path through the boundary helpers unchanged.
+  const auto sample = lexicon::http::toUtf8(root / "kůň" / "žlutý.db");
+  checks.expectEqual(
+      lexicon::http::toUtf8(lexicon::http::fromUtf8(sample)), sample,
+      "paths survive the UTF-8 boundary unchanged");
+
+  std::error_code ignored;
+  std::filesystem::remove_all(root, ignored);
+}
+
 void checkUnconfiguredServer(Checks &checks) {
   lexicontest::HarnessOptions options;
   options.configureCredentials = false;
@@ -662,6 +735,7 @@ int main() {
   checkConfigurationGuards(checks);
   checkPasswordHashing(checks);
   checkCredentialsFile(checks);
+  checkNonAsciiPaths(checks);
   checkSlowLoginDoesNotBlockSessions(checks);
   checkPasswordHashBoundOfOne(checks);
   checkTls(checks);

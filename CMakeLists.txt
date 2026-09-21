@@ -107,6 +107,8 @@ if (LEXICON_BUILD_SERVER)
         OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
 
     add_library(lexicon-http STATIC
+        lexicon-http/FilePath.h
+        lexicon-http/FilePath.cpp
         lexicon-http/Transport.h
         lexicon-http/Transport.cpp
         lexicon-http/Security.h

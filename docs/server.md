@@ -203,6 +203,30 @@ or pass --allow-insecure-http to override.
 `--allow-insecure-http` exists for closed test networks and prints a loud
 warning. Never use it on the Internet.
 
+## Paths and text encoding
+
+Every path inside the server is a UTF-8 `std::string`, the same convention
+`lexicon-storage-sqlite` already used, and `lexicon-http/FilePath.h` is the
+only place that converts to and from `std::filesystem::path`. That matters on
+Windows, where two lossy conversions sit on the way in:
+
+- `std::filesystem::path::string()` is the *native narrow* encoding, which
+  with MSVC is the active code page. It is not UTF-8, and the standard does
+  not promise it will be. (MinGW's libstdc++ happens to produce UTF-8, which
+  is exactly the kind of accident that hides the bug until someone builds with
+  the other toolchain.)
+- The narrow `argv` the C runtime hands to `main` is the active code page
+  whatever the compiler. On a code page 1252 machine, `--database
+  C:\Users\Jiri\...` with a hacek on the r arrives with the hacek silently
+  dropped, naming a directory that does not exist.
+
+So `LexiconServer` takes its arguments from `GetCommandLineW` and converts
+them to UTF-8 itself, and sets the console output code page to UTF-8 so a path
+printed back is readable. A database, credentials file, blob store and upload
+staging file therefore all work under a path like
+`C:\Users\Jiri\Lexicon\lexikon-databaze.db` spelled with any characters the
+file system accepts.
+
 ## Security model
 
 - **One user.** A configured user name and password, nothing else. No
@@ -256,9 +280,10 @@ warning. Never use it on the Internet.
 - Logins queue behind `--login-max-parallel-hashes`. That is the intended
   trade: bounded memory and CPU under a login flood, at the cost of a slower
   sign-in while one is in progress. Authenticated requests are unaffected.
-- The Windows credential path (atomic `ReplaceFileW` install and the
-  owner-only DACL) is written against the documented API and exercised through
-  a cross-compiled build, but the project's automated tests run on POSIX.
+- The Windows credential path (atomic `ReplaceFileW` install, the owner-only
+  DACL and the UTF-8 argument handling) is written against the documented API
+  and exercised through a cross-compiled build, but the project's automated
+  tests run on POSIX.
 - Blob storage maintenance (scan, verify, garbage collect) stays in the desktop
   client and on the server machine. It is local file system maintenance, so it
   is deliberately not reachable over HTTP.

@@ -1,5 +1,6 @@
 #include "AuthState.h"
 
+#include "FilePath.h"
 #include "TempFile.h"
 
 #include <nlohmann/json.hpp>
@@ -18,11 +19,6 @@ using Json = nlohmann::json;
 std::unexpected<Error> invalid(std::string message) {
   return std::unexpected(Error{Error::Code::Validation, std::move(message)});
 }
-fs::path utf8Path(const std::string &value) {
-  return fs::path(std::u8string(reinterpret_cast<const char8_t *>(value.data()),
-                                value.size()));
-}
-
 std::uint64_t positiveNumber(const Json &json, const char *key,
                              std::uint64_t fallback) {
   const auto found = json.find(key);
@@ -33,7 +29,7 @@ std::uint64_t positiveNumber(const Json &json, const char *key,
 } // namespace
 
 Result<Credentials> readCredentialsFile(const std::string &path) {
-  std::ifstream input(utf8Path(path), std::ios::binary);
+  std::ifstream input(fromUtf8(path), std::ios::binary);
   if (!input)
     return std::unexpected(
         Error{Error::Code::NotFound, "No server credentials are configured."});
@@ -110,10 +106,10 @@ Result<void> writeCredentialsFile(const std::string &path,
   // installed atomically. A crash or a concurrent reader sees either the old
   // credentials or the new ones, never a half-written file, and no attacker
   // can pre-create the temporary path.
-  const auto target = utf8Path(path);
+  const auto target = fromUtf8(path);
   const auto directory = target.parent_path();
   auto staging = TempFile::create(directory.empty() ? std::string(".")
-                                                    : directory.string());
+                                                    : toUtf8(directory));
   if (!staging)
     return std::unexpected(staging.error());
   if (auto written = staging->write(text.data(), text.size()); !written)

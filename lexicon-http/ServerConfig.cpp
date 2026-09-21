@@ -1,5 +1,7 @@
 #include "ServerConfig.h"
 
+#include "FilePath.h"
+
 #include <charconv>
 #include <filesystem>
 
@@ -53,11 +55,10 @@ bool looksLikeOrigin(const std::string &origin) {
 std::string ServerConfig::resolvedAuthFilePath() const {
   if (!authFilePath.empty())
     return authFilePath;
-  const fs::path database(databasePath);
+  const auto database = fromUtf8(databasePath);
   const auto directory = database.parent_path();
-  return (directory.empty() ? fs::path("lexicon-auth.json")
-                            : directory / "lexicon-auth.json")
-      .string();
+  return toUtf8(directory.empty() ? fs::path("lexicon-auth.json")
+                                  : directory / "lexicon-auth.json");
 }
 
 bool isLoopbackAddress(const std::string &address) {

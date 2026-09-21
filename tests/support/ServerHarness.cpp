@@ -1,5 +1,7 @@
 #include "ServerHarness.h"
 
+#include "FilePath.h"
+
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509v3.h>
@@ -65,7 +67,7 @@ ServerHarness::ServerHarness(HarnessOptions options)
     startupError_ = "Cannot create the temporary directory.";
     return;
   }
-  databasePath_ = (directory_ / "lexicon.db").string();
+  databasePath_ = lexicon::http::toUtf8(directory_ / "lexicon.db");
   if (auto opened = repository_.open(databasePath_); !opened) {
     startupError_ = opened.error().message;
     return;
@@ -85,8 +87,8 @@ ServerHarness::ServerHarness(HarnessOptions options)
 
   lexicon::http::ServerConfig config;
   if (options_.tls) {
-    const auto certificate = (directory_ / "server-cert.pem").string();
-    const auto key = (directory_ / "server-key.pem").string();
+    const auto certificate = lexicon::http::toUtf8(directory_ / "server-cert.pem");
+    const auto key = lexicon::http::toUtf8(directory_ / "server-key.pem");
     if (!writeSelfSignedCertificate(certificate, key)) {
       startupError_ = "Cannot create the test certificate.";
       return;

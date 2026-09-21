@@ -28,6 +28,7 @@ public:
   // symbolic link planted at the path is never opened or followed.
   static Result<TempFile> create(const std::string &directory);
 
+  // UTF-8, like every other path in this layer.
   const std::string &path() const { return path_; }
   bool valid() const { return !path_.empty(); }
 
