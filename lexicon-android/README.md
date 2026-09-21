@@ -102,6 +102,10 @@ cd lexicon-android
 ./gradlew assembleRelease # minified with R8, unsigned unless a keystore is configured
 ```
 
+Release builds only reach HTTPS servers. To try the R8-shrunk code against a
+local development server, `./gradlew assembleDebug -Plexicon.minifyDebug` shrinks
+a debug build with the release rules.
+
 Android Studio opens the `lexicon-android` directory as a project. The SDK
 location comes from `ANDROID_HOME` or a `local.properties` file with
 `sdk.dir=...`; that file is machine specific and ignored by Git.
@@ -219,8 +223,9 @@ A Blob field is uploaded from the system document picker and saved with the
 system's "create document" picker (the Storage Access Framework). The app never
 asks for storage permissions and never touches file paths: the picker grants
 access to the one document chosen. Uploads stream from the document with a
-progress line; `413` from the server (`--max-blob-bytes`) is reported as such. A
-download that fails or is cancelled deletes the incomplete document again.
+progress line, and the item cannot be saved until the upload has finished;
+`413` from the server (`--max-blob-bytes`) is reported as such. A download that
+fails or is cancelled deletes the incomplete document again.
 
 Blob maintenance — scanning, verifying and garbage collecting the blob
 directory — remains a local desktop and server administration feature. The REST
@@ -339,10 +344,10 @@ Deliberate differences:
 | --- | --- |
 | `./gradlew test` | JVM tests: JSON models and symbolic enums, error envelopes, URL validation, API version check, the HTTP client against MockWebServer (Bearer header, 401 handling without retry, redirects, TLS failure, cancellation, blob streaming), token encryption, the session state machine, query building, editor rules, field formats, Markdown safety, C++ highlighting, share parsing; Robolectric ViewModel paging tests; Compose UI flows against an in-memory server (login, search, Quick Add, duplicates, reading, editing, failed saves, filters, links, blob round trip, groups, types and fields, overviews, logout, session expiry, share and shortcut intents, tablet layout, theme) |
 | `LEXICON_SERVER_BINARY=/path/to/LexiconServer ./gradlew test` | Also `ServerIntegrationTest`: a temporary real LexiconServer with a throwaway user, driven through the app's REST layer (login, groups, types, fields, item with values, links and backlinks, blob upload and download, update, validation errors, filtered and paged queries, counts, delete, 413 for an oversized blob, logout) |
-| `scripts/run-device-tests.sh /path/to/LexiconServer` | The instrumented tests on a connected emulator or device, against a temporary real server: Keystore encryption, the full UI flow including a blob round trip through document URIs, and Share to Lexicon |
+| `scripts/run-device-tests.sh /path/to/LexiconServer [Gradle arguments]` | The instrumented tests on a connected emulator or device, against a temporary real server: Keystore encryption, the full UI flow including a blob round trip through document URIs, Share to Lexicon, and the Accessibility Test Framework over every main screen (labels, touch target sizes, contrast) |
 
 No test contacts the Internet; Robolectric runs offline with the framework jar
-Gradle resolved.
+Gradle resolved. Kotlin compiler warnings, like lint warnings, fail the build.
 
 ## Release signing
 
