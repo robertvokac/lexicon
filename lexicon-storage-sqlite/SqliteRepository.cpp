@@ -12,6 +12,7 @@
 #include <openssl/evp.h>
 #include <set>
 #include <random>
+#include <vector>
 #include <type_traits>
 #include <utility>
 #ifdef _WIN32
@@ -740,7 +741,12 @@ std::string hashFile(const fs::path &path,
   std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
   if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
     throw Failure("Cannot initialize SHA-256.");
-  char buffer[1024 * 1024];
+  // On the heap: a megabyte does not fit on a thread stack everywhere. Windows
+  // reserves one or two for a thread, and importBlob below is already holding
+  // a buffer of its own further down the same stack.
+  std::vector<char> storage(1024 * 1024);
+  char *buffer = storage.data();
+  const std::size_t bufferSize = storage.size();
 #ifdef _WIN32
   HANDLE descriptor = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ,
                                   nullptr, OPEN_EXISTING,
@@ -757,7 +763,8 @@ std::string hashFile(const fs::path &path,
     throw Failure("Blob path is not a regular file.");
   for (;;) {
     DWORD count = 0;
-    if (!ReadFile(descriptor, buffer, sizeof(buffer), &count, nullptr))
+    if (!ReadFile(descriptor, buffer, static_cast<DWORD>(bufferSize), &count,
+                  nullptr))
       throw Failure("Cannot read Blob file completely.");
     if (count == 0) break;
     if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
@@ -775,7 +782,7 @@ std::string hashFile(const fs::path &path,
   if (::fstat(descriptor, &metadata) != 0 || !S_ISREG(metadata.st_mode))
     throw Failure("Blob path is not a regular file.");
   for (;;) {
-    const auto count = ::read(descriptor, buffer, sizeof(buffer));
+    const auto count = ::read(descriptor, buffer, bufferSize);
     if (count < 0 && errno == EINTR) continue;
     if (count < 0) throw Failure("Cannot read Blob file completely.");
     if (count == 0) break;
@@ -1007,9 +1014,12 @@ SqliteRepository::Result<std::string> SqliteRepository::importBlob(const std::st
     std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
     if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
       throw Failure("Cannot initialize SHA-256.");
-    char buffer[1024 * 1024];
+    // Heap again: this frame and hashFile's below it would otherwise want two
+    // megabytes of stack between them.
+    std::vector<char> storage(1024 * 1024);
+    char *buffer = storage.data();
     while (source) {
-      source.read(buffer, sizeof(buffer));
+      source.read(buffer, static_cast<std::streamsize>(storage.size()));
       auto count = source.gcount();
       if (count > 0) {
         if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
