@@ -30,6 +30,11 @@ public:
       close();
       throw Failure("Cannot open database: " + message);
     }
+    // The desktop client and the server may share one database file. Without
+    // a busy timeout, a write that meets the other connection's lock fails at
+    // once with "database is locked"; with it, SQLite waits for the lock,
+    // which a Lexicon write holds for milliseconds.
+    sqlite3_busy_timeout(db_, 5000);
     try { exec("PRAGMA foreign_keys = ON;"); }
     catch (...) { close(); throw; }
   }
@@ -88,16 +93,37 @@ private:
   void check(int rc) { if (rc != SQLITE_OK) throw Failure(sqlite3_errmsg(db_)); }
 };
 
+// The outermost write transaction starts with BEGIN IMMEDIATE, taking the
+// write lock before the first read. A deferred transaction that reads and then
+// writes while another connection commits is refused with SQLITE_BUSY at once,
+// because SQLite will not wait where waiting could deadlock; taking the lock up
+// front turns that case into an ordinary wait under the busy timeout. Nested
+// transactions and the unit of work keep using savepoints inside it.
+inline bool autocommit(const Connection &db) { return sqlite3_get_autocommit(db.get()) != 0; }
+
 class Transaction {
   const Connection &db_;
   std::string name_;
   bool active_ = true;
+  bool outermost_ = false;
 public:
-  Transaction(const Connection &db, std::string name) : db_(db), name_(std::move(name)) { db_.exec("SAVEPOINT " + name_); }
-  ~Transaction() { if (active_) { try { db_.exec("ROLLBACK TO SAVEPOINT " + name_); db_.exec("RELEASE SAVEPOINT " + name_); } catch (...) {} } }
+  Transaction(const Connection &db, std::string name) : db_(db), name_(std::move(name)) {
+    outermost_ = autocommit(db_);
+    if (outermost_) db_.exec("BEGIN IMMEDIATE");
+    try { db_.exec("SAVEPOINT " + name_); }
+    catch (...) { if (outermost_) { try { db_.exec("ROLLBACK"); } catch (...) {} } throw; }
+  }
+  ~Transaction() {
+    if (!active_) return;
+    try { db_.exec("ROLLBACK TO SAVEPOINT " + name_); db_.exec("RELEASE SAVEPOINT " + name_); }
+    catch (...) {}
+    if (outermost_) { try { db_.exec("ROLLBACK"); } catch (...) {} }
+  }
   Transaction(const Transaction&) = delete;
   Transaction& operator=(const Transaction&) = delete;
-  void commit() { db_.exec("RELEASE SAVEPOINT " + name_); active_ = false; }
+  // COMMIT also releases the savepoint. If it fails - SQLITE_BUSY after the
+  // timeout leaves the transaction open - the destructor rolls everything back.
+  void commit() { db_.exec(outermost_ ? "COMMIT" : "RELEASE SAVEPOINT " + name_); active_ = false; }
 };
 
 inline void run(const Connection &db, const std::string &sql) { Statement(db, sql).run(); }

@@ -125,6 +125,8 @@ struct SqliteRepository::Impl {
   Connection db;
   std::string path;
   enum class UnitState { Idle, Active, Failed } unitState = UnitState::Idle;
+  // Whether the unit of work opened the outer BEGIN IMMEDIATE transaction.
+  bool unitOwnsTransaction = false;
 };
 SqliteRepository::SqliteRepository() : impl_(std::make_unique<Impl>()) {}
 SqliteRepository::~SqliteRepository() = default;
@@ -667,7 +669,16 @@ SqliteRepository::Result<void> SqliteRepository::beginUnitOfWork() {
     require(impl_->unitState == Impl::UnitState::Idle,
             "Unit of work is already active or its state is uncertain.",
             lexicon::Error::Code::Storage);
-    impl_->db.exec("SAVEPOINT lexicon_unit");
+    // Same reasoning as storage::Transaction: take the write lock up front.
+    impl_->unitOwnsTransaction = storage::autocommit(impl_->db);
+    if (impl_->unitOwnsTransaction) impl_->db.exec("BEGIN IMMEDIATE");
+    try {
+      impl_->db.exec("SAVEPOINT lexicon_unit");
+    } catch (...) {
+      if (impl_->unitOwnsTransaction) { try { impl_->db.exec("ROLLBACK"); } catch (...) {} }
+      impl_->unitOwnsTransaction = false;
+      throw;
+    }
     impl_->unitState = Impl::UnitState::Active;
   });
 }
@@ -675,7 +686,10 @@ SqliteRepository::Result<void> SqliteRepository::commitUnitOfWork() {
   return guarded([&] {
     require(impl_->unitState == Impl::UnitState::Active,
             "No active unit of work.", lexicon::Error::Code::Storage);
-    impl_->db.exec("RELEASE SAVEPOINT lexicon_unit");
+    // COMMIT also releases the savepoint. A failed COMMIT leaves both open, so
+    // rollbackUnitOfWork can still undo the unit exactly as before.
+    impl_->db.exec(impl_->unitOwnsTransaction ? "COMMIT" : "RELEASE SAVEPOINT lexicon_unit");
+    impl_->unitOwnsTransaction = false;
     impl_->unitState = Impl::UnitState::Idle;
   });
 }
@@ -687,6 +701,8 @@ SqliteRepository::Result<void> SqliteRepository::rollbackUnitOfWork() {
     try {
       impl_->db.exec("ROLLBACK TO SAVEPOINT lexicon_unit");
       impl_->db.exec("RELEASE SAVEPOINT lexicon_unit");
+      if (impl_->unitOwnsTransaction) impl_->db.exec("ROLLBACK");
+      impl_->unitOwnsTransaction = false;
       impl_->unitState = Impl::UnitState::Idle;
     } catch (...) {
       // An unknown savepoint state must never be reused as a healthy connection.
