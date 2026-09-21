@@ -70,15 +70,71 @@ cross-site scripting bugs are born. Everything else is application code.
    LexiconServer --allowed-origin https://lexicon.example.com
    ```
 
-4. Open the page and sign in.
+4. Make the static host send the headers below.
+
+5. Open the page and sign in.
 
 `LexiconServer` never serves these files. The API and the frontend are
 deployed independently and may live on completely different hosts.
 
+### Headers for the static host
+
+`index.html` carries its own Content Security Policy, so only the page's own
+files may run: no inline script, no event handler attributes, no `eval`. Four
+things a `<meta>` tag cannot do are left to the host:
+
+| Header | Value | Why |
+| --- | --- | --- |
+| `Cache-Control` | `no-cache` on `.html`, `.js`, `.css` | Without it browsers cache ES modules heuristically, so after an update a reload can mix a new `index.html` with an old `dialogs.js`. `no-cache` still caches; it only revalidates. |
+| `Content-Security-Policy` | `frame-ancestors 'none'` | Nobody may frame the page to trick clicks. Only valid as a header. |
+| `X-Frame-Options` | `DENY` | The same for older browsers. |
+| `X-Content-Type-Options` | `nosniff` | Scripts and styles run only with their real MIME type. |
+
+nginx:
+
+```nginx
+location / {
+    root /var/www/lexicon;
+    add_header Cache-Control "no-cache" always;
+    add_header Content-Security-Policy "frame-ancestors 'none'" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+}
+```
+
+Caddy:
+
+```caddy
+lexicon.example.com {
+    root * /var/www/lexicon
+    file_server
+    header {
+        Cache-Control "no-cache"
+        Content-Security-Policy "frame-ancestors 'none'"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+    }
+}
+```
+
+Hosts that do not let you set headers (plain GitHub Pages) still work; you
+lose the framing protection and may need a hard reload after an update.
+
 ## Local development
 
-Serve the directory with any static HTTP server - `file://` does not work
-because browsers refuse ES modules and cross-origin requests from it:
+Serve the directory with a static HTTP server - `file://` does not work
+because browsers refuse ES modules and cross-origin requests from it. The
+repository has one that sends the headers above:
+
+```bash
+python3 tools/serve-web.py --port 8080
+```
+
+It binds to `127.0.0.1` unless you pass `--bind`. Any other static server
+works too, but without `Cache-Control: no-cache` you will be pressing
+Ctrl+Shift+R after every change:
 
 ```bash
 cd lexicon-web
