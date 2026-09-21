@@ -1,15 +1,24 @@
 // The main window: search and actions, the filtered item table with its filter
 // row, pagination, the Markdown preview and the link/backlink preview.
 import { api } from './api.js';
-import { confirmDialog, errorDialog } from './dialogs.js';
+import { confirmDialog, errorDialog, openDialog } from './dialogs.js';
 import { openItemEditor } from './itemEdit.js';
 import { renderMarkdown } from './markdown.js';
 import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
 import {
-    button, clear, debounce, el, fillDatalist, fillSelect, ITEM_STATUSES, joinValues,
-    linkDescription, LITERAL_TEXT, readLocal, statusLabel, typeDisplayName, UNDERSTANDING_LEVELS,
-    understandingLabel, writeLocal,
+    button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
+    joinValues, linkDescription, LITERAL_TEXT, readLocal, statusLabel, typeDisplayName,
+    UNDERSTANDING_LEVELS, understandingLabel, writeLocal,
 } from './utils.js';
+
+// Whether the text is the item's title, its title with the disambiguation,
+// or one of its aliases, ignoring case.
+function namedExactly(item, text) {
+    const wanted = text.toLocaleLowerCase();
+    return item.title.toLocaleLowerCase() === wanted
+        || formatItemTitle(item.title, item.disambiguation).toLocaleLowerCase() === wanted
+        || (item.aliases || []).some((alias) => alias.toLocaleLowerCase() === wanted);
+}
 
 // filterKey names the widget in filterControls; filter picks how it is built.
 const BASE_COLUMNS = [
@@ -589,10 +598,12 @@ export class MainView {
         const search = debounce(() => this.resetPaginationAndRefresh(), 250);
         this.searchInput.addEventListener('input', search);
         this.searchInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                // Enter is the fast path for the mobile capture workflow.
+            if (event.key === 'Enter' && !event.isComposing) {
+                // A phone keyboard's search key sends Enter, so Enter must
+                // never create an item that already exists.
                 event.preventDefault();
-                this.quickAdd();
+                search.cancel();
+                this.searchOrAdd();
             }
         });
         this.quickAddButton.addEventListener('click', () => this.quickAdd());
@@ -1099,11 +1110,85 @@ export class MainView {
         return defaultGroupId;
     }
 
+    // Enter in the search field: show what matches the text, and add it as a
+    // new item only when nothing does.
+    async searchOrAdd() {
+        const text = this.searchInput.value.trim();
+        if (!text) return;
+        await this.resetPaginationAndRefresh();
+        if (this.searchInput.value.trim() !== text) return; // Typing went on.
+        if (this.totalCount === 0) {
+            await this.quickAdd();
+            return;
+        }
+        const match = this.items.find((item) => namedExactly(item, text))
+            || (this.items.length === 1 ? this.items[0] : null);
+        if (match) await this.selectItem(match.id);
+        // On a touch screen the keyboard would go on covering the result.
+        if (window.matchMedia('(pointer: coarse)').matches) this.searchInput.blur();
+    }
+
+    // Items anywhere whose title, full title or alias is exactly this text,
+    // ignoring case, whatever the current filters show.
+    async itemsNamed(text) {
+        const [byTitle, byAlias] = await Promise.all([
+            api.queryItems({ columnFilters: { title: text }, limit: 1000 }),
+            api.queryItems({ columnFilters: { alias: text }, limit: 1000 }),
+        ]);
+        const found = new Map();
+        for (const item of [...byTitle.items, ...byAlias.items]) {
+            if (namedExactly(item, text)) found.set(item.id, item);
+        }
+        return [...found.values()];
+    }
+
+    // Returns true when the new item should be added after all.
+    async confirmAnotherItem(title, groupId, existing) {
+        // The database holds one item per title and group, so that one can
+        // only be shown, not added again.
+        const twin = existing.find((item) => item.groupId === groupId
+            && item.title === title && !item.disambiguation);
+        if (twin) {
+            const show = await confirmDialog('Already in Lexicon',
+                `"${title}" already exists in the group ${twin.groupName}.`,
+                { acceptLabel: 'Show it', cancelLabel: 'Close' });
+            if (show) await this.showItem(twin);
+            return false;
+        }
+        const lines = existing.slice(0, 5).map((item) => {
+            const name = formatItemTitle(item.title, item.disambiguation);
+            const byTitle = item.title.toLocaleLowerCase() === title.toLocaleLowerCase()
+                || name.toLocaleLowerCase() === title.toLocaleLowerCase();
+            return `- ${name} (${item.groupName})${byTitle ? '' : `, alias "${title}"`}`;
+        });
+        if (existing.length > lines.length) lines.push(`- and ${existing.length - lines.length} more`);
+        const choice = await openDialog({
+            title: 'Already in Lexicon',
+            body: el('p', {
+                class: 'confirm',
+                text: `"${title}" already names:\n${lines.join('\n')}\n\nAdd another item called "${title}"?`,
+            }),
+            acceptLabel: 'Add anyway',
+            extraActions: [{ label: 'Show it', onClick: ({ close }) => close('show') }],
+            onAccept: () => 'add',
+        });
+        if (choice === 'show') await this.showItem(existing[0]);
+        return choice === 'add';
+    }
+
+    async showItem(item) {
+        this.searchInput.value = item.title;
+        await this.resetPaginationAndRefresh();
+        await this.selectItem(item.id);
+    }
+
     async quickAdd() {
         const title = this.searchInput.value.trim();
         if (!title) return;
         try {
             const groupId = await this.groupIdForNewItem();
+            const existing = await this.itemsNamed(title);
+            if (existing.length && !(await this.confirmAnotherItem(title, groupId, existing))) return;
             await api.createItem({
                 item: {
                     groupId,
