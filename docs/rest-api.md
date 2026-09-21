@@ -242,6 +242,10 @@ on backlinks are filled in from the saved item. If any part fails, nothing is
 written. `Custom` links require a non-empty `customValue`; other types store
 none; `None` is not a persistable link type.
 
+A group holds one item per title and disambiguation, compared exactly. A
+second one is refused with 400 `validation` and a message naming the title,
+for a new item and for an update that would rename an item onto another.
+
 ## Links
 
 Supplementary to the atomic save above:

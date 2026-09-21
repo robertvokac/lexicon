@@ -70,6 +70,26 @@ int main() {
     if (!success(app.groups.upsertGroup(*current), "Update Group with identical values") ||
         !success(app.items.saveItem(first), "Update Item with identical values")) return 1;
 
+    // A second Item with the same title in the same Group is refused in words,
+    // not with the unique index's SQL message; a disambiguation tells them apart.
+    lexicon::ItemRecord twin;
+    twin.groupId = defaultId;
+    twin.title = "  Created without a selected Group ";
+    auto refused = app.items.createItem(twin);
+    if (!check(!refused && refused.error().code == lexicon::Error::Code::Validation &&
+                   refused.error().message.find("already exists in this group") != std::string::npos,
+               "A twin Item was not refused with a validation message")) return 1;
+    twin.disambiguation = "second";
+    auto distinct = app.items.createItem(twin);
+    if (!success(distinct, "Create twin with a disambiguation")) return 1;
+    auto renamed = app.items.loadItem(*distinct);
+    if (!success(renamed, "Load disambiguated twin")) return 1;
+    renamed->disambiguation.clear();
+    auto collision = app.items.saveItem(*renamed);
+    if (!check(!collision && collision.error().code == lexicon::Error::Code::Validation,
+               "Renaming onto an existing Item was not refused") ||
+        !success(app.items.deleteItem(*distinct), "Delete disambiguated twin")) return 1;
+
     lexicon::ItemTypeRecord type;
     type.name = "Example";
     if (!success(app.types.upsertItemType(type), "Create Type")) return 1;

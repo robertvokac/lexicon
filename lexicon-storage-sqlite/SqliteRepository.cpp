@@ -495,6 +495,28 @@ int saveItemNative(const Connection &db, const std::string &databasePath,
   auto fields = item.itemTypeId > 0 ? fieldsFor(db, item.itemTypeId) : std::vector<lexicon::ItemFieldRecord>{};
   valid(lexicon::validateItem(item, fields));
   Transaction tx(db, "lexicon_write");
+  // item_unique would refuse a twin with an SQL message nobody should have to
+  // read. The transaction already holds the write lock, so nothing can add
+  // the twin between this check and the write.
+  {
+    // A missing Item stays NotFound even when its title matches another.
+    if (item.id >= 0) {
+      Statement existing(db, "SELECT 1 FROM item WHERE id = ?;");
+      existing.bind(item.id);
+      if (!existing.step()) throw Failure("Item not found.", lexicon::Error::Code::NotFound);
+    }
+    const std::string title = lexicon::trim(item.title);
+    const std::string disambiguation = lexicon::trim(item.disambiguation);
+    Statement twin(db, "SELECT 1 FROM item WHERE group_id = ? AND title = ? "
+                       "AND COALESCE(disambiguation, '') = ? AND id <> ?;");
+    twin.bind(item.groupId).bind(title).bind(disambiguation).bind(item.id);
+    require(!twin.step(),
+            disambiguation.empty()
+                ? "An item titled '" + title + "' already exists in this group. "
+                  "Give one of them a disambiguation to tell them apart."
+                : "An item titled '" + title + "' with the disambiguation '" +
+                      disambiguation + "' already exists in this group.");
+  }
   int id = item.id;
   if (id < 0) {
     Statement(db, "INSERT INTO item(group_id, title, disambiguation, understanding, status, pinned, content, item_type_id) "

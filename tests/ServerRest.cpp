@@ -710,6 +710,15 @@ void checkQuickAdd(Checks &checks) {
                      "quick add leaves the status unset");
   checks.expect(stored.at("itemTypeId").is_null(),
                 "quick add leaves the type unset");
+
+  // Adding the same title again must say why it failed, not answer 500.
+  const auto twin = client.post(
+      "/api/v1/items",
+      Json{{"item", Json{{"groupId", groupId}, {"title", "Quickly added"}}}}
+          .dump());
+  checks.expectEqual(twin.status, 400, "a twin title in the group is refused");
+  checks.expect(twin.body.find("already exists in this group") != std::string::npos,
+                "and the answer says the item already exists");
 }
 } // namespace
 
