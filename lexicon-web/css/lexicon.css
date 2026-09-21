@@ -653,6 +653,8 @@ body.resizing { cursor: row-resize; user-select: none; }
 }
 
 .toolbar-button { min-width: 40px; min-height: 34px; }
+/* Source and preview side by side need no switch; see the narrow layout. */
+.content-mode { display: none; }
 .toolbar-separator { width: 1px; background: var(--border); margin: 2px 4px; }
 
 .content-split {
@@ -714,6 +716,20 @@ body.resizing { cursor: row-resize; user-select: none; }
 
     .dialog-form { max-height: 100vh; }
     .markdown-source, .content-split { min-height: 200px; }
+
+    /* One column: source and preview take turns at the full height. */
+    .content-mode { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 6px; }
+    .content-mode-button { min-height: var(--touch); border-radius: 0; }
+    .content-mode-button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+    .content-mode-button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+    .content-mode-button.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-text);
+    }
+    .content-panel:not(.previewing) .content-split .markdown-preview { display: none; }
+    .content-panel.previewing .markdown-toolbar,
+    .content-panel.previewing .markdown-source { display: none; }
 }
 
 @media (max-width: 720px) {

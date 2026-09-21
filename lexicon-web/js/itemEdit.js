@@ -477,10 +477,35 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
             },
         }));
     }
-    const contentPanel = el('div', { class: 'content-panel' }, [
+    // On a narrow screen source and preview take turns instead of sharing a
+    // height the keyboard already halves. A wide screen shows both.
+    const contentPanel = el('div', { class: 'content-panel' });
+    const modeButtons = {};
+    function showContent(mode) {
+        const previewing = mode === 'preview';
+        if (previewing) {
+            refreshPreview.cancel();
+            renderMarkdown(preview, contentArea.value);
+        }
+        contentPanel.classList.toggle('previewing', previewing);
+        for (const [name, node] of Object.entries(modeButtons)) {
+            node.classList.toggle('active', name === mode);
+            node.setAttribute('aria-pressed', name === mode ? 'true' : 'false');
+        }
+    }
+    modeButtons.source = button('Source', {
+        class: 'content-mode-button', onclick: () => showContent('source'),
+    });
+    modeButtons.preview = button('Preview', {
+        class: 'content-mode-button', onclick: () => showContent('preview'),
+    });
+    contentPanel.append(
+        el('div', { class: 'content-mode', role: 'group', 'aria-label': 'Content view' },
+            [modeButtons.source, modeButtons.preview]),
         toolbar,
         el('div', { class: 'content-split' }, [contentArea, preview]),
-    ]);
+    );
+    showContent('source');
 
     // --- Values ----------------------------------------------------------
     const valuesPanel = el('div', { class: 'values-panel' });
