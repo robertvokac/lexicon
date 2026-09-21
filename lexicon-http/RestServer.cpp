@@ -245,6 +245,22 @@ void RestServer::Impl::createServer() {
   server->set_keep_alive_timeout(config.keepAliveTimeoutSeconds);
   server->set_keep_alive_max_count(config.keepAliveMaxCount);
   server->set_tcp_nodelay(true);
+  // The port must belong to one server. cpp-httplib's default is SO_REUSEPORT,
+  // which lets a second LexiconServer bind the same port without an error;
+  // the kernel then splits connections between the two processes. Sessions
+  // live in one process's memory, so a token issued by one instance is
+  // refused by the other and requests fail with 401 at random.
+  server->set_socket_options([](socket_t sock) {
+#ifdef _WIN32
+    // SO_REUSEADDR on Windows lets another socket take over a bound port;
+    // SO_EXCLUSIVEADDRUSE is how a Windows server keeps its port to itself.
+    httplib::set_socket_opt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, 1);
+#else
+    // On POSIX, SO_REUSEADDR only lets a restart bind while old connections
+    // sit in TIME_WAIT. It never admits a second listener.
+    httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
+#endif
+  });
   if (!config.trustedProxies.empty())
     server->set_trusted_proxies(config.trustedProxies);
 
@@ -1286,7 +1302,9 @@ Result<int> RestServer::bind() {
     return std::unexpected(
         Error{Error::Code::Storage,
               "Cannot bind " + address + ":" +
-                  std::to_string(impl_->config.port) + "."});
+                  std::to_string(impl_->config.port) +
+                  ". Is another LexiconServer, or another program, already "
+                  "listening on that port?"});
   };
   if (impl_->config.port == 0) {
     // Port 0 asks the operating system for a free port, which tests use.

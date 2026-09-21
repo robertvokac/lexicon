@@ -6,6 +6,7 @@
 #include "FilePath.h"
 #include "Security.h"
 #include "Utf8Path.h"
+#include "RestServer.h"
 #include "ServerConfig.h"
 #include "TempFile.h"
 
@@ -785,6 +786,31 @@ void checkNonAsciiPaths(Checks &checks) {
   std::filesystem::remove_all(root, ignored);
 }
 
+// Starting the server twice must fail, not quietly share the port.
+void checkPortIsExclusive(Checks &checks) {
+  ServerHarness first;
+  if (!first.started()) {
+    checks.expect(false, "the first server starts: " + first.startupError());
+    return;
+  }
+  lexicon::http::ServerConfig config;
+  config.databasePath = first.databasePath();
+  config.listenAddress = "127.0.0.1";
+  config.port = first.port();
+  config.requestLogging = false;
+  lexicon::http::RestServer second(config, first.application(), first.auth());
+  const auto bound = second.bind();
+  checks.expect(!bound.has_value(),
+                "a second server on the same port is refused");
+  if (!bound)
+    checks.expect(bound.error().message.find("Cannot bind") != std::string::npos,
+                  "and says why: " + bound.error().message);
+  // The first server is untouched and still answers.
+  HttpTestClient client("127.0.0.1", first.port());
+  checks.expectEqual(client.get("/api/v1/health").status, 200,
+                     "the first server keeps serving");
+}
+
 void checkUnconfiguredServer(Checks &checks) {
   lexicontest::HarnessOptions options;
   options.configureCredentials = false;
@@ -819,6 +845,7 @@ int main() {
   checkSlowLoginDoesNotBlockSessions(checks);
   checkPasswordHashBoundOfOne(checks);
   checkTls(checks);
+  checkPortIsExclusive(checks);
   checkUnconfiguredServer(checks);
   return checks.summarize("server_auth");
 }
