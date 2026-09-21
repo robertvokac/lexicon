@@ -205,10 +205,13 @@ warning. Never use it on the Internet.
 
 ## Paths and text encoding
 
-Every path inside the server is a UTF-8 `std::string`, the same convention
-`lexicon-storage-sqlite` already used, and `lexicon-http/FilePath.h` is the
-only place that converts to and from `std::filesystem::path`. That matters on
-Windows, where two lossy conversions sit on the way in:
+Every path inside Lexicon is a UTF-8 `std::string`. Conversion between those
+strings and `std::filesystem::path` is centralized in `lexicon-core/Utf8Path.h`,
+which both the SQLite storage and the server use; `lexicon-http/FilePath.h`
+handles only the Windows operating system text boundaries, the command line
+and the console, which arrive as UTF-16.
+
+That matters on Windows, where three lossy conversions sit on the way in:
 
 - `std::filesystem::path::string()` is the *native narrow* encoding, which
   with MSVC is the active code page. It is not UTF-8, and the standard does
@@ -219,18 +222,30 @@ Windows, where two lossy conversions sit on the way in:
   whatever the compiler. On a code page 1252 machine, `--database
   C:\Users\Jiri\...` with a hacek on the r arrives with the hacek silently
   dropped, naming a directory that does not exist.
-
-A Windows console is a third: its narrow input is the console input code page,
-often 437, which cannot spell a Czech name at all.
+- The narrow input of a Windows console is the console input code page, often
+  437, which cannot spell a Czech name at all.
 
 So `LexiconServer` takes its arguments from `GetCommandLineW`, reads an
 interactive console with `ReadConsoleW`, and converts both to UTF-8 itself. It
 also sets the console output code page to UTF-8 so a path printed back is
-readable. Redirected input is defined to be UTF-8 already and is read as bytes,
-which is what a pipe or a file from any other tool provides. A database, credentials file, blob store and upload
-staging file therefore all work under a path like
-`C:\Users\Jiri\Lexicon\lexikon-databaze.db` spelled with any characters the
-file system accepts.
+readable. Redirected input is defined to be UTF-8 already and is read as
+bytes, which is what a pipe or a file from any other tool provides.
+
+The result is one encoding everywhere:
+
+| Boundary | Encoding |
+| --- | --- |
+| Windows command line | UTF-16, converted to UTF-8 |
+| Windows interactive console | UTF-16, converted to UTF-8 |
+| Redirected standard input | UTF-8 bytes |
+| REST and JSON | UTF-8 |
+| Core and application strings | UTF-8 `std::string` |
+| File system | UTF-8, converted to and from `std::filesystem::path` in `Utf8Path.h` |
+| SQLite text | UTF-8 |
+
+A database, credentials file, blob store and upload staging file therefore all
+work under a path like `C:\Users\Jiri\Lexicon\lexikon-databaze.db` spelled
+with any characters the file system accepts.
 
 ## Security model
 
