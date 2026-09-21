@@ -656,6 +656,10 @@ export class MainView {
         await this.refreshTagsAndFlags();
         await this.refreshSuggestions();
         await this.refreshItems();
+        // Something may have changed the selected item, or selected a new one,
+        // so the preview is reloaded rather than left showing what it held.
+        this.updatePreviewVisibility();
+        if (this.selectedItemId !== null) await this.loadPreview(this.selectedItemId);
     }
 
     setChoices(key, options) {
@@ -1007,20 +1011,28 @@ export class MainView {
         });
         this.updateActions();
         this.updatePreviewVisibility();
+        if (await this.loadPreview(itemId)) api.logItemRead(itemId).catch(() => {});
+    }
+
+    // Shows the item's current content and links. Returns false when it could
+    // not, or when another item was selected while this one was loading.
+    async loadPreview(itemId) {
         try {
             const loaded = await api.getItem(itemId, ['links', 'backlinks']);
+            if (this.selectedItemId !== itemId) return false;
             clear(this.contentPreview);
             if (loaded.item.content) renderMarkdown(this.contentPreview, loaded.item.content);
             else this.contentPreview.appendChild(
                 el('p', { class: 'hint', text: 'This item has no content yet.' }));
             this.renderLinksPreview(loaded.links, loaded.backlinks);
-            api.logItemRead(itemId).catch(() => {});
+            return true;
         } catch (error) {
-            if (error.isUnauthorized) return;
+            if (error.isUnauthorized || this.selectedItemId !== itemId) return false;
             clear(this.contentPreview);
             this.contentPreview.appendChild(
                 el('p', { class: 'hint', text: `Error loading content: ${error.message}` }));
             clear(this.linksPreview);
+            return false;
         }
     }
 
