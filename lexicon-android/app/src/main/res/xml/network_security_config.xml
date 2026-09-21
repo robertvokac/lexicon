@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release: HTTPS only, trusting the system certificate store and nothing
+     else. There is no user CA, no pinning override, no cleartext host.
+     The debug source set adds the emulator and loopback hosts. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

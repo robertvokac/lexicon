@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lexicon</string>
+    <string name="share_label">Add to Lexicon</string>
+    <string name="share_saved">Added to Lexicon.</string>
+    <string name="shortcut_quick_add_short">Quick add</string>
+    <string name="shortcut_quick_add_long">Quick add an item</string>
+    <string name="shortcut_quick_add_disabled">Quick add is unavailable</string>
+</resources>

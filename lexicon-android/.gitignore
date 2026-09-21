@@ -1,0 +1,27 @@
+# Gradle and Android Studio output
+.gradle/
+.kotlin/
+build/
+/app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Machine-specific configuration and IDE state
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Built packages
+*.apk
+*.aab
+*.ap_
+*.dex
+output-metadata.json
+
+# Signing material and its configuration never enter the repository
+*.jks
+*.keystore
+keystore.properties
+signing.properties

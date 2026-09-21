@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer. Preferences (server URL, user name, theme, page
+     size) may be backed up and moved to a new device. The encrypted session
+     token never is: its Keystore key stays on this device anyway, and a
+     restored copy would only be dead weight. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore/session.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore/session.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

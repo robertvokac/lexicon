@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_quick_add"
+        android:shortcutDisabledMessage="@string/shortcut_quick_add_disabled"
+        android:shortcutId="quick_add"
+        android:shortcutLongLabel="@string/shortcut_quick_add_long"
+        android:shortcutShortLabel="@string/shortcut_quick_add_short">
+        <intent
+            android:action="com.robertvokac.lexicon.action.QUICK_ADD"
+            android:targetClass="com.robertvokac.lexicon.MainActivity"
+            android:targetPackage="com.robertvokac.lexicon" />
+    </shortcut>
+</shortcuts>
