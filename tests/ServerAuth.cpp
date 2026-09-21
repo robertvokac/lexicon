@@ -635,6 +635,65 @@ void checkTls(Checks &checks) {
                      "a TLS session reaches the domain endpoints");
 }
 
+// The conversion the Windows command line depends on. Kept portable so the
+// cases below run on every platform rather than only where a Windows API is.
+void checkTextConversions(Checks &checks) {
+  using lexicon::http::utf16ToUtf8;
+  struct Sample {
+    std::u16string utf16;
+    std::string utf8;
+    const char *what;
+  };
+  const std::vector<Sample> samples = {
+      {u"", "", "an empty string"},
+      {u"--database", "--database", "ASCII"},
+      {u"Jiří", "Jiří", "Czech letters"},
+      {u"Uživatelé", "Uživatelé", "a Czech directory name"},
+      {u"Český název", "Český název", "a Czech phrase"},
+      {u"中文词典", "中文词典", "CJK"},
+      {u"😀📘", "😀📘", "emoji, which are surrogate pairs"},
+      {u"C:\\Users\\Jiří\\Lexicon\\lexikon.db",
+       "C:\\Users\\Jiří\\Lexicon\\lexikon.db", "a full Windows path"},
+  };
+  std::vector<Sample> all = samples;
+  {
+    // Built rather than written as a literal, which the compiler warns about.
+    Sample embedded{u"a", std::string("a\0b", 3), "an embedded null"};
+    embedded.utf16.push_back(u'\0');
+    embedded.utf16.push_back(u'b');
+    all.push_back(std::move(embedded));
+  }
+  for (const auto &sample : all) {
+    auto converted = utf16ToUtf8(sample.utf16);
+    checks.expect(converted.has_value(),
+                  std::string("UTF-16 converts: ") + sample.what);
+    if (converted)
+      checks.expectEqual(*converted, sample.utf8,
+                         std::string("UTF-16 matches UTF-8: ") + sample.what);
+    // And the result is the path the file system layer would build.
+    checks.expectEqual(
+        lexicon::http::toUtf8(lexicon::http::fromUtf8(sample.utf8)),
+        sample.utf8, std::string("round trips as a path: ") + sample.what);
+  }
+  // An unpaired surrogate is reported rather than silently replaced.
+  const std::u16string highOnly(1, static_cast<char16_t>(0xd83d));
+  const std::u16string lowOnly(1, static_cast<char16_t>(0xde00));
+  std::u16string reversed;
+  reversed.push_back(static_cast<char16_t>(0xde00));
+  reversed.push_back(static_cast<char16_t>(0xd83d));
+  checks.expect(!utf16ToUtf8(highOnly).has_value(),
+                "an unpaired high surrogate is rejected");
+  checks.expect(!utf16ToUtf8(lowOnly).has_value(),
+                "an unpaired low surrogate is rejected");
+  checks.expect(!utf16ToUtf8(reversed).has_value(),
+                "a reversed surrogate pair is rejected");
+  // The boundary of the basic plane and of the whole range.
+  checks.expectEqual(utf16ToUtf8(u"￿").value_or(""), "￿",
+                     "the last character of the basic plane");
+  checks.expectEqual(utf16ToUtf8(u"􏿿").value_or(""), "􏿿",
+                     "the last character of Unicode");
+}
+
 // A database under a path the active code page cannot spell is the ordinary
 // case for anyone whose user name is not ASCII.
 void checkNonAsciiPaths(Checks &checks) {
@@ -735,6 +794,7 @@ int main() {
   checkConfigurationGuards(checks);
   checkPasswordHashing(checks);
   checkCredentialsFile(checks);
+  checkTextConversions(checks);
   checkNonAsciiPaths(checks);
   checkSlowLoginDoesNotBlockSessions(checks);
   checkPasswordHashBoundOfOne(checks);

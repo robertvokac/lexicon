@@ -280,10 +280,14 @@ file system accepts.
 - Logins queue behind `--login-max-parallel-hashes`. That is the intended
   trade: bounded memory and CPU under a login flood, at the cost of a slower
   sign-in while one is in progress. Authenticated requests are unaffected.
-- The Windows credential path (atomic `ReplaceFileW` install, the owner-only
-  DACL and the UTF-8 argument handling) is written against the documented API
-  and exercised through a cross-compiled build, but the project's automated
-  tests run on POSIX.
+- The Windows build is cross-compiled with MinGW-w64 and exercised under Wine:
+  `auth set-user`, `auth show`, the REST API, a blob upload and download and a
+  UTF-8 item all work with the database under a path like
+  `Uzivatele\Jiri\Lexicon\lexikon-databaze.db`. Wine covers the encoding and
+  file replacement behaviour convincingly; it does not prove NTFS ACL
+  semantics, and nothing here has been run on real Windows with MSVC. That
+  remains the one platform claim in this document that is not backed by an
+  execution.
 - Blob storage maintenance (scan, verify, garbage collect) stays in the desktop
   client and on the server machine. It is local file system maintenance, so it
   is deliberately not reachable over HTTP.

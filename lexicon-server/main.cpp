@@ -1,6 +1,7 @@
 // Composition root for LexiconServer: SqliteRepository + LexiconApplication +
 // HTTP adapter. No Qt, no HTML, no static files.
 #include "AuthState.h"
+#include "FilePath.h"
 #include "LexiconApplication.h"
 #include "RestServer.h"
 #include "ServerConfig.h"
@@ -22,38 +23,6 @@
 #endif
 
 namespace {
-// Everything below the command line treats a path as UTF-8. On Windows the
-// narrow argv is the active code page, which cannot even spell a user name
-// like Jiri with a hacek on most installations, so the arguments are taken
-// from the wide command line and converted explicitly.
-std::vector<std::string> utf8Arguments(int argc, char *argv[]) {
-#ifdef _WIN32
-  static_cast<void>(argc);
-  static_cast<void>(argv);
-  std::vector<std::string> arguments;
-  int count = 0;
-  LPWSTR *wide = CommandLineToArgvW(GetCommandLineW(), &count);
-  if (!wide)
-    return arguments;
-  for (int index = 1; index < count; ++index) {
-    const int length = WideCharToMultiByte(CP_UTF8, 0, wide[index], -1, nullptr,
-                                           0, nullptr, nullptr);
-    if (length <= 1)
-      continue;
-    std::string value(static_cast<std::size_t>(length - 1), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wide[index], -1, value.data(), length - 1,
-                        nullptr, nullptr);
-    arguments.push_back(std::move(value));
-  }
-  LocalFree(wide);
-  return arguments;
-#else
-  // POSIX hands over the bytes the user typed, which are already UTF-8 on any
-  // current system.
-  return std::vector<std::string>(argv + 1, argv + argc);
-#endif
-}
-
 using lexicon::http::AuthState;
 using lexicon::http::Command;
 using lexicon::http::Credentials;
@@ -229,7 +198,7 @@ int main(int argc, char *argv[]) {
   // So a path printed back to the operator is readable rather than mojibake.
   SetConsoleOutputCP(CP_UTF8);
 #endif
-  const auto arguments = utf8Arguments(argc, argv);
+  const auto arguments = lexicon::http::commandLineArguments(argc, argv);
   auto parsed = lexicon::http::parseCommandLine(arguments);
   if (!parsed) {
     std::cerr << parsed.error().message << "\n\n"

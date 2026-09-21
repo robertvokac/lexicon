@@ -105,6 +105,10 @@ if (LEXICON_BUILD_SERVER)
         CPPHTTPLIB_OPENSSL_SUPPORT)
     target_link_libraries(lexicon-cpp-httplib INTERFACE
         OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+    if (WIN32)
+        # Sockets, and the certificate store OpenSSL reaches for on Windows.
+        target_link_libraries(lexicon-cpp-httplib INTERFACE ws2_32 crypt32)
+    endif()
 
     add_library(lexicon-http STATIC
         lexicon-http/FilePath.h
