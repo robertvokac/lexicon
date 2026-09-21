@@ -30,6 +30,7 @@ opens SQLite itself.
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Toolchain](#toolchain)
 - [Build](#build)
 - [Run against a server](#run-against-a-server)
@@ -40,6 +41,20 @@ opens SQLite itself.
 - [Release signing](#release-signing)
 - [Limitations](#limitations)
 - [Source layout](#source-layout)
+
+## Screenshots
+
+<p>
+  <img src="../images/Screenshot_Android_Items.png" alt="Items list" width="200">
+  <img src="../images/Screenshot_Android_Item.png" alt="Item page" width="200">
+  <img src="../images/Screenshot_Android_Content.png" alt="Editor, Content tab" width="200">
+  <img src="../images/Screenshot_Android_Dark_Item.png" alt="Item with code block and table, dark theme" width="200">
+</p>
+
+![Two-pane layout on a tablet](../images/Screenshot_Android_Tablet.png)
+
+More, next to the desktop and web clients, in the
+[main README](../README.md#android-client).
 
 ## Toolchain
 

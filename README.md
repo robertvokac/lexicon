@@ -54,45 +54,98 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 
 ## Screenshots
 
-### Main window
+The web and Android screenshots share one small sample dictionary: C++ terms,
+a few database and algorithm notes, and a `Term` type with `Standard`,
+`Difficulty` and `Reviewed` fields.
+
+- [Desktop client](#desktop-client)
+- [Web client](#web-client)
+- [Android client](#android-client)
+
+### Desktop client
+
+#### Main window
 
 ![Main window](images/Screenshot.png)
 
 The main screen combines filters, searchable item table, pagination, rendered Markdown content, and link/backlink preview.
 
-### Item editor — General tab
+#### Item editor — General tab
 
 ![General tab](images/Screenshot_General.png)
 
 Basic identity and state fields for an item: group, optional type, title, disambiguation, status, understanding, and pinned flag.
 
-### Item editor — Values tab
+#### Item editor — Values tab
 
 Items with a type have a Values tab containing the fields defined by that type. Blob fields accept a file path (or Browse) and import the file when you click Import or save the item. The field stores its SHA-256 hash, and the file is kept in `blobs` next to the database.
 
-### Item editor — Content tab
+#### Item editor — Content tab
 
 ![Content tab](images/Screenshot_Content.png)
 
 Markdown editor on the left, live rendered preview on the right, plus a formatting toolbar.
 
-### Item editor — Metadata tab
+#### Item editor — Metadata tab
 
 ![Metadata tab](images/Screenshot_Metadata.png)
 
 Manage tags, flags, aliases, and additional key/value properties with dedicated add/edit/remove controls.
 
-### Item editor — Links tab
+#### Item editor — Links tab
 
 ![Links tab](images/Screenshot_Links.png)
 
 Create and maintain outgoing relationships to other items.
 
-### Item editor — Backlinks tab
+#### Item editor — Backlinks tab
 
 ![Backlinks tab](images/Screenshot_Backlinks.png)
 
 Create and maintain incoming relationships (who references this item).
+
+### Web client
+
+`lexicon-web/` in a desktop browser: the filtered item table with the rendered
+content, links and backlinks of the selected item.
+
+![Web client: item table and preview](images/Screenshot_Web.png)
+
+The six-tab item editor, with the Markdown source next to its live preview.
+
+![Web client: item editor, Content tab](images/Screenshot_Web_Editor.png)
+
+On a phone-sized screen the same page turns into a card list with a filter
+panel; this one uses the dark theme.
+
+<img src="images/Screenshot_Web_Phone.png" alt="Web client on a phone-sized screen, dark theme" width="300">
+
+### Android client
+
+`lexicon-android/`, the native app. The items list with server-side search,
+an item with its values and rendered Markdown, and the editor's Content and
+Values tabs:
+
+<p>
+  <img src="images/Screenshot_Android_Items.png" alt="Android: items list" width="200">
+  <img src="images/Screenshot_Android_Item.png" alt="Android: item page" width="200">
+  <img src="images/Screenshot_Android_Content.png" alt="Android: editor, Content tab" width="200">
+  <img src="images/Screenshot_Android_Values.png" alt="Android: editor, Values tab" width="200">
+</p>
+
+Filters and sorting, the navigation drawer, and the dark theme:
+
+<p>
+  <img src="images/Screenshot_Android_Filters.png" alt="Android: filters and sort" width="200">
+  <img src="images/Screenshot_Android_Navigation.png" alt="Android: navigation drawer" width="200">
+  <img src="images/Screenshot_Android_Dark_Items.png" alt="Android: items list, dark theme" width="200">
+  <img src="images/Screenshot_Android_Dark_Item.png" alt="Android: item with code block and table, dark theme" width="200">
+</p>
+
+On screens at least 840 dp wide, such as tablets, the list and the selected item
+sit side by side:
+
+![Android: two-pane layout on a tablet](images/Screenshot_Android_Tablet.png)
 
 ## Requirements
 
@@ -488,6 +541,7 @@ Backup strategies:
 
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
+- `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 
