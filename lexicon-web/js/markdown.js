@@ -2,6 +2,7 @@
 // the DOM, and no other module assigns generated HTML anywhere.
 import { marked } from '../vendor/marked.esm.js';
 import DOMPurify from '../vendor/purify.es.mjs';
+import { highlightCode } from './highlight.js';
 
 marked.setOptions({ gfm: true, breaks: false, headerIds: false, mangle: false });
 
@@ -36,4 +37,5 @@ export function markdownToSafeHtml(text) {
 
 export function renderMarkdown(target, text) {
     target.innerHTML = markdownToSafeHtml(text);
+    highlightCode(target);
 }

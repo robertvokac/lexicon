@@ -27,6 +27,11 @@
     --selection-text: #ffffff;
     --danger: #b3261e;
     --code-bg: #f2f2f2;
+    /* C++ tokens in the desktop highlighter's light colours. */
+    --code-keyword: #00008b;
+    --code-string: #a52a2a;
+    --code-comment: #006400;
+    --code-preprocessor: #8b008b;
     --link: #1a5fb4;
     --text-disabled: #6f6f6f;
     --surface-disabled: #e4e4e4;
@@ -50,6 +55,10 @@
     --selection-text: #ffffff;
     --danger: #ff6b6b;
     --code-bg: #000000;
+    --code-keyword: #569cd6;
+    --code-string: #ce9178;
+    --code-comment: #6a9955;
+    --code-preprocessor: #c586c0;
     --link: #64b5ff;
     --text-disabled: #9d9d9d;
     --surface-disabled: #323232;
@@ -483,6 +492,10 @@ body.resizing { cursor: row-resize; user-select: none; }
 }
 
 .markdown-preview pre code { padding: 0; background: none; }
+.token-keyword { color: var(--code-keyword); font-weight: 600; }
+.token-string { color: var(--code-string); }
+.token-comment { color: var(--code-comment); }
+.token-preprocessor { color: var(--code-preprocessor); }
 .markdown-preview img { max-width: 100%; height: auto; }
 
 .markdown-preview table {
