@@ -121,8 +121,8 @@ int authSetUser(const ServerConfig &config) {
     return 1;
   }
   username = lexicon::trim(username);
-  if (username.empty()) {
-    std::cerr << "The user name cannot be empty.\n";
+  if (username.empty() || lexicon::http::containsNul(username)) {
+    std::cerr << "The user name cannot be empty or contain a NUL character.\n";
     return 1;
   }
   std::string password;
@@ -134,6 +134,10 @@ int authSetUser(const ServerConfig &config) {
   }
   if (password != confirmation) {
     std::cerr << "The passwords do not match.\n";
+    return 1;
+  }
+  if (lexicon::http::containsNul(password)) {
+    std::cerr << "The password cannot contain a NUL character.\n";
     return 1;
   }
   if (password.size() < 12) {

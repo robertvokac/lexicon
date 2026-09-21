@@ -121,6 +121,10 @@ Result<void> writeCredentialsFile(const std::string &path,
   return {};
 }
 
+bool containsNul(std::string_view text) {
+  return text.find('\0') != std::string_view::npos;
+}
+
 namespace {
 std::ptrdiff_t hashSlotCount(const LoginLimitPolicy &limits) {
   return std::clamp<std::ptrdiff_t>(limits.maxConcurrentHashes, 1,
@@ -278,6 +282,15 @@ AuthState::LoginResult AuthState::login(const std::string &clientKey,
     expireSessions(moment);
     if (limited(clientKey, moment, result.retryAfterSeconds)) {
       result.status = LoginStatus::RateLimited;
+      return result;
+    }
+    // scrypt keys HMAC with the password, and HMAC pads a key shorter than
+    // its block with zero bytes, so "secret" and "secret\0" derive the same
+    // key. No typed password contains a NUL, so one is refused here rather
+    // than silently accepted as equivalent.
+    if (containsNul(username) || containsNul(password)) {
+      recordFailure(clientKey, moment);
+      result.status = LoginStatus::InvalidCredentials;
       return result;
     }
     expected = credentials_;

@@ -12,12 +12,17 @@
 #include <optional>
 #include <semaphore>
 #include <string>
+#include <string_view>
 
 namespace lexicon::http {
 struct Credentials {
   std::string username;
   PasswordHash password;
 };
+
+// True when the text holds a NUL byte, which a user name or password never
+// legitimately does. See AuthState::login for why it matters.
+bool containsNul(std::string_view text);
 
 // Credentials live in their own file next to the database so that historical
 // Lexicon databases stay readable by the Qt client.

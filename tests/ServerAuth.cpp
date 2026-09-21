@@ -811,6 +811,39 @@ void checkPortIsExclusive(Checks &checks) {
                      "the first server keeps serving");
 }
 
+// scrypt runs HMAC, which zero-pads short keys, so "secret" and "secret\0"
+// derive the same key. The server must not rely on that: a NUL is refused.
+void checkNulInCredentials(Checks &checks) {
+  ServerHarness harness;
+  HttpTestClient client("127.0.0.1", harness.port());
+  const auto &options = harness.options();
+  auto withNul = [](std::string text) {
+    text.push_back('\0');
+    return text;
+  };
+  const auto passwordNul =
+      Json{{"username", options.username}, {"password", withNul(options.password)}};
+  const auto usernameNul =
+      Json{{"username", withNul(options.username)}, {"password", options.password}};
+  const auto first = client.post("/api/v1/auth/login", passwordNul.dump());
+  checks.expectEqual(first.status, 401,
+                     "the right password followed by NUL is refused");
+  checks.expect(first.body.find("\"token\"") == std::string::npos,
+                "and no session is issued for it");
+  checks.expectEqual(client.post("/api/v1/auth/login", usernameNul.dump()).status,
+                     401, "a user name ending in NUL is refused");
+  // The plain credentials still work.
+  checks.expectEqual(
+      client
+          .post("/api/v1/auth/login",
+                credentials(options.username, options.password))
+          .status,
+      200, "the exact credentials still sign in");
+  checks.expect(lexicon::http::containsNul(std::string("a\0b", 3)) &&
+                    !lexicon::http::containsNul("ab"),
+                "containsNul finds an embedded NUL");
+}
+
 void checkUnconfiguredServer(Checks &checks) {
   lexicontest::HarnessOptions options;
   options.configureCredentials = false;
@@ -846,6 +879,7 @@ int main() {
   checkPasswordHashBoundOfOne(checks);
   checkTls(checks);
   checkPortIsExclusive(checks);
+  checkNulInCredentials(checks);
   checkUnconfiguredServer(checks);
   return checks.summarize("server_auth");
 }
