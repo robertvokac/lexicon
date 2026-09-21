@@ -2,6 +2,7 @@
 // between the login screen and the main view.
 import { api, API_VERSION, ApiError } from './api.js';
 import { errorDialog, messageDialog } from './dialogs.js';
+import { clearAllDrafts, setDraftOwner } from './drafts.js';
 import { openGroupManager } from './groups.js';
 import { MainView } from './items.js';
 import { showValueOverview } from './overviews.js';
@@ -160,9 +161,11 @@ class Application {
         this.mainView.hidden = false;
         this.menuBar.hidden = false;
         this.sessionLabel.textContent = `${this.username} @ ${api.baseUrl}`;
+        setDraftOwner(api.baseUrl, this.username);
         this.view = new MainView(this.mainView);
         try {
             await this.view.refreshAll();
+            await this.view.resumeDraft();
         } catch (error) {
             if (!(error instanceof ApiError) || !error.isUnauthorized) {
                 await errorDialog(error.message || String(error));
@@ -177,6 +180,9 @@ class Application {
             // A server that is already gone still ends the local session.
         }
         writeSession(STORAGE.token, null);
+        // Signing out leaves no item text behind in this browser.
+        clearAllDrafts();
+        setDraftOwner('', '');
         this.username = '';
         clear(this.mainView);
         this.view = null;

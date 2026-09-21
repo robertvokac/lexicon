@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { confirmDialog, errorDialog, field, listEditor, openDialog, promptDialog }
     from './dialogs.js';
+import { clearDraft, keepDraft, readDraft } from './drafts.js';
 import { renderMarkdown } from './markdown.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
@@ -319,7 +320,37 @@ async function propertyDialog(title, property, existing, skipIndex) {
     });
 }
 
-export async function openItemEditor({ itemId, draft, groups }) {
+// Asks what to do with unsaved changes found in the browser. Resolves with
+// 'use', 'discard', or null when the question is put off.
+export function askAboutDraft(stored, laterLabel = 'Cancel') {
+    const title = (stored.state.item.title || '').trim();
+    const name = title ? `"${title}"` : 'a new item';
+    const when = new Date(stored.savedAt).toLocaleString();
+    return openDialog({
+        title: 'Unsaved changes',
+        body: el('p', {
+            class: 'confirm',
+            text: `Your changes to ${name} were never saved (last edited ${when}).`,
+        }),
+        acceptLabel: 'Continue editing',
+        cancelLabel: laterLabel,
+        extraActions: [{ label: 'Discard', onClick: ({ close }) => close('discard') }],
+        onAccept: () => 'use',
+    });
+}
+
+// restore: an editor state kept by drafts.js, laid over what the server holds.
+// Without one, a draft stored for this item is offered first.
+export async function openItemEditor({ itemId, draft, groups, restore }) {
+    if (restore === undefined) {
+        const stored = readDraft(itemId);
+        if (stored) {
+            const choice = await askAboutDraft(stored);
+            if (choice === null) return null;
+            if (choice === 'use') restore = stored.state;
+            else clearDraft(itemId);
+        }
+    }
     let record = draft || {
         id: null,
         groupId: groups.length ? groups[0].id : null,
@@ -361,6 +392,13 @@ export async function openItemEditor({ itemId, draft, groups }) {
 
     const originalTypeId = record.itemTypeId;
     const originalFieldValues = { ...(record.fieldValues || {}) };
+    if (restore) {
+        // What the server holds decides the type change warnings; the draft
+        // decides what the editor shows.
+        record = { ...record, ...restore.item };
+        links = restore.links || [];
+        backlinks = restore.backlinks || [];
+    }
     let typeChangeConfirmed = false;
     // Pending values survive switching types back and forth, as in Qt.
     const pendingValues = { ...(record.fieldValues || {}) };
@@ -666,6 +704,31 @@ export async function openItemEditor({ itemId, draft, groups }) {
         itemTitles = [];
     }
 
+    // Everything the editor would save, in the shape `restore` accepts.
+    function snapshot() {
+        captureFieldValues();
+        return {
+            item: {
+                groupId: Number.parseInt(groupSelect.value, 10) || null,
+                itemTypeId: typeSelect.value ? Number.parseInt(typeSelect.value, 10) : null,
+                title: titleInput.value,
+                disambiguation: disambiguationInput.value,
+                status: statusSelect.value,
+                understanding: understandingSelect.value,
+                pinned: pinnedCheck.checked,
+                content: contentArea.value,
+                tags: [...tags],
+                flags: [...flags],
+                aliases: [...aliases],
+                properties: properties.map((property) => ({ ...property })),
+                fieldValues: { ...pendingValues },
+            },
+            links: links.map((link) => ({ ...link })),
+            backlinks: backlinks.map((link) => ({ ...link })),
+        };
+    }
+    const keeper = keepDraft({ itemId, snapshot, restored: Boolean(restore) });
+
     const saved = await openDialog({
         title: itemId ? 'Edit item' : 'Add item',
         body: tabStrip.node,
@@ -674,6 +737,8 @@ export async function openItemEditor({ itemId, draft, groups }) {
         // A fixed frame, like the desktop dialog: switching tabs must not move
         // the title, the tab strip or the buttons.
         className: 'dialog-item-editor',
+        // A stray tap beside the editor must not throw away what was typed.
+        closeOnBackdrop: false,
         initialFocus: titleInput,
         onAccept: async ({ fail }) => {
             if (!titleInput.value.trim()) {
@@ -749,6 +814,9 @@ export async function openItemEditor({ itemId, draft, groups }) {
     });
 
     refreshPreview.cancel();
+    // A cancel is a decision, unless the session ended under the editor: then
+    // the draft waits for the next sign-in.
+    keeper.stop(saved === null && !api.authenticated);
     return saved;
 }
 

@@ -167,6 +167,14 @@ export function writeLocal(key, value) {
     }
 }
 
+export function removeLocal(key) {
+    try {
+        window.localStorage.removeItem(key);
+    } catch (error) {
+        // Nothing was stored if storage is refused.
+    }
+}
+
 export function readSession(key) {
     try {
         return window.sessionStorage.getItem(key);

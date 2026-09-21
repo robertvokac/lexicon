@@ -13,7 +13,8 @@ function nextId(prefix) {
 // the dialog is cancelled. onAccept may return undefined to keep it open, which
 // is how validation errors are reported without losing the user's input.
 export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'Cancel',
-    onAccept, extraActions = [], wide = false, showAccept = true, initialFocus, className }) {
+    onAccept, extraActions = [], wide = false, showAccept = true, initialFocus, className,
+    closeOnBackdrop = true }) {
     return new Promise((resolve) => {
         const classes = ['dialog', wide ? 'dialog-wide' : '', className || ''];
         const dialog = el('dialog', { class: classes.filter(Boolean).join(' ') });
@@ -80,7 +81,7 @@ export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'C
         });
         // A click on the backdrop cancels, like clicking outside a Qt dialog.
         dialog.addEventListener('mousedown', (event) => {
-            if (event.target === dialog) { settled = null; dialog.close(); }
+            if (closeOnBackdrop && event.target === dialog) { settled = null; dialog.close(); }
         });
         dialog.showModal();
         const focusTarget = initialFocus

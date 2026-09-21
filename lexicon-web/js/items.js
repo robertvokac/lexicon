@@ -1,8 +1,9 @@
 // The main window: search and actions, the filtered item table with its filter
 // row, pagination, the Markdown preview and the link/backlink preview.
 import { api } from './api.js';
-import { confirmDialog, errorDialog, openDialog } from './dialogs.js';
-import { openItemEditor } from './itemEdit.js';
+import { confirmDialog, errorDialog, messageDialog, openDialog } from './dialogs.js';
+import { clearDraft, latestDraft } from './drafts.js';
+import { askAboutDraft, openItemEditor } from './itemEdit.js';
 import { renderMarkdown } from './markdown.js';
 import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
 import {
@@ -1227,6 +1228,37 @@ export class MainView {
             }
         } catch (error) {
             if (!error.isUnauthorized) await errorDialog(error.message);
+        }
+    }
+
+    // Changes a closed or discarded tab never saved: offer to carry on with
+    // the most recent ones. The others wait until their item is opened.
+    async resumeDraft() {
+        const stored = latestDraft();
+        if (!stored) return;
+        const choice = await askAboutDraft(stored, 'Later');
+        if (choice === 'discard') clearDraft(stored.itemId);
+        if (choice !== 'use') return;
+        let { itemId, state } = stored;
+        if (itemId) {
+            try {
+                await api.getItem(itemId);
+            } catch (error) {
+                if (error.status !== 404) throw error;
+                await messageDialog('Unsaved changes',
+                    'The item was deleted in the meantime, so your changes open as a new item.');
+                clearDraft(itemId);
+                itemId = null;
+                // Link IDs belonged to the deleted item.
+                const unsaved = (link) => ({ ...link, id: null });
+                state = { ...state, links: state.links.map(unsaved),
+                    backlinks: state.backlinks.map(unsaved) };
+            }
+        }
+        const savedId = await openItemEditor({ itemId, groups: this.groups, restore: state });
+        if (savedId) {
+            this.selectedItemId = savedId;
+            await this.refreshAll();
         }
     }
 
