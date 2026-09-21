@@ -23,7 +23,9 @@ lexicon-web/
 │   ├── api.js            the only module that speaks HTTP
 │   ├── app.js            shell, login, menus, themes
 │   ├── dialogs.js        modal dialogs and list editors
+│   ├── drafts.js         unsaved item edits kept in the browser
 │   ├── groups.js         group manager
+│   ├── highlight.js      C++ highlighting for code blocks
 │   ├── itemEdit.js       item editor with its six tabs
 │   ├── items.js          main window: table, filters, pagination, preview
 │   ├── markdown.js       Markdown rendering and sanitization
@@ -168,9 +170,20 @@ Open <http://127.0.0.1:8080/> and log in with the user you created with
 | `lexicon.web.lastItemId` | `localStorage` | Reselects the last item you looked at |
 | `lexicon.web.viewMode` | `localStorage` | Table, list, or automatic |
 | `lexicon.web.tableHeight` | `localStorage` | Where you put the splitter |
+| `lexicon.web.codeLanguage` | `localStorage` | Language of the last code block, offered for the next |
+| `lexicon.web.drafts` | `localStorage` | Item edits not yet saved, per user and server |
 
 The token lives in `sessionStorage` on purpose: a browser restart requires a
 new sign-in. There is no long-lived "remember me" token.
+
+Drafts are the one place item text is kept in the browser. While the item
+editor is open, its state is written to `lexicon.web.drafts` every second it
+changes and whenever the page is hidden, because a phone browser discards a
+background tab without warning and switching to a PDF reader is enough. The
+next sign-in offers the latest draft (Continue editing, Discard, Later), and
+opening an item that has one asks first. Saving or cancelling removes it; a
+cancel forced by an expired session keeps it for the next sign-in. Logout
+removes every draft, so signing out leaves no item text behind.
 
 These preferences are per browser. They never touch the desktop client's
 settings, so switching the web theme does not change the Qt theme, and hiding a
@@ -195,6 +208,7 @@ Everything below behaves the same way in both:
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |
 | Light and dark themes | the same, stored per browser |
 | Resizable split between the item list and the preview | a draggable splitter whose position is remembered |
+| `CodeHighlighter` for `cpp` code blocks: keywords, strings, comments | the same colours in both themes, plus preprocessor directives and `#include <header>` |
 
 ### Two readings of the same list
 
@@ -211,7 +225,26 @@ table on a phone if that is what you want.
 
 On a phone the menu opens as a drawer over the page, the secondary actions move
 behind a single overflow button so search and quick add keep the row, and the
-preview appears only once something is selected.
+preview appears only once something is selected. The item editor fills the
+screen, and its Content tab shows the source or the preview, switched with a
+Source/Preview control, rather than both squeezed under the keyboard. Fields
+use 16px text so iOS does not zoom into them, and fields for titles, aliases,
+tags and content turn off automatic capitals, autocorrection and spell
+checking, so `std::move` stays `std::move`.
+
+Additions for taking notes quickly, which the desktop does not have:
+
+- **Enter in the search field** shows what matches and selects an exact or
+  only match; it adds the text as a new item only when nothing matches. A
+  phone keyboard's search key sends Enter, so it never creates a duplicate.
+- **Add warns about duplicates.** A title the group already has can only be
+  shown, since the database holds one item per title and group; a title or
+  alias used elsewhere asks before adding another.
+- **Several tags or flags at once**: the Add prompt takes `cpp, c++11`.
+  Aliases are not split, because `std::map<K, V>` is one alias.
+- **The code block prompt remembers the language** of the last block.
+- **Unsaved edits survive the tab** (see above), and a tap beside the editor
+  does not close it.
 
 Deliberate differences, all of them because a browser is not a desktop:
 
