@@ -7,8 +7,8 @@ import { clearDraft, keepDraft, readDraft } from './drafts.js';
 import { renderMarkdown } from './markdown.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
-    LINK_TYPES, linkDescription, LITERAL_TEXT, splitItemTitle, typeDisplayName,
-    UNDERSTANDING_LEVELS,
+    LINK_TYPES, linkDescription, LITERAL_TEXT, readLocal, splitItemTitle, typeDisplayName,
+    UNDERSTANDING_LEVELS, writeLocal,
 } from './utils.js';
 
 const MARKDOWN_ACTIONS = [
@@ -30,6 +30,17 @@ const MARKDOWN_ACTIONS = [
     { label: 'Link', title: 'Insert link ([])', prefix: '[', suffix: '](https://)', sample: 'link text' },
     { label: 'Table', title: 'Insert table (|)', table: true },
 ];
+
+// The language of the last code block, offered for the next one: someone
+// taking notes on one book writes the same language all evening.
+const CODE_LANGUAGE_KEY = 'lexicon.web.codeLanguage';
+
+// A comma separates values in the Add prompt for tags and flags, so one prompt
+// can add several. Aliases are left whole: std::map<K, V> is one alias.
+function withValues(values, text) {
+    const added = text.split(',').map((part) => part.trim()).filter(Boolean);
+    return [...new Set([...values, ...added])].sort();
+}
 
 function tabs(definitions) {
     const list = el('div', { class: 'tab-list', role: 'tablist' });
@@ -463,8 +474,9 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
             onclick: async () => {
                 if (action.codeBlock) {
                     const language = await promptDialog('Code block',
-                        'Language (e.g. cpp, python, sql):', '');
+                        'Language (e.g. cpp, python, sql):', readLocal(CODE_LANGUAGE_KEY, ''));
                     if (language === null) return;
+                    writeLocal(CODE_LANGUAGE_KEY, language);
                     insertMarkdown(contentArea, `\n\`\`\`${language}\n`, '\n```\n', 'code block');
                     return;
                 }
@@ -545,9 +557,9 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
     const tagEditor = listEditor({
         title: 'Tags',
         onAdd: async () => {
-            const value = await promptDialog('Add tag', 'Value:', '',
+            const value = await promptDialog('Add tag', 'Values, separated by commas:', '',
                 (await api.tagUsage()).map((usage) => usage.value));
-            if (value && !tags.includes(value)) { tags = [...tags, value].sort(); tagEditor.render(tags); }
+            if (value) { tags = withValues(tags, value); tagEditor.render(tags); }
         },
         onEdit: async (index) => {
             const value = await promptDialog('Edit tag', 'Value:', tags[index],
@@ -559,9 +571,9 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
     const flagEditor = listEditor({
         title: 'Flags',
         onAdd: async () => {
-            const value = await promptDialog('Add flag', 'Value:', '',
+            const value = await promptDialog('Add flag', 'Values, separated by commas:', '',
                 (await api.flagUsage()).map((usage) => usage.value));
-            if (value && !flags.includes(value)) { flags = [...flags, value].sort(); flagEditor.render(flags); }
+            if (value) { flags = withValues(flags, value); flagEditor.render(flags); }
         },
         onEdit: async (index) => {
             const value = await promptDialog('Edit flag', 'Value:', flags[index],
