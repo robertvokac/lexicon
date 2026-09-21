@@ -249,7 +249,7 @@ class FakeLexiconServer : Dispatcher() {
                 noContent()
             }
             segments.size == 3 && segments[0] == "fields" && segments[2] == "value-count" -> {
-                val id = segments[1].toString()
+                val id = segments[1]
                 json(buildJsonObject { put("count", items.values.count { it.fieldValues.containsKey(id) }) })
             }
             path == "/items/query" -> query(request)

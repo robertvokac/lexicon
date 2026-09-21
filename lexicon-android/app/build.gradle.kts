@@ -150,6 +150,13 @@ dependencies {
     robolectricSdk(robolectricSdkJar)
 }
 
+// Compiler warnings, deprecations included, fail the build like lint warnings do.
+kotlin {
+    compilerOptions {
+        allWarningsAsErrors = true
+    }
+}
+
 val prepareRobolectricSdk = tasks.register<Sync>("prepareRobolectricSdk") {
     from(robolectricSdk)
     into(layout.buildDirectory.dir("robolectric-sdk"))

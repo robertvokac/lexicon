@@ -13,7 +13,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -105,8 +105,8 @@ class RealServerFlowTest {
 
         // A Blob type, so the item can carry a file.
         val (typeId, fieldId) = runBlocking {
-            val type = container.api.createType(TypeWrite("Android test type ${System.currentTimeMillis()}"))
-            type.id!! to container.api.createField(type.id!!, FieldWrite("Attachment", FieldDataType.Blob)).id!!
+            val type = checkNotNull(container.api.createType(TypeWrite("Android test type ${System.currentTimeMillis()}")).id)
+            type to checkNotNull(container.api.createField(type, FieldWrite("Attachment", FieldDataType.Blob)).id)
         }
 
         // Search on the server, open, edit.

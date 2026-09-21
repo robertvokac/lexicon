@@ -10,12 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.DrawerValue
@@ -28,7 +28,7 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -223,7 +223,7 @@ private fun MainScaffold(
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val widthClass = currentWindowAdaptiveInfo().windowSizeClass
+    val widthClass = currentWindowAdaptiveInfoV2().windowSizeClass
     val wide = widthClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
 
     // Requests from outside wait until someone is signed in.
@@ -282,7 +282,7 @@ private fun MainScaffold(
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
                     DrawerEntry(Destination.Types, Icons.Filled.Category, ::go)
                     DrawerHeading("Overview")
-                    DrawerEntry(Destination.Tags, Icons.Filled.Label, ::go)
+                    DrawerEntry(Destination.Tags, Icons.AutoMirrored.Filled.Label, ::go)
                     DrawerEntry(Destination.Flags, Icons.Filled.Flag, ::go)
                     DrawerEntry(Destination.Aliases, Icons.Filled.Translate, ::go)
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))

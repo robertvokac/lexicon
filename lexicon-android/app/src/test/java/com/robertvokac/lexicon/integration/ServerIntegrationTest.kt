@@ -128,9 +128,13 @@ class ServerIntegrationTest {
 
             val group = api.createGroup(GroupWrite("C++", "Notes on C++", 1))
             val type = api.createType(TypeWrite("Term", "", groupId = null))
-            val difficulty = api.createField(type.id!!, FieldWrite("Difficulty", FieldDataType.Enum, 0, listOf("easy", "hard")))
-            val attachment = api.createField(type.id!!, FieldWrite("Attachment", FieldDataType.Blob, 1))
-            val year = api.createField(type.id!!, FieldWrite("Year", FieldDataType.Integer, 2))
+            val typeId = checkNotNull(type.id)
+            val difficulty = api.createField(typeId, FieldWrite("Difficulty", FieldDataType.Enum, 0, listOf("easy", "hard")))
+            val attachment = api.createField(typeId, FieldWrite("Attachment", FieldDataType.Blob, 1))
+            val year = api.createField(typeId, FieldWrite("Year", FieldDataType.Integer, 2))
+            val difficultyId = checkNotNull(difficulty.id)
+            val attachmentId = checkNotNull(attachment.id)
+            val yearId = checkNotNull(year.id)
 
             // A blob travels as bytes and comes back identical.
             val bytes = ByteArray(150_000) { (it * 31 % 256).toByte() }
@@ -147,7 +151,7 @@ class ServerIntegrationTest {
                 status = ItemStatus.Draft, understanding = UnderstandingLevel.Practiced, pinned = true,
                 tags = listOf("cpp", "resources"), flags = listOf("todo"), aliases = listOf("Scope-bound resource management"),
                 properties = listOf(Property("source", "Stroustrup")),
-                values = mapOf(difficulty.id!! to "hard", attachment.id!! to hash, year.id!! to "1984"),
+                values = mapOf(difficultyId to "hard", attachmentId to hash, yearId to "1984"),
                 links = listOf(LinkEntry(1, null, target.id, "Object lifetime", LinkType.DependsOn, "", 0)),
                 backlinks = listOf(LinkEntry(2, null, source.id, "Constructor", LinkType.Custom, "acquires in", 1)),
             )
@@ -155,8 +159,8 @@ class ServerIntegrationTest {
             val loaded = api.item(created.id, withLinks = true)
             assertEquals("RAII", loaded.item.title)
             assertEquals("Term", loaded.item.itemTypeName.removeSuffix(" (All groups)"))
-            assertEquals("hard", loaded.item.fieldValue(difficulty.id!!))
-            assertEquals(hash, loaded.item.fieldValue(attachment.id!!))
+            assertEquals("hard", loaded.item.fieldValue(difficultyId))
+            assertEquals(hash, loaded.item.fieldValue(attachmentId))
             assertEquals("# RAII\n\nČeština and ✓ survive UTF-8.", loaded.item.content)
             assertEquals(LinkType.DependsOn, loaded.links.single().linkType)
             assertEquals(target.id, loaded.links.single().toItemId)
@@ -164,7 +168,7 @@ class ServerIntegrationTest {
             assertEquals(source.id, loaded.backlinks.single().fromItemId)
 
             val downloaded = ByteArrayOutputStream()
-            api.downloadBlob(loaded.item.fieldValue(attachment.id!!), { downloaded }) { _, _ -> }
+            api.downloadBlob(loaded.item.fieldValue(attachmentId), { downloaded }) { _, _ -> }
             assertArrayEquals(bytes, downloaded.toByteArray())
 
             // The complete link state: dropping the backlink deletes it.
@@ -182,7 +186,7 @@ class ServerIntegrationTest {
 
             // The server stays authoritative about values and duplicates.
             try {
-                api.updateItem(created.id, EditorRules.saveRequest(update.copy(values = mapOf(year.id!! to "nineteen")), "", fields))
+                api.updateItem(created.id, EditorRules.saveRequest(update.copy(values = mapOf(yearId to "nineteen")), "", fields))
                 fail("expected Validation")
             } catch (failure: ApiException.Validation) {
                 assertTrue(failure.message!!.contains("Invalid value"))
@@ -199,11 +203,11 @@ class ServerIntegrationTest {
                 "idiom",
                 ItemFilters(
                     groupId = group.id, typeId = type.id, tag = "cpp", pinned = true, status = ItemStatus.Draft,
-                    values = mapOf(difficulty.id!! to "hard"), properties = listOf(PropertyFilter("SOURCE", "strou")),
+                    values = mapOf(difficultyId to "hard"), properties = listOf(PropertyFilter("SOURCE", "strou")),
                 ),
                 fields, SortColumns.TITLE, SortOrder.Ascending, 20, 0,
             )
-            assertEquals(listOf(ValueFilter(difficulty.id!!, "hard", true)), query.valueFilters)
+            assertEquals(listOf(ValueFilter(difficultyId, "hard", true)), query.valueFilters)
             val page = api.queryItems(query)
             assertEquals(1, page.totalCount)
             assertEquals(created.id, page.items.single().id)
@@ -215,8 +219,8 @@ class ServerIntegrationTest {
 
             // Overviews and destructive-change counts.
             assertEquals(1, api.tagUsage().single { it.value == "cpp" }.usageCount)
-            assertEquals(1, api.typeItemCount(type.id!!))
-            assertEquals(1, api.fieldValueCount(difficulty.id!!))
+            assertEquals(1, api.typeItemCount(typeId))
+            assertEquals(1, api.fieldValueCount(difficultyId))
 
             api.logItemRead(created.id)
             api.deleteItem(created.id)
