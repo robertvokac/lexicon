@@ -1,11 +1,13 @@
 package com.robertvokac.lexicon.ui.items
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -14,6 +16,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,7 +63,17 @@ fun FilterSheet(state: ItemsUiState, viewModel: ItemsViewModel, onDismiss: () ->
     var addingProperty by rememberSaveable { mutableStateOf(false) }
     val filters = state.filters
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        // The handle carries the sheet's expand, collapse and dismiss actions;
+        // the default one is a 32 dp target, this one a 48 dp one.
+        dragHandle = {
+            Box(Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp), contentAlignment = Alignment.Center) {
+                BottomSheetDefaults.DragHandle()
+            }
+        },
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()

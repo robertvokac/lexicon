@@ -2,7 +2,7 @@
 # Runs the instrumented tests on a connected device or emulator against a
 # temporary LexiconServer with a throwaway database and user.
 #
-#   scripts/run-device-tests.sh /path/to/LexiconServer
+#   scripts/run-device-tests.sh /path/to/LexiconServer [extra Gradle arguments]
 #
 # The server listens on 127.0.0.1 of this machine; the Android emulator
 # reaches that address as 10.0.2.2, which debug builds may use over plain
@@ -11,7 +11,8 @@
 # LEXICON_DEVICE_HOST=127.0.0.1.
 set -euo pipefail
 
-server_binary=${1:?usage: $0 /path/to/LexiconServer}
+server_binary=${1:?usage: $0 /path/to/LexiconServer [extra Gradle arguments]}
+shift
 port=${LEXICON_TEST_PORT:-18628}
 device_host=${LEXICON_DEVICE_HOST:-10.0.2.2}
 user=android-device-test
@@ -40,4 +41,5 @@ cd "$(dirname "$0")/.."
 ./gradlew connectedDebugAndroidTest \
     "-Pandroid.testInstrumentationRunnerArguments.lexiconServer=http://$device_host:$port" \
     "-Pandroid.testInstrumentationRunnerArguments.lexiconUser=$user" \
-    "-Pandroid.testInstrumentationRunnerArguments.lexiconPassword=$password"
+    "-Pandroid.testInstrumentationRunnerArguments.lexiconPassword=$password" \
+    "$@"

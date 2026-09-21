@@ -45,8 +45,11 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 class RealServerFlowTest {
-    @get:Rule
+    @get:Rule(order = 0)
     val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @get:Rule(order = 1)
+    val dump = DumpOnFailure { compose }
 
     private val container get() = (compose.activity.application as LexiconApplication).container
     private val title = "Android device test ${System.currentTimeMillis()}"

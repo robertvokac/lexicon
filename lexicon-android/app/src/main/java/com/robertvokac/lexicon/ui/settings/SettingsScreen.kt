@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -193,6 +194,7 @@ private fun RadioRow(label: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
