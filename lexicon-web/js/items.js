@@ -927,6 +927,9 @@ export class MainView {
                 el('div', { class: 'card-main' }, [
                     el('div', { class: 'card-title', text: title }),
                     meta ? el('div', { class: 'card-meta', text: meta }) : null,
+                    item.matchSnippet
+                        ? el('div', { class: 'match-snippet', text: item.matchSnippet })
+                        : null,
                     badges.childElementCount ? badges : null,
                 ]),
                 button('\u203a', {
@@ -977,6 +980,14 @@ export class MainView {
                     text: this.cellText(item, column),
                     'data-label': column.label,
                 });
+                // Why the search found it, under the title it belongs to.
+                if (column.key === 'title' && item.matchSnippet) {
+                    cell.appendChild(el('div', {
+                        class: 'match-snippet',
+                        text: item.matchSnippet,
+                        title: item.matchSnippet,
+                    }));
+                }
                 cell.hidden = this.isHidden(column);
                 row.appendChild(cell);
             });

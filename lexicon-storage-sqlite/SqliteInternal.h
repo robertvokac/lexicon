@@ -136,4 +136,7 @@ void refreshSearchIndex(const Connection &db);
 // The FTS5 MATCH expression for what the user typed; empty when no word in
 // it is worth a full-text match.
 std::string fullTextQuery(const std::string &text);
+// The same query limited to the content column, so an item found by its title
+// alone yields no snippet. Empty when there is nothing to index.
+std::string contentQuery(const std::string &text);
 } // namespace storage

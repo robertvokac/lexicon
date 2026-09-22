@@ -314,6 +314,21 @@ def run(browser, web, server):
         type_into(".search-input", "provenance")
         b.wait("""(() => { const rows = [...document.querySelectorAll('tbody tr')];
             return rows.length === 1 && rows[0].textContent.includes('Pointer provenance'); })()""", "one match")
+        # A word only the content has: the row says why it was found.
+        type_into(".search-input", "came from")
+        b.wait("""(() => { const rows = [...document.querySelectorAll('tbody tr')];
+            return rows.length === 1 && rows[0].textContent.includes('Pointer provenance'); })()""",
+               "the content match")
+        b.wait("""(() => { const snippet = document.querySelector('tbody tr .match-snippet');
+            return !!snippet && snippet.textContent.includes('came from'); })()""",
+               "the snippet saying why")
+        # An item whose title is the whole answer needs no snippet.
+        type_into(".search-input", "lifetime")
+        b.wait("""(() => { const rows = [...document.querySelectorAll('tbody tr')];
+            return rows.length === 1 && rows[0].textContent.includes('Object lifetime'); })()""",
+               "the title match")
+        b.wait("!document.querySelector('tbody tr .match-snippet')",
+               "no snippet where the title is the answer")
         type_into(".search-input", "")
         b.wait("document.querySelectorAll('tbody tr').length >= 2", "the full list again")
 

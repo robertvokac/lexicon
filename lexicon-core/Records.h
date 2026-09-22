@@ -121,6 +121,11 @@ struct ItemRecord {
   // due now. Saving an item keeps them; a review sets them.
   std::string reviewedAt;
   std::string reviewDueAt;
+  // Why a search found this item: the piece of its content around the match,
+  // with "…" where it was cut. Empty unless a search text was given that the
+  // content matched - an item found by its title or a tag alone needs no
+  // explanation. Never stored; it belongs to one search, not to the item.
+  std::string matchSnippet;
 };
 // A reminder at a moment: when it goes off, as UTC "YYYY-MM-DDTHH:MM:SSZ".
 struct AlarmRecord {

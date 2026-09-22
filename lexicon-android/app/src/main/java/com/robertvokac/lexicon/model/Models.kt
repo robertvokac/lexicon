@@ -103,6 +103,8 @@ data class Item(
     /** Last review and next one, UTC "YYYY-MM-DDTHH:MM:SSZ"; null when never reviewed (due now). */
     val reviewedAt: String? = null,
     val reviewDueAt: String? = null,
+    /** Why a search found this item: the piece of content around the match; null otherwise. */
+    val matchSnippet: String? = null,
 ) {
     val displayTitle: String get() = formatItemTitle(title, disambiguation)
 

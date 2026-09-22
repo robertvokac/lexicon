@@ -178,7 +178,8 @@ every word must occur as a word prefix, ignoring case and diacritics; text
 without a word of two letters or more, like `C++`, is a contains match on the
 content instead. While `searchText` is set, the results are ranked before the
 sort column applies: exact title, exact alias, title prefix, title contains,
-another field contains, content only.
+another field contains, content only. Each item found through its content
+carries a `matchSnippet` saying which part of it matched.
 `sortColumn` is the column index used by both clients - 0 `Id`, 1 `Group`,
 2 `Type`, 3 `Title`, 4 `Disambiguation`, 5 `Tags`, 6 `Flags`, 7 `Aliases`,
 8 `Status`, 9 `Understanding`, 10 `Pinned`, and 11 onwards the fields of the
@@ -241,9 +242,16 @@ An item:
   "content": "# Monoid\n\nMarkdown source.",
   "revision": 4,
   "reviewedAt": "2026-09-20T08:15:00Z",
-  "reviewDueAt": "2026-10-02T08:15:00Z"
+  "reviewDueAt": "2026-10-02T08:15:00Z",
+  "matchSnippet": null
 }
 ```
+
+`matchSnippet` says why a search found the item: the piece of its **content**
+around the match, on one line, with `…` where it was cut. It is `null` unless
+the request carried a `searchText` that the content matched - an item found by
+its title, an alias or a tag alone needs no explanation and gets none - and it
+is always `null` for an item fetched by ID.
 
 `reviewedAt` and `reviewDueAt` are UTC and `null` for an item never reviewed,
 which is due at once. Saving an item keeps its review time; a new item may be

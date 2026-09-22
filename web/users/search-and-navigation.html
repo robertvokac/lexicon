@@ -74,6 +74,11 @@
     </ul>
     <p>Because aliases are searched too, a well-maintained alias list means you find <em>Resource Acquisition Is Initialization</em> just by typing <code>RAII</code>.</p>
     <p>The content is searched with a full-text index that <strong>ignores diacritics</strong>, so <code>prilis</code> finds <em>Příliš</em> and <code>naive</code> finds <em>naïve</em>. An item whose title matches exactly comes first, then the other title matches, then the ones found by their content. The web client and the Android app search the same way — the server runs the same query.</p>
+    <p>An item found <strong>through its content</strong> says why: under its title the list shows the piece of content around the match, with <code>…</code> where it was cut. An item found by its title, an alias or a tag needs no explanation and gets none.</p>
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-search-match.png" alt="Search results with a line under each title showing the matched piece of content" loading="lazy">
+      <figcaption>Three items found by their content, each saying which part matched.</figcaption>
+    </figure>
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
       <p><strong>Search-to-create</strong> If a search comes up empty, click <code>Add</code> — the new item's title is prefilled from your search text. Searching and capturing become one motion.</p>

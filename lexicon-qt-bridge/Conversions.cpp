@@ -115,7 +115,8 @@ lexicon::ItemRecord toCore(const ItemRecord &v) {
           toCore(v.content),
           v.revision,
           toCore(v.reviewedAt),
-          toCore(v.reviewDueAt)};
+          toCore(v.reviewDueAt),
+          toCore(v.matchSnippet)};
 }
 ItemRecord toQt(const lexicon::ItemRecord &v) {
   return {v.id,
@@ -136,7 +137,8 @@ ItemRecord toQt(const lexicon::ItemRecord &v) {
           toQt(v.content),
           v.revision,
           toQt(v.reviewedAt),
-          toQt(v.reviewDueAt)};
+          toQt(v.reviewDueAt),
+          toQt(v.matchSnippet)};
 }
 lexicon::UsageValueRecord toCore(const UsageValueRecord &v) {
   return {toCore(v.value), v.usageCount};

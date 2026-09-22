@@ -928,5 +928,19 @@ svg.graph { flex: none; margin: auto; }
 .graph-node:focus { outline: none; }
 .graph-caption { fill: var(--text); font-size: 13px; }
 
+/* Why a search found an item: a quiet line under its title */
+.match-snippet {
+    display: block;
+    margin-top: 2px;
+    max-width: 46ch;
+    color: var(--text-muted);
+    font-size: 0.82em;
+    font-weight: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.item-card .match-snippet { max-width: none; white-space: normal; }
+
 /* Inbox */
 .inbox-content { width: 100%; font-family: var(--font-ui); resize: vertical; }

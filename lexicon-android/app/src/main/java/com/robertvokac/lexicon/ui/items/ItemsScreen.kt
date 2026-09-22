@@ -479,6 +479,15 @@ private fun ItemRow(
                     if (status.isNotEmpty()) {
                         Text(status.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
+                    item.matchSnippet?.takeIf { it.isNotBlank() }?.let { snippet ->
+                        Text(
+                            snippet,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     val labels = (item.tags + item.flags.map { "⚑ $it" })
                     if (labels.isNotEmpty()) {
                         Text(

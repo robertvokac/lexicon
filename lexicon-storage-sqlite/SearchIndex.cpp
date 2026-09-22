@@ -97,4 +97,8 @@ std::string fullTextQuery(const std::string &text) {
   }
   return query;
 }
+std::string contentQuery(const std::string &text) {
+  const auto query = fullTextQuery(text);
+  return query.empty() ? std::string{} : "content : (" + query + ")";
+}
 } // namespace storage

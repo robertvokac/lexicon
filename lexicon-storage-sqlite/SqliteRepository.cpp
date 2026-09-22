@@ -425,15 +425,33 @@ std::string reviewDueSql() {
 }
 const char *kNow = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')";
 
-// The columns of an item list row, read by readItemRow.
-std::string itemRowSelect() {
+// Why a search found an item: the piece of its content around the match.
+// With FTS5 the index knows where the words are; without it, or for a text
+// with no word worth indexing ("C++"), the position of the substring does.
+// Both keep the snippet to one line and mark a cut with an ellipsis.
+std::string matchSnippetSql(bool fullText, const std::string &searchText) {
+  if (lexicon::trim(searchText).empty())
+    return "''";
+  if (fullText && !storage::contentQuery(lexicon::trim(searchText)).empty())
+    return "COALESCE((SELECT REPLACE(REPLACE(snippet(item_search, 5, '', '', '\u2026', 12), char(10), ' '), char(13), ' ') "
+           "FROM item_search WHERE item_search MATCH ? AND rowid = t.id), '')";
+  return "(SELECT CASE WHEN p > 0 THEN (CASE WHEN s > 1 THEN '\u2026' ELSE '' END) || "
+         "TRIM(REPLACE(REPLACE(SUBSTR(c, s, 120), char(10), ' '), char(13), ' ')) || "
+         "(CASE WHEN LENGTH(c) > s + 119 THEN '\u2026' ELSE '' END) ELSE '' END "
+         "FROM (SELECT c, p, MAX(1, p - 40) AS s FROM "
+         "(SELECT COALESCE(t.content, '') AS c, INSTR(LOWER(COALESCE(t.content, '')), ?) AS p)))";
+}
+
+// The columns of an item list row, read by readItemRow. [snippet] is the SQL
+// for the last column, '' when nothing was searched for.
+std::string itemRowSelect(const std::string &snippet = "''") {
   return "SELECT t.id, m.name, t.group_id, t.title, t.disambiguation, "
          "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.item_id = t.id), '') AS aliases, "
          "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.item_id = t.id), '') AS tags, "
          "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.item_id = t.id), '') AS flags, "
          "t.understanding, t.status, t.pinned, "
          "COALESCE(ty.name || CASE WHEN ty.group_id IS NULL THEN ' (All groups)' ELSE '' END, ''), "
-         "t.revision, COALESCE(t.reviewed_at, ''), COALESCE(" + reviewDueSql() + ", '') "
+         "t.revision, COALESCE(t.reviewed_at, ''), COALESCE(" + reviewDueSql() + ", ''), " + snippet + " "
          "FROM item t JOIN item_group m ON m.id = t.group_id "
          "LEFT JOIN item_type ty ON ty.id = t.item_type_id ";
 }
@@ -448,6 +466,7 @@ lexicon::ItemRecord readItemRow(const Statement &stmt) {
   item.pinned = stmt.integer(10) != 0; item.itemTypeName = stmt.text(11);
   item.revision = stmt.integer(12);
   item.reviewedAt = stmt.text(13); item.reviewDueAt = stmt.text(14);
+  item.matchSnippet = stmt.text(15);
   return item;
 }
 bool reviewTime(const std::string &text) {
@@ -466,7 +485,7 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
   return guarded([&] {
     const bool searching = !lexicon::trim(searchText).empty();
     if (searching && impl_->fullText) storage::refreshSearchIndex(impl_->db);
-    std::string sql = itemRowSelect() + "WHERE 1 = 1 ";
+    std::string sql = itemRowSelect(matchSnippetSql(impl_->fullText, searchText)) + "WHERE 1 = 1 ";
     appendFilters(sql, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                   propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
     std::string order;
@@ -504,6 +523,13 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
     sql += ", t.id ASC ";
     if (limit > 0) sql += "LIMIT ? OFFSET ? ";
     Statement stmt(impl_->db, sql);
+    // The snippet's parameter stands in the select list, ahead of the filters'.
+    if (searching) {
+      const auto content = storage::contentQuery(lexicon::trim(searchText));
+      stmt.bind(impl_->fullText && !content.empty()
+                    ? content
+                    : lexicon::asciiFold(lexicon::trim(searchText)));
+    }
     bindFilters(stmt, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                 propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
     if (searching) {

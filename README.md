@@ -45,7 +45,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
   - search in title, disambiguation, alias, tag, flag, and Markdown content
-  - full-text search of the content that ignores diacritics (`prilis` finds `Příliš`), with the exact title first
+  - full-text search of the content that ignores diacritics (`prilis` finds `Příliš`), with the exact title first, and a line under the title saying which part of the content matched
   - per-column filters above the table headers, including type fields
   - property key/value filters via `Filter Properties...`
 - Pagination for large datasets
@@ -442,6 +442,11 @@ Search matches these fields:
 - content
 
 Titles and the other short fields match any part of the text, ignoring ASCII case. Content is searched word by word: every word you type must occur, as the start of a word, and case and diacritics do not matter (`zlutoucky kun` finds `žluťoučký kůň`). Text without such a word, like `C++`, is matched as a substring of the content.
+
+An item found through its content says so: under its title the list shows the
+piece of content around the match, on one line, with `…` where it was cut. An
+item found by its title, an alias or a tag needs no explanation and shows none.
+The web client and the Android app show the same line.
 
 Results are ranked: the item titled exactly what you typed comes first, then items with it as an alias, titles starting with it, titles containing it, items where it is a disambiguation, alias, tag or flag, and last the items that only mention it in their content. The column you sort by orders the items within each of these groups.
 

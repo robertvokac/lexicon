@@ -607,6 +607,27 @@ void checkSearchAndUsage(Checks &checks) {
   checks.expectEqual(client.get("/api/v1/usage/aliases").status, 200,
                      "alias usage is available");
 
+  // Why a search found an item travels with it.
+  client.post("/api/v1/items",
+              Json{{"item", Json{{"groupId", groupId},
+                                 {"title", "Functor"},
+                                 {"content", "A structure preserving map between categories."}}}}
+                  .dump());
+  const auto byContent = parse(client.post(
+      "/api/v1/items/query", Json{{"searchText", "categories"}}.dump())).at("items");
+  checks.expectEqual(static_cast<long long>(byContent.size()), 1, "the content is searched");
+  checks.expect(byContent.at(0).value("matchSnippet", std::string{}).find("categories") != std::string::npos,
+                "and the item says why it was found, got '" +
+                    byContent.at(0).value("matchSnippet", std::string{"null"}) + "'");
+  const auto byTitle = parse(client.post(
+      "/api/v1/items/query", Json{{"searchText", "Monad"}}.dump())).at("items");
+  checks.expect(byTitle.at(0).at("matchSnippet").is_null(),
+                "an item found by its title explains nothing");
+  const auto fetched = parse(client.get("/api/v1/items/" +
+      std::to_string(byContent.at(0).value("id", 0))));
+  checks.expect(fetched.at("item").at("matchSnippet").is_null(),
+                "and an item fetched by ID carries no snippet either");
+
   const auto resolved = client.get("/api/v1/items/resolve?title=Monoid&disambiguation=algebra");
   checks.expectEqual(resolved.status, 200, "an item resolves by title");
   checks.expect(parse(resolved).value("itemId", 0) > 0,

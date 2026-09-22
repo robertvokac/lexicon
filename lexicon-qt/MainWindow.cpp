@@ -19,6 +19,8 @@
 #include "WikiLinks.h"
 #include <QAction>
 #include <QApplication>
+#include <QPainter>
+#include <QStyledItemDelegate>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
@@ -56,6 +58,64 @@
 #include <QItemSelectionModel>
 
 namespace {
+// The title cell keeps the piece of content a search matched.
+constexpr int kMatchSnippetRole = Qt::UserRole + 3;
+constexpr int kTitleColumn = 3;
+constexpr int kMatchWidthCap = 420;
+
+QFont matchFont(QFont base) {
+    base.setPointSizeF(base.pointSizeF() * 0.85);
+    return base;
+}
+
+// Paints the title and, while searching, the matched piece of content under
+// it, the way the web client and the Android app show it.
+class TitleWithMatchDelegate : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override {
+        const QString snippet = index.data(kMatchSnippetRole).toString();
+        if (snippet.isEmpty()) {
+            QStyledItemDelegate::paint(painter, option, index);
+            return;
+        }
+        QStyleOptionViewItem view(option);
+        initStyleOption(&view, index);
+        const QString title = view.text;
+        view.text.clear();
+        QStyle* style = view.widget ? view.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &view, painter, view.widget);
+        const QRect area = style->subElementRect(QStyle::SE_ItemViewItemText, &view, view.widget);
+        const bool selected = option.state & QStyle::State_Selected;
+        const QFont small = matchFont(option.font);
+        const QFontMetrics titleMetrics(option.font);
+        const QFontMetrics smallMetrics(small);
+        painter->save();
+        painter->setPen(option.palette.color(selected ? QPalette::HighlightedText : QPalette::Text));
+        painter->drawText(QRect(area.left(), area.top(), area.width(), titleMetrics.height()),
+                          Qt::AlignLeft | Qt::AlignVCenter,
+                          titleMetrics.elidedText(title, Qt::ElideRight, area.width()));
+        painter->setFont(small);
+        painter->setPen(option.palette.color(selected ? QPalette::HighlightedText : QPalette::PlaceholderText));
+        painter->drawText(QRect(area.left(), area.top() + titleMetrics.height(), area.width(), smallMetrics.height()),
+                          Qt::AlignLeft | Qt::AlignVCenter,
+                          smallMetrics.elidedText(snippet, Qt::ElideRight, area.width()));
+        painter->restore();
+    }
+
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        const QSize size = QStyledItemDelegate::sizeHint(option, index);
+        const QString snippet = index.data(kMatchSnippetRole).toString();
+        if (snippet.isEmpty()) return size;
+        const QFontMetrics smallMetrics(matchFont(option.font));
+        // The column grows to show the reason, but never takes the whole table.
+        return {std::min(std::max(size.width(), smallMetrics.horizontalAdvance(snippet) + 12), kMatchWidthCap),
+                size.height() + smallMetrics.height()};
+    }
+};
+
 const QStringList kConfigurableColumns = {
     "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"
 };
@@ -184,6 +244,8 @@ void MainWindow::setupUi() {
     m_tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableView->horizontalHeader()->setStretchLastSection(true);
     m_tableView->verticalHeader()->setVisible(false);
+    m_defaultRowHeight = m_tableView->verticalHeader()->defaultSectionSize();
+    m_tableView->setItemDelegateForColumn(kTitleColumn, new TitleWithMatchDelegate(this));
     m_tableView->setSortingEnabled(true);
     m_tableView->horizontalHeader()->setSectionsClickable(true);
     m_tableView->horizontalHeader()->setSortIndicatorShown(true);
@@ -687,6 +749,7 @@ void MainWindow::refreshItems() {
     if (typeId > 0) {
         for (const auto& field : m_selectedTypeFields) headers.push_back(field.name);
     }
+    const bool searching = !m_searchEdit->text().trimmed().isEmpty();
     m_model->setColumnCount(headers.size());
     m_model->setHorizontalHeaderLabels(headers);
     int rowToSelect = -1;
@@ -699,10 +762,15 @@ void MainWindow::refreshItems() {
         auto* idItem = new QStandardItem();
         idItem->setData(item.id, Qt::DisplayRole);
         idItem->setData(item.id, Qt::UserRole);
+        auto* titleItem = new QStandardItem(item.title);
+        if (!item.matchSnippet.isEmpty()) {
+            titleItem->setData(item.matchSnippet, kMatchSnippetRole);
+            titleItem->setToolTip(item.matchSnippet);
+        }
         row << idItem
             << new QStandardItem(item.groupName)
             << new QStandardItem(item.itemTypeName)
-            << new QStandardItem(item.title)
+            << titleItem
             << new QStandardItem(item.disambiguation)
             << new QStandardItem(item.tags.join(", "))
             << new QStandardItem(item.flags.join(", "))
@@ -742,6 +810,9 @@ void MainWindow::refreshItems() {
         m_model->appendRow(row);
     }
 
+    // A searched list has two lines per row: the title and why it was found.
+    m_tableView->verticalHeader()->setDefaultSectionSize(
+        searching ? m_defaultRowHeight + QFontMetrics(matchFont(font())).height() : m_defaultRowHeight);
     applyColumnVisibility();
     m_tableView->resizeColumnsToContents();
     for (int column = 0; column < m_model->columnCount(); ++column) {

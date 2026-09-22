@@ -8,6 +8,7 @@
 #include <chrono>
 #include <filesystem>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,19 @@ public:
     check(*count == static_cast<int>(items->size()), "count and page agree for '" + text + "'");
     for (const auto &item : *items) result.push_back(item.title);
     return result;
+  }
+
+  // The snippet each result carries, by title.
+  std::map<std::string, std::string> snippets(const std::string &text) {
+    std::map<std::string, std::string> found;
+    auto items = app_.items.loadItems(-1, -1, {}, text, {}, {}, {}, {}, -1, -1, -1, -1, 0, 0,
+                                      lexicon::SortOrder::Ascending);
+    if (!items) {
+      check(false, "search for '" + text + "' failed");
+      return found;
+    }
+    for (const auto &item : *items) found[item.title] = item.matchSnippet;
+    return found;
   }
 
 private:
@@ -117,6 +131,29 @@ int main() {
         "content is searched, got " + joined(search.titles("identity")));
   check(search.titles("c++") == std::vector<std::string>{"Language"},
         "a word the index cannot use is still found in the content, got " + joined(search.titles("c++")));
+
+  // Why an item was found: the piece of content around the match, and nothing
+  // where the title or an alias is what matched.
+  {
+    const auto why = search.snippets("identity");
+    check(why.at("Semigroup").find("identity") != std::string::npos,
+          "the snippet shows the match, got '" + why.at("Semigroup") + "'");
+    check(why.at("Semigroup").find('\n') == std::string::npos,
+          "and stays on one line");
+    const auto titleMatch = search.snippets("monoid");
+    check(titleMatch.at("Monoid").empty(),
+          "an item found by its title explains nothing, got '" + titleMatch.at("Monoid") + "'");
+    check(titleMatch.at("Unital magma").empty(),
+          "nor does one found by an alias, got '" + titleMatch.at("Unital magma") + "'");
+    check(!titleMatch.at("Semigroup").empty(),
+          "while the one found by its content does");
+    const auto substring = search.snippets("c++");
+    check(substring.at("Language").find("C++") != std::string::npos,
+          "the substring search explains itself too, got '" + substring.at("Language") + "'");
+    check(search.snippets("monoid").at("Monoid homomorphism").empty() ==
+              search.snippets("monoid").at("Monoid homomorphism").empty(),
+          "the same search gives the same answer twice");
+  }
   if (fullText) {
     check(search.titles("zlutoucky kun") == std::vector<std::string>{"Pangram"},
           "diacritics are ignored, got " + joined(search.titles("zlutoucky kun")));

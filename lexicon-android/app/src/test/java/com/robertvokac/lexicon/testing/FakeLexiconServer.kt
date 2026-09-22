@@ -434,7 +434,8 @@ class FakeLexiconServer : Dispatcher() {
             (query.groupId == null || item.groupId == query.groupId) &&
                 (query.typeId == null || item.itemTypeId == query.typeId) &&
                 (query.searchText.isEmpty() || listOf(item.title, item.disambiguation).plus(item.aliases).plus(item.tags).plus(item.flags)
-                    .any { it.contains(query.searchText, ignoreCase = true) }) &&
+                    .any { it.contains(query.searchText, ignoreCase = true) } ||
+                    item.content.contains(query.searchText, ignoreCase = true)) &&
                 (query.columnFilters.id.isEmpty() || item.id.toString() == query.columnFilters.id) &&
                 (query.columnFilters.title.isEmpty() || item.title.contains(query.columnFilters.title, ignoreCase = true)) &&
                 (query.columnFilters.alias.isEmpty() || item.aliases.any { it.contains(query.columnFilters.alias, ignoreCase = true) }) &&
@@ -457,11 +458,22 @@ class FakeLexiconServer : Dispatcher() {
         }
         if (query.sortOrder == SortOrder.Descending) list = list.reversed()
         val page = list.drop(query.offset).let { if (query.limit > 0) it.take(query.limit) else it }
-            .map { it.copy(content = "", properties = emptyList()) }
+            .map { it.copy(content = "", properties = emptyList(), matchSnippet = snippetOf(it.content, query.searchText)) }
         return json(buildJsonObject {
             put("items", encode(page))
             put("totalCount", list.size)
         })
+    }
+
+    /** Why a search found an item, the way the server explains it: around the match, on one line. */
+    private fun snippetOf(content: String, searchText: String): String? {
+        if (searchText.isEmpty()) return null
+        val at = content.indexOf(searchText, ignoreCase = true)
+        if (at < 0) return null
+        val start = maxOf(0, at - 40)
+        val end = minOf(content.length, start + 120)
+        val middle = content.substring(start, end).replace('\n', ' ').replace('\r', ' ').trim()
+        return (if (start > 0) "…" else "") + middle + (if (end < content.length) "…" else "")
     }
 
     private fun saveItem(request: RecordedRequest, id: Int?): MockResponse {

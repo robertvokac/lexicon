@@ -293,7 +293,9 @@ Json toJson(const ItemRecord &item) {
       {"content", item.content},
       {"revision", item.revision},
       {"reviewedAt", item.reviewedAt.empty() ? Json(nullptr) : Json(item.reviewedAt)},
-      {"reviewDueAt", item.reviewDueAt.empty() ? Json(nullptr) : Json(item.reviewDueAt)}};
+      {"reviewDueAt", item.reviewDueAt.empty() ? Json(nullptr) : Json(item.reviewDueAt)},
+      // Why a search found this item; absent from an item fetched by ID.
+      {"matchSnippet", item.matchSnippet.empty() ? Json(nullptr) : Json(item.matchSnippet)}};
 }
 
 Json toJson(const AlarmRecord &alarm) {

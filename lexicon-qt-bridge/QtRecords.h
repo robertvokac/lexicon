@@ -112,6 +112,8 @@ struct ItemRecord {
   int revision = 0;
   QString reviewedAt;
   QString reviewDueAt;
+  // Why a search found this item; empty otherwise. See lexicon::ItemRecord.
+  QString matchSnippet;
 };
 struct UsageValueRecord {
   QString value;

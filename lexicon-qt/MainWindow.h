@@ -234,6 +234,8 @@ private:
     CodeHighlighter* m_highlighter = nullptr;
     CodeHighlighter* m_linksHighlighter = nullptr;
 
+    // The table's row height without a search snippet under the title.
+    int m_defaultRowHeight = 0;
     int m_currentPage = 0;
     int m_pageSize = 20;
     int m_lastItemId = -1;

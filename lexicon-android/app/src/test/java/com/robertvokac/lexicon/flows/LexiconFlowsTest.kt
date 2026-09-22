@@ -201,6 +201,17 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun aContentMatchSaysWhyTheItemWasFound() {
+        fake.addItem(Item(title = "Arena allocator", content = "Allocate a frame's objects from one block and free them all at once."))
+        login()
+        compose.onNode(hasSetTextAction() and hasContentDescription("Search items")).performTextInput("free them all")
+        compose.onNode(hasSetTextAction() and hasContentDescription("Search items")).performImeAction()
+        compose.waitForText("Arena allocator")
+        // The card carries the piece of content that matched.
+        compose.waitForText("free them all at once", substring = true)
+    }
+
+    @Test
     fun quickAddUsesTheDefaultGroup() {
         login()
         compose.onNodeWithContentDescription("Quick add item").performClick()
