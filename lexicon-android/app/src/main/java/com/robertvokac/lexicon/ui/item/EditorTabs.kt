@@ -58,6 +58,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -93,6 +95,7 @@ import kotlinx.coroutines.withContext
 fun ContentTab(viewModel: ItemEditorViewModel) {
     var previewing by rememberSaveable { mutableStateOf(false) }
     var askLanguage by rememberSaveable { mutableStateOf(false) }
+    var pickingItem by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val sideBySide = maxWidth >= 720.dp
         Column(Modifier.fillMaxSize()) {
@@ -116,6 +119,7 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
                         onAction = { action ->
                             if (action == FormattingAction.CodeBlock) askLanguage = true else viewModel.format(action)
                         },
+                        onItemLink = { pickingItem = true },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -142,6 +146,16 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
             }
         }
     }
+    if (pickingItem) {
+        ItemPickerDialog(
+            title = "Link to an item",
+            onPick = { item ->
+                pickingItem = false
+                viewModel.insertItemLink(item.displayTitle)
+            },
+            onDismiss = { pickingItem = false },
+        )
+    }
     if (askLanguage) {
         CodeLanguageDialog(
             viewModel = viewModel,
@@ -155,7 +169,7 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
 }
 
 @Composable
-private fun FormattingToolbar(onAction: (FormattingAction) -> Unit, modifier: Modifier = Modifier) {
+private fun FormattingToolbar(onAction: (FormattingAction) -> Unit, onItemLink: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
         FormattingAction.entries.forEach { action ->
             TextButton(
@@ -163,6 +177,10 @@ private fun FormattingToolbar(onAction: (FormattingAction) -> Unit, modifier: Mo
                 modifier = Modifier.semantics { contentDescription = action.description },
             ) { Text(action.label) }
         }
+        TextButton(
+            onClick = onItemLink,
+            modifier = Modifier.semantics { contentDescription = "Link to an item" },
+        ) { Text("[[ ]]") }
     }
 }
 
@@ -635,6 +653,20 @@ fun LinksTab(state: EditorState, viewModel: ItemEditorViewModel, incoming: Boole
             OutlinedButton(onClick = { adding = true }, modifier = Modifier.padding(vertical = 12.dp)) {
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Text(if (incoming) "Add backlink" else "Add link")
+            }
+        }
+        if (!incoming) {
+            item {
+                OutlinedButton(onClick = viewModel::addLinksFromContent, modifier = Modifier.padding(bottom = 12.dp)) {
+                    Text("Add links from content")
+                }
+                state.linksFromContent?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
             }
         }
     }

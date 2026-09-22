@@ -197,13 +197,17 @@ accept it; install a proper certificate instead.
   **More…** opens the full editor instead, the desktop's Add ….
 - **Item page.** Title, group and type, status, understanding, pinned, tags,
   flags, aliases, values (with **Save as…** for blobs), properties, the rendered
-  Markdown content, links and backlinks. Links open the item they point to.
+  Markdown content, links and backlinks. Links open the item they point to,
+  and so does a `[[Title]]` in the content; one to no item offers to create it.
   Opening an item records one read (`POST /items/{id}/read`), once per opening.
 - **Editor.** General, Content, Values, Metadata, Links and Backlinks, as tabs of
   one screen. Everything, including both link directions, is saved in one
   request, which the server commits as one unit of work. Changing the type
   asks first when field values would be lost, with their number. A failed save
   keeps everything typed and says why; leaving with unsaved changes asks first.
+  The `[[ ]]` button inserts a link to an item picked from the list, and
+  **Add links from content** on the Links tab adds a Related link to every item
+  the content names.
   If another client saved the item after the editor opened it, the server
   refuses the save (409) and the app names what differs, then offers
   **Overwrite**, **Reload** or **Keep editing**.

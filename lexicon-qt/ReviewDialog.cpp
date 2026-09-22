@@ -4,6 +4,7 @@
 #include "MarkdownConverter.h"
 
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -63,7 +64,11 @@ ReviewDialog::ReviewDialog(QWidget* parent) : QDialog(parent) {
     m_detailLabel->setWordWrap(true);
     m_content = new QTextBrowser(card);
     m_content->setObjectName("reviewContent");
-    m_content->setOpenExternalLinks(true);
+    // Links to items are for the main window; web links open in the browser.
+    m_content->setOpenLinks(false);
+    connect(m_content, &QTextBrowser::anchorClicked, this, [](const QUrl& url) {
+        if (url.scheme() != MarkdownConverter::kItemScheme) QDesktopServices::openUrl(url);
+    });
     m_highlighter = new CodeHighlighter(m_content->document());
     cardLayout->addWidget(m_titleLabel);
     cardLayout->addWidget(m_detailLabel);

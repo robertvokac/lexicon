@@ -842,3 +842,8 @@ body.resizing { cursor: row-resize; user-select: none; }
 .review-content { max-height: 50vh; overflow: auto; }
 .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .review-done { text-align: center; margin: 24px 0; }
+
+/* Wiki links and the Links tab */
+.links-panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.links-panel > .list-editor { align-self: stretch; }
+a.wiki-link { text-decoration-style: dotted; }

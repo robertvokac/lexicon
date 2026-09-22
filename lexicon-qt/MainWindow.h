@@ -165,6 +165,9 @@ private slots:
     void updateActions();
     void showItemContent(const QModelIndex& index);
     void onLinkActivated(const QUrl& link);
+    // A link in the rendered content: a wiki link opens its item, or offers
+    // to create it; any other link opens in the browser.
+    void onContentLinkActivated(const QUrl& link);
 
 private:
     void applySavedTheme();
@@ -184,6 +187,10 @@ private:
     QList<ItemValueFilter> valueFilters() const;
     ItemColumnFilters columnFilters() const;
     void showError(const QString& message);
+    // Clears the filters, searches for the title and selects the item with
+    // this ID, or the first result.
+    void showItemTitled(const QString& title, int itemId = -1);
+    void openNewItemEditor(const QString& title, const QString& disambiguation = QString());
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -219,7 +226,7 @@ private:
     QPushButton* m_lastButton = nullptr;
     QLabel* m_pageLabel = nullptr;
     QComboBox* m_pageSizeCombo = nullptr;
-    QTextEdit* m_itemContentView = nullptr;
+    QTextBrowser* m_itemContentView = nullptr;
     QTextBrowser* m_linksView = nullptr;
     CodeHighlighter* m_highlighter = nullptr;
     CodeHighlighter* m_linksHighlighter = nullptr;

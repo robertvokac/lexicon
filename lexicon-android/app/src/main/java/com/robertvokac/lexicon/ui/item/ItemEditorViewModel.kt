@@ -19,10 +19,12 @@ import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.ItemType
 import com.robertvokac.lexicon.model.Link
+import com.robertvokac.lexicon.model.LinkType
 import com.robertvokac.lexicon.model.Property
 import com.robertvokac.lexicon.model.UnderstandingLevel
 import com.robertvokac.lexicon.ui.common.userMessage
 import com.robertvokac.lexicon.ui.markdown.FormattingAction
+import com.robertvokac.lexicon.ui.markdown.Markdown
 import com.robertvokac.lexicon.ui.markdown.MarkdownFormatting
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +94,8 @@ data class EditorState(
     val fromShare: Boolean = false,
     val message: String? = null,
     val conflict: SaveConflict? = null,
+    /** What "Add links from content" did, shown under its button. */
+    val linksFromContent: String? = null,
 ) {
     val isNew: Boolean get() = itemId == null
     val saving: Boolean get() = save == SaveStatus.Saving
@@ -108,6 +112,7 @@ data class EditorStart(
     val title: String,
     val content: String,
     val fromShare: Boolean,
+    val disambiguation: String = "",
 )
 
 /**
@@ -192,7 +197,7 @@ class ItemEditorViewModel(
                 } else {
                     val groupId = start.groupId?.takeIf { id -> groups.any { it.id == id } }
                         ?: api.defaultGroupId()
-                    fields = EditorFields(groupId = groupId, typeId = start.typeId, title = start.title)
+                    fields = EditorFields(groupId = groupId, typeId = start.typeId, title = start.title, disambiguation = start.disambiguation)
                     text = start.content
                 }
                 val refreshedGroups = if (groups.any { it.id == fields.groupId }) groups else api.groups()
@@ -393,6 +398,61 @@ class ItemEditorViewModel(
     }
 
     suspend fun lastCodeLanguage(): String = container.settings.codeLanguage()
+
+    /** Inserts [[target]] for the selection; a selection that is not the target becomes the shown text. */
+    fun insertItemLink(target: String) {
+        val selection = content.selection
+        val selected = content.text.substring(selection.min, selection.max).trim()
+        val text = "[[" + target + (if (selected.isNotEmpty() && selected != target) "|$selected" else "") + "]]"
+        content.edit {
+            replace(selection.min, selection.max, text)
+            this.selection = TextRange(selection.min + text.length)
+        }
+    }
+
+    /** A Related link to every item the content names with [[Title]]. */
+    fun addLinksFromContent() {
+        viewModelScope.launch {
+            val named = Markdown.itemLinks(content.text.toString())
+            if (named.isEmpty()) {
+                _state.update { it.copy(linksFromContent = "The content names no item with [[Title]].") }
+                return@launch
+            }
+            val missing = mutableListOf<String>()
+            var added = 0
+            try {
+                named.forEach { link ->
+                    val target = try {
+                        api.resolveItem(link.title, link.disambiguation)
+                    } catch (_: ApiException.NotFound) {
+                        if (link.target !in missing) missing += link.target
+                        return@forEach
+                    }
+                    val fields = _state.value.fields
+                    if (target == _state.value.itemId || fields.links.any { it.itemId == target }) return@forEach
+                    val item = api.item(target).item
+                    putLink(
+                        incoming = false,
+                        entry = LinkEntry(
+                            key = newLinkKey(),
+                            id = null,
+                            itemId = target,
+                            title = item.displayTitle,
+                            linkType = LinkType.Related,
+                            customValue = "",
+                            position = (fields.links.maxOfOrNull { it.position } ?: -1) + 1,
+                        ),
+                    )
+                    added++
+                }
+            } catch (failure: ApiException) {
+                _state.update { it.copy(message = failure.userMessage()) }
+                return@launch
+            }
+            val summary = "$added link(s) added." + if (missing.isEmpty()) "" else " No item is called: ${missing.joinToString(", ")}."
+            _state.update { it.copy(linksFromContent = summary) }
+        }
+    }
 
     // Metadata --------------------------------------------------------------
 

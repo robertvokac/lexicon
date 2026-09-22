@@ -59,6 +59,7 @@ private slots:
     void formatCode();
     void formatCodeBlock();
     void formatHorizontalLine();
+    void formatItemLink();
     void updatePreview();
 
     void addLink();
@@ -67,6 +68,7 @@ private slots:
     void addBacklink();
     void editBacklink();
     void removeBacklink();
+    void addLinksFromContent();
 
     void validateAndAccept();
 

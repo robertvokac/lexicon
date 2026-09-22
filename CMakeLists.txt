@@ -69,6 +69,8 @@ add_library(lexicon-core STATIC
     lexicon-core/Utf8Path.cpp
     lexicon-core/Validation.h
     lexicon-core/Validation.cpp
+    lexicon-core/WikiLinks.h
+    lexicon-core/WikiLinks.cpp
 )
 target_include_directories(lexicon-core PUBLIC lexicon-core)
 set_target_properties(lexicon-core PROPERTIES AUTOMOC OFF AUTORCC OFF)
@@ -222,7 +224,7 @@ if (LEXICON_BUILD_DESKTOP)
         ${MD4QT_SRC}
     )
     target_include_directories(lexicon-markdown PUBLIC 3rdparty/md4qt/src lexicon-qt)
-    target_link_libraries(lexicon-markdown PUBLIC Qt${QT_VERSION_MAJOR}::Core)
+    target_link_libraries(lexicon-markdown PUBLIC lexicon-core Qt${QT_VERSION_MAJOR}::Core)
 
     add_executable(Lexicon
         lexicon-qt/main.cpp
@@ -281,6 +283,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/ApplicationContext.cpp
             lexicon-qt/ReviewDialog.h
             lexicon-qt/ReviewDialog.cpp
+            lexicon-qt/ItemEditDialog.h
+            lexicon-qt/ItemEditDialog.cpp
         )
         target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
         target_link_libraries(lexicon-desktop-gui-smoke PRIVATE
@@ -296,6 +300,11 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-core-smoke PRIVATE lexicon-application)
     set_target_properties(lexicon-core-smoke PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME core_smoke COMMAND lexicon-core-smoke)
+
+    add_executable(lexicon-wiki-links tests/WikiLinks.cpp)
+    target_link_libraries(lexicon-wiki-links PRIVATE lexicon-core)
+    set_target_properties(lexicon-wiki-links PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME wiki_links COMMAND lexicon-wiki-links)
 
     add_executable(lexicon-application-integration tests/ApplicationIntegration.cpp)
     target_link_libraries(lexicon-application-integration PRIVATE lexicon-application lexicon-storage-sqlite)

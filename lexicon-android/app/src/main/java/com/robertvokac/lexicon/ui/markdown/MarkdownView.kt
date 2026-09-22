@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
@@ -49,12 +50,19 @@ import androidx.compose.ui.unit.dp
 import com.robertvokac.lexicon.ui.theme.CodeColors
 import com.robertvokac.lexicon.ui.theme.LocalCodeColors
 
-/** Colors and the link handler inline text needs; built once per composition. */
+/**
+ * What a tap on a [[wiki link]] does, given its title and disambiguation. The
+ * item page opens the item; elsewhere the link does nothing.
+ */
+val LocalItemLinkHandler = staticCompositionLocalOf<(title: String, disambiguation: String) -> Unit> { { _, _ -> } }
+
+/** Colors and the link handlers inline text needs; built once per composition. */
 @Immutable
 private class InlineStyle(
     val link: Color,
     val code: Color,
     val onLink: (String) -> Unit,
+    val onItemLink: (String, String) -> Unit,
 )
 
 @Composable
@@ -62,7 +70,8 @@ private fun rememberInlineStyle(): InlineStyle {
     val context = LocalContext.current
     val link = MaterialTheme.colorScheme.primary
     val code = LocalCodeColors.current.background
-    return remember(link, code, context) { InlineStyle(link, code) { SafeLinks.open(context, it) } }
+    val onItemLink = LocalItemLinkHandler.current
+    return remember(link, code, context, onItemLink) { InlineStyle(link, code, { SafeLinks.open(context, it) }, onItemLink) }
 }
 
 /** Renders [blocks] in a column; for content inside a scrolling parent. */
@@ -238,6 +247,12 @@ private fun annotated(inlines: List<MdInline>, style: InlineStyle): AnnotatedStr
                 } else {
                     appendAll(node.children)
                 }
+                is MdInline.ItemLink -> withLink(
+                    LinkAnnotation.Clickable(
+                        "item:${node.target}",
+                        TextLinkStyles(SpanStyle(color = style.link, textDecoration = TextDecoration.Underline)),
+                    ) { style.onItemLink(node.title, node.disambiguation) },
+                ) { append(node.label.ifEmpty { node.title }) }
                 is MdInline.ImageRef -> {
                     // Images are not loaded: a note never makes the device fetch
                     // from wherever its source points.

@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { confirmDialog, errorDialog, messageDialog, openDialog } from './dialogs.js';
 import { clearDraft, latestDraft } from './drafts.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
-import { renderMarkdown } from './markdown.js';
+import { bindItemLinks, renderMarkdown } from './markdown.js';
 import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
@@ -227,6 +227,7 @@ export class MainView {
         });
         this.contentPreview.appendChild(
             el('p', { class: 'hint', text: 'Select an item to view content...' }));
+        bindItemLinks(this.contentPreview, (target) => this.openWikiLink(target));
         this.linksPreview = el('div', { class: 'links-preview' });
 
         this.tableWrapper = el('div', { class: 'table-wrapper' }, [this.table]);
@@ -1078,9 +1079,34 @@ export class MainView {
         this.linksPreview.appendChild(line('Backlinks', backlinks, (link) => link.fromItemTitle));
     }
 
+    // A [[wiki link]] in the content: its item, or the offer to create it.
+    async openWikiLink(target) {
+        let itemId;
+        try {
+            itemId = await api.resolveItem(target.title, target.disambiguation);
+        } catch (error) {
+            if (error.isUnauthorized) return;
+            if (error.status !== 404) {
+                await errorDialog(error.message);
+                return;
+            }
+            const name = formatItemTitle(target.title, target.disambiguation);
+            if (await confirmDialog('Create item', `No item is called '${name}'. Create it?`)) {
+                await this.addItem(target.title, target.disambiguation);
+            }
+            return;
+        }
+        try {
+            const loaded = await api.getItem(itemId);
+            await this.navigateToTitle(loaded.item.title, itemId);
+        } catch (error) {
+            if (!error.isUnauthorized) await errorDialog(error.message);
+        }
+    }
+
     // Following a link clears the filters and searches for the target, like the
-    // desktop link view.
-    async navigateToTitle(title) {
+    // desktop link view, and selects the item with itemId or the first one.
+    async navigateToTitle(title, itemId = null) {
         this.filters = {
             groupId: 0, typeId: 0, id: '', title: '', disambiguation: '', alias: '',
             tag: '', flag: '', status: '', understanding: '', pinned: '', values: {},
@@ -1094,10 +1120,11 @@ export class MainView {
         await this.refreshTypes();
         await this.resetPaginationAndRefresh();
         if (this.items.length) {
-            await this.selectItem(this.items[0].id);
+            const index = Math.max(0, this.items.findIndex((item) => item.id === itemId));
+            await this.selectItem(this.items[index].id);
             const rows = this.viewMode === 'list' ? this.itemList.children
                                                   : this.tableBody.children;
-            if (rows[0]) rows[0].focus();
+            if (rows[index]) rows[index].focus();
         }
     }
 
@@ -1204,7 +1231,7 @@ export class MainView {
         }
     }
 
-    async addItem() {
+    async addItem(title = this.searchInput.value.trim(), disambiguation = '') {
         try {
             const groupId = await this.groupIdForNewItem();
             const savedId = await openItemEditor({
@@ -1213,8 +1240,8 @@ export class MainView {
                 draft: {
                     groupId,
                     itemTypeId: this.filters.typeId > 0 ? this.filters.typeId : null,
-                    title: this.searchInput.value.trim(),
-                    disambiguation: '',
+                    title,
+                    disambiguation,
                     status: 'None',
                     understanding: 'Unknown',
                     pinned: false,

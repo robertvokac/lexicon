@@ -6,6 +6,10 @@
 
 class MarkdownConverter {
 public:
+    // Wiki links become links with this scheme; the rest of the URL is the
+    // percent-encoded "Title [disambiguation]".
+    static constexpr const char* kItemScheme = "lexicon-item";
+
     static QString toHtml(const QString& markdown);
 
 private:

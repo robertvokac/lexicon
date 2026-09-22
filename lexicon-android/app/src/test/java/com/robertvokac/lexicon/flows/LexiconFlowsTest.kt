@@ -13,6 +13,7 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasParent
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -419,12 +420,14 @@ class LexiconFlowsTest {
         compose.onNodeWithText("Resource acquisition is initialization.").assertDoesNotExist()
         compose.onNode(hasText("Show answer") and hasClickAction()).performClick()
         compose.waitForText("Resource acquisition is initialization.")
+        compose.waitFor(hasText("Good (2 days)") and hasClickAction())
         compose.onNode(hasText("Good (2 days)") and hasClickAction()).performScrollTo().performClick()
         compose.waitForText("Object lifetime")
         assertEquals(listOf(raii.id!! to ReviewRating.Good), fake.reviews.toList())
         assertEquals(UnderstandingLevel.Recognized, fake.items.getValue(raii.id!!).understanding)
 
         compose.onNode(hasText("Show answer") and hasClickAction()).performClick()
+        compose.waitFor(hasText("Again (1 day)") and hasClickAction())
         compose.onNode(hasText("Again (1 day)") and hasClickAction()).performScrollTo().performClick()
         compose.waitForText("Pointer provenance")
         compose.onNode(hasText("Skip") and hasClickAction()).performClick()
@@ -432,6 +435,44 @@ class LexiconFlowsTest {
         compose.waitForText("Object lifetime")
         compose.onNode(hasText("Skip") and hasClickAction()).performClick()
         compose.waitForText("2 reviewed", substring = true)
+    }
+
+    @Test
+    fun aWikiLinkOpensItsItemOrOffersToCreateIt() {
+        fake.changeElsewhere(raii.id!!) { it.copy(content = "Tied to the [[object lifetime]]; see [[Ownership]].") }
+        login()
+        compose.onNodeWithText("RAII").performClick()
+        compose.waitForText("Tied to the object lifetime; see Ownership.")
+        // The links of a text are its clickable children, in order.
+        val links = hasClickAction() and hasParent(hasText("Tied to the object lifetime; see Ownership."))
+        compose.onAllNodes(links)[0].performClick()
+        compose.waitForText("This item has no content yet.")
+        assertTrue(fake.requests.any { it.url.encodedPath == "/api/v1/items/${lifetime.id}" })
+
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForText("Tied to the object lifetime; see Ownership.")
+        compose.onAllNodes(links)[1].performClick()
+        compose.waitForText("No item is called 'Ownership'. Create it?")
+        inDialog("Create").performClick()
+        compose.waitFor(hasSetTextAction() and hasText("Ownership"))
+    }
+
+    @Test
+    fun linksAreAddedForTheItemsTheContentNames() {
+        fake.changeElsewhere(raii.id!!) { it.copy(content = "Tied to the [[object lifetime]], not to [[Ghost]].") }
+        login()
+        compose.onNodeWithText("RAII").performClick()
+        compose.waitForText("Tied to the object lifetime, not to Ghost.")
+        openEditor()
+        compose.onNode(hasText("Links", substring = true) and hasClickAction()).performClick()
+        compose.onNode(hasText("Add links from content") and hasClickAction()).performScrollTo().performClick()
+        compose.waitForText("1 link(s) added. No item is called: Ghost.")
+        compose.onNodeWithText("Object lifetime").assertIsDisplayed()
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        compose.waitForCondition { fake.requestsTo("PUT", "/api/v1/items/${raii.id}").isNotEmpty() }
+        val link = lastBody("PUT", "/api/v1/items/${raii.id}")["links"]!!.jsonArray.single().jsonObject
+        assertEquals(lifetime.id, link["toItemId"]!!.jsonPrimitive.int)
+        assertEquals("Related", link["linkType"]!!.jsonPrimitive.content)
     }
 
     @Test

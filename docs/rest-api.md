@@ -202,6 +202,12 @@ GET    /api/v1/items/{id}/backlinks              → { "backlinks": [ ... ] }
 GET    /api/v1/items/resolve?title=&disambiguation= → { "itemId": 7 }
 ```
 
+`resolve` is what a `[[Title]]` link in item content uses. The first of these
+that finds an item wins: the exact title (preferring an item without a
+disambiguation when none is given), the title ignoring ASCII case, an exact
+alias, an alias ignoring ASCII case. With a `disambiguation`, only titles are
+considered, exactly and then ignoring ASCII case.
+
 An item:
 
 ```json

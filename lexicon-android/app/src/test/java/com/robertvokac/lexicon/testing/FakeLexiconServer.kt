@@ -269,6 +269,15 @@ class FakeLexiconServer : Dispatcher() {
                 json(buildJsonObject { put("count", items.values.count { it.fieldValues.containsKey(id) }) })
             }
             path == "/items/query" -> query(request)
+            path == "/items/resolve" && method == "GET" -> {
+                val title = request.url.queryParameter("title").orEmpty()
+                val disambiguation = request.url.queryParameter("disambiguation").orEmpty()
+                val found = items.values.firstOrNull {
+                    it.title.equals(title, ignoreCase = true) && it.disambiguation.equals(disambiguation, ignoreCase = true)
+                } ?: items.values.firstOrNull { item -> disambiguation.isEmpty() && item.aliases.any { it.equals(title, ignoreCase = true) } }
+                    ?: return error(404, "not_found", "Item not found.")
+                json(buildJsonObject { put("itemId", found.id!!) })
+            }
             path == "/items" && method == "POST" -> saveItem(request, null)
             segments.size == 2 && segments[0] == "items" && method == "GET" -> {
                 val id = segments[1].toIntOrNull() ?: return notFound()

@@ -1,10 +1,10 @@
 // The web counterpart of ItemEditDialog: General, Content, Values, Metadata,
 // Links and Backlinks, saved in one atomic item+links request.
 import { api } from './api.js';
-import { confirmDialog, errorDialog, field, listEditor, openDialog, promptDialog }
+import { confirmDialog, errorDialog, field, listEditor, messageDialog, openDialog, promptDialog }
     from './dialogs.js';
 import { clearDraft, keepDraft, readDraft } from './drafts.js';
-import { renderMarkdown } from './markdown.js';
+import { bindItemLinks, findWikiLinks, renderMarkdown } from './markdown.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
     LINK_TYPES, linkDescription, LITERAL_TEXT, readLocal, splitItemTitle, typeDisplayName,
@@ -28,6 +28,7 @@ const MARKDOWN_ACTIONS = [
     { label: 'Block', title: 'Code block (```)', codeBlock: true },
     { separator: true },
     { label: 'Link', title: 'Insert link ([])', prefix: '[', suffix: '](https://)', sample: 'link text' },
+    { label: '[[ ]]', title: 'Link to an item ([[Title]])', itemLink: true },
     { label: 'Table', title: 'Insert table (|)', table: true },
 ];
 
@@ -525,6 +526,7 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
     });
     contentArea.value = record.content || '';
     const preview = el('div', { class: 'markdown-preview', 'aria-live': 'polite' });
+    bindItemLinks(preview, () => {});
     const refreshPreview = debounce(() => renderMarkdown(preview, contentArea.value), 300);
     contentArea.addEventListener('input', refreshPreview);
     renderMarkdown(preview, contentArea.value);
@@ -545,6 +547,20 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
                     if (language === null) return;
                     writeLocal(CODE_LANGUAGE_KEY, language);
                     insertMarkdown(contentArea, `\n\`\`\`${language}\n`, '\n```\n', 'code block');
+                    return;
+                }
+                if (action.itemLink) {
+                    const { selectionStart, selectionEnd, value } = contentArea;
+                    const selected = value.slice(selectionStart, selectionEnd).trim();
+                    const target = await promptDialog('Link to an item', 'Item:', selected, itemTitles);
+                    if (!target) return;
+                    // A selection that is not the target itself becomes the shown text.
+                    const label = selected && selected !== target ? `|${selected}` : '';
+                    const text = `[[${target}${label}]]`;
+                    contentArea.value = value.slice(0, selectionStart) + text + value.slice(selectionEnd);
+                    contentArea.focus();
+                    contentArea.setSelectionRange(selectionStart + text.length, selectionStart + text.length);
+                    contentArea.dispatchEvent(new Event('input', { bubbles: true }));
                     return;
                 }
                 if (action.table) {
@@ -740,12 +756,57 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
     linkEditor.render(sortLinks(links));
     backlinkEditor.render(sortLinks(backlinks));
 
+    // A Related link to every item the content names with [[Title]].
+    async function addLinksFromContent() {
+        const named = findWikiLinks(contentArea.value);
+        const linked = new Set(links.map((link) => link.itemId));
+        let position = links.reduce((highest, link) => Math.max(highest, link.position + 1), 0);
+        const missing = [];
+        let added = 0;
+        for (const target of named) {
+            const name = formatItemTitle(target.title, target.disambiguation);
+            let targetId;
+            try {
+                targetId = await api.resolveItem(target.title, target.disambiguation);
+            } catch (error) {
+                if (error.status !== 404) throw error;
+                if (!missing.includes(name)) missing.push(name);
+                continue;
+            }
+            if (targetId === itemId || linked.has(targetId)) continue;
+            const loaded = await api.getItem(targetId);
+            links.push({
+                id: null,
+                itemId: targetId,
+                targetTitle: formatItemTitle(loaded.item.title, loaded.item.disambiguation),
+                linkType: 'Related',
+                customValue: '',
+                position,
+            });
+            position += 1;
+            linked.add(targetId);
+            added += 1;
+        }
+        linkEditor.render(sortLinks(links));
+        let message = named.length ? `${added} link(s) added.` : 'The content names no item with [[Title]].';
+        if (missing.length) message += `\n\nNo item is called: ${missing.join(', ')}.`;
+        await messageDialog('Links from content', message);
+    }
+    const linksPanel = el('div', { class: 'links-panel' }, [
+        linkEditor.node,
+        button('Add links from content', {
+            class: 'secondary',
+            title: 'A Related link to every item the content names with [[Title]]',
+            onclick: () => addLinksFromContent().catch((error) => errorDialog(error.message)),
+        }),
+    ]);
+
     const tabStrip = tabs([
         { name: 'general', label: 'General', content: generalPanel },
         { name: 'content', label: 'Content', content: contentPanel },
         { name: 'values', label: 'Values', content: valuesPanel },
         { name: 'metadata', label: 'Metadata', content: metadataPanel },
-        { name: 'links', label: 'Links', content: linkEditor.node },
+        { name: 'links', label: 'Links', content: linksPanel },
         { name: 'backlinks', label: 'Backlinks', content: backlinkEditor.node },
     ]);
 

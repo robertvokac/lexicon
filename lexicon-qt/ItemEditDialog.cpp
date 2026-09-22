@@ -4,6 +4,7 @@
 
 #include "ApplicationContext.h"
 #include "MarkdownConverter.h"
+#include "WikiLinks.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
@@ -161,6 +162,7 @@ void ItemEditDialog::setupUi() {
     m_contentToolbar->addAction("Block", this, SLOT(formatCodeBlock()))->setToolTip("Code Block (```)");
     m_contentToolbar->addSeparator();
     m_contentToolbar->addAction("Link", this, SLOT(formatLink()))->setToolTip("Insert Link ([])");
+    m_contentToolbar->addAction("[[ ]]", this, SLOT(formatItemLink()))->setToolTip("Link to an item ([[Title]])");
     m_contentToolbar->addAction("Table", this, SLOT(formatTable()))->setToolTip("Insert Table (|)");
 
     m_contentEdit = new QTextEdit(this);
@@ -207,8 +209,16 @@ void ItemEditDialog::setupUi() {
     m_tabWidget->addTab(additionalTab, "Metadata");
 
     // --- Tab 5: Links ---
-    auto* linksTab = buildListEditor("Outgoing Links", m_linksList, this,
-                                     SLOT(addLink()), SLOT(editLink()), SLOT(removeLink()));
+    auto* linksTab = new QWidget();
+    auto* linksLayout = new QVBoxLayout(linksTab);
+    linksLayout->addWidget(buildListEditor("Outgoing Links", m_linksList, this,
+                                           SLOT(addLink()), SLOT(editLink()), SLOT(removeLink())));
+    m_linksList->setObjectName("outgoingLinks");
+    auto* fromContent = new QPushButton("Add links from content", linksTab);
+    fromContent->setObjectName("linksFromContent");
+    fromContent->setToolTip("A Related link to every item the content names with [[Title]]");
+    connect(fromContent, &QPushButton::clicked, this, &ItemEditDialog::addLinksFromContent);
+    linksLayout->addWidget(fromContent, 0, Qt::AlignLeft);
     m_tabWidget->addTab(linksTab, "Links");
 
     // --- Tab 6: Backlinks ---
@@ -705,6 +715,16 @@ void ItemEditDialog::formatHorizontalLine() {
     insertMarkdown("\n---\n", "", "");
 }
 
+void ItemEditDialog::formatItemLink() {
+    const QString selected = m_contentEdit->textCursor().selectedText().trimmed();
+    const QString target = getInputValue("Link to an item", "Item:", selected, services().search.loadItemTitles());
+    if (target.isEmpty()) return;
+    // A selection that is not the target itself becomes the shown text.
+    const bool labelled = !selected.isEmpty() && selected != target;
+    m_contentEdit->textCursor().insertText("[[" + target + (labelled ? "|" + selected : QString()) + "]]");
+    m_contentEdit->setFocus();
+}
+
 void ItemEditDialog::updatePreview() {
     m_previewEdit->setHtml(MarkdownConverter::toHtml(m_contentEdit->toPlainText()));
 }
@@ -1046,6 +1066,46 @@ void ItemEditDialog::removeBacklink() {
         m_currentBacklinks.removeAt(row);
         updateLinksList();
     }
+}
+
+void ItemEditDialog::addLinksFromContent() {
+    const QByteArray content = m_contentEdit->toPlainText().toUtf8();
+    const auto named = lexicon::findWikiLinks(std::string_view(content.constData(), static_cast<std::size_t>(content.size())));
+    QSet<int> linked;
+    int position = 0;
+    for (const auto& link : m_currentLinks) {
+        linked.insert(link.toItemId);
+        position = std::max(position, link.position + 1);
+    }
+    int added = 0;
+    QStringList missing;
+    for (const auto& link : named) {
+        const QString title = qtbridge::toQt(link.title);
+        const QString disambiguation = qtbridge::toQt(link.disambiguation);
+        const QString name = disambiguation.isEmpty() ? title : QString("%1 [%2]").arg(title, disambiguation);
+        const int target = services().search.findItemId(title, disambiguation);
+        if (target <= 0) {
+            if (!missing.contains(name)) missing << name;
+            continue;
+        }
+        if (target == m_itemId || linked.contains(target)) continue;
+        ItemRecord item;
+        services().items.loadItem(target, item);
+        LinkRecord record;
+        record.fromItemId = m_itemId;
+        record.toItemId = target;
+        record.toItemTitle = item.disambiguation.isEmpty() ? item.title : QString("%1 [%2]").arg(item.title, item.disambiguation);
+        record.linkType = LinkType::Related;
+        record.position = position++;
+        m_currentLinks.append(record);
+        linked.insert(target);
+        ++added;
+    }
+    updateLinksList();
+    QString message = named.empty() ? "The content names no item with [[Title]]."
+                                    : QString("%1 link(s) added.").arg(added);
+    if (!missing.isEmpty()) message += "\n\nNo item is called: " + missing.join(", ") + ".";
+    QMessageBox::information(this, "Links from content", message);
 }
 
 void ItemEditDialog::validateAndAccept() {

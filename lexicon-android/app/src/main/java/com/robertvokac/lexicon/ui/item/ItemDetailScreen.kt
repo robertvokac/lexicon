@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +58,9 @@ import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.Link
 import com.robertvokac.lexicon.model.LinkType
 import com.robertvokac.lexicon.model.UnderstandingLevel
+import com.robertvokac.lexicon.model.formatItemTitle
 import com.robertvokac.lexicon.ui.common.ConfirmDialog
+import com.robertvokac.lexicon.ui.markdown.LocalItemLinkHandler
 import com.robertvokac.lexicon.ui.common.ErrorBox
 import com.robertvokac.lexicon.ui.common.LabelChip
 import com.robertvokac.lexicon.ui.common.LoadingBox
@@ -80,8 +83,27 @@ fun ItemDetailScreen(
     onOpenItem: (Int) -> Unit,
     onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
+    onCreateItem: (title: String, disambiguation: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    state.openItem?.let { id ->
+        LaunchedEffect(id) {
+            viewModel.itemLinkHandled()
+            onOpenItem(id)
+        }
+    }
+    state.missingItem?.let { (title, disambiguation) ->
+        ConfirmDialog(
+            title = "Create item",
+            message = "No item is called '${formatItemTitle(title, disambiguation)}'. Create it?",
+            confirmLabel = "Create",
+            onConfirm = {
+                viewModel.itemLinkHandled()
+                onCreateItem(title, disambiguation)
+            },
+            onDismiss = viewModel::itemLinkHandled,
+        )
+    }
     val snackbar = remember { SnackbarHostState() }
     var menu by remember { mutableStateOf(false) }
     var pendingHash by rememberSaveable { mutableStateOf<String?>(null) }
@@ -147,24 +169,26 @@ fun ItemDetailScreen(
             state.loading && bundle == null -> LoadingBox(Modifier.padding(padding))
             state.notFound -> ErrorBox("This item no longer exists.", onRetry = null, modifier = Modifier.padding(padding))
             bundle == null -> ErrorBox(state.error ?: "The item could not be loaded.", onRetry = { viewModel.load() }, modifier = Modifier.padding(padding))
-            else -> LazyColumn(
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
-                modifier = Modifier.padding(padding).fillMaxSize(),
-            ) {
-                header(bundle.item)
-                values(state, onSaveAs = { name, hash ->
-                    pendingHash = hash
-                    saveAs.launch(BlobTransfer.suggestedName(name, hash))
-                })
-                properties(bundle.item)
-                item(key = "content-title") { Heading("Content") }
-                if (state.content.isEmpty()) {
-                    item(key = "content-empty") { Muted("This item has no content yet.") }
-                } else {
-                    markdownItems(state.content, keyPrefix = "md")
+            else -> CompositionLocalProvider(LocalItemLinkHandler provides viewModel::openItemLink) {
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+                    modifier = Modifier.padding(padding).fillMaxSize(),
+                ) {
+                    header(bundle.item)
+                    values(state, onSaveAs = { name, hash ->
+                        pendingHash = hash
+                        saveAs.launch(BlobTransfer.suggestedName(name, hash))
+                    })
+                    properties(bundle.item)
+                    item(key = "content-title") { Heading("Content") }
+                    if (state.content.isEmpty()) {
+                        item(key = "content-empty") { Muted("This item has no content yet.") }
+                    } else {
+                        markdownItems(state.content, keyPrefix = "md")
+                    }
+                    links("Links", "links", bundle.links, incoming = false, onOpenItem)
+                    links("Backlinks", "backlinks", bundle.backlinks, incoming = true, onOpenItem)
                 }
-                links("Links", "links", bundle.links, incoming = false, onOpenItem)
-                links("Backlinks", "backlinks", bundle.backlinks, incoming = true, onOpenItem)
             }
         }
     }

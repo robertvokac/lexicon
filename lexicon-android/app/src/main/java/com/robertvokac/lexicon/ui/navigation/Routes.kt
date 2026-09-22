@@ -17,6 +17,7 @@ data class EditItemRoute(
     val title: String = "",
     val content: String = "",
     val fromShare: Boolean = false,
+    val disambiguation: String = "",
 )
 
 @Serializable

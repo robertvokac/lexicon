@@ -47,12 +47,33 @@ class MarkdownTest {
     }
 
     @Test
+    fun wikiLinksBecomeItemLinksOutsideCode() {
+        val blocks = Markdown.parse("See [[Monoid]], [[Monoid [algebra]|monoids]] and `[[code]]`.\n\n```\n[[fenced]]\n```")
+        val paragraph = blocks[0] as MdBlock.Paragraph
+        assertEquals(
+            listOf(
+                MdInline.Plain("See "),
+                MdInline.ItemLink("Monoid", "", ""),
+                MdInline.Plain(", "),
+                MdInline.ItemLink("Monoid", "algebra", "monoids"),
+                MdInline.Plain(" and "),
+                MdInline.InlineCode("[[code]]"),
+                MdInline.Plain("."),
+            ),
+            paragraph.inlines,
+        )
+        assertEquals(MdBlock.CodeBlock("", "[[fenced]]"), blocks[1])
+        val found = Markdown.itemLinks("- in a [[List item]]\n\n| a |\n| - |\n| [[In table]] |\n\n> **[[Quoted]]**")
+        assertEquals(listOf("List item", "In table", "Quoted"), found.map { it.title })
+    }
+
+    @Test
     fun rawHtmlStaysText() {
         val blocks = Markdown.parse("<script>alert(1)</script>\n\nText <b onclick=\"x\">bold</b>")
         assertTrue(blocks[0] is MdBlock.RawHtml)
         assertEquals("<script>alert(1)</script>", (blocks[0] as MdBlock.RawHtml).literal)
         val paragraph = blocks[1] as MdBlock.Paragraph
-        assertTrue(paragraph.inlines.contains(MdInline.Plain("<b onclick=\"x\">")))
+        assertEquals(listOf(MdInline.Plain("Text <b onclick=\"x\">bold</b>")), paragraph.inlines)
     }
 
     @Test

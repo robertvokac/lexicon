@@ -605,6 +605,12 @@ void checkSearchAndUsage(Checks &checks) {
   checks.expectEqual(resolved.status, 200, "an item resolves by title");
   checks.expect(parse(resolved).value("itemId", 0) > 0,
                 "the resolved item has an ID");
+  checks.expectEqual(parse(client.get("/api/v1/items/resolve?title=monoid")).value("itemId", 0),
+                     parse(resolved).value("itemId", 0), "a title resolves ignoring case");
+  checks.expectEqual(parse(client.get("/api/v1/items/resolve?title=semigroup%20UNIT")).value("itemId", 0),
+                     parse(resolved).value("itemId", 0), "and so does an alias");
+  checks.expectEqual(client.get("/api/v1/items/resolve?title=MONOID&disambiguation=ALGEBRA").status, 200,
+                     "a disambiguation also ignores case");
   checks.expectEqual(client.get("/api/v1/items/resolve?title=Nothing").status,
                      404, "an unknown title is a not-found error");
   checks.expectEqual(client.get("/api/v1/items/resolve?title=").status, 400,

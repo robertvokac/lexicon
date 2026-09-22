@@ -44,6 +44,11 @@ sealed interface MdInline {
     data class Strike(val children: List<MdInline>) : MdInline
     data class LinkTo(val destination: String, val children: List<MdInline>) : MdInline
     data class ImageRef(val destination: String, val alt: String) : MdInline
+
+    /** A [[wiki link]] to another item; [label] is empty for the title. */
+    data class ItemLink(val title: String, val disambiguation: String, val label: String) : MdInline {
+        val target: String get() = if (disambiguation.isEmpty()) title else "$title [$disambiguation]"
+    }
     data object SoftBreak : MdInline
     data object HardBreak : MdInline
 }
@@ -122,7 +127,64 @@ object Markdown {
         return MdBlock.Table(alignments, header, rows)
     }
 
-    private fun inlines(parent: Node): List<MdInline> = children(parent).mapNotNull(::inline).toList()
+    private fun inlines(parent: Node): List<MdInline> = wikiLinks(children(parent).mapNotNull(::inline).toList())
+
+    // [[Title]], [[Title [disambiguation]]], either with |shown text: the
+    // syntax of lexicon-core/WikiLinks.h. Code spans and code blocks never
+    // reach this as text, so they keep their brackets.
+    private val wikiLink = Regex("""\[\[([^\[\]|\n]+?)(?:\s*\[([^\[\]\n]*)\])?(?:\s*\|([^\[\]\n]+))?\]\]""")
+
+    /** Joins neighbouring text, then turns its wiki links into [MdInline.ItemLink]s. */
+    private fun wikiLinks(nodes: List<MdInline>): List<MdInline> {
+        val joined = mutableListOf<MdInline>()
+        nodes.forEach { node ->
+            val last = joined.lastOrNull()
+            if (node is MdInline.Plain && last is MdInline.Plain) joined[joined.lastIndex] = MdInline.Plain(last.text + node.text)
+            else joined += node
+        }
+        return joined.flatMap { node ->
+            if (node !is MdInline.Plain || !node.text.contains("[[")) return@flatMap listOf(node)
+            buildList {
+                var from = 0
+                wikiLink.findAll(node.text).forEach { match ->
+                    val title = match.groupValues[1].trim()
+                    if (title.isEmpty()) return@forEach
+                    if (match.range.first > from) add(MdInline.Plain(node.text.substring(from, match.range.first)))
+                    add(MdInline.ItemLink(title, match.groupValues[2].trim(), match.groupValues[3].trim()))
+                    from = match.range.last + 1
+                }
+                if (from < node.text.length) add(MdInline.Plain(node.text.substring(from)))
+            }
+        }
+    }
+
+    /** Every wiki link in [source], in order, skipping code. */
+    fun itemLinks(source: String): List<MdInline.ItemLink> {
+        val found = mutableListOf<MdInline.ItemLink>()
+        fun inline(node: MdInline) {
+            when (node) {
+                is MdInline.ItemLink -> found += node
+                is MdInline.Emph -> node.children.forEach(::inline)
+                is MdInline.Strong -> node.children.forEach(::inline)
+                is MdInline.Strike -> node.children.forEach(::inline)
+                is MdInline.LinkTo -> node.children.forEach(::inline)
+                else -> Unit
+            }
+        }
+        fun block(node: MdBlock) {
+            when (node) {
+                is MdBlock.Heading -> node.inlines.forEach(::inline)
+                is MdBlock.Paragraph -> node.inlines.forEach(::inline)
+                is MdBlock.Quote -> node.blocks.forEach(::block)
+                is MdBlock.Bullets -> node.items.flatten().forEach(::block)
+                is MdBlock.Numbered -> node.items.flatten().forEach(::block)
+                is MdBlock.Table -> (node.header + node.rows.flatten()).flatten().forEach(::inline)
+                else -> Unit
+            }
+        }
+        parse(source).forEach(::block)
+        return found
+    }
 
     private fun inline(node: Node): MdInline? = when (node) {
         is Text -> MdInline.Plain(node.literal)

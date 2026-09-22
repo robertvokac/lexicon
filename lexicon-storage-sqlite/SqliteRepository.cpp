@@ -11,6 +11,7 @@
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <openssl/evp.h>
 #include <set>
 #include <random>
@@ -818,18 +819,28 @@ SqliteRepository::Result<std::vector<SqliteRepository::UsageValueRecord>> Sqlite
 }
 SqliteRepository::Result<int> SqliteRepository::findItemId(const std::string &title, const std::string &disambiguation) {
   return guarded([&] {
-    if (disambiguation.empty()) {
-      Statement exact(impl_->db, "SELECT id FROM item WHERE title = ? AND (disambiguation IS NULL OR disambiguation = '') LIMIT 1;");
-      exact.bind(title);
-      if (exact.step()) return exact.integer(0);
-      Statement fallback(impl_->db, "SELECT id FROM item WHERE title = ? LIMIT 1;");
-      fallback.bind(title);
-      if (fallback.step()) return fallback.integer(0);
-    } else {
-      Statement exact(impl_->db, "SELECT id FROM item WHERE title = ? AND disambiguation = ? LIMIT 1;");
-      exact.bind(title).bind(disambiguation);
-      if (exact.step()) return exact.integer(0);
-    }
+    // The first query that answers wins: an exact title before one that only
+    // differs in ASCII case, a title before an alias. A wiki link written by
+    // hand - [[monoid]], [[Semigroup with unit]] - finds its item this way.
+    const auto first = [&](const char *sql, bool withDisambiguation) -> std::optional<int> {
+      Statement stmt(impl_->db, sql);
+      stmt.bind(title);
+      if (withDisambiguation) stmt.bind(disambiguation);
+      if (stmt.step()) return stmt.integer(0);
+      return std::nullopt;
+    };
+    const std::vector<std::pair<const char *, bool>> attempts = disambiguation.empty()
+      ? std::vector<std::pair<const char *, bool>>{
+          {"SELECT id FROM item WHERE title = ? AND (disambiguation IS NULL OR disambiguation = '') ORDER BY id LIMIT 1;", false},
+          {"SELECT id FROM item WHERE title = ? ORDER BY id LIMIT 1;", false},
+          {"SELECT id FROM item WHERE title = ? COLLATE NOCASE ORDER BY (disambiguation IS NOT NULL AND disambiguation <> ''), id LIMIT 1;", false},
+          {"SELECT item_id FROM alias WHERE alias = ? ORDER BY item_id LIMIT 1;", false},
+          {"SELECT item_id FROM alias WHERE alias = ? COLLATE NOCASE ORDER BY item_id LIMIT 1;", false}}
+      : std::vector<std::pair<const char *, bool>>{
+          {"SELECT id FROM item WHERE title = ? AND disambiguation = ? LIMIT 1;", true},
+          {"SELECT id FROM item WHERE title = ? COLLATE NOCASE AND disambiguation = ? COLLATE NOCASE ORDER BY id LIMIT 1;", true}};
+    for (const auto &[sql, withDisambiguation] : attempts)
+      if (auto id = first(sql, withDisambiguation)) return *id;
     throw Failure("Item not found.", lexicon::Error::Code::NotFound);
   });
 }

@@ -52,6 +52,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
+- `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
 - A Qt-free REST server and an independently deployable static web client with the same capabilities
 - A native Android client (Kotlin, Jetpack Compose) for the same server
 
@@ -386,8 +387,15 @@ Open an item and go to the `Content` tab.
   - horizontal rule
   - inline code and code block
   - link and table insertion
+  - `[[ ]]`: a link to another item, chosen from the item titles
 
 The preview updates automatically as you type.
+
+#### Links to other items
+
+Write `[[Title]]` to link to another item by its title. `[[Monoid [algebra]]]` picks the item with that disambiguation, and `[[Monoid|monoids]]` shows its own text. A title is matched exactly first, then ignoring ASCII case, then as an alias, so `[[forwarding reference]]` finds `universal reference` if that is one of its aliases. Code spans and code blocks keep their brackets.
+
+In the rendered content a wiki link opens its item; when there is none, Lexicon offers to create it with that title. On the `Links` tab, **Add links from content** adds a `Related` link to every item the content names, and lists the names no item has. The web client and the Android app do the same.
 
 ### 7) Maintain metadata (tags, flags, aliases, properties)
 
@@ -569,7 +577,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; review with spaced repetition
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; review with spaced repetition; `[[wiki links]]` between items
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

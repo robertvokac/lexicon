@@ -1,4 +1,5 @@
 #include "MarkdownConverter.h"
+#include "WikiLinks.h"
 #include "parser.h"
 #include "doc.h"
 #include <QTextStream>
@@ -6,8 +7,12 @@
 QString MarkdownConverter::toHtml(const QString& markdown) {
     if (markdown.isEmpty()) return QString();
 
+    const QByteArray utf8 = markdown.toUtf8();
+    QString linked = QString::fromStdString(lexicon::wikiLinksToMarkdown(
+        std::string_view(utf8.constData(), static_cast<std::size_t>(utf8.size())),
+        std::string(kItemScheme) + ":"));
     MD::Parser parser;
-    QTextStream stream(const_cast<QString*>(&markdown));
+    QTextStream stream(&linked);
     auto doc = parser.parse(stream, QString(), QString());
 
     CustomHtmlVisitor visitor;

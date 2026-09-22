@@ -384,6 +384,9 @@ private fun LexiconNavHost(
                                 onEdit = { edit(selected) },
                                 onOpenItem = items::select,
                                 onDeleted = { items.select(null) },
+                                onCreateItem = { title, disambiguation ->
+                                    navController.navigate(EditItemRoute(title = title, disambiguation = disambiguation))
+                                },
                             )
                         }
                     }
@@ -407,6 +410,9 @@ private fun LexiconNavHost(
                 onEdit = { navController.navigate(EditItemRoute(itemId = route.itemId)) },
                 onOpenItem = { navController.navigate(ItemRoute(it)) },
                 onDeleted = back,
+                onCreateItem = { title, disambiguation ->
+                    navController.navigate(EditItemRoute(title = title, disambiguation = disambiguation))
+                },
             )
         }
         composable<EditItemRoute> { entry ->
@@ -421,6 +427,7 @@ private fun LexiconNavHost(
                         title = route.title,
                         content = route.content,
                         fromShare = route.fromShare,
+                        disambiguation = route.disambiguation,
                     ),
                     saved,
                 )

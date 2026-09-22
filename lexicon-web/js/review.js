@@ -3,7 +3,7 @@
 // when the item is due again - the same rules as the desktop and the server.
 import { api } from './api.js';
 import { openDialog } from './dialogs.js';
-import { renderMarkdown } from './markdown.js';
+import { bindItemLinks, renderMarkdown } from './markdown.js';
 import { button, clear, el, fillSelect, formatItemTitle, understandingLabel } from './utils.js';
 
 const LEVELS = ['Unknown', 'Recognized', 'Understood', 'Practiced', 'Mastered'];
@@ -38,6 +38,8 @@ export async function openReview(groups) {
     const title = el('h3', { class: 'review-title' });
     const details = el('p', { class: 'hint review-details' });
     const content = el('div', { class: 'markdown-preview review-content', hidden: true });
+    // Items are opened from the main view; here a link to one does nothing.
+    bindItemLinks(content, () => {});
     const showButton = button('Show answer', { class: 'primary' });
     const ratingButtons = RATINGS.map((rating, index) => button(rating.name, {
         class: 'secondary review-rating',

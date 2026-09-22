@@ -38,6 +38,10 @@ data class ItemDetailState(
     /** A running or finished download, as a line of text. */
     val transfer: String? = null,
     val transferring: Boolean = false,
+    /** A wiki link resolved to this item: open it, then call [ItemDetailViewModel.itemLinkHandled]. */
+    val openItem: Int? = null,
+    /** A wiki link to no item, as "Title [disambiguation]": offer to create it. */
+    val missingItem: Pair<String, String>? = null,
 )
 
 /**
@@ -111,6 +115,22 @@ class ItemDetailViewModel(private val container: AppContainer, initialItemId: In
             }
         }
     }
+
+    /** A tap on [[title]] in the content. */
+    fun openItemLink(title: String, disambiguation: String) {
+        viewModelScope.launch {
+            try {
+                val id = api.resolveItem(title, disambiguation)
+                _state.update { it.copy(openItem = id) }
+            } catch (_: ApiException.NotFound) {
+                _state.update { it.copy(missingItem = title to disambiguation) }
+            } catch (failure: ApiException) {
+                _state.update { it.copy(actionError = failure.userMessage()) }
+            }
+        }
+    }
+
+    fun itemLinkHandled() = _state.update { it.copy(openItem = null, missingItem = null) }
 
     fun requestDelete() = _state.update { it.copy(confirmDelete = true) }
 

@@ -1,13 +1,18 @@
 // The desktop dialogs added after the original client, driven offscreen
 // against a real database: each check clicks what a person would click.
 #include "ApplicationContext.h"
+#include "ItemEditDialog.h"
+#include "MarkdownConverter.h"
 #include "ReviewDialog.h"
 #include "SqliteRepository.h"
 
 #include <QApplication>
 #include <QLabel>
+#include <QListWidget>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QTextBrowser>
+#include <QTimer>
 
 #include <chrono>
 #include <filesystem>
@@ -62,6 +67,44 @@ void checkReview(lexicon::LexiconApplication &application, int group) {
   check(functor && functor->understanding == lexicon::UnderstandingLevel::Recognized && !functor->reviewedAt.empty(),
         "the rating is stored");
 }
+
+void checkWikiLinks(lexicon::LexiconApplication &application, int group) {
+  const auto html = MarkdownConverter::toHtml("See [[Semigroup]] and `[[code]]`.");
+  check(html.contains("href=\"lexicon-item:Semigroup\""), "a wiki link renders as an item link");
+  check(html.contains("[[code]]"), "code keeps its brackets");
+
+  lexicon::ItemRecord semigroup;
+  semigroup.groupId = group;
+  semigroup.title = "Semigroup";
+  check(application.items.createItem(semigroup).has_value(), "create Semigroup");
+  lexicon::ItemRecord monoid;
+  monoid.groupId = group;
+  monoid.title = "Monoid";
+  monoid.content = "A [[semigroup]] with a unit; not a [[Ghost]].";
+  const auto id = application.items.createItem(monoid);
+  check(id.has_value(), "create Monoid");
+  ItemRecord loaded;
+  services().items.loadItem(*id, loaded);
+
+  ItemEditDialog dialog;
+  dialog.setGroups(services().groups.loadGroups());
+  dialog.setItem(loaded);
+  auto *button = child<QPushButton>(dialog, "linksFromContent");
+  auto *links = child<QListWidget>(dialog, "outgoingLinks");
+  if (!button || !links) return;
+  QString shown;
+  QTimer::singleShot(0, [&] {
+    if (auto *message = qobject_cast<QMessageBox *>(QApplication::activeModalWidget())) {
+      shown = message->text();
+      message->accept();
+    }
+  });
+  button->click();
+  check(links->count() == 1 && links->item(0)->text().contains("Semigroup"),
+        "a Related link to the named item is added");
+  check(shown.contains("1 link(s) added") && shown.contains("Ghost"),
+        "the missing item is named, got " + shown.toStdString());
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -78,6 +121,7 @@ int main(int argc, char **argv) {
   const int group = application.groups.defaultGroupId().value_or(-1);
 
   checkReview(application, group);
+  checkWikiLinks(application, group);
 
   if (failures == 0) std::cout << "desktop_gui_smoke: all checks passed\n";
   return failures == 0 ? 0 : 1;

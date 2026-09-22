@@ -11,6 +11,7 @@
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
+#include "WikiLinks.h"
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
@@ -26,6 +27,7 @@
 #include <QMenuBar>
 #include <QCloseEvent>
 #include <QDate>
+#include <QDesktopServices>
 #include <QFile>
 #include <QFileDialog>
 #include <QSaveFile>
@@ -203,8 +205,10 @@ void MainWindow::setupUi() {
 
     rootLayout->addLayout(paginationLayout);
 
-    m_itemContentView = new QTextEdit(centralWidget);
+    m_itemContentView = new QTextBrowser(centralWidget);
     m_itemContentView->setReadOnly(true);
+    m_itemContentView->setOpenLinks(false);
+    connect(m_itemContentView, &QTextBrowser::anchorClicked, this, &MainWindow::onContentLinkActivated);
     m_highlighter = new CodeHighlighter(m_itemContentView->document());
     m_itemContentView->setPlaceholderText("Select an item to view content...");
     m_itemContentView->setMinimumHeight(150);
@@ -815,6 +819,10 @@ int MainWindow::groupIdForNewItem() {
 }
 
 void MainWindow::addItem() {
+    openNewItemEditor(m_searchEdit->text().trimmed());
+}
+
+void MainWindow::openNewItemEditor(const QString& title, const QString& disambiguation) {
     const int groupId = groupIdForNewItem();
     if (groupId <= 0) {
         return;
@@ -825,7 +833,8 @@ void MainWindow::addItem() {
     draft.groupId = groupId;
     const int typeId = m_typeFilter->currentData().toInt();
     if (typeId > 0) draft.itemTypeId = typeId;
-    draft.title = m_searchEdit->text().trimmed();
+    draft.title = title;
+    draft.disambiguation = disambiguation;
     dialog.setItem(draft);
 
     if (dialog.exec() != QDialog::Accepted) {
@@ -1174,7 +1183,32 @@ void MainWindow::updateLinksDisplay(int itemId) {
 }
 
 void MainWindow::onLinkActivated(const QUrl& link) {
-    QString itemTitle = QUrl::fromPercentEncoding(link.toString().toUtf8());
+    showItemTitled(QUrl::fromPercentEncoding(link.toString().toUtf8()));
+}
+
+void MainWindow::onContentLinkActivated(const QUrl& link) {
+    if (link.scheme() != MarkdownConverter::kItemScheme) {
+        QDesktopServices::openUrl(link);
+        return;
+    }
+    const QString target = link.path(QUrl::FullyDecoded);
+    const auto parsed = lexicon::parseWikiTarget(qtbridge::toCore(target));
+    const QString title = qtbridge::toQt(parsed.title);
+    const QString disambiguation = qtbridge::toQt(parsed.disambiguation);
+    QString error;
+    const int itemId = services().search.findItemId(title, disambiguation, &error);
+    if (itemId > 0) {
+        ItemRecord item;
+        if (services().items.loadItem(itemId, item, &error)) showItemTitled(item.title, itemId);
+        else showError(error);
+        return;
+    }
+    const auto answer = QMessageBox::question(this, "Create item",
+        QString("No item is called '%1'. Create it?").arg(target));
+    if (answer == QMessageBox::Yes) openNewItemEditor(title, disambiguation);
+}
+
+void MainWindow::showItemTitled(const QString& itemTitle, int itemId) {
 
     m_groupFilter->blockSignals(true);
     m_typeFilter->blockSignals(true);
@@ -1222,7 +1256,14 @@ void MainWindow::onLinkActivated(const QUrl& link) {
     resetPaginationAndRefresh();
 
     if (m_model->rowCount() > 0) {
-        m_tableView->selectRow(0);
+        int row = 0;
+        for (int candidate = 0; candidate < m_model->rowCount(); ++candidate) {
+            if (m_model->item(candidate, 0)->data(Qt::UserRole).toInt() == itemId) {
+                row = candidate;
+                break;
+            }
+        }
+        m_tableView->selectRow(row);
         m_tableView->setFocus();
     }
 }
