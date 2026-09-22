@@ -1302,6 +1302,8 @@ export class MainView {
             ]),
             acceptLabel: 'Save',
             initialFocus: title,
+            // "Enter a title." or "already exists" goes once the title changes.
+            clearErrorOn: [title],
             // A stray tap beside the dialog must not throw the idea away.
             closeOnBackdrop: false,
             onAccept: async ({ fail }) => {

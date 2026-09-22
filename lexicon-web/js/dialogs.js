@@ -14,7 +14,7 @@ function nextId(prefix) {
 // is how validation errors are reported without losing the user's input.
 export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'Cancel',
     onAccept, extraActions = [], wide = false, showAccept = true, initialFocus, className,
-    closeOnBackdrop = true }) {
+    closeOnBackdrop = true, clearErrorOn = [] }) {
     return new Promise((resolve) => {
         const classes = ['dialog', wide ? 'dialog-wide' : '', className || ''];
         const dialog = el('dialog', { class: classes.filter(Boolean).join(' ') });
@@ -72,6 +72,10 @@ export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'C
         form.appendChild(el('div', { class: 'dialog-body' }, [body]));
         form.appendChild(errorLine);
         form.appendChild(actions);
+        // Typing into one of these fields takes back an error about it.
+        for (const control of clearErrorOn) {
+            control.addEventListener('input', () => showDialogError(errorLine, ''));
+        }
         dialog.appendChild(form);
         document.body.appendChild(dialog);
 
