@@ -236,6 +236,10 @@ class Application {
                             if (await openReview(this.view.groups)) await this.view.refreshAll();
                         },
                     },
+                    {
+                        label: 'Relationship graph...',
+                        action: () => this.view && this.view.showGraph(),
+                    },
                     { separator: true },
                     { label: 'All tags...', action: () => showValueOverview('tags') },
                     { label: 'All flags...', action: () => showValueOverview('flags') },

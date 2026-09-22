@@ -37,3 +37,6 @@ data object SettingsRoute
 
 @Serializable
 data object ReviewRoute
+
+@Serializable
+data class GraphRoute(val itemId: Int)

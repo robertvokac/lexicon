@@ -248,6 +248,9 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/ValueListDialog.cpp
         lexicon-qt/ReviewDialog.h
         lexicon-qt/ReviewDialog.cpp
+        lexicon-qt/GraphLayout.h
+        lexicon-qt/GraphDialog.h
+        lexicon-qt/GraphDialog.cpp
     )
 
     target_link_libraries(Lexicon PRIVATE
@@ -285,6 +288,9 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/ReviewDialog.cpp
             lexicon-qt/ItemEditDialog.h
             lexicon-qt/ItemEditDialog.cpp
+            lexicon-qt/GraphLayout.h
+            lexicon-qt/GraphDialog.h
+            lexicon-qt/GraphDialog.cpp
         )
         target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
         target_link_libraries(lexicon-desktop-gui-smoke PRIVATE

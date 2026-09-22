@@ -1001,6 +1001,47 @@ void RestServer::Impl::registerRoutes() {
     respondNoContent(response);
   });
 
+  api.Get("/api/v1/items/:id/graph", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    const auto number = [&](const char *key, int fallback, int highest) -> std::optional<int> {
+      const auto raw = queryValue(request, key);
+      if (raw.empty())
+        return fallback;
+      const auto parsed = parseId(raw);
+      if (!parsed || *parsed > highest) {
+        respondFailure(response, {400, "validation",
+                                  std::string("'") + key + "' must be between 1 and " +
+                                      std::to_string(highest) + "."});
+        return std::nullopt;
+      }
+      return parsed;
+    };
+    const auto depth = number("depth", 2, 3);
+    if (!depth)
+      return;
+    const auto limit = number("limit", 100, 300);
+    if (!limit)
+      return;
+    auto graph = guarded.with([&](LexiconApplication &application) {
+      return application.links.neighborhood(*id, *depth, *limit);
+    });
+    if (!graph) {
+      respondError(response, graph.error(), "neighborhood");
+      return;
+    }
+    Json nodes = Json::array();
+    for (const auto &node : graph->nodes) {
+      Json entry = toJson(node.item);
+      entry["depth"] = node.depth;
+      nodes.push_back(std::move(entry));
+    }
+    respondJson(response, 200, Json{{"nodes", std::move(nodes)},
+                                    {"edges", toJsonArray(graph->edges)},
+                                    {"truncated", graph->truncated}});
+  });
+
   api.Post("/api/v1/items/:id/review", [this](const Request &request, Response &response) {
     auto id = pathId(request, response, "id");
     if (!id)

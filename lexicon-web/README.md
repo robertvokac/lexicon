@@ -211,6 +211,7 @@ Everything below behaves the same way in both:
 | `File -> Export...` and `File -> Import...` | the same, as a download and an upload |
 | `View -> Review...` with Again, Hard, Good and Easy | the same cards and keys 1 to 4, Space shows the answer |
 | `[[Title]]` links in the content, the `[[ ]]` button and **Add links from content** | the same, rendered by a `marked` extension (`js/wikilinks.js`) |
+| `View -> Relationship graph...` | the same graph as SVG, also from the link preview; Space centres, Enter opens |
 | Resizable split between the item list and the preview | a draggable splitter whose position is remembered |
 | `CodeHighlighter` for `cpp` code blocks: keywords, strings, comments | the same colours in both themes, plus preprocessor directives and `#include <header>` |
 

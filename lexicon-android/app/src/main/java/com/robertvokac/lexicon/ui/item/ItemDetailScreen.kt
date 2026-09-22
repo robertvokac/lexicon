@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Refresh
@@ -84,6 +85,7 @@ fun ItemDetailScreen(
     onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
     onCreateItem: (title: String, disambiguation: String) -> Unit = { _, _ -> },
+    onShowGraph: ((Int) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     state.openItem?.let { id ->
@@ -141,6 +143,16 @@ fun ItemDetailScreen(
                         IconButton(onClick = onEdit) { Icon(Icons.Filled.Edit, contentDescription = "Edit item") }
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More actions") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            if (onShowGraph != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Relationship graph") },
+                                    leadingIcon = { Icon(Icons.Filled.Hub, contentDescription = null) },
+                                    onClick = {
+                                        menu = false
+                                        state.bundle?.item?.id?.let(onShowGraph)
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Refresh") },
                                 leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },

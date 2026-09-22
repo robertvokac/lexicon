@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { confirmDialog, errorDialog, messageDialog, openDialog } from './dialogs.js';
 import { clearDraft, latestDraft } from './drafts.js';
+import { openGraph } from './graph.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
 import { bindItemLinks, renderMarkdown } from './markdown.js';
 import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
@@ -1077,6 +1078,29 @@ export class MainView {
         };
         this.linksPreview.appendChild(line('Links', links, (link) => link.toItemTitle));
         this.linksPreview.appendChild(line('Backlinks', backlinks, (link) => link.fromItemTitle));
+        if (links.length || backlinks.length) {
+            this.linksPreview.appendChild(el('p', { class: 'links-line' }, [el('a', {
+                href: '#',
+                class: 'item-link',
+                text: 'Relationship graph',
+                onclick: (event) => {
+                    event.preventDefault();
+                    this.showGraph().catch((error) => errorDialog(error.message));
+                },
+            })]));
+        }
+    }
+
+    // The items around the selected one; the one chosen there is shown here.
+    async showGraph() {
+        if (this.selectedItemId === null) {
+            await messageDialog('Relationship graph', 'Select an item first.');
+            return;
+        }
+        const chosen = await openGraph(this.selectedItemId);
+        if (chosen === null) return;
+        const loaded = await api.getItem(chosen);
+        await this.navigateToTitle(loaded.item.title, chosen);
     }
 
     // A [[wiki link]] in the content: its item, or the offer to create it.

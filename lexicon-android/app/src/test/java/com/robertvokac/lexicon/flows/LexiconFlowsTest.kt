@@ -476,6 +476,20 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun theGraphShowsTheItemsAroundOneAndOpensThem() {
+        fake.links += com.robertvokac.lexicon.model.Link(id = 900, fromItemId = raii.id, toItemId = lifetime.id, linkType = LinkType.DependsOn)
+        login()
+        compose.onNodeWithText("RAII").performClick()
+        compose.waitForText("Resource acquisition is initialization.")
+        compose.onNodeWithContentDescription("More actions").performClick()
+        compose.onNode(hasText("Relationship graph") and hasClickAction()).performClick()
+        compose.waitForText("2 item(s), 1 link(s)")
+        compose.onNode(hasText("Object lifetime") and hasClickAction()).performClick()
+        compose.onNode(hasText("Open") and hasClickAction()).performClick()
+        compose.waitForText("This item has no content yet.")
+    }
+
+    @Test
     fun saveWaitsForARunningUpload() {
         val type = fake.addType("Document")
         fake.addField(checkNotNull(type.id), "Attachment", FieldDataType.Blob)

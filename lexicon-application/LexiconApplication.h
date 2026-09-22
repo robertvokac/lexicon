@@ -104,9 +104,23 @@ private:
   Repository &repository_;
 };
 
+// The items around one item, following links in both directions.
+struct GraphNode {
+  ItemRecord item; // a list row: no content, values or properties
+  int depth = 0;   // links away from the centre
+};
+struct Neighborhood {
+  std::vector<GraphNode> nodes; // the centre first, then by depth
+  std::vector<LinkRecord> edges; // the links among these nodes
+  bool truncated = false;        // more items were in reach than allowed
+};
+
 class LinkService {
 public:
   explicit LinkService(Repository &repository) : repository_(repository) {}
+  // Breadth first from `itemId`, up to `depth` links away and at most
+  // `maxNodes` items.
+  Result<Neighborhood> neighborhood(ItemId itemId, int depth, int maxNodes);
   Result<std::vector<LinkRecord>> loadLinks(int itemId) {
     return repository_.loadLinks(itemId);
   }

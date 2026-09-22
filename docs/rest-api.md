@@ -202,6 +202,17 @@ GET    /api/v1/items/{id}/backlinks              → { "backlinks": [ ... ] }
 GET    /api/v1/items/resolve?title=&disambiguation= → { "itemId": 7 }
 ```
 
+```http
+GET /api/v1/items/{id}/graph?depth=2&limit=100
+→ { "nodes": [ { ...item..., "depth": 0 }, ... ], "edges": [ ...links... ], "truncated": false }
+```
+
+The items around one item, following links in both directions: `depth` 1 to
+3 (default 2) links away, at most `limit` items (1 to 300, default 100). The
+nodes are list rows plus their `depth`, the centre first; the edges are the
+links among the nodes, in the shape of the link endpoints. `truncated` says
+that more items were in reach than `limit` allowed.
+
 `resolve` is what a `[[Title]]` link in item content uses. The first of these
 that finds an item wins: the exact title (preferring an item without a
 disambiguation when none is given), the title ignoring ASCII case, an exact

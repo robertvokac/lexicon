@@ -53,6 +53,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
+- A relationship graph of the items around one item, up to three links away
 - A Qt-free REST server and an independently deployable static web client with the same capabilities
 - A native Android client (Kotlin, Jetpack Compose) for the same server
 
@@ -447,6 +448,8 @@ When you select an item in the main table:
 
 This gives quick context while browsing without opening the edit dialog every time.
 
+`View -> Relationship graph...` (`Ctrl+G`) draws the items around the selected one: the selected item in the middle, the items it links to and the items linking to it around it, as arrows labelled with the link type. **Depth** reaches one, two or three links away; at most 150 items are drawn, and the dialog says when more are in reach. Click an item to centre the graph on it, double-click it to open it in the main window; the wheel zooms and dragging moves the view. The web client offers the same from its `View` menu and from the link preview, the Android app from the item page's menu.
+
 ### 10) Global overviews and themes
 
 From the menu:
@@ -577,7 +580,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; review with spaced repetition; `[[wiki links]]` between items
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; review with spaced repetition; `[[wiki links]]` between items; a relationship graph
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

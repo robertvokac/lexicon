@@ -304,6 +304,22 @@ class FakeLexiconServer : Dispatcher() {
             path == "/usage/flags" -> usage(items.values.flatMap { it.flags })
             path == "/usage/aliases" -> usage(items.values.flatMap { it.aliases })
             path == "/search/suggestions" -> json(buildJsonObject { put("values", buildJsonArray { items.values.forEach { add(JsonPrimitive(it.title)) } }) })
+            segments.size == 3 && segments[0] == "items" && segments[2] == "graph" && method == "GET" -> {
+                val id = segments[1].toInt()
+                val centre = items[id] ?: return notFound()
+                val around = links.filter { it.fromItemId == id || it.toItemId == id }
+                val others = around.map { if (it.fromItemId == id) it.toItemId else it.fromItemId }.distinct()
+                json(buildJsonObject {
+                    put("nodes", buildJsonArray {
+                        add(buildJsonObject { put("id", id); put("title", centre.title); put("depth", 0) })
+                        others.forEach { other ->
+                            add(buildJsonObject { put("id", other!!); put("title", items.getValue(other).title); put("depth", 1) })
+                        }
+                    })
+                    put("edges", encode(around.map(::withTitles)))
+                    put("truncated", false)
+                })
+            }
             path == "/review" && method == "GET" -> {
                 val due = items.values.filter { it.reviewedAt == null }.sortedBy { it.id }
                 val limit = request.url.queryParameter("limit")?.toInt() ?: 20

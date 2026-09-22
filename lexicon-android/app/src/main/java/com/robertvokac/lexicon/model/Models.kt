@@ -279,6 +279,23 @@ enum class ReviewRating(val step: Int) {
     }
 }
 
+/** An item in a relationship graph, [depth] links from its centre. */
+@Serializable
+data class GraphNode(
+    val id: Int,
+    val title: String,
+    val disambiguation: String = "",
+    val groupName: String = "",
+    val itemTypeName: String = "",
+    val depth: Int = 0,
+) {
+    val displayTitle: String get() = formatItemTitle(title, disambiguation)
+}
+
+/** GET /items/{id}/graph: the items around one, the centre first, and the links among them. */
+@Serializable
+data class ItemGraph(val nodes: List<GraphNode>, val edges: List<Link>, val truncated: Boolean = false)
+
 /** GET /review: the items due now, and how many are due in all. */
 @Serializable
 data class ReviewQueue(val items: List<Item>, val dueCount: Int)

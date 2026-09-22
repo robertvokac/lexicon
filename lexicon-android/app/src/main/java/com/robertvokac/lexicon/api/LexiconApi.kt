@@ -14,6 +14,7 @@ import com.robertvokac.lexicon.model.Health
 import com.robertvokac.lexicon.model.ImportEnvelope
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.ItemEnvelope
+import com.robertvokac.lexicon.model.ItemGraph
 import com.robertvokac.lexicon.model.ReviewQueue
 import com.robertvokac.lexicon.model.ReviewRating
 import com.robertvokac.lexicon.model.ReviewRequest
@@ -165,6 +166,9 @@ class LexiconApi(private val client: ApiClient) {
         require(isBlobHash(hash)) { "A blob is addressed by its lowercase SHA-256 hash." }
         client.download("blobs/$hash", output, onProgress)
     }
+
+    suspend fun itemGraph(id: Int, depth: Int = 2, limit: Int = 100): ItemGraph =
+        client.get("items/$id/graph", ItemGraph.serializer(), query = mapOf("depth" to depth.toString(), "limit" to limit.toString()))
 
     // Review ------------------------------------------------------------------
 

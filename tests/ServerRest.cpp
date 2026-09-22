@@ -710,6 +710,51 @@ void checkBlobs(Checks &checks) {
   checks.expectEqual(leftovers, 0, "blob staging files are cleaned up");
 }
 
+void checkGraph(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const auto create = [&](const std::string &title) {
+    return parse(client.post("/api/v1/items", Json{{"item", Json{{"groupId", groupId}, {"title", title}}}}.dump()))
+        .value("id", 0);
+  };
+  // Monoid -> Semigroup -> Magma -> Set, and Group -> Monoid.
+  const int monoid = create("Monoid"), semigroup = create("Semigroup"), magma = create("Magma");
+  const int set = create("Set"), group = create("Group");
+  const auto link = [&](int from, int to) {
+    client.post("/api/v1/links", Json{{"fromItemId", from}, {"toItemId", to}, {"linkType", "IsA"}}.dump());
+  };
+  link(monoid, semigroup);
+  link(semigroup, magma);
+  link(magma, set);
+  link(group, monoid);
+  const auto titles = [&](const Json &graph) {
+    std::vector<std::string> result;
+    for (const auto &node : graph.at("nodes")) result.push_back(node.value("title", std::string{}));
+    return result;
+  };
+  const auto path = "/api/v1/items/" + std::to_string(monoid) + "/graph";
+  const auto near = client.get(path + "?depth=1");
+  checks.expectEqual(near.status, 200, "the neighbourhood is available");
+  const auto nearGraph = parse(near);
+  checks.expect(titles(nearGraph) == std::vector<std::string>{"Monoid", "Semigroup", "Group"},
+                "depth 1 reaches both directions, the centre first");
+  checks.expectEqual(static_cast<long long>(nearGraph.at("edges").size()), 2, "with the two links among them");
+  checks.expectEqual(nearGraph.at("nodes").at(1).value("depth", 0), 1, "each node has its depth");
+  checks.expect(!nearGraph.value("truncated", true), "nothing was left out");
+  checks.expectEqual(static_cast<long long>(parse(client.get(path)).at("nodes").size()), 4,
+                     "depth 2 is the default");
+  checks.expectEqual(static_cast<long long>(parse(client.get(path + "?depth=3")).at("nodes").size()), 5,
+                     "depth 3 reaches the whole chain");
+  const auto capped = parse(client.get(path + "?depth=3&limit=2"));
+  checks.expectEqual(static_cast<long long>(capped.at("nodes").size()), 2, "the node limit holds");
+  checks.expect(capped.value("truncated", false), "and says that items were left out");
+  checks.expectEqual(static_cast<long long>(capped.at("edges").size()), 1, "only links among the shown nodes");
+  checks.expectEqual(client.get(path + "?depth=4").status, 400, "the depth is at most 3");
+  checks.expectEqual(client.get("/api/v1/items/999999/graph").status, 404, "a missing item has no graph");
+}
+
 void checkReview(Checks &checks) {
   ServerHarness harness;
   Session session(harness, checks);
@@ -930,5 +975,6 @@ int main() {
   checkConflicts(checks);
   checkExportImport(checks);
   checkReview(checks);
+  checkGraph(checks);
   return checks.summarize("server_rest");
 }

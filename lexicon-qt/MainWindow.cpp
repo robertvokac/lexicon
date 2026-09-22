@@ -8,6 +8,7 @@
 #include "PropertyFilterDialog.h"
 #include "BlobMaintenanceDialog.h"
 #include "ReviewDialog.h"
+#include "GraphDialog.h"
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
@@ -313,6 +314,21 @@ void MainWindow::setupMenus() {
         ReviewDialog dialog(this);
         dialog.exec();
         if (dialog.changedItems()) refreshAll();
+    });
+    auto* graphAction = viewMenu->addAction("Relationship graph...");
+    graphAction->setShortcut(QKeySequence("Ctrl+G"));
+    connect(graphAction, &QAction::triggered, this, [this] {
+        const int itemId = selectedItemId();
+        if (itemId < 0) {
+            QMessageBox::information(this, "Relationship graph", "Select an item first.");
+            return;
+        }
+        GraphDialog dialog(itemId, this);
+        if (dialog.exec() != QDialog::Accepted || dialog.openedItemId() < 0) return;
+        ItemRecord item;
+        QString error;
+        if (services().items.loadItem(dialog.openedItemId(), item, &error)) showItemTitled(item.title, item.id);
+        else showError(error);
     });
     viewMenu->addSeparator();
     auto* tagsAction = viewMenu->addAction("All tags...");

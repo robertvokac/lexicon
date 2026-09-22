@@ -213,6 +213,9 @@ export class LexiconApi {
     deleteItem(id) { return this.delete(`/items/${id}`); }
     logItemRead(id) { return this.request('POST', `/items/${id}/read`, { expect: 'none' }); }
     async itemLinks(id) { return (await this.get(`/items/${id}/links`)).links; }
+    itemGraph(id, depth = 2, limit = 100) {
+        return this.get(`/items/${id}/graph?depth=${depth}&limit=${limit}`);
+    }
     async itemBacklinks(id) { return (await this.get(`/items/${id}/backlinks`)).backlinks; }
 
     async resolveItem(title, disambiguation) {

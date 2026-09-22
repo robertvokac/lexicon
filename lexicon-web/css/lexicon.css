@@ -847,3 +847,18 @@ body.resizing { cursor: row-resize; user-select: none; }
 .links-panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .links-panel > .list-editor { align-self: stretch; }
 a.wiki-link { text-decoration-style: dotted; }
+
+/* Relationship graph */
+.graph-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.graph-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+    height: min(62vh, 640px); overflow: auto; display: flex; align-items: center; justify-content: center; }
+svg.graph { width: 100%; height: 100%; }
+.graph-edge { stroke: var(--border-strong); stroke-width: 1.5; }
+.graph-arrow { fill: var(--border-strong); }
+.graph-edge-label { fill: var(--text-muted); font-size: 11px; }
+.graph-node { cursor: pointer; }
+.graph-node circle { fill: var(--surface-alt); stroke: var(--border-strong); stroke-width: 1.5; }
+.graph-node.centre circle { fill: var(--accent); stroke: var(--accent); stroke-width: 3; }
+.graph-node:focus-visible circle, .graph-node:hover circle { stroke: var(--accent); stroke-width: 3; }
+.graph-node:focus { outline: none; }
+.graph-caption { fill: var(--text); font-size: 13px; }

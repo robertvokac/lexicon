@@ -200,6 +200,10 @@ accept it; install a proper certificate instead.
   Markdown content, links and backlinks. Links open the item they point to,
   and so does a `[[Title]]` in the content; one to no item offers to create it.
   Opening an item records one read (`POST /items/{id}/read`), once per opening.
+  Its menu has **Relationship graph**: the items around it, drawn with the
+  same layout as the other clients, one, two or three links deep. Pinch to
+  zoom; tap an item, or pick it from the list under the graph, to centre on it
+  or open it.
 - **Editor.** General, Content, Values, Metadata, Links and Backlinks, as tabs of
   one screen. Everything, including both link directions, is saved in one
   request, which the server commits as one unit of work. Changing the type

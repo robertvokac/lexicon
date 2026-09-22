@@ -112,6 +112,60 @@ ItemService::saveItemWithLinks(const ItemRecord &item,
 } // namespace lexicon
 
 namespace lexicon {
+Result<Neighborhood> LinkService::neighborhood(ItemId itemId, int depth, int maxNodes) {
+  const auto summary = [&](ItemId id) -> Result<ItemRecord> {
+    ItemColumnFilters byId;
+    byId.id = std::to_string(id);
+    auto rows = repository_.loadItems(-1, -1, {}, {}, byId, {}, {}, {}, -1, -1, -1, 1, 0, 0,
+                                      SortOrder::Ascending);
+    if (!rows)
+      return std::unexpected(rows.error());
+    if (rows->empty())
+      return std::unexpected(Error{Error::Code::NotFound, "Item not found."});
+    return std::move(rows->front());
+  };
+  Neighborhood graph;
+  auto centre = summary(itemId);
+  if (!centre)
+    return std::unexpected(centre.error());
+  graph.nodes.push_back({std::move(*centre), 0});
+  std::set<int> visited{itemId};
+  std::set<int> seenLinks;
+  std::vector<LinkRecord> links;
+  for (std::size_t next = 0; next < graph.nodes.size(); ++next) {
+    const int id = graph.nodes[next].item.id;
+    const int level = graph.nodes[next].depth;
+    auto outgoing = repository_.loadLinks(id);
+    if (!outgoing)
+      return std::unexpected(outgoing.error());
+    auto incoming = repository_.loadBacklinks(id);
+    if (!incoming)
+      return std::unexpected(incoming.error());
+    outgoing->insert(outgoing->end(), incoming->begin(), incoming->end());
+    for (auto &link : *outgoing) {
+      if (!seenLinks.insert(link.id).second)
+        continue;
+      const int other = link.fromItemId == id ? link.toItemId : link.fromItemId;
+      links.push_back(std::move(link));
+      if (visited.contains(other) || level >= depth)
+        continue;
+      if (static_cast<int>(graph.nodes.size()) >= maxNodes) {
+        graph.truncated = true;
+        continue;
+      }
+      auto node = summary(other);
+      if (!node)
+        return std::unexpected(node.error());
+      visited.insert(other);
+      graph.nodes.push_back({std::move(*node), level + 1});
+    }
+  }
+  for (auto &link : links)
+    if (visited.contains(link.fromItemId) && visited.contains(link.toItemId))
+      graph.edges.push_back(std::move(link));
+  return graph;
+}
+
 Result<ItemRecord> ReviewService::review(ItemId id, ReviewRating rating) {
   auto item = repository_.loadItem(id);
   if (!item)

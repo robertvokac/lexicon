@@ -80,6 +80,7 @@ import com.robertvokac.lexicon.ui.login.LoginViewModel
 import com.robertvokac.lexicon.ui.login.StartingScreen
 import com.robertvokac.lexicon.ui.login.UnreachableScreen
 import com.robertvokac.lexicon.ui.navigation.EditItemRoute
+import com.robertvokac.lexicon.ui.navigation.GraphRoute
 import com.robertvokac.lexicon.ui.navigation.GroupsRoute
 import com.robertvokac.lexicon.ui.navigation.ItemRoute
 import com.robertvokac.lexicon.ui.navigation.ItemsRoute
@@ -91,6 +92,8 @@ import com.robertvokac.lexicon.ui.navigation.TypesRoute
 import com.robertvokac.lexicon.ui.overview.OverviewKind
 import com.robertvokac.lexicon.ui.overview.OverviewScreen
 import com.robertvokac.lexicon.ui.overview.OverviewViewModel
+import com.robertvokac.lexicon.ui.graph.GraphScreen
+import com.robertvokac.lexicon.ui.graph.GraphViewModel
 import com.robertvokac.lexicon.ui.review.ReviewScreen
 import com.robertvokac.lexicon.ui.review.ReviewViewModel
 import com.robertvokac.lexicon.ui.settings.SettingsScreen
@@ -387,6 +390,7 @@ private fun LexiconNavHost(
                                 onCreateItem = { title, disambiguation ->
                                     navController.navigate(EditItemRoute(title = title, disambiguation = disambiguation))
                                 },
+                                onShowGraph = { navController.navigate(GraphRoute(it)) },
                             )
                         }
                     }
@@ -413,6 +417,15 @@ private fun LexiconNavHost(
                 onCreateItem = { title, disambiguation ->
                     navController.navigate(EditItemRoute(title = title, disambiguation = disambiguation))
                 },
+                onShowGraph = { navController.navigate(GraphRoute(it)) },
+            )
+        }
+        composable<GraphRoute> { entry ->
+            val route = entry.toRoute<GraphRoute>()
+            GraphScreen(
+                lexiconViewModel { app, _ -> GraphViewModel(app, route.itemId) },
+                onBack = back,
+                onOpenItem = { navController.navigate(ItemRoute(it)) },
             )
         }
         composable<EditItemRoute> { entry ->
