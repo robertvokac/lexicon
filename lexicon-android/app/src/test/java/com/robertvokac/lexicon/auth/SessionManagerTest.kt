@@ -103,7 +103,7 @@ class SessionManagerTest {
     }
 
     @Test
-    fun aRestartedServerSendsTheUserBackToLogin() = runBlocking {
+    fun aSessionTheServerNoLongerKnowsSendsTheUserBackToLogin() = runBlocking {
         sessions.login(fake.baseUrl, fake.username, fake.password)
         fake.tokens.clear()
         val restarted = newManager().also { sessions = it }

@@ -12,6 +12,10 @@ struct ServerConfig {
   std::string databasePath = "lexicon.db";
   // Defaults to <database directory>/lexicon-auth.json.
   std::string authFilePath;
+  // Where sessions are kept so they survive a restart. Defaults to
+  // <database directory>/lexicon-sessions.json.
+  std::string sessionFilePath;
+  bool persistSessions = true;
   std::string listenAddress = "127.0.0.1";
   int port = 8628;
   std::string tlsCertificatePath;
@@ -33,6 +37,7 @@ struct ServerConfig {
     return !tlsCertificatePath.empty() && !tlsPrivateKeyPath.empty();
   }
   std::string resolvedAuthFilePath() const;
+  std::string resolvedSessionFilePath() const;
 };
 
 // Returns true for 127.0.0.0/8, ::1 and localhost.

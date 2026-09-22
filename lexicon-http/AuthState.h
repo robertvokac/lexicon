@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -67,6 +68,12 @@ public:
   LoginResult login(const std::string &clientKey, const std::string &username,
                     const std::string &password);
 
+  // Keeps the sessions in `path` from now on, so they survive a restart, and
+  // takes over the ones stored there that are still valid for the current
+  // credentials. Returns how many were taken over. The file holds only the
+  // SHA-256 of each token, which does not let anyone sign in.
+  Result<std::size_t> useSessionFile(const std::string &path);
+
   // Returns the authenticated user name, refreshing the idle timer.
   std::optional<std::string> authenticate(const std::string &token);
   bool logout(const std::string &token);
@@ -83,11 +90,14 @@ public:
   static constexpr std::ptrdiff_t maxHashSlots = 32;
 
 private:
-  using Clock = std::chrono::steady_clock;
+  // The wall clock, because session times are stored across restarts.
+  using Clock = std::chrono::system_clock;
   struct Session {
     std::string username;
     Clock::time_point created;
     Clock::time_point lastSeen;
+    // lastSeen as last written to the session file.
+    Clock::time_point savedLastSeen;
   };
   struct FailureCounter {
     int failures = 0;
@@ -110,7 +120,15 @@ private:
   };
 
   Clock::time_point now() const;
-  void expireSessions(Clock::time_point moment);
+  // Returns whether any session expired.
+  bool expireSessions(Clock::time_point moment);
+  // Identifies the credentials the stored sessions belong to; changing the
+  // password changes it.
+  std::string credentialsFingerprint() const;
+  // Writes the sessions to the session file, if there is one. Called with
+  // mutex_ held through `lock`; the file is written after releasing it, so a
+  // slow disk never delays authentication.
+  void saveSessions(std::unique_lock<std::mutex> &lock);
   bool limited(const std::string &clientKey, Clock::time_point moment,
                int &retryAfterSeconds);
   void recordFailure(const std::string &clientKey, Clock::time_point moment);
@@ -125,6 +143,12 @@ private:
   std::map<std::string, FailureCounter> failures_;
   FailureCounter totalFailures_;
   std::chrono::seconds testOffset_{0};
+  std::string sessionFile_;
+  std::uint64_t saveGeneration_ = 0;
+
+  // Serializes writes of the session file; the newest snapshot wins.
+  std::mutex saveMutex_;
+  std::uint64_t savedGeneration_ = 0;
 
   // Independent of mutex_ on purpose: these are touched while no lock is held.
   std::counting_semaphore<maxHashSlots> hashSlots_;

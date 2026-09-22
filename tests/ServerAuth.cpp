@@ -357,6 +357,18 @@ void checkConfigurationGuards(Checks &checks) {
                 "an unknown option is refused");
   checks.expect(!lexicon::http::parseCommandLine({"--port"}).has_value(),
                 "a missing option value is refused");
+  const auto sessions = lexicon::http::parseCommandLine({"--database", "data/lexicon.db"});
+  checks.expect(sessions.has_value() && sessions->config.persistSessions &&
+                    lexicon::utf8Path(sessions->config.resolvedSessionFilePath()) ==
+                        lexicon::utf8Path("data") / "lexicon-sessions.json",
+                "sessions are kept next to the database by default");
+  const auto sessionFile = lexicon::http::parseCommandLine({"--session-file", "/var/lib/s.json"});
+  checks.expect(sessionFile.has_value() &&
+                    sessionFile->config.resolvedSessionFilePath() == "/var/lib/s.json",
+                "--session-file chooses the session file");
+  const auto memoryOnly = lexicon::http::parseCommandLine({"--no-session-file"});
+  checks.expect(memoryOnly.has_value() && !memoryOnly->config.persistSessions,
+                "--no-session-file keeps sessions in memory");
   // Arguments arrive as UTF-8 on every platform, and a conversion failure is
   // reported rather than turned into an empty argument.
   char program[] = "LexiconServer";
@@ -402,6 +414,96 @@ void checkPasswordHashing(Checks &checks) {
   checks.expect(tokenA.has_value() && tokenB.has_value() && *tokenA != *tokenB,
                 "session tokens are unique");
   checks.expect(tokenA->size() >= 43, "session tokens carry 256 random bits");
+}
+
+void checkSessionFile(Checks &checks) {
+  // A restart keeps the sessions that are still valid for the credentials.
+  namespace fs = std::filesystem;
+  using lexicon::http::AuthState;
+  const auto directory =
+      fs::temp_directory_path() /
+      ("lexicon-sessions-test-" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  fs::create_directories(directory);
+  const auto file = lexicon::pathToUtf8(directory / "lexicon-sessions.json");
+  const auto password = std::string("correct horse battery");
+  auto hashed = lexicon::http::hashPassword(
+      password, lexicon::http::ScryptParameters::forTests());
+  checks.expect(hashed.has_value(), "the session test password hashes");
+  if (!hashed) return;
+  const lexicon::http::Credentials credentials{"lexicon", *hashed};
+
+  std::string token;
+  std::string loggedOut;
+  {
+    AuthState auth({}, {});
+    auth.setCredentials(credentials);
+    checks.expectEqual(static_cast<long long>(auth.useSessionFile(file).value_or(99)), 0,
+                       "there is nothing to restore before the first sign-in");
+    token = auth.login("client", "lexicon", password).token;
+    loggedOut = auth.login("client", "lexicon", password).token;
+    checks.expect(!token.empty() && !loggedOut.empty(), "two sessions start");
+    checks.expect(auth.logout(loggedOut), "one of them logs out");
+  }
+
+  std::ifstream input(directory / "lexicon-sessions.json", std::ios::binary);
+  const std::string stored((std::istreambuf_iterator<char>(input)),
+                           std::istreambuf_iterator<char>());
+  checks.expect(!stored.empty(), "the sessions are written to the file");
+  checks.expect(stored.find(token) == std::string::npos,
+                "the file never holds a token");
+  checks.expect(stored.find(lexicon::http::sha256Hex(token)) != std::string::npos,
+                "the file holds the token's hash");
+#ifndef _WIN32
+  const auto permissions = fs::status(directory / "lexicon-sessions.json").permissions();
+  checks.expect((permissions & (fs::perms::group_all | fs::perms::others_all)) ==
+                    fs::perms::none,
+                "the session file is private to the server's account");
+#endif
+
+  {
+    AuthState restarted({}, {});
+    restarted.setCredentials(credentials);
+    checks.expectEqual(static_cast<long long>(restarted.useSessionFile(file).value_or(0)), 1,
+                       "the open session is restored");
+    checks.expect(restarted.authenticate(token).has_value(),
+                  "its token works after the restart");
+    checks.expect(!restarted.authenticate(loggedOut).has_value(),
+                  "a logged out token stays logged out");
+  }
+  {
+    AuthState later({}, {});
+    later.setCredentials(credentials);
+    later.advanceClockForTests(std::chrono::hours(9));
+    checks.expectEqual(static_cast<long long>(later.useSessionFile(file).value_or(99)), 0,
+                       "a session idle for longer than the timeout is not restored");
+    checks.expect(!later.authenticate(token).has_value(), "and its token is refused");
+  }
+  {
+    auto other = lexicon::http::hashPassword(
+        "a new password entirely", lexicon::http::ScryptParameters::forTests());
+    AuthState changed({}, {});
+    changed.setCredentials({"lexicon", *other});
+    checks.expectEqual(static_cast<long long>(changed.useSessionFile(file).value_or(99)), 0,
+                       "a new password ends the stored sessions");
+    checks.expect(!changed.authenticate(token).has_value(),
+                  "the old token is refused after a password change");
+  }
+  {
+    std::ofstream(directory / "lexicon-sessions.json", std::ios::trunc) << "not json";
+    AuthState damaged({}, {});
+    damaged.setCredentials(credentials);
+    checks.expect(!damaged.useSessionFile(file).has_value(),
+                  "a damaged session file is reported");
+    const auto fresh = damaged.login("client", "lexicon", password).token;
+    checks.expect(!fresh.empty(), "signing in still works");
+    AuthState again({}, {});
+    again.setCredentials(credentials);
+    checks.expectEqual(static_cast<long long>(again.useSessionFile(file).value_or(0)), 1,
+                       "and replaces the damaged file");
+  }
+  std::error_code ignored;
+  fs::remove_all(directory, ignored);
 }
 
 void checkCredentialsFile(Checks &checks) {
@@ -881,5 +983,6 @@ int main() {
   checkPortIsExclusive(checks);
   checkNulInCredentials(checks);
   checkUnconfiguredServer(checks);
+  checkSessionFile(checks);
   return checks.summarize("server_auth");
 }

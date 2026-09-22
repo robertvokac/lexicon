@@ -290,12 +290,12 @@ class ServerIntegrationTest {
     }
 
     @Test
-    fun aRestartedServerSessionEndsInTheLoginScreen() = runBlocking {
+    fun aSessionEndedOnTheServerEndsInTheLoginScreen() = runBlocking {
         val environment = TestEnvironment()
         try {
             val (sessions, api) = newSessionManager(environment)
             assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
-            // What a server restart does to a token: it is simply unknown.
+            // A session the server ended - here by a logout elsewhere - is simply unknown.
             val session = sessions.current!!
             api.logout(session)
             try {

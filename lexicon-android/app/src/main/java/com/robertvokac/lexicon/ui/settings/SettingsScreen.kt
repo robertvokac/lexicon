@@ -119,7 +119,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             if (sessionInfo.idleTimeoutSeconds > 0) {
                 Text(
                     "The server ends a session after ${duration(sessionInfo.idleTimeoutSeconds)} without use, " +
-                        "and after ${duration(sessionInfo.absoluteLifetimeSeconds)} at most. A server restart ends it too.",
+                        "and after ${duration(sessionInfo.absoluteLifetimeSeconds)} at most. A new password on the server ends it too.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

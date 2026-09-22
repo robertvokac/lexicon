@@ -212,7 +212,7 @@ class SessionManager(
             if (active?.token != session.token) return
             active = null
             _state.value = SessionState.SignedOut(
-                "Your session has expired, or the server was restarted. Sign in again.",
+                "Your session has expired or was ended on the server. Sign in again.",
                 retained = (_state.value as? SessionState.SignedIn)?.identity,
             )
         }

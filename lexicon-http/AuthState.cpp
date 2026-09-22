@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <system_error>
 
 namespace lexicon::http {
@@ -25,6 +26,29 @@ std::uint64_t positiveNumber(const Json &json, const char *key,
   if (found == json.end() || !found->is_number_unsigned())
     return fallback;
   return found->get<std::uint64_t>();
+}
+
+// Replaces the file at `path` with `text`, readable by this account only. The
+// write goes through an exclusively created temporary file with an
+// unpredictable name and is installed atomically, so a crash or a concurrent
+// reader sees the old document or the new one, never half of one, and no
+// attacker can pre-create the temporary path.
+Result<void> writePrivateFile(const std::string &path, const std::string &text) {
+  const auto target = utf8Path(path);
+  const auto directory = target.parent_path();
+  auto staging = TempFile::create(directory.empty() ? std::string(".")
+                                                    : pathToUtf8(directory));
+  if (!staging)
+    return std::unexpected(staging.error());
+  if (auto written = staging->write(text.data(), text.size()); !written)
+    return written;
+  return staging->replace(path, TempFile::Protection::OwnerOnly);
+}
+
+bool validTokenHash(const std::string &hash) {
+  return hash.size() == 64 && std::all_of(hash.begin(), hash.end(), [](char ch) {
+           return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+         });
 }
 } // namespace
 
@@ -99,26 +123,8 @@ Result<void> writeCredentialsFile(const std::string &path,
         {"maxMemory", credentials.password.parameters.maxMemory},
         {"salt", base64Encode(credentials.password.salt)},
         {"hash", base64Encode(credentials.password.hash)}}}};
-  const auto text = document.dump(2) + "\n";
-
-  // Changing the password rewrites an existing file, so it goes through an
-  // exclusively created temporary with an unpredictable name and is then
-  // installed atomically. A crash or a concurrent reader sees either the old
-  // credentials or the new ones, never a half-written file, and no attacker
-  // can pre-create the temporary path.
-  const auto target = utf8Path(path);
-  const auto directory = target.parent_path();
-  auto staging = TempFile::create(directory.empty() ? std::string(".")
-                                                    : pathToUtf8(directory));
-  if (!staging)
-    return std::unexpected(staging.error());
-  if (auto written = staging->write(text.data(), text.size()); !written)
-    return written;
-  if (auto installed =
-          staging->replace(path, TempFile::Protection::OwnerOnly);
-      !installed)
-    return installed;
-  return {};
+  // Changing the password rewrites an existing file.
+  return writePrivateFile(path, document.dump(2) + "\n");
 }
 
 bool containsNul(std::string_view text) {
@@ -157,10 +163,107 @@ int AuthState::peakPasswordHashConcurrency() const {
 }
 
 void AuthState::setCredentials(Credentials credentials) {
-  std::lock_guard lock(mutex_);
+  std::unique_lock lock(mutex_);
   credentials_ = std::move(credentials);
   // Changing the credentials invalidates every existing session.
   activeSessions_.clear();
+  saveSessions(lock);
+}
+
+std::string AuthState::credentialsFingerprint() const {
+  if (!credentials_)
+    return {};
+  return sha256Hex(credentials_->username + '\n' +
+                   base64Encode(credentials_->password.salt) + '\n' +
+                   base64Encode(credentials_->password.hash));
+}
+
+namespace {
+long long epochSeconds(std::chrono::system_clock::time_point moment) {
+  return std::chrono::duration_cast<std::chrono::seconds>(moment.time_since_epoch()).count();
+}
+std::chrono::system_clock::time_point fromEpochSeconds(long long seconds) {
+  return std::chrono::system_clock::time_point(std::chrono::seconds(seconds));
+}
+} // namespace
+
+Result<std::size_t> AuthState::useSessionFile(const std::string &path) {
+  std::unique_lock lock(mutex_);
+  sessionFile_ = path;
+  std::ifstream input(utf8Path(path), std::ios::binary);
+  if (!input)
+    return std::size_t{0}; // Nobody has signed in yet.
+  Json document;
+  try {
+    input >> document;
+  } catch (const std::exception &) {
+    return invalid("The session file is not valid JSON. It is replaced at the next sign-in.");
+  }
+  if (!document.is_object() || positiveNumber(document, "version", 0) != 1 ||
+      !document.contains("sessions") || !document["sessions"].is_array())
+    return invalid("Unsupported session file. It is replaced at the next sign-in.");
+  // Sessions opened with other credentials - before `auth set-user` changed
+  // the password, say - end here.
+  const auto credentials = document.find("credentials");
+  if (credentials == document.end() || !credentials->is_string() ||
+      credentials->get<std::string>() != credentialsFingerprint() || !credentials_)
+    return std::size_t{0};
+  const auto moment = now();
+  std::map<std::string, Session> restored;
+  for (const auto &entry : document["sessions"]) {
+    if (!entry.is_object()) continue;
+    const auto hash = entry.value("tokenHash", std::string{});
+    const auto user = entry.value("username", std::string{});
+    const auto created = entry.find("created");
+    const auto lastSeen = entry.find("lastSeen");
+    if (!validTokenHash(hash) || user != credentials_->username ||
+        created == entry.end() || !created->is_number_integer() ||
+        lastSeen == entry.end() || !lastSeen->is_number_integer())
+      continue;
+    Session session{user, fromEpochSeconds(created->get<long long>()),
+                    fromEpochSeconds(lastSeen->get<long long>()),
+                    fromEpochSeconds(lastSeen->get<long long>())};
+    if (moment - session.lastSeen > sessions_.idleTimeout ||
+        moment - session.created > sessions_.absoluteLifetime)
+      continue;
+    restored.emplace(hash, std::move(session));
+  }
+  // The most recently used ones, if the file holds more than are allowed.
+  while (restored.size() > sessions_.maxSessions)
+    restored.erase(std::min_element(restored.begin(), restored.end(),
+                                    [](const auto &left, const auto &right) {
+                                      return left.second.lastSeen < right.second.lastSeen;
+                                    }));
+  activeSessions_ = std::move(restored);
+  return activeSessions_.size();
+}
+
+void AuthState::saveSessions(std::unique_lock<std::mutex> &lock) {
+  if (sessionFile_.empty())
+    return;
+  Json sessions = Json::array();
+  for (auto &[hash, session] : activeSessions_) {
+    session.savedLastSeen = session.lastSeen;
+    sessions.push_back(Json{{"tokenHash", hash},
+                            {"username", session.username},
+                            {"created", epochSeconds(session.created)},
+                            {"lastSeen", epochSeconds(session.lastSeen)}});
+  }
+  const Json document{{"version", 1},
+                      {"credentials", credentialsFingerprint()},
+                      {"sessions", std::move(sessions)}};
+  const auto generation = ++saveGeneration_;
+  const auto path = sessionFile_;
+  lock.unlock();
+  const auto text = document.dump(2) + "\n";
+  std::lock_guard save(saveMutex_);
+  // A newer snapshot may have been written while this one waited.
+  if (generation <= savedGeneration_)
+    return;
+  if (auto written = writePrivateFile(path, text); !written)
+    std::cerr << "lexicon-http: cannot save the sessions to " << path << ": "
+              << written.error().message << '\n';
+  savedGeneration_ = generation;
 }
 
 bool AuthState::configured() const {
@@ -182,15 +285,19 @@ void AuthState::advanceClockForTests(std::chrono::seconds amount) {
   testOffset_ += amount;
 }
 
-void AuthState::expireSessions(Clock::time_point moment) {
+bool AuthState::expireSessions(Clock::time_point moment) {
+  bool expired = false;
   for (auto it = activeSessions_.begin(); it != activeSessions_.end();) {
     const bool idle = moment - it->second.lastSeen > sessions_.idleTimeout;
     const bool old = moment - it->second.created > sessions_.absoluteLifetime;
-    if (idle || old)
+    if (idle || old) {
       it = activeSessions_.erase(it);
-    else
+      expired = true;
+    } else {
       ++it;
+    }
   }
+  return expired;
 }
 
 bool AuthState::limited(const std::string &clientKey, Clock::time_point moment,
@@ -314,7 +421,7 @@ AuthState::LoginResult AuthState::login(const std::string &clientKey,
   }
 
   // Phase three, under the lock again: record the outcome.
-  std::lock_guard lock(mutex_);
+  std::unique_lock lock(mutex_);
   const auto moment = now();
   // A password change during the derivation invalidates what was verified.
   const bool stillCurrent =
@@ -344,31 +451,43 @@ AuthState::LoginResult AuthState::login(const std::string &clientKey,
       activeSessions_.erase(oldest);
   }
   activeSessions_.emplace(sha256Hex(*token),
-                          Session{credentials_->username, moment, moment});
+                          Session{credentials_->username, moment, moment, moment});
   clearFailures(clientKey);
   result.status = LoginStatus::Ok;
   result.token = std::move(*token);
+  saveSessions(lock);
   return result;
 }
 
 std::optional<std::string> AuthState::authenticate(const std::string &token) {
   if (token.empty())
     return std::nullopt;
-  std::lock_guard lock(mutex_);
+  std::unique_lock lock(mutex_);
   const auto moment = now();
-  expireSessions(moment);
+  const bool expired = expireSessions(moment);
   const auto found = activeSessions_.find(sha256Hex(token));
-  if (found == activeSessions_.end())
+  if (found == activeSessions_.end()) {
+    if (expired)
+      saveSessions(lock);
     return std::nullopt;
+  }
   found->second.lastSeen = moment;
-  return found->second.username;
+  auto user = found->second.username;
+  // The idle timer survives a restart to within a minute, without a write
+  // for every request.
+  if (expired || moment - found->second.savedLastSeen >= std::chrono::minutes(1))
+    saveSessions(lock);
+  return user;
 }
 
 bool AuthState::logout(const std::string &token) {
   if (token.empty())
     return false;
-  std::lock_guard lock(mutex_);
-  return activeSessions_.erase(sha256Hex(token)) != 0;
+  std::unique_lock lock(mutex_);
+  const bool removed = activeSessions_.erase(sha256Hex(token)) != 0;
+  if (removed)
+    saveSessions(lock);
+  return removed;
 }
 
 std::size_t AuthState::sessionCount() const {

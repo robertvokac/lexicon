@@ -481,10 +481,10 @@ class LexiconFlowsTest {
         compose.waitForText("Resource acquisition is initialization.")
         openEditor()
         field("Title").performTextReplacement("RAII, kept")
-        // The server restarts: every session is gone.
+        // The server ends every session, as a new password does.
         fake.tokens.clear()
         compose.onNode(hasText("Save") and hasClickAction()).performClick()
-        compose.waitForText("Your session has expired, or the server was restarted. Sign in again.")
+        compose.waitForText("Your session has expired or was ended on the server. Sign in again.")
         field("Password").performTextInput(fake.password)
         compose.onNode(hasText("Log in") and hasClickAction()).performClick()
         compose.waitForText("RAII, kept")

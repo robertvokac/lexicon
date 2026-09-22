@@ -61,6 +61,15 @@ std::string ServerConfig::resolvedAuthFilePath() const {
                                   : directory / "lexicon-auth.json");
 }
 
+std::string ServerConfig::resolvedSessionFilePath() const {
+  if (!sessionFilePath.empty())
+    return sessionFilePath;
+  const auto database = utf8Path(databasePath);
+  const auto directory = database.parent_path();
+  return pathToUtf8(directory.empty() ? fs::path("lexicon-sessions.json")
+                                  : directory / "lexicon-sessions.json");
+}
+
 bool isLoopbackAddress(const std::string &address) {
   if (address == "localhost" || address == "::1" || address == "[::1]")
     return true;
@@ -132,7 +141,10 @@ Options:
   --session-idle-timeout S   Idle session timeout in seconds (default: 28800)
   --session-max-lifetime S   Absolute session lifetime in seconds
                              (default: 604800)
-  --max-sessions N           Concurrent sessions kept in memory (default: 32)
+  --max-sessions N           Concurrent sessions kept (default: 32)
+  --session-file PATH        Where sessions are kept across restarts
+                             (default: <database directory>/lexicon-sessions.json)
+  --no-session-file          Keep sessions in memory only; a restart ends them
   --max-json-bytes N         Maximum JSON request body (default: 1048576)
   --max-blob-bytes N         Maximum blob upload (default: 67108864)
   --read-timeout S           Socket read timeout in seconds (default: 15)
@@ -196,6 +208,10 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.allowInsecureHttp = true;
       continue;
     }
+    if (option == "--no-session-file") {
+      parsed.config.persistSessions = false;
+      continue;
+    }
     if (option == "--quiet") {
       parsed.config.requestLogging = false;
       continue;
@@ -207,6 +223,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.databasePath = *value;
     else if (option == "--auth-file")
       parsed.config.authFilePath = *value;
+    else if (option == "--session-file")
+      parsed.config.sessionFilePath = *value;
     else if (option == "--listen")
       parsed.config.listenAddress = *value;
     else if (option == "--tls-cert")

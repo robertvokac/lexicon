@@ -80,8 +80,8 @@ not reach the shell history or the process list. `LexiconServer auth show`
 prints the configured user name and the hash parameters, never the hash.
 
 The server reads the credentials once, at startup. After changing the password
-restart it; the restart also ends every existing session, so anyone signed in
-with the old password is signed out.
+restart it; the sessions opened with the old password are not restored, so
+anyone signed in with it is signed out.
 
 Credentials are stored in `lexicon-auth.json` next to the database (override
 with `--auth-file`). Changing the password rewrites that file, so the write
@@ -136,7 +136,9 @@ intentional, not a bug.
 | `--trusted-proxy ADDRESS` | none | Honour `X-Forwarded-For` from this peer, repeatable |
 | `--session-idle-timeout S` | `28800` (8 h) | Idle session timeout |
 | `--session-max-lifetime S` | `604800` (7 d) | Absolute session lifetime |
-| `--max-sessions N` | `32` | Concurrent sessions kept in memory |
+| `--max-sessions N` | `32` | Concurrent sessions kept |
+| `--session-file PATH` | `<database dir>/lexicon-sessions.json` | Where sessions are kept across restarts |
+| `--no-session-file` | off | Keep sessions in memory only; a restart ends them |
 | `--max-json-bytes N` | `1048576` | Largest JSON request body |
 | `--max-blob-bytes N` | `67108864` | Largest blob upload |
 | `--read-timeout S` | `15` | Socket read timeout |
@@ -147,6 +149,20 @@ intentional, not a bug.
 | `--login-max-failures-total N` | `200` | Failed logins from all clients before 429 (0 disables) |
 | `--login-max-parallel-hashes N` | `2` | Password derivations allowed to run at once |
 | `--quiet` | off | Do not log one line per request |
+
+## Sessions across restarts
+
+Sessions are kept in `lexicon-sessions.json` next to the database (override
+with `--session-file`), so restarting or upgrading the server does not sign
+the web client and the Android app out. The file holds, for each session, the
+SHA-256 of its token, the user name, and when the session started and was last
+used - never a token, which cannot be recovered from its hash. It is written
+like the credentials file, readable by the server's account only, whenever a
+session starts or ends and at most once a minute while one is in use. At
+startup the server takes over the sessions that are still within
+`--session-idle-timeout` and `--session-max-lifetime` and that belong to the
+current credentials; `auth set-user` therefore ends them all. With
+`--no-session-file` sessions live in memory only and a restart ends them.
 
 ## HTTP, HTTPS and reverse proxies
 
@@ -349,9 +365,11 @@ with any characters the file system accepts.
   cost about 128 MB, not 128 MB per request.
 - **Sessions.** On a successful login the server generates 256 bits from the
   OpenSSL CSPRNG and returns it as an opaque base64url token. Only the SHA-256
-  of the token is kept in memory. Sessions expire on idle timeout and on
-  absolute lifetime, are dropped by logout, are capped in number, and disappear
-  entirely when the server restarts. The password is never usable as a token.
+  of the token is kept, in memory and in the owner-only session file. Sessions
+  expire on idle timeout and on absolute lifetime, are dropped by logout, are
+  capped in number, and end when the password changes; a restart keeps them
+  unless `--no-session-file` is given. The password is never usable as a
+  token.
 - **Brute force.** Failed logins are counted per client address in a bounded
   table, with a global backstop against address rotation. Over the threshold,
   logins answer 429 with `Retry-After`; a successful login clears the client's
@@ -429,7 +447,6 @@ the same scrypt derivation as a wrong password.
   defaults allow 10 failures per address and 200 in total per 15 minutes,
   about 19,000 guesses a day from many addresses. Use a long random password,
   and change any password that has been shown to anyone with `auth set-user`.
-- Sessions live in memory only, so a restart signs every client out.
 - The global login backstop means a determined attacker rotating addresses can
   make logins answer 429 for the length of the window. Raise
   `--login-max-failures-total`, or set it to 0, if that trade-off is wrong for

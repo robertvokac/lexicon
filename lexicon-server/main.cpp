@@ -160,7 +160,7 @@ int authSetUser(const ServerConfig &config) {
     std::cerr << written.error().message << '\n';
     return 1;
   }
-  std::cout << "Saved. Existing sessions will stop working after a restart.\n";
+  std::cout << "Saved. Existing sessions stop working when the server restarts.\n";
   return 0;
 }
 
@@ -201,6 +201,15 @@ int serve(const ServerConfig &config) {
   lexicon::LexiconApplication application(repository);
   AuthState auth(config.sessions, config.loginLimits);
   auth.setCredentials(*credentials);
+  std::size_t restoredSessions = 0;
+  if (config.persistSessions) {
+    auto restored = auth.useSessionFile(config.resolvedSessionFilePath());
+    if (restored)
+      restoredSessions = *restored;
+    else
+      std::cerr << "Ignoring " << config.resolvedSessionFilePath() << ": "
+                << restored.error().message << '\n';
+  }
 
   RestServer server(config, application, auth);
   auto port = server.bind();
@@ -217,6 +226,11 @@ int serve(const ServerConfig &config) {
             << config.listenAddress << ':' << *port << "/api/v1\n"
             << "Database: " << config.databasePath << '\n'
             << "User: " << credentials->username << '\n';
+  if (config.persistSessions)
+    std::cout << "Sessions: " << config.resolvedSessionFilePath() << " ("
+              << restoredSessions << " still valid)\n";
+  else
+    std::cout << "Sessions: in memory only, a restart ends them\n";
   if (config.allowedOrigins.empty())
     std::cout << "No CORS origin is allowed yet. Browser clients need "
                  "--allowed-origin <https://your-static-host>.\n";
