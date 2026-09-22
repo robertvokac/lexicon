@@ -2,6 +2,8 @@
 
 #include "AlarmsDialog.h"
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -24,7 +26,7 @@ QString keyOf(const lexicon::AlarmRecord& alarm) {
 AlarmRingDialog::AlarmRingDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("Alarm");
     setWindowFlag(Qt::WindowStaysOnTopHint);
-    setModal(false);
+    setWindowModality(Qt::ApplicationModal);
     resize(460, 240);
     auto* root = new QVBoxLayout(this);
     auto* scroll = new QScrollArea(this);
@@ -54,6 +56,12 @@ AlarmRingDialog::AlarmRingDialog(QWidget* parent) : QDialog(parent) {
 }
 
 void AlarmRingDialog::setAlarms(const std::vector<lexicon::AlarmRecord>& alarms) {
+    // Rebuilt only when something changed: the notifier asks every few
+    // seconds, and a button replaced under the cursor loses its click.
+    const auto same = [](const lexicon::AlarmRecord& a, const lexicon::AlarmRecord& b) {
+        return a.id == b.id && a.title == b.title && a.description == b.description && a.firesAt == b.firesAt;
+    };
+    if (std::equal(alarms.begin(), alarms.end(), m_alarms.begin(), m_alarms.end(), same) && m_list->count() > 0) return;
     m_alarms = alarms;
     while (auto* item = m_list->takeAt(0)) {
         if (auto* widget = item->widget()) widget->deleteLater();

@@ -19,6 +19,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QDateTimeEdit>
+#include <QDialog>
 #include <QTimeZone>
 #include <QLabel>
 #include <QLineEdit>
@@ -344,8 +345,12 @@ void checkAlarmNotifier(lexicon::LexiconApplication &application) {
   if (!ring) return;
   check(ring->findChild<QFrame *>(QString("alarmCard_%1").arg(later->id)) == nullptr, "a future alarm does not");
   shot(*ring, "alarm-ring");
+  auto *before = ring->findChild<QPushButton *>(QString("alarmDismiss_%1").arg(tea->id));
   notifier.check();
   check(notifier.announcements() == 1, "an alarm already ringing is not announced again at once");
+  QApplication::processEvents();
+  check(before && ring->findChild<QPushButton *>(QString("alarmDismiss_%1").arg(tea->id)) == before,
+        "and its buttons are not replaced under the cursor");
 
   auto *snooze = ring->findChild<QPushButton *>(QString("alarmSnooze_%1").arg(tea->id));
   check(snooze != nullptr, "each alarm can be snoozed");
@@ -370,6 +375,47 @@ void checkAlarmNotifier(lexicon::LexiconApplication &application) {
   check(!ring->isVisible(), "and stops when dismissed elsewhere");
   for (const int id : {tea->id, call->id, later->id}) application.alarms.deleteAlarm(id);
 }
+// An alarm that goes off while a modal dialog is open - the item editor, the
+// alarm list - must still be answerable, or the whole window seems frozen.
+void checkAlarmDuringModalDialog(lexicon::LexiconApplication &application) {
+  if (auto due = application.alarms.loadDueAlarms())
+    for (const auto &alarm : *due) application.alarms.dismissAlarm(alarm.id);
+  QWidget window;
+  window.resize(800, 600);
+  window.show();
+  AlarmNotifier notifier(&window, 60 * 60 * 1000);
+  auto tea = application.alarms.saveAlarm({-1, "Tea during a dialog", "", "2020-01-01T10:00:00Z", {}});
+  check(tea.has_value(), "create an alarm");
+  if (!tea) return;
+  QDialog modal(&window);
+  modal.setWindowTitle("Some modal dialog");
+  modal.resize(400, 300);
+  bool rang = false;
+  bool onTop = false;
+  bool modalAgain = false;
+  QTimer::singleShot(0, &modal, [&] {
+    notifier.check();
+    auto *ring = notifier.dialog();
+    rang = ring && ring->isVisible();
+    QApplication::processEvents();
+    // Qt gives input to the most recently shown modal window only; the one
+    // that answers must be the alarm, not the dialog beneath it.
+    onTop = ring && QGuiApplication::modalWindow() == ring->windowHandle();
+    if (ring) {
+      if (auto *dismiss = ring->findChild<QPushButton *>(QString("alarmDismiss_%1").arg(tea->id))) dismiss->click();
+      QApplication::processEvents();
+      modalAgain = !ring->isVisible() && QGuiApplication::modalWindow() == modal.windowHandle();
+    }
+    modal.accept();
+  });
+  modal.exec();
+  check(rang, "the alarm rings while a modal dialog is open");
+  check(onTop, "and takes the input from that dialog, which would otherwise block it");
+  check(modalAgain, "dismissed, it hands the input back to the dialog");
+  const auto after = application.alarms.loadAlarm(tea->id);
+  check(after && !after->dismissedAt.empty(), "and its Dismiss button can be clicked there");
+  application.alarms.deleteAlarm(tea->id);
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -391,6 +437,7 @@ int main(int argc, char **argv) {
   checkInbox(application);
   checkAlarms(application);
   checkAlarmNotifier(application);
+  checkAlarmDuringModalDialog(application);
   checkImages(application, group, directory);
 
   if (failures == 0) std::cout << "desktop_gui_smoke: all checks passed\n";

@@ -15,7 +15,10 @@ class QVBoxLayout;
 class QLabel;
 
 // The alarms that have gone off, each with Dismiss and Snooze. It stays on
-// top and does not block the main window.
+// top and is modal to the application: shown while another modal dialog is
+// open - the item editor, the alarm list - it would otherwise be blocked by
+// that dialog and cover it, and the whole program would seem frozen. As the
+// most recently shown modal window it takes the input; Later hides it.
 class AlarmRingDialog : public QDialog {
     Q_OBJECT
 
