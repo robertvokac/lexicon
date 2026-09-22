@@ -200,19 +200,27 @@ Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build -j
 QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
-node --test lexicon-web/tests/
+node --test lexicon-web/tests/*.test.mjs
+python3 tools/web-e2e.py --server build/LexiconServer
 ```
+
+`tools/web-e2e.py` drives the web client in headless Chrome or Chromium
+against a fresh `LexiconServer`: sign in, the Inbox, editing and saving,
+search, groups, types, review, alarms and sign out, each step also checked
+through the REST API. It needs only Python and the browser.
 
 The Android app has its own Gradle build; see
 [lexicon-android/README.md](lexicon-android/README.md#tests).
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs all of this on
-every push and pull request, on Ubuntu 24.04: it builds the backend, the
-server and the desktop client, runs every CTest suite - the desktop dialogs
-offscreen - and the web client's tests, then runs the Android unit, Compose
-and lint checks and the Android tests against the `LexiconServer` the first
-job built, and builds the debug and release APKs. Started by hand with
-**device-tests**, it also runs the instrumented tests on an emulator.
+every push and pull request. On Ubuntu 24.04 it builds the Qt-free backend
+and `LexiconServer`, runs their CTest suites and the web client's tests, then
+runs the web client in a browser and the Android unit, Compose, lint and
+real-server tests against that server, and builds the debug and release
+APKs. The desktop client is built and tested - its dialogs offscreen - in a
+Debian 13 container, because its Markdown library needs a newer Qt than
+Ubuntu 24.04 has. Started by hand with **device-tests**, it also runs the
+instrumented tests on an emulator.
 
 ## Architecture
 
@@ -225,11 +233,13 @@ job built, and builds the debug and release APKs. Started by hand with
 | `Lexicon` (`lexicon-qt/`) | Qt Widgets frontend and composition root; injects `SqliteRepository` into `LexiconApplication`. No SQL in Widgets. |
 | `lexicon-json` | The JSON representation of records, shared by the REST API and the [export format](docs/export-format.md); export and import. Depends on application and vendored nlohmann/json. No Qt. |
 | `lexicon-http` | HTTP adapter: authentication, sessions, CORS, TLS, routes. Depends on application, `lexicon-json`, vendored cpp-httplib, and OpenSSL. No Qt. |
-| `LexiconServer` (`lexicon-server/`) | Server composition root; injects `SqliteRepository` into `LexiconApplication` and serves `lexicon-http`. No Qt. |
+| `lexicon-backup` (`lexicon-server/Backup.*`) | Automatic backups: a database copy, an export and the files it refers to, with rotation. Depends on application, storage and `lexicon-json`. No Qt. |
+| `LexiconServer` (`lexicon-server/`) | Server composition root; injects `SqliteRepository` into `LexiconApplication`, serves `lexicon-http` and runs `lexicon-backup`. No Qt. |
+| `lexicon-markdown` | The desktop's Markdown to HTML conversion, with the vendored md4qt parser and `[[wiki links]]`. Depends on core and QtCore. |
 | `lexicon-web/` | Static HTML, CSS and vanilla JavaScript client. No C++, no framework, no build step. Talks only REST. |
 | `lexicon-android/` | Native Android client in Kotlin and Jetpack Compose, a separate Gradle project outside the CMake build. No database of its own, no C++. Talks only REST. |
 
-Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. Migration versions and schema are unchanged; old QtSql databases are covered by version 10 and version 20 compatibility fixtures.
+Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. The schema grows only by appended migrations (25 so far, in `lexicon-storage-sqlite/Migrations.cpp`); a database written by any earlier Lexicon, including the former QtSql desktop client, is upgraded when opened, and version 10 and version 20 fixtures test that path. See [web/developers/database.html](web/developers/database.html) for the tables and the migration list.
 
 Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding. The one exception is the full-text search index (below), which folds case and diacritics in every script.
 
@@ -630,9 +640,16 @@ Backup strategies:
 
 ## Roadmap
 
-- export to CSV/JSON
-- add new unique indexes
-- export to static HTML
+Lexicon now covers what it set out to do, so new features wait while it is
+used day to day; fixes come from that use. Ideas for later, not promises:
+
+- export to static HTML, to publish a dictionary as a website
+- export to CSV, for spreadsheets
+- a trash and an item history, to undo a deletion or an edit
+- recurring alarms, and alarms that belong to an item
+- automatic backups for the desktop client without a server
+
+See [TODO.md](TODO.md) for the smaller polish items.
 
 ## License
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Developer Docs — Lexicon</title>
-<meta name="description" content="Lexicon developer documentation: technology stack, repository layout, building with CMake and Qt 6, architecture, SQLite schema, and contributing.">
+<meta name="description" content="Lexicon developer documentation: technology stack, repository layout, building the desktop client, server, web and Android clients, architecture, SQLite schema, and contributing.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -52,49 +52,60 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / Developers</p>
     <h1>Developer Docs</h1>
-    <p class="lead">Everything you need to build, understand, and extend Lexicon. The codebase is small, focused, and easy to get into — a classic Qt Widgets desktop application with a clean data layer.</p>
+    <p class="lead">Everything you need to build, understand, and extend Lexicon: one C++23 backend and three clients. The Qt desktop client opens the SQLite database directly; the web client and the Android app talk to <code>LexiconServer</code> over a REST API.</p>
 
     <h2>Technology stack</h2>
     <table>
-      <tr><th>Layer</th><th>Technology</th><th>Notes</th></tr>
-      <tr><td>Language</td><td>C++23</td><td><code>CMAKE_CXX_STANDARD 23</code>, extensions off</td></tr>
-      <tr><td>GUI</td><td>Qt 6 Widgets</td><td>Classic desktop widgets, no QML</td></tr>
-      <tr><td>Persistence</td><td>SQLite C API</td><td>Single-file database with versioned migrations</td></tr>
-      <tr><td>Markdown</td><td><a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a></td><td>Vendored in <code>3rdparty/</code>, compiled into the binary</td></tr>
-      <tr><td>Build system</td><td>CMake ≥ 3.21</td><td>Single <code>Lexicon</code> executable target</td></tr>
+      <tr><th>Part</th><th>Technology</th><th>Notes</th></tr>
+      <tr><td>Backend</td><td>C++23</td><td><code>CMAKE_CXX_STANDARD 23</code>, extensions off, no Qt</td></tr>
+      <tr><td>Persistence</td><td>SQLite C API</td><td>One database file with versioned migrations; FTS5 search where SQLite has it; files in <code>blobs/</code> beside it</td></tr>
+      <tr><td>Desktop client</td><td>Qt 6 Widgets</td><td>Classic desktop widgets, no QML; Markdown by the vendored <a href="https://github.com/igormironchik/md4qt" target="_blank" rel="noopener">md4qt</a></td></tr>
+      <tr><td>Server</td><td><code>LexiconServer</code></td><td>REST/JSON under <code>/api/v1</code>, vendored cpp-httplib and nlohmann/json, OpenSSL for TLS and hashing</td></tr>
+      <tr><td>Web client</td><td>HTML, CSS, JavaScript modules</td><td>No framework and no build step; vendored <code>marked</code> and DOMPurify</td></tr>
+      <tr><td>Android client</td><td>Kotlin, Jetpack Compose</td><td>A separate Gradle project; no database of its own</td></tr>
+      <tr><td>Build</td><td>CMake ≥ 3.21, Gradle</td><td>CMake for the C++ targets, Gradle for Android</td></tr>
+      <tr><td>Tests</td><td>CTest, Node, Robolectric, a headless browser</td><td>All run on every push by GitHub Actions</td></tr>
       <tr><td>License</td><td>MIT</td><td>Free for any use</td></tr>
     </table>
 
     <h2>Repository layout</h2>
     <pre><code>lexicon/
-├── lexicon-core/             # records and validation
-├── lexicon-application/      # services and Repository interface
-├── lexicon-storage-sqlite/   # native SQLite and migrations
+├── lexicon-core/             # records, validation, review rules, wiki links, image values
+├── lexicon-application/      # services and the Repository interface
+├── lexicon-storage-sqlite/   # native SQLite, migrations, search index, Blob files
+├── lexicon-json/             # the JSON form of records; export and import
+├── lexicon-http/             # REST routes, authentication, sessions, CORS, TLS
+├── lexicon-server/           # LexiconServer and its automatic backups
 ├── lexicon-qt-bridge/        # Qt / UTF-8 conversions
-├── lexicon-qt/               # Widgets frontend
-├── tests/                    # backend and compatibility tests
-└── 3rdparty/md4qt/           # Markdown parser</code></pre>
+├── lexicon-qt/               # Qt Widgets desktop client
+├── lexicon-web/              # static web client
+├── lexicon-android/          # Android client (Gradle)
+├── tests/                    # C++ tests, including offscreen desktop dialogs
+├── tools/                    # web-e2e.py (browser test), serve-web.py
+├── docs/                     # REST API, server, export format
+├── web/                      # this site
+└── 3rdparty/                 # md4qt, cpp-httplib, nlohmann/json</code></pre>
 
     <h2>How it fits together</h2>
-    <p>The desktop composition root opens the native SQLite repository and injects it into <code>LexiconApplication</code>. Widgets call services; only the storage target runs SQL. Core, application, and storage build without Qt. Read the <a href="architecture.html">architecture guide</a>.</p>
+    <p>Each program has a composition root that opens the SQLite repository and injects it into <code>LexiconApplication</code>: the desktop client in <code>lexicon-qt/</code>, the server in <code>lexicon-server/</code>. Only the storage target runs SQL. The server exposes the same services over REST, and the web client and the Android app use nothing else. Read the <a href="architecture.html">architecture guide</a>.</p>
 
     <h2>Jump in</h2>
     <div class="grid grid-2" style="margin-top:1.2rem">
       <a class="card card-link" href="building.html">
         <h3>🔨 Building from source</h3>
-        <p>Prerequisites, CMake configuration, build types, and IDE setup for Linux, Windows, and macOS.</p>
+        <p>Prerequisites, the desktop client, the server, the web and Android clients, and the tests.</p>
       </a>
       <a class="card card-link" href="architecture.html">
         <h3>🏗️ Architecture</h3>
-        <p>Source files and their responsibilities, core data structures, enums, and design decisions.</p>
+        <p>Targets and their dependencies, transactions, revisions, search, files, and the clients.</p>
       </a>
       <a class="card card-link" href="database.html">
         <h3>🗄️ Database schema</h3>
-        <p>Domain tables, configuration, indexes, cascade rules, and the versioned migration system — with full DDL.</p>
+        <p>Tables, indexes, cascade rules, and the versioned migrations — with full DDL.</p>
       </a>
       <a class="card card-link" href="roadmap.html">
         <h3>🗺️ Roadmap &amp; TODO</h3>
-        <p>Planned features like CSV/JSON export, static HTML export, and an HTTP server — plus the working TODO list.</p>
+        <p>What shipped, what may come later, and the working TODO list.</p>
       </a>
       <a class="card card-link" href="contributing.html">
         <h3>🤝 Contributing</h3>

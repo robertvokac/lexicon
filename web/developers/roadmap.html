@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Roadmap &amp; TODO — Lexicon Developer Docs</title>
-<meta name="description" content="Lexicon roadmap: CSV/JSON export, static HTML export, HTTP server, improved search ranking — plus the working TODO list and recent updates.">
+<meta name="description" content="Lexicon roadmap: what shipped - the server, web and Android clients, search, review, alarms, backups - ideas for later, and the working TODO list.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -44,7 +44,7 @@
       <p class="sidebar-title">On this page</p>
       <ul>
         <li><a href="#recent">Recently shipped</a></li>
-        <li><a href="#roadmap">Roadmap</a></li>
+        <li><a href="#roadmap">Ideas for later</a></li>
         <li><a href="#todo">Working TODO list</a></li>
       </ul>
     </nav>
@@ -53,60 +53,60 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Roadmap &amp; TODO</p>
     <h1>Roadmap &amp; TODO</h1>
-    <p class="lead">Lexicon is young and actively developed. This page tracks where it is heading — a great place to look if you want to <a href="contributing.html">contribute</a>.</p>
+    <p class="lead">Lexicon now does what it set out to do. New features wait while it is used day to day; what comes next is what that use shows is missing.</p>
 
     <h2 id="recent">Recently shipped</h2>
     <ul>
-      <li>Item table supports <strong>sorting by clicking column headers</strong>.</li>
-      <li><strong><code>New item</code> prefills the title</strong> from the current search text — search-to-create in one motion.</li>
+      <li><strong>LexiconServer</strong> with a versioned REST API, and two clients for it: the <strong>web client</strong> and the <strong>Android app</strong>.</li>
+      <li><strong>Search</strong> that ignores case and diacritics and ranks exact titles first.</li>
+      <li><strong>Conflicts</strong>: a save based on an item another client changed meanwhile is refused with a choice to overwrite or reload.</li>
+      <li><strong>Export and import</strong> of the whole dictionary in a documented JSON format.</li>
+      <li><strong>Review</strong> with spaced repetition, <strong><code>[[wiki links]]</code></strong> between items, and a <strong>relationship graph</strong>.</li>
+      <li>An <strong>Inbox</strong> for quick ideas, which works offline on Android.</li>
+      <li><strong>Alarms</strong> that ring in every client, <strong>Image</strong> values, and <strong>automatic server backups</strong>.</li>
     </ul>
 
-    <h2 id="roadmap">Roadmap</h2>
+    <h2 id="roadmap">Ideas for later</h2>
+    <p>Not promises — candidates, once day-to-day use asks for them.</p>
     <div class="grid grid-2" style="margin-top:1rem">
-      <div class="card">
-        <h3>📤 Export to CSV / JSON</h3>
-        <p>Structured exports of groups and items, so data can flow into spreadsheets, scripts, and other tools.</p>
-      </div>
       <div class="card">
         <h3>🌐 Export to static HTML</h3>
         <p>Publish a whole lexicon as a browsable static website — sharing your knowledge base without sharing the app.</p>
       </div>
       <div class="card">
-        <h3>🖧 HTTP server</h3>
-        <p>A built-in server to browse your lexicon from other devices on the local network.</p>
+        <h3>📊 Export to CSV</h3>
+        <p>Items and their values as a table, for spreadsheets and scripts.</p>
       </div>
       <div class="card">
-        <h3>🔎 Better search ranking</h3>
-        <p>Exact matches should surface first; ranking improvements are planned for the search pipeline.</p>
+        <h3>🗑️ Trash and item history</h3>
+        <p>Undo a deletion or go back to an earlier version of an item.</p>
+      </div>
+      <div class="card">
+        <h3>⏰ Recurring alarms</h3>
+        <p>Alarms that repeat, and alarms that belong to an item.</p>
+      </div>
+      <div class="card">
+        <h3>💾 Desktop backups</h3>
+        <p>The server's automatic backups for people who use only the desktop client.</p>
       </div>
       <div class="card">
         <h3>🧱 More unique indexes</h3>
         <p>Additional database constraints to guarantee consistency as the schema grows.</p>
       </div>
-      <div class="card">
-        <h3>🕸️ Graph visualization</h3>
-        <p>A visual view of the item relationship graph — the natural payoff of typed links.</p>
-      </div>
     </div>
 
     <h2 id="todo">Working TODO list</h2>
-    <p>The current <code>TODO.md</code> focuses on polish and future product features. Groups, Items, Types, Fields, typed Values, Links, multi-field search, pinned filters, Markdown editing, and themes are already implemented.</p>
-    <h3>UI polish</h3>
+    <p><code>TODO.md</code> in the repository holds the smaller polish items:</p>
     <ul>
       <li>Improve table column density and wrapping for long Tags, Aliases, and Flags.</li>
       <li>Review resizing between the item table, content preview, and links area.</li>
-      <li>Add keyboard shortcuts and undo/redo across item edits.</li>
-    </ul>
-    <h3>Product features</h3>
-    <ul>
-      <li>Improve search ranking so exact title matches appear first.</li>
-      <li>Export and import Items and Groups in a documented format.</li>
-      <li>Add an optional graph view of Item relationships.</li>
+      <li>Add keyboard shortcuts for common item actions.</li>
+      <li>Add undo/redo for edits spanning multiple item fields or links.</li>
     </ul>
 
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
-      <p><strong>Want one of these?</strong> Pick an item, open an issue to claim it, and see <a href="contributing.html">Contributing</a> for the workflow. Small, focused pull requests are the easiest to review and merge.</p>
+      <p><strong>Want one of these?</strong> Open an issue to discuss it first, and see <a href="contributing.html">Contributing</a> for the workflow. Small, focused pull requests are the easiest to review and merge.</p>
     </div>
 
     <div class="page-nav">

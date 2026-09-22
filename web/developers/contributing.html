@@ -74,7 +74,7 @@
       <li><strong>Fork</strong> the repository on GitHub and clone your fork.</li>
       <li><strong>Create a branch</strong> for your change: <code>git checkout -b fix/table-sorting</code>.</li>
       <li><strong>Make the change</strong>, keeping it focused — one topic per pull request.</li>
-      <li><strong>Build and test manually</strong>: run the app, exercise the affected workflow, and verify migrations still apply cleanly on both a fresh and an existing <code>lexicon.db</code>.</li>
+      <li><strong>Run the tests</strong> (see <a href="building.html#tests">Building from source</a>), then exercise the affected workflow by hand and check that migrations still apply cleanly to both a fresh and an existing <code>lexicon.db</code>. GitHub Actions runs every suite on your pull request.</li>
       <li><strong>Open the pull request</strong> with a clear description of what changed and why.</li>
     </ol>
 
@@ -84,7 +84,7 @@
       <li><strong>C++23, no extensions.</strong> The build sets <code>CMAKE_CXX_STANDARD 23</code> with compiler extensions off; keep code portable across GCC, Clang, and MSVC.</li>
       <li><strong>SQL belongs in <code>lexicon-storage-sqlite</code>.</strong> UI classes call application services through the repository boundary.</li>
       <li><strong>Schema changes are append-only migrations.</strong> Never modify a shipped migration; add a new version instead (see <a href="database.html#adding">Adding a migration</a>).</li>
-      <li><strong>Never renumber enums.</strong> <code>ItemStatus</code>, <code>UnderstandingLevel</code>, and <code>LinkType</code> values are persisted in SQLite.</li>
+      <li><strong>Never renumber enums.</strong> <code>ItemStatus</code>, <code>UnderstandingLevel</code>, <code>LinkType</code>, and <code>FieldDataType</code> values are persisted in SQLite (see <a href="architecture.html#enums">Architecture</a>).</li>
       <li><strong>Report errors, don't swallow them.</strong> Return <code>std::expected&lt;T, Error&gt;</code> from public application and repository operations.</li>
     </ul>
 

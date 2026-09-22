@@ -451,8 +451,11 @@ with R8.
 
 ## Limitations
 
-- Online only. Without the server the app shows why and offers to retry; it
-  never queues changes. An edit whose save fails stays in the editor.
+- Online, except for the Inbox. Without the server the app shows why and
+  offers to retry. Inbox ideas wait on the phone and are sent later (see
+  **Offline Inbox**); nothing else is queued. An edit whose save fails stays
+  in the editor. There is no copy of the dictionary on the phone, so nothing
+  can be browsed offline.
 - Unsaved editor changes survive rotation, the session expiring and, for notes
   up to about 200,000 characters, the system ending the app in the background.
   Longer notes reload from the server after process death.

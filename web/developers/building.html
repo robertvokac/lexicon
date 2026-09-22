@@ -44,7 +44,9 @@
       <p class="sidebar-title">On this page</p>
       <ul>
         <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#build">Standard build</a></li>
+        <li><a href="#build">Desktop client</a></li>
+        <li><a href="#server">Server, web, Android</a></li>
+        <li><a href="#tests">Tests</a></li>
         <li><a href="#configs">Build configurations</a></li>
         <li><a href="#platforms">Platform notes</a></li>
         <li><a href="#ide">IDE setup</a></li>
@@ -55,33 +57,49 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Building from source</p>
     <h1>Building from source</h1>
-    <p class="lead">Lexicon has a Qt-free backend and a Qt Widgets desktop executable. CMake builds both configurations.</p>
+    <p class="lead">One CMake tree builds the Qt-free backend, the Qt desktop client and <code>LexiconServer</code>. The web client needs no build; the Android app has its own Gradle project.</p>
 
     <h2 id="prerequisites">Prerequisites</h2>
     <table>
       <tr><th>Tool</th><th>Minimum</th><th>Notes</th></tr>
       <tr><td>CMake</td><td>3.21</td><td>Required by <code>cmake_minimum_required</code></td></tr>
-      <tr><td>Compiler</td><td>C++23 support</td><td>GCC 13+, Clang 16+, or MSVC 19.3x recommended</td></tr>
-      <tr><td>Qt</td><td>Qt 6 (Qt 5 fallback)</td><td>Desktop modules: <code>Core</code> and <code>Widgets</code>. The build prefers Qt 6 and falls back to Qt 5 if Qt 6 is absent.</td></tr>
-      <tr><td>SQLite</td><td>3.38+</td><td>Native C library with JSON functions</td></tr>
-      <tr><td>OpenSSL</td><td>Crypto</td><td>SHA-256 blob identifiers</td></tr>
+      <tr><td>Compiler</td><td>C++23 support</td><td>GCC 14 is what CI uses; recent Clang or MSVC should work</td></tr>
+      <tr><td>Qt</td><td>A recent Qt 6</td><td>Desktop only, modules <code>Core</code> and <code>Widgets</code>. The vendored md4qt needs a newer Qt 6 than Ubuntu 24.04's 6.4; Debian 13's 6.8 works.</td></tr>
+      <tr><td>SQLite</td><td>3.38+</td><td>Native C library with JSON functions; FTS5 enables diacritic-insensitive content search</td></tr>
+      <tr><td>OpenSSL</td><td>3</td><td>Crypto for SHA-256 file identifiers; SSL for the server's TLS</td></tr>
     </table>
-    <p>Debian/Ubuntu one-liner:</p>
+    <p>Debian 13 one-liner:</p>
     <pre><code>sudo apt update
-sudo apt install -y build-essential cmake qt6-base-dev libsqlite3-dev libssl-dev</code></pre>
+sudo apt install -y build-essential cmake ninja-build qt6-base-dev libgl-dev libsqlite3-dev libssl-dev</code></pre>
 
-    <h2 id="build">Standard build</h2>
+    <h2 id="build">Desktop client</h2>
     <pre><code>git clone https://github.com/robertvokac/lexicon.git
 cd lexicon
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target Lexicon -j
 ./build/Lexicon</code></pre>
-    <p>The desktop target compiles the vendored md4qt Markdown parser. The backend libraries also build without Qt; <code>AUTOMOC</code> applies only to Qt targets.</p>
 
     <div class="callout">
       <span class="callout-icon">ℹ️</span>
       <p><strong>Runtime side effect</strong> The first run creates <code>lexicon.db</code> in the directory of the executable — for a development build that means inside <code>build/</code>. Delete that file whenever you want a fresh database.</p>
     </div>
+
+    <h2 id="server">Server, web and Android clients</h2>
+    <p><code>LexiconServer</code> needs no Qt. Without Qt installed, configure with <code>-DLEXICON_BUILD_DESKTOP=OFF</code>:</p>
+    <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLEXICON_BUILD_DESKTOP=OFF
+cmake --build build --target LexiconServer -j
+./build/LexiconServer auth set-user --database ~/lexicon/lexicon.db
+./build/LexiconServer --database ~/lexicon/lexicon.db --allowed-origin http://127.0.0.1:8080</code></pre>
+    <p>The web client in <code>lexicon-web/</code> is static files: serve them with any web server, or locally with <code>python3 tools/serve-web.py --port 8080</code>. The Android app builds with <code>./gradlew assembleDebug</code> in <code>lexicon-android/</code>. <code>docs/server.md</code>, <code>lexicon-web/README.md</code> and <code>lexicon-android/README.md</code> cover deployment, TLS, backups and signing.</p>
+
+    <h2 id="tests">Tests</h2>
+    <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build -j
+QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+node --test lexicon-web/tests/*.test.mjs
+python3 tools/web-e2e.py --server build/LexiconServer
+cd lexicon-android &amp;&amp; LEXICON_SERVER_BINARY=../build/LexiconServer ./gradlew test lint</code></pre>
+    <p>The C++ suites cover the backend, the REST server over real sockets, backups, old databases, and the desktop dialogs offscreen. <code>tools/web-e2e.py</code> drives the web client in headless Chrome against a fresh server. The Android tests run the Compose screens under Robolectric, some of them against a real <code>LexiconServer</code>. GitHub Actions runs all of it on every push.</p>
 
     <h2 id="configs">Build configurations</h2>
     <table>
@@ -96,12 +114,12 @@ cmake --build build --target Lexicon -j
     <h2 id="platforms">Platform notes</h2>
     <h3>Linux</h3>
     <ul>
-      <li>Distribution Qt packages work fine; no vendor SDK needed.</li>
+      <li>Distribution Qt packages work when they are recent enough (see Prerequisites); no vendor SDK needed.</li>
       <li>The <code>lexicon.desktop</code> file in the repository can be installed for menu integration.</li>
     </ul>
     <h3>Windows</h3>
     <ul>
-      <li>The target is declared <code>WIN32_EXECUTABLE</code>, so Release builds start without a console window.</li>
+      <li>The desktop target is declared <code>WIN32_EXECUTABLE</code>, so Release builds start without a console window.</li>
       <li>Use the Qt Online Installer and configure with <code>-DCMAKE_PREFIX_PATH=C:\Qt\6.x.y\msvc2019_64</code>.</li>
       <li>With multi-config generators (Visual Studio), pass <code>--config Release</code> to <code>cmake --build</code>.</li>
       <li>Run <code>windeployqt</code> on the built executable to gather the required Qt DLLs for distribution.</li>
@@ -115,8 +133,9 @@ cmake --build build --target Lexicon -j
     <h2 id="ide">IDE setup</h2>
     <ul>
       <li><strong>Qt Creator</strong> — open <code>CMakeLists.txt</code> directly; kits handle Qt discovery for you.</li>
-      <li><strong>CLion</strong> — open the project root; set <code>CMAKE_PREFIX_PATH</code> in <em>Settings → Build → CMake</em> if Qt isn't found. (The repository contains an <code>.idea/</code> folder from CLion development.)</li>
+      <li><strong>CLion</strong> — open the project root; set <code>CMAKE_PREFIX_PATH</code> in <em>Settings → Build → CMake</em> if Qt isn't found.</li>
       <li><strong>VS Code</strong> — use the <em>CMake Tools</em> extension; select a kit with your C++23 compiler and add the Qt path to <code>cmake.configureSettings</code>.</li>
+      <li><strong>Android Studio</strong> — open <code>lexicon-android/</code> as its own project.</li>
     </ul>
 
     <div class="page-nav">

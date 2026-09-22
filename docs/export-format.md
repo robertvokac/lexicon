@@ -12,8 +12,17 @@ JSON document. Every client writes and reads the same format:
 | Server machine | `LexiconServer export --output FILE [--with-files]` | `LexiconServer import --input FILE` |
 | REST | `GET /api/v1/export?blobs=true` | `POST /api/v1/import` |
 
-The command line works on the database file directly, so it can back a
-dictionary up while the server runs; SQLite coordinates the two connections.
+The command line works on the database file directly, so it can export a
+dictionary while the server runs; SQLite coordinates the two connections.
+
+**An export is for moving a dictionary, not for backing up a large one.**
+With files included, every file is read into memory, grows by a third as
+base64 and becomes part of one JSON document, which is also built in memory;
+the REST import accepts at most `--max-blob-bytes` (64 MB by default). That
+is fine for notes and a few images, and wrong for gigabytes of PDFs or video.
+To keep such a dictionary safe, use the server's automatic backups (see
+[server.md](server.md#backups-while-the-server-runs)): they copy the database
+and keep the files as files, shared between backups.
 
 ## The document
 

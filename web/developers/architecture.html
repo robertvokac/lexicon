@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Architecture — Lexicon Developer Docs</title>
-<meta name="description" content="Lexicon application architecture: source files, core records, item types and fields, blob storage, enums, and design decisions.">
+<meta name="description" content="Lexicon architecture: targets and dependencies, transactions and revisions, search, files and images, persisted enums, the server and the clients.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -43,10 +43,14 @@
       </ul>
       <p class="sidebar-title">On this page</p>
       <ul>
-        <li><a href="#layers">Layers</a></li>
-        <li><a href="#storage">Persistence</a></li>
+        <li><a href="#layers">Targets</a></li>
+        <li><a href="#storage">Transactions</a></li>
+        <li><a href="#search">Search</a></li>
+        <li><a href="#files">Files and images</a></li>
         <li><a href="#text">Text comparison</a></li>
-        <li><a href="#extension">Extension point</a></li>
+        <li><a href="#enums">Persisted enums</a></li>
+        <li><a href="#server">The server</a></li>
+        <li><a href="#clients">The clients</a></li>
       </ul>
     </nav>
   </aside>
@@ -54,35 +58,71 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Developers</a> / Architecture</p>
     <h1>Architecture</h1>
-    <p class="lead">Qt Widgets is one frontend for a framework-independent Lexicon backend.</p>
+    <p class="lead">A framework-independent C++ backend with two composition roots — the Qt desktop client and <code>LexiconServer</code> — and two REST clients, the web client and the Android app.</p>
 
-    <h2 id="layers">Layers and dependencies</h2>
+    <h2 id="layers">Targets and dependencies</h2>
     <table>
       <tr><th>Target</th><th>Responsibility and dependencies</th></tr>
-      <tr><td><code>lexicon-core</code></td><td>Records, validation, and comparison policy. Standard C++ only.</td></tr>
+      <tr><td><code>lexicon-core</code></td><td>Records, validation, comparison policy, review intervals, wiki link syntax, Image values. Standard C++ only.</td></tr>
       <tr><td><code>lexicon-application</code></td><td>Services and the <code>Repository</code> interface. Depends on core only.</td></tr>
-      <tr><td><code>lexicon-storage-sqlite</code></td><td>Native SQLite implementation of <code>Repository</code>. Depends on application, SQLite C API, and OpenSSL Crypto. No Qt.</td></tr>
+      <tr><td><code>lexicon-storage-sqlite</code></td><td>Native SQLite implementation of <code>Repository</code>: migrations, transactions, the search index, Blob files. Depends on application, SQLite C API, and OpenSSL Crypto. No Qt.</td></tr>
+      <tr><td><code>lexicon-json</code></td><td>The JSON form of records, shared by the REST API and the export format; export and import. No Qt.</td></tr>
+      <tr><td><code>lexicon-http</code></td><td>Routes, authentication, sessions, CORS, TLS. Depends on application, <code>lexicon-json</code>, cpp-httplib, OpenSSL. No Qt.</td></tr>
+      <tr><td><code>lexicon-backup</code></td><td>The server's automatic backups. Depends on application, storage, <code>lexicon-json</code>. No Qt.</td></tr>
+      <tr><td><code>LexiconServer</code> (<code>lexicon-server/</code>)</td><td>Server composition root: injects the SQLite repository into the application, serves <code>lexicon-http</code>, runs backups.</td></tr>
       <tr><td><code>lexicon-qt-bridge</code></td><td>Qt and UTF-8 standard C++ value conversions. Depends on core and QtCore.</td></tr>
-      <tr><td><code>Lexicon</code> (<code>lexicon-qt/</code>)</td><td>Qt Widgets frontend and desktop composition root. Injects the SQLite repository into application services. Contains no SQL.</td></tr>
+      <tr><td><code>lexicon-markdown</code></td><td>The desktop's Markdown to HTML conversion with md4qt and wiki links. Depends on core and QtCore.</td></tr>
+      <tr><td><code>Lexicon</code> (<code>lexicon-qt/</code>)</td><td>Qt Widgets client and desktop composition root. Contains no SQL.</td></tr>
+      <tr><td><code>lexicon-web/</code></td><td>Static web client. Talks only REST.</td></tr>
+      <tr><td><code>lexicon-android/</code></td><td>Kotlin and Compose client, a separate Gradle project. Talks only REST; keeps no copy of the dictionary.</td></tr>
     </table>
-    <pre><code>lexicon-core
-      ↑
-lexicon-application ← lexicon-storage-sqlite
-      ↑                         ↑
-lexicon-qt-bridge          SQLite C API
-      ↑
-lexicon-qt (Qt Widgets; composition root)</code></pre>
-    <p>Core, application, and SQLite storage can be configured, built, and tested without Qt. CMake rejects Qt links in these targets.</p>
+    <pre><code>                   lexicon-core
+                        ↑
+               lexicon-application
+                  ↑            ↑
+       lexicon-storage-sqlite  lexicon-json
+          ↑        ↑             ↑       ↑
+          │   lexicon-backup  lexicon-http
+          │        ↑             ↑
+          │        └── LexiconServer ──── REST ──┬── lexicon-web
+          │                                      └── lexicon-android
+  Lexicon (Qt Widgets; opens the database itself)</code></pre>
+    <p>Everything except the desktop client configures, builds, and tests without Qt. CMake rejects Qt links in the Qt-free targets. The desktop client and the server may open the same database file at the same time; SQLite's locks coordinate them.</p>
 
     <h2 id="storage">Repository and transaction ownership</h2>
-    <p>Application services use the <code>Repository</code> interface and return <code>std::expected&lt;T, Error&gt;</code>. Only the storage implementation owns <code>sqlite3</code> connections and prepared statements. RAII finalizes statements and rolls back unfinished savepoints. The application defines the item and links unit of work in <code>ItemService::saveItemWithLinks</code>; repository writes use nested savepoints.</p>
-    <p><code>Migrations.cpp</code> retains the existing schema and migration versions. Databases created by the former QtSql implementation remain compatible, including enum options stored as compact JSON arrays. Blob bytes live beside the database under <code>blobs/</code> and use SHA-256 identifiers.</p>
+    <p>Application services use the <code>Repository</code> interface and return <code>std::expected&lt;T, Error&gt;</code>. Only the storage implementation owns <code>sqlite3</code> connections and prepared statements. RAII finalizes statements and rolls back unfinished savepoints. The application defines the item-and-links unit of work in <code>ItemService::saveItemWithLinks</code>; repository writes use nested savepoints.</p>
+    <p>Every item has a <code>revision</code> that moves on with each change to it, its values or its links. A save based on an older revision is refused with a conflict, and every client then shows what differs and offers to overwrite or reload — so two clients never silently overwrite each other.</p>
+
+    <h2 id="search">Search</h2>
+    <p>Where SQLite has FTS5, item content, titles, aliases, tags and flags are indexed with <code>unicode61 remove_diacritics 2</code>, so a search folds case and diacritics in every script. The index keeps the revision it last saw of each item and catches up lazily before a search, so changes made by another program are found too. Without FTS5 the search falls back to substring matching. Results rank exact titles first, then aliases, prefixes and matches in the content.</p>
+
+    <h2 id="files">Files and images</h2>
+    <p>Blob bytes live beside the database under <code>blobs/</code>, named by their SHA-256; identical files are stored once. An <code>Image</code> value stores <code>&lt;media type&gt;:&lt;SHA-256&gt;</code> — PNG, JPEG, GIF, WebP or BMP, never SVG — and the server checks the file's first bytes against the declared type. Files are kept after their last reference goes; only the desktop's Blob maintenance removes unreferenced ones.</p>
 
     <h2 id="text">UTF-8 and comparison</h2>
-    <p>Core, application, and storage use UTF-8 <code>std::string</code>. Qt conversions occur at the desktop boundary. Case-insensitive matching folds ASCII letters only; non-ASCII UTF-8 bytes compare exactly. This matches SQLite <code>NOCASE</code>, <code>LOWER</code>, and default <code>LIKE</code>. Exact lookups and constraints without <code>NOCASE</code> remain byte-exact. The backend does not implement Unicode case folding.</p>
+    <p>Core, application, and storage use UTF-8 <code>std::string</code>. Qt converts at the desktop boundary. Uniqueness constraints and exact lookups fold ASCII letters only and compare non-ASCII bytes exactly, matching SQLite <code>NOCASE</code>, <code>LOWER</code>, and default <code>LIKE</code>. The full-text search is the one place that folds case and diacritics beyond ASCII.</p>
 
-    <h2 id="extension">Future client</h2>
-    <p>A future <code>lexicon-http</code> executable can compose <code>lexicon-application</code> with <code>lexicon-storage-sqlite</code> without linking Qt. No server is part of the current application.</p>
+    <h2 id="enums">Persisted enums</h2>
+    <p>These integers are stored in the database; values are only ever appended, never renumbered.</p>
+    <table>
+      <tr><th>Enum</th><th>Values</th></tr>
+      <tr><td><code>ItemStatus</code></td><td>0 None, 1 Draft, 2 Completed</td></tr>
+      <tr><td><code>UnderstandingLevel</code></td><td>0 Unknown, 1 Recognized, 2 Understood, 3 Practiced, 4 Mastered</td></tr>
+      <tr><td><code>LinkType</code></td><td>0 None, 1 IsA, 2 PartOf, 3 Uses, 4 DependsOn, 5 Implements, 6 Related, 7 Contrasts, 8 AlternativeTo, 9 ParentOf, 10 Custom</td></tr>
+      <tr><td><code>FieldDataType</code></td><td>0 Integer, 1 Float, 2 Text, 3 Date, 4 Time, 5 Timestamp, 6 Boolean, 7 Enum, 8 Blob, 9 Other, 10 Image</td></tr>
+    </table>
+    <p>The REST API and the export format use the names, never the numbers.</p>
+
+    <h2 id="server">The server</h2>
+    <p><code>LexiconServer</code> is a single-user server: one account, created on the server machine with <code>auth set-user</code>, a scrypt password hash, and bearer-token sessions that survive a restart. It serves JSON under <code>/api/v1</code> and nothing else — the web client is deployed separately, and browsers reach the API only from the origins given with <code>--allowed-origin</code>. With <code>--backup-dir</code> it backs itself up. See <code>docs/rest-api.md</code> and <code>docs/server.md</code>.</p>
+
+    <h2 id="clients">The clients</h2>
+    <p>The desktop, web and Android clients show and edit the same things — items, types, links, review, alarms, images — each in its own idiom. Alarms ring in every client, and the server keeps which ones were dismissed, so a dismissal anywhere stops them everywhere. The Android app keeps no copy of the dictionary; only Inbox ideas caught without a connection wait on the phone until the server takes them.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="building.html"><span class="dir">← Previous</span>Building from source</a>
+      <a class="next" href="database.html"><span class="dir">Next →</span>Database schema</a>
+    </div>
   </main>
 
 </div>

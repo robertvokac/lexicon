@@ -58,7 +58,7 @@
     <p class="lead">Lexicon stores structured data in <code>lexicon.db</code> and blob bytes in an adjacent <code>blobs</code> directory. The database is initialized at startup; the blob directory is created when a file is imported. This page documents the schema defined by <code>lexicon-storage-sqlite/Migrations.cpp</code>.</p>
 
     <h2 id="overview">Overview</h2>
-    <p>Eleven domain tables, one configuration table, and one bookkeeping table:</p>
+    <p>Eleven domain tables, an optional full-text index, an operation log, one configuration table, and one bookkeeping table:</p>
     <table>
       <tr><th>Table</th><th>Purpose</th></tr>
       <tr><td><code>item_group</code></td><td>Top-level buckets for items</td></tr>
@@ -71,6 +71,8 @@
       <tr><td><code>tag</code></td><td>Classification labels per item</td></tr>
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
       <tr><td><code>link</code></td><td>Typed, directed relationships between items</td></tr>
+      <tr><td><code>alarm</code></td><td>Reminders at a moment, and whether they were dismissed</td></tr>
+      <tr><td><code>item_search</code></td><td>FTS5 full-text index of items, where SQLite has FTS5; rebuilt from the other tables</td></tr>
       <tr><td><code>log</code></td><td>Operation log (create/update/delete/read events)</td></tr>
       <tr><td><code>configuration</code></td><td>Persistent application settings</td></tr>
       <tr><td><code>db_version</code></td><td>Applied migration versions</td></tr>
@@ -87,7 +89,8 @@
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–20</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–25</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>A migration that rebuilds a table — SQLite cannot change a <code>CHECK</code> constraint in place — runs with foreign keys switched off around its transaction, so dropping the old table cannot cascade into the rows that refer to it, and must pass <code>PRAGMA foreign_key_check</code> before it commits.</li>
     </ol>
     <table>
       <tr><th>Version</th><th>What it introduced</th></tr>
@@ -111,6 +114,11 @@
       <tr><td>18</td><td>Adds optional text <code>item_type.description</code> with an empty default for existing types</td></tr>
       <tr><td>19</td><td>Renames <code>item_type_field</code> back to <code>item_field</code>, preserving field definitions and values</td></tr>
       <tr><td>20</td><td>Creates the <code>configuration</code> table for persistent application settings</td></tr>
+      <tr><td>21</td><td>Adds <code>item.revision</code>, moved on by every change to an item, its values or its links</td></tr>
+      <tr><td>22</td><td>Adds <code>item.reviewed_at</code> and its index, for spaced repetition</td></tr>
+      <tr><td>23</td><td>Creates the <code>alarm</code> table</td></tr>
+      <tr><td>24</td><td>Rebuilds <code>item_field</code> so <code>data_type</code> admits 10, <code>Image</code>, keeping IDs, the ID sequence, indexes and triggers</td></tr>
+      <tr><td>25</td><td>Adds <code>alarm.dismissed_at</code>; alarms already past count as dismissed</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -136,6 +144,8 @@ CREATE INDEX idx_item_group_position ON item_group(position, name COLLATE NOCASE
   pinned         INTEGER NOT NULL DEFAULT 0,
   content        TEXT,                        -- Markdown source
   item_type_id   INTEGER,                     -- added in migration 14
+  revision       INTEGER NOT NULL DEFAULT 1,  -- migration 21
+  reviewed_at    TEXT,                        -- UTC; migration 22
   FOREIGN KEY(group_id) REFERENCES item_group(id) ON DELETE CASCADE,
   FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE SET NULL
 );
@@ -143,8 +153,9 @@ CREATE UNIQUE INDEX item_unique
   ON item(group_id, title, COALESCE(disambiguation, ''));
 CREATE INDEX idx_item_group_id ON item(group_id);
 CREATE INDEX idx_item_title  ON item(title);
-CREATE INDEX idx_item_item_type_id ON item(item_type_id);</code></pre>
-    <p>The unique index is why the same title can exist twice in one group only when the disambiguations differ.</p>
+CREATE INDEX idx_item_item_type_id ON item(item_type_id);
+CREATE INDEX idx_item_reviewed_at ON item(reviewed_at);</code></pre>
+    <p>The unique index is why the same title can exist twice in one group only when the disambiguations differ. A client saving an item names the <code>revision</code> it loaded; a save based on an older one is refused. The next review is due a number of days after <code>reviewed_at</code> that grows with <code>understanding</code>.</p>
 
     <h3><code>item_type</code> and <code>item_field</code></h3>
     <pre><code>CREATE TABLE item_type (
@@ -161,7 +172,7 @@ CREATE TABLE item_field (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   item_type_id INTEGER NOT NULL,
   name         TEXT NOT NULL CHECK(TRIM(name) &lt;&gt; ''),
-  data_type    INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 9),
+  data_type    INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 10),
   position     INTEGER NOT NULL DEFAULT 0,
   enum_options TEXT NOT NULL DEFAULT '[]', -- JSON array
   FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE
@@ -193,7 +204,7 @@ CREATE TABLE property (
 );
 CREATE UNIQUE INDEX property_item_key_unique
   ON property(item_id, "key" COLLATE NOCASE);</code></pre>
-    <p>Field values are stored as canonical text validated against their declared type. Blob values contain a lowercase SHA-256 hash. Their bytes live at <code>blobs/&lt;first 2 hex characters&gt;/&lt;remaining 62&gt;</code> next to the database. Properties are independent of item types and remain when an item changes type.</p>
+    <p>Field values are stored as canonical text validated against their declared type. Blob values contain a lowercase SHA-256 hash; Image values contain <code>&lt;media type&gt;:&lt;SHA-256&gt;</code>, such as <code>image/png:6c7d…</code>. The bytes of both live at <code>blobs/&lt;first 2 hex characters&gt;/&lt;remaining 62&gt;</code> next to the database. Properties are independent of item types and remain when an item changes type.</p>
 
     <h3><code>alias</code>, <code>tag</code>, <code>flag</code></h3>
     <p>Three structurally identical child tables (the value column is <code>alias</code> in <code>alias</code>, <code>name</code> in <code>tag</code> and <code>flag</code>):</p>
@@ -223,12 +234,30 @@ CREATE INDEX idx_link_from_item_id ON link(from_item_id);
 CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
     <p>Links are directed: querying by <code>from_item_id</code> yields an item's outgoing links, querying by <code>to_item_id</code> yields its backlinks. <code>link_type</code> stores the <code>LinkType</code> enum value (<a href="architecture.html#enums">see Architecture</a>).</p>
 
+    <h3><code>alarm</code></h3>
+    <pre><code>CREATE TABLE alarm (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  title        TEXT NOT NULL CHECK(TRIM(title) &lt;&gt; ''),
+  description  TEXT NOT NULL DEFAULT '',
+  fires_at     TEXT NOT NULL,  -- UTC "YYYY-MM-DDTHH:MM:SSZ"
+  dismissed_at TEXT            -- UTC; migration 25
+);
+CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);</code></pre>
+    <p>Times are UTC text of one fixed shape, so text order is time order. An alarm whose <code>fires_at</code> has passed rings in every client until <code>dismissed_at</code> is set; snoozing moves <code>fires_at</code> and clears it.</p>
+
+    <h3><code>item_search</code></h3>
+    <pre><code>CREATE VIRTUAL TABLE item_search USING fts5(
+  title, disambiguation, aliases, tags, flags, content, revision UNINDEXED,
+  tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
+);</code></pre>
+    <p>Created when the database is opened by a SQLite that has FTS5, and never by a migration: a database stays readable without it. It holds nothing that is not in the other tables, and each row remembers the item <code>revision</code> it was built from, so a search re-indexes whatever changed since — also changes made by a program without FTS5.</p>
+
     <h3><code>log</code></h3>
     <pre><code>CREATE TABLE log (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   table_name  TEXT NOT NULL,
   record_id   INTEGER NOT NULL,
-  log_type    INTEGER NOT NULL,  -- 1=created, 2=updated, 3=deleted, 4=read
+  log_type    INTEGER NOT NULL,  -- 1=created, 2=updated, 3=deleted, 4=read, 5=reviewed
   happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );</code></pre>
 
@@ -252,6 +281,7 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
     <ol class="steps">
       <li>Append a new <code>{version, statements}</code> entry to the <code>migrations</code> list with the <strong>next sequential version number</strong>. Never edit an already-shipped migration — existing databases have already recorded it as applied.</li>
       <li>Use idempotent DDL where possible (<code>CREATE TABLE IF NOT EXISTS</code>, <code>CREATE INDEX IF NOT EXISTS</code>) and <code>ALTER TABLE ... ADD COLUMN</code> for extensions.</li>
+      <li>Changing a <code>CHECK</code> constraint means rebuilding the table: copy it aside, drop and re-create it, copy back, re-create its indexes and the triggers that name it, and mark the migration as rebuilding tables (see migration 24).</li>
       <li>Update the core record structs and queries in <code>SqliteRepository</code> to read/write the new columns.</li>
       <li>Test by launching with an old <code>lexicon.db</code> copy and with no database at all — both paths must succeed.</li>
     </ol>
