@@ -40,14 +40,18 @@
         <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
       </ul>
       <p class="sidebar-title">On this page</p>
       <ul>
-        <li><a href="#groups">Create groups</a></li>
-        <li><a href="#main-window">The main window</a></li>
-        <li><a href="#first-item">Your first item</a></li>
-        <li><a href="#pagination">Large dictionaries</a></li>
+        <li><a href="#groups">1. Create and manage groups</a></li>
+        <li><a href="#main-window">2. Explore the main window</a></li>
+        <li><a href="#first-item">3. Create your first item</a></li>
+        <li><a href="#pagination">4. Working with large dictionaries</a></li>
       </ul>
     </nav>
   </aside>
@@ -79,7 +83,7 @@
 
     <h2 id="main-window">2. Explore the main window</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filter row, item table, pagination controls, and content preview">
+      <img src="../assets/img/desktop-main.png" alt="Lexicon main window with filter row, item table, pagination controls, and content preview" loading="lazy">
       <figcaption>The main window: filters above the column names, with content and relationships below the table.</figcaption>
     </figure>
     <p>The main window is organized top-to-bottom:</p>
@@ -88,14 +92,15 @@
       <tr><td><strong>Search and actions</strong></td><td>Search across titles, disambiguations, aliases, tags, and flags; add, edit, or delete items; use <code>Filter Properties...</code> for key/value filters.</td></tr>
       <tr><td><strong>Item table</strong></td><td>Filter each column in the row above its name, click a column name to sort, select a row to preview it below, or double-click to edit.</td></tr>
       <tr><td><strong>Pagination bar</strong></td><td>Browse large result sets page by page with a configurable page size.</td></tr>
-      <tr><td><strong>Content pane</strong></td><td>Shows the selected item's Markdown rendered as HTML, followed by a links/backlinks summary.</td></tr>
+      <tr><td><strong>Content pane</strong></td><td>Shows the selected item's Markdown rendered as HTML, its images below it, and a links/backlinks summary at the bottom.</td></tr>
     </table>
 
     <h2 id="first-item">3. Create your first item</h2>
-    <p>The main toolbar offers two ways to add an item:</p>
+    <p>The main toolbar offers three ways to add an item:</p>
     <ul>
       <li><strong><code>Add</code></strong> — the quick path. The title is prefilled from your current search text, which is perfect for the "searched it, didn't exist, so let's create it" workflow.</li>
       <li><strong><code>Add ...</code></strong> — the full dialog path, opening the complete item editor.</li>
+      <li><strong><code>Inbox</code></strong> — a title and a few plain lines, saved to <code>Default</code> without a type. For the idea you want to keep now and file later; see <a href="inbox.html">Inbox</a>.</li>
     </ul>
     <p>Both actions assign the type selected above the Type column. A group-scoped type also determines the group when <code>All groups</code> is selected.</p>
     <p>Recommended workflow:</p>

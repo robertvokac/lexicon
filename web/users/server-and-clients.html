@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Server, web &amp; Android — Lexicon</title>
+<meta name="description" content="Use one Lexicon dictionary from every device: LexiconServer over REST, the static web client in any browser, and the native Android app - with the same items, reviews and alarms.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html" class="active">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#server">1. Run the server</a></li>
+        <li><a href="#web">2. The web client in a browser</a></li>
+        <li><a href="#android">3. The Android app</a></li>
+        <li><a href="#together">Working on the same dictionary</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Server, web &amp; Android</p>
+    <h1>Server, web &amp; Android</h1>
+    <p class="lead">The desktop client opens the SQLite file directly. Run <code>LexiconServer</code> next to that same file and the dictionary is also available in a browser and on your phone — the same items, the same reviews, the same alarms.</p>
+
+    <figure class="screenshot">
+      <img src="../assets/img/web-main.png" alt="The web client: search, the item table and the rendered content of an item" loading="lazy">
+      <figcaption>The web client in a desktop browser — the same screen as the desktop client.</figcaption>
+    </figure>
+
+    <h2 id="server">1. Run the server</h2>
+    <p>Build <code>LexiconServer</code> as described in <a href="installation.html">Installation</a> (it needs no Qt), create the single user it serves, and start it:</p>
+    <pre><code>LexiconServer auth set-user --database ~/lexicon/lexicon.db
+LexiconServer --database ~/lexicon/lexicon.db \
+  --allowed-origin http://127.0.0.1:8080 \
+  --backup-dir ~/lexicon-backups</code></pre>
+    <p>It listens on <code>127.0.0.1:8628</code> by default and answers REST calls under <code>/api/v1</code>. A browser client served from another address needs that address as an <code>--allowed-origin</code>; without one it is refused on purpose. <code>--backup-dir</code> turns on <a href="backup-and-troubleshooting.html#automatic">automatic backups</a>.</p>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">🔒</span>
+      <p><strong>Off the loopback, use HTTPS</strong> Put a reverse proxy (nginx, Caddy, Apache) with a certificate in front of the server, or give it <code>--tls-cert</code> and <code>--tls-key</code>. The full list of options is in <code>docs/server.md</code>.</p>
+    </div>
+
+    <h2 id="web">2. The web client in a browser</h2>
+    <p><code>lexicon-web/</code> is static content — HTML, CSS and JavaScript with no build step. Serve the directory with any web server, open it, and sign in with the server's address, your user name and your password.</p>
+    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>, export and import. On a narrow screen it turns into a phone layout, and it follows your system's light or dark theme.</p>
+
+    <div class="phone-shots">
+      <figure>
+        <img src="../assets/img/web-phone.png" alt="The web client on a phone-sized screen in the dark theme" loading="lazy">
+        <figcaption>The web client on a phone</figcaption>
+      </figure>
+      <figure>
+        <img src="../assets/img/web-phone-item.png" alt="An item with its image in the web client on a phone" loading="lazy">
+        <figcaption>An item with its diagram</figcaption>
+      </figure>
+    </div>
+
+    <h2 id="android">3. The Android app</h2>
+    <p>The native app (Kotlin and Jetpack Compose) is built from <code>lexicon-android/</code> with Gradle and installed as an APK. On first start it asks for the server address, a user name and a password; after that the dictionary is a tap away.</p>
+    <ul>
+      <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
+      <li>The editor with the same tabs, including image values.</li>
+      <li><a href="review.html">Review</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, and the <a href="inbox.html">Inbox</a> that also works offline.</li>
+      <li>The <a href="links-and-relationships.html#graph">relationship graph</a>, with pinch to zoom and a full-screen mode.</li>
+    </ul>
+
+    <div class="phone-shots">
+      <figure>
+        <img src="../assets/img/android-items.png" alt="The Android items list" loading="lazy">
+        <figcaption>Items on Android</figcaption>
+      </figure>
+      <figure>
+        <img src="../assets/img/android-item.png" alt="An item on Android with its values and content" loading="lazy">
+        <figcaption>One item</figcaption>
+      </figure>
+      <figure>
+        <img src="../assets/img/android-drawer.png" alt="The Android navigation drawer with Items, Review, Alarms and more" loading="lazy">
+        <figcaption>The drawer</figcaption>
+      </figure>
+    </div>
+
+    <h2 id="together">Working on the same dictionary</h2>
+    <ul>
+      <li><strong>One database.</strong> The desktop client and the server open the same SQLite file; the web client and the Android app hold no data of their own.</li>
+      <li><strong>No lost edits.</strong> Every item carries a revision. If another client saved an item after you opened it, your save is refused with a list of what differs and the choice to <strong>Overwrite</strong>, <strong>Reload</strong>, or keep editing.</li>
+      <li><strong>Sessions survive a restart</strong> of the server, so an upgrade does not sign your phone out.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">🏠</span>
+      <p><strong>Start at home</strong> Run the server on the machine that holds the dictionary and reach it over your own network or a VPN. That is the smallest setup that gives you the phone and the browser without exposing anything to the internet.</p>
+    </div>
+
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

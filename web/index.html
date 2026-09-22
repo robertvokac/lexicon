@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lexicon — Desktop Knowledge Dictionary</title>
-<meta name="description" content="Lexicon is a free, open-source desktop knowledge dictionary built with Qt Widgets and SQLite. Structured learning and technical note-taking with groups, items, metadata, and typed links between concepts.">
+<title>Lexicon — Knowledge Dictionary for Desktop, Web and Android</title>
+<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for structured learning and technical note-taking: groups, items, metadata, typed links, a relationship graph, spaced-repetition review, alarms and an Inbox — on the desktop, in a browser and on Android, over one SQLite database.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -34,12 +34,15 @@
     <div class="container">
       <img class="hero-icon" src="assets/img/appicon.png" alt="Lexicon application icon">
       <h1>Lexicon</h1>
-      <p class="tagline">A desktop knowledge dictionary for structured learning and technical note-taking — groups, items, rich metadata, and typed links between concepts.</p>
+      <p class="tagline">A knowledge dictionary for structured learning and technical note-taking — groups, items, rich metadata and typed links between concepts. One dictionary, three clients: desktop, browser and Android.</p>
       <div class="badges">
         <span class="badge">MIT License</span>
         <span class="badge">C++23</span>
         <span class="badge">Qt 6 Widgets</span>
         <span class="badge">SQLite</span>
+        <span class="badge">REST server</span>
+        <span class="badge">Web client</span>
+        <span class="badge">Android</span>
         <span class="badge">Linux · Windows · macOS</span>
       </div>
       <div class="hero-actions">
@@ -48,8 +51,8 @@
         <a class="btn btn-ghost" href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">View source on GitHub</a>
       </div>
       <figure class="hero-shot screenshot">
-        <img src="assets/img/Screenshot.png" alt="Lexicon main window — filters, item table, pagination, and rendered Markdown content">
-        <figcaption>The main window: filters, searchable item table, pagination, and live Markdown preview.</figcaption>
+        <img src="assets/img/desktop-main.png" alt="Lexicon main window — filters, item table, pagination, and rendered Markdown content with a diagram">
+        <figcaption>The main window: filters, searchable item table, pagination, and live Markdown preview with images.</figcaption>
       </figure>
     </div>
   </section>
@@ -62,22 +65,27 @@
         <div class="card">
           <span class="card-emoji">🗄️</span>
           <h3>Local-first storage</h3>
-          <p>Structured data lives in a local SQLite file; optional attachments live in the adjacent blobs directory. No cloud or account is needed.</p>
+          <p>Structured data lives in a local SQLite file; images and other files live in the adjacent blobs directory. No cloud or account is needed.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🗺️</span>
-          <h3>Groups and items</h3>
-          <p>Group items into top-level groups such as <em>C++</em>, <em>Databases</em>, or <em>Networking</em>, with full create/edit/delete support.</p>
+          <h3>Groups, types and items</h3>
+          <p>Group items into top-level groups such as <em>C++</em> or <em>Databases</em>, and give them types with ordered typed fields — numbers, dates, enums, files, images.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🏷️</span>
           <h3>Rich metadata</h3>
-          <p>Every item carries aliases, tags, flags, a status, an understanding level, and a pinned state — so you always know where you stand.</p>
+          <p>Every item carries aliases, tags, flags, properties, a status, an understanding level and a pinned state — so you always know where you stand.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🔗</span>
           <h3>Typed relationships</h3>
-          <p>Connect concepts with links and backlinks typed as <em>Is A</em>, <em>Part Of</em>, <em>Depends On</em>, <em>Related</em>, and more — building a real concept graph.</p>
+          <p>Connect concepts with links and backlinks typed as <em>Is A</em>, <em>Part Of</em>, <em>Depends On</em>, <em>Related</em> and more — or just write <code>[[wiki links]]</code> in the content.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🕸️</span>
+          <h3>Relationship graph</h3>
+          <p>See the neighbourhood of any item up to three links away, zoom in and out, take it full screen, and click your way around the graph.</p>
         </div>
         <div class="card">
           <span class="card-emoji">✍️</span>
@@ -85,19 +93,44 @@
           <p>Write item content in Markdown with a formatting toolbar and a live rendered preview, powered by the md4qt parser.</p>
         </div>
         <div class="card">
+          <span class="card-emoji">🖼️</span>
+          <h3>Images where they belong</h3>
+          <p>An image field holds a diagram or a photo of a whiteboard: a thumbnail in the editor, the picture under the item's content, and full size on request.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🎓</span>
+          <h3>Review with spaced repetition</h3>
+          <p>The items due now, one card at a time: the answer on request and a rating that moves the understanding level and sets the next review.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">⏰</span>
+          <h3>Alarms that ring</h3>
+          <p>Reminders with a title, a description and a time. They ring on the desktop, in the browser and on the phone — even when the app is closed — until one dismissal quiets them everywhere.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">📥</span>
+          <h3>An Inbox for ideas</h3>
+          <p>A title and a few lines, saved in one step and sorted out later. On Android it works offline too and goes out when the server is back.</p>
+        </div>
+        <div class="card">
           <span class="card-emoji">🔎</span>
           <h3>Fast search &amp; filters</h3>
-          <p>Search across titles, disambiguations, aliases, tags, and flags. Combine filters for group, type, typed field values, tag, flag, status, understanding, and pinned.</p>
+          <p>Search titles, aliases, tags, flags and the content itself — the full-text index ignores diacritics, so <code>prilis</code> finds <em>Příliš</em>. Then narrow it down with a filter per column.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🛟</span>
+          <h3>Backups and one-file export</h3>
+          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Export the whole thing as one documented JSON file, with or without its images.</p>
         </div>
         <div class="card">
           <span class="card-emoji">📄</span>
           <h3>Built for large datasets</h3>
-          <p>Pagination controls and sortable columns keep even very large lexicons fast and easy to browse.</p>
+          <p>Pagination, sortable columns and per-column filters keep even very large lexicons fast and easy to browse.</p>
         </div>
         <div class="card">
-          <span class="card-emoji">📊</span>
-          <h3>Global overviews</h3>
-          <p>Read-only overviews of all tags, flags, and aliases with usage counts help you keep your vocabulary consistent.</p>
+          <span class="card-emoji">🖧</span>
+          <h3>Your dictionary everywhere</h3>
+          <p>A Qt-free REST server, a static web client and a native Android app — the same items, reviews and alarms, with revisions that keep two clients from overwriting each other.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🌗</span>
@@ -122,6 +155,8 @@
             <li>Creating groups and items</li>
             <li>The Markdown content editor</li>
             <li>Tags, flags, aliases, links &amp; backlinks</li>
+            <li>Review, alarms and the Inbox</li>
+            <li>The server, the web client and the Android app</li>
             <li>Search, filtering, backup, and troubleshooting</li>
           </ul>
           <a class="btn btn-primary" href="users/index.html">Open the User Guide</a>
@@ -157,15 +192,23 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
   <section class="section section-alt">
     <div class="container">
       <h2>See it in action</h2>
-      <p class="section-lead">The item editor gives every concept six focused tabs: General, Values, Content, Metadata, Links, and Backlinks.</p>
+      <p class="section-lead">The item editor gives every concept six focused tabs — General, Values, Content, Metadata, Links and Backlinks — and the graph shows how it all hangs together.</p>
       <div class="grid grid-2">
         <figure class="screenshot">
-          <img src="assets/img/Screenshot_Content.png" alt="Item editor Content tab — Markdown editor with live preview">
+          <img src="assets/img/desktop-editor-content.png" alt="Item editor Content tab — Markdown editor with live preview" loading="lazy">
           <figcaption>Markdown editor with live preview</figcaption>
         </figure>
         <figure class="screenshot">
-          <img src="assets/img/Screenshot_Links.png" alt="Item editor Links tab — typed outgoing relationships">
-          <figcaption>Typed links between concepts</figcaption>
+          <img src="assets/img/desktop-graph.png" alt="The relationship graph of one item with labelled arrows to its neighbours" loading="lazy">
+          <figcaption>The relationship graph, zoomable and full screen</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/img/desktop-review.png" alt="A review card with the four ratings" loading="lazy">
+          <figcaption>Review: what is due, one card at a time</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/img/desktop-alarms.png" alt="The alarm list with the soonest alarm first" loading="lazy">
+          <figcaption>Alarms that ring in every client</figcaption>
         </figure>
       </div>
       <p style="text-align:center; margin-top:1.5rem"><a class="btn btn-ghost" href="screenshots.html">Browse all screenshots</a></p>
@@ -177,11 +220,39 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
       <h2>Beyond the desktop</h2>
       <p class="section-lead">The same dictionary, wherever you are:</p>
       <div class="grid grid-3">
-        <div class="card"><h3>🖧 LexiconServer</h3><p>Serves your knowledge base to your other devices, and backs it up by itself.</p></div>
-        <div class="card"><h3>🌐 Web client and 📱 Android app</h3><p>Search, edit, review and catch ideas from a browser or your phone — the Inbox even works offline.</p></div>
-        <div class="card"><h3>📤 Export and import</h3><p>The whole dictionary as one documented JSON file.</p></div>
+        <div class="card"><h3>🖧 LexiconServer</h3><p>A Qt-free REST server next to your database. It serves your other devices and backs the dictionary up by itself.</p></div>
+        <div class="card"><h3>🌐 Web client</h3><p>Static HTML, CSS and JavaScript — no build step. Everything the desktop does, in a browser, down to a phone-sized screen.</p></div>
+        <div class="card"><h3>📱 Android app</h3><p>Kotlin and Jetpack Compose: search, edit, review, alarms that ring when the app is closed, and an Inbox that works offline.</p></div>
       </div>
-      <p style="text-align:center; margin-top:1.5rem"><a href="developers/roadmap.html">Full roadmap and TODO list →</a></p>
+      <div class="grid grid-2" style="margin-top:1.5rem">
+        <figure class="screenshot">
+          <img src="assets/img/web-main.png" alt="The Lexicon web client in a desktop browser" loading="lazy">
+          <figcaption>The web client in a browser</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/img/web-phone.png" alt="The web client on a phone-sized screen in the dark theme" loading="lazy" style="max-width:260px; display:block; margin:0 auto">
+          <figcaption>… and on a phone</figcaption>
+        </figure>
+      </div>
+      <div class="phone-shots">
+        <figure>
+          <img src="assets/img/android-items.png" alt="The Android app: the items list" loading="lazy">
+          <figcaption>Android: the items list</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/img/android-item.png" alt="The Android app: one item with its values and content" loading="lazy">
+          <figcaption>An item</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/img/android-graph.png" alt="The Android app: the relationship graph" loading="lazy">
+          <figcaption>The graph</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/img/android-review.png" alt="The Android app: a review card" loading="lazy">
+          <figcaption>Review</figcaption>
+        </figure>
+      </div>
+      <p style="text-align:center; margin-top:1.5rem"><a class="btn btn-primary" href="users/server-and-clients.html">Set up the server, web and Android</a> <a class="btn btn-ghost" href="developers/roadmap.html">Roadmap and TODO list</a></p>
     </div>
   </section>
 
@@ -204,6 +275,9 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
           <li><a href="users/index.html">User Guide</a></li>
           <li><a href="users/installation.html">Installation</a></li>
           <li><a href="users/getting-started.html">Getting started</a></li>
+          <li><a href="users/review.html">Review</a></li>
+          <li><a href="users/alarms.html">Alarms</a></li>
+          <li><a href="users/server-and-clients.html">Server, web &amp; Android</a></li>
           <li><a href="users/backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
         </ul>
       </div>

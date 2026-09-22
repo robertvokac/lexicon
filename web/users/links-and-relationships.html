@@ -40,14 +40,20 @@
         <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html" class="active">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
       </ul>
       <p class="sidebar-title">On this page</p>
       <ul>
-        <li><a href="#links">Links tab</a></li>
-        <li><a href="#backlinks">Backlinks tab</a></li>
+        <li><a href="#links">Links tab — outgoing relationships</a></li>
+        <li><a href="#backlinks">Backlinks tab — incoming relationships</a></li>
         <li><a href="#relation-types">Relation types</a></li>
+        <li><a href="#wiki">Wiki links in the content</a></li>
         <li><a href="#context">Reading in context</a></li>
+        <li><a href="#graph">The relationship graph</a></li>
       </ul>
     </nav>
   </aside>
@@ -59,7 +65,7 @@
 
     <h2 id="links">Links tab — outgoing relationships</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_Links.png" alt="Item editor Links tab listing outgoing typed relationships">
+      <img src="../assets/img/desktop-editor-links.png" alt="Item editor Links tab listing outgoing typed relationships" loading="lazy">
       <figcaption>Outgoing links: relationships <em>from</em> the current item <em>to</em> other items.</figcaption>
     </figure>
     <p>In the item editor, open the <strong>Links</strong> tab to create relationships from the current item to any other item in your lexicon:</p>
@@ -72,7 +78,7 @@
 
     <h2 id="backlinks">Backlinks tab — incoming relationships</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_Backlinks.png" alt="Item editor Backlinks tab listing incoming relationships from other items">
+      <img src="../assets/img/desktop-editor-backlinks.png" alt="Item editor Backlinks tab listing incoming relationships from other items" loading="lazy">
       <figcaption>Backlinks: who references this item.</figcaption>
     </figure>
     <p>The <strong>Backlinks</strong> tab shows — and lets you create — relationships pointing <em>to</em> the current item from a source item. This is handy when you're working on a hub concept and want to attach many children to it without opening each child separately.</p>
@@ -98,11 +104,43 @@
       <p><strong>Don't overthink it</strong> When no specific type fits, <em>Related</em> is perfectly fine. A rough link now beats a perfect link never — you can retype it any time.</p>
     </div>
 
+    <h2 id="wiki">Wiki links in the content</h2>
+    <p>Links do not have to be made in a dialog. Write <code>[[Title]]</code> anywhere in an item's Markdown content and it becomes a link to that item:</p>
+    <ul>
+      <li><code>[[Move semantics]]</code> — by title.</li>
+      <li><code>[[Monoid [algebra]]]</code> — the item with that disambiguation.</li>
+      <li><code>[[Monoid|monoids]]</code> — the link shows your own text.</li>
+    </ul>
+    <p>A title is matched exactly first, then ignoring ASCII case, then as an <strong>alias</strong>, so <code>[[forwarding reference]]</code> finds <em>universal reference</em> when that is one of its aliases. Code spans and code blocks keep their brackets.</p>
+    <p>In the rendered content a wiki link <strong>opens its item</strong>; when no item has that title, Lexicon offers to <strong>create it</strong> on the spot. On the <strong>Links</strong> tab, <strong>Add links from content</strong> turns every name the content mentions into a <code>Related</code> link and lists the names that have no item yet. The web client and the Android app do the same.</p>
+
     <h2 id="context">Reading in context</h2>
     <p>The graph pays off while browsing: select any item in the main table and the lower pane shows its rendered content <strong>followed by a links and backlinks summary</strong>. You see a concept's neighborhood at a glance, without opening the editor.</p>
-    <div class="callout">
-      <span class="callout-icon">ℹ️</span>
-      <p><strong>Relationship graph</strong> <code>View → Relationship graph...</code> (<code>Ctrl+G</code>) draws the items around the selected one, up to three links away. Click an item to centre on it, double-click to open it. Inside the Markdown content, <code>[[Title]]</code> links to another item.</p>
+
+    <h2 id="graph">The relationship graph</h2>
+    <p><code>View → Relationship graph...</code> (<code>Ctrl+G</code>) draws the neighbourhood of the selected item: it sits in the middle, the items it links to and the items linking to it around it, as arrows labelled with the link type.</p>
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-graph.png" alt="The relationship graph: the selected item in the middle with labelled arrows to its neighbours" loading="lazy">
+      <figcaption>The graph of one item, two links away, with the zoom and full-screen buttons above it.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Control</th><th>What it does</th></tr>
+      <tr><td><code>Depth</code></td><td>One, two or three links away. At most 150 items are drawn; the dialog says when more are in reach.</td></tr>
+      <tr><td><strong>Click</strong> an item</td><td>Centres the graph on it.</td></tr>
+      <tr><td><strong>Double click</strong> (or <code>Enter</code>)</td><td>Opens the item.</td></tr>
+      <tr><td><code>+</code> / <code>−</code> / <code>Fit</code></td><td>Zoom in, zoom out, and back to the whole graph. The wheel zooms too, and dragging the background moves the view.</td></tr>
+      <tr><td><strong>Full screen</strong></td><td>Gives the graph the whole window; <code>Esc</code> leaves it again.</td></tr>
+    </table>
+    <p>The web client opens the same graph from its <code>View</code> menu and from the link preview under an item; the Android app from the item page's menu, where a pinch zooms as well.</p>
+    <div class="phone-shots">
+      <figure>
+        <img src="../assets/img/android-graph.png" alt="The relationship graph in the Android app" loading="lazy">
+        <figcaption>On Android, with a list of the items below</figcaption>
+      </figure>
+      <figure>
+        <img src="../assets/img/android-graph-full.png" alt="The relationship graph on Android, full screen and zoomed in" loading="lazy">
+        <figcaption>Full screen and zoomed in</figcaption>
+      </figure>
     </div>
 
     <div class="page-nav">

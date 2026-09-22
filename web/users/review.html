@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Review — Lexicon</title>
+<meta name="description" content="Review what you learned in Lexicon: the items due now, the answer on request, and a rating that moves the understanding level and sets the next review - on the desktop, in the browser and on Android.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html" class="active">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#start">Start a review</a></li>
+        <li><a href="#card">One card at a time</a></li>
+        <li><a href="#ratings">The four ratings</a></li>
+        <li><a href="#queue">What is due</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Review</p>
+    <h1>Review</h1>
+    <p class="lead">Writing something down is the easy half. Review takes the items you already have and brings each one back just before you would have forgotten it — one card at a time, with a rating that decides when you see it again.</p>
+
+    <h2 id="start">Start a review</h2>
+    <table>
+      <tr><th>Client</th><th>How to open it</th></tr>
+      <tr><td>Desktop</td><td><code>View → Review...</code> (<code>Ctrl+R</code>)</td></tr>
+      <tr><td>Web client</td><td><code>View → Review...</code></td></tr>
+      <tr><td>Android</td><td><strong>Review</strong> in the navigation drawer</td></tr>
+    </table>
+    <p>The <code>Group</code> box at the top limits the sitting to one group — useful when you have half an hour and want it all to go into <em>C++</em>.</p>
+
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-review.png" alt="The desktop review card: the item title, its group and type, and the four ratings" loading="lazy">
+      <figcaption>A card asks the title first. <strong>Show answer</strong> reveals the content.</figcaption>
+    </figure>
+
+    <h2 id="card">One card at a time</h2>
+    <ol class="steps">
+      <li><strong>The title comes first</strong>, with its disambiguation, group, type, understanding level and when you last saw it. Try to recall the content before you read on.</li>
+      <li><strong>Show answer</strong> renders the item's Markdown content, images and all.</li>
+      <li><strong>Rate how it went.</strong> The rating moves the understanding level and sets the next review.</li>
+      <li><strong>Skip</strong> leaves an item for later without changing anything; <strong>Close</strong> ends the sitting. Nothing is lost — the queue is rebuilt from the items themselves every time.</li>
+    </ol>
+
+    <h2 id="ratings">The four ratings</h2>
+    <table>
+      <tr><th>Rating</th><th>Key</th><th>Understanding</th><th>Next review for an <code>Understood</code> item</th></tr>
+      <tr><td><code>Again</code></td><td><code>1</code></td><td>one level down</td><td>2 days, and once more in this sitting</td></tr>
+      <tr><td><code>Hard</code></td><td><code>2</code></td><td>unchanged</td><td>5 days</td></tr>
+      <tr><td><code>Good</code></td><td><code>3</code></td><td>one level up</td><td>12 days</td></tr>
+      <tr><td><code>Easy</code></td><td><code>4</code></td><td>two levels up</td><td>30 days</td></tr>
+    </table>
+    <p>The interval follows the understanding level the item ends up with: <strong>1, 2, 5, 12 or 30 days</strong> for <code>Unknown</code>, <code>Recognized</code>, <code>Understood</code>, <code>Practiced</code> and <code>Mastered</code>. So the levels you already track double as the schedule — there is no second, hidden set of numbers.</p>
+
+    <h2 id="queue">What is due</h2>
+    <ul>
+      <li>An item is due when its last review is further back than the interval for its level.</li>
+      <li>Items you have <strong>never reviewed are due at once</strong>, and come after the overdue ones — old business first.</li>
+      <li>The review reads and writes the same items as everything else, so a rating on the phone shows up on the desktop, and the other way around.</li>
+    </ul>
+
+    <div class="phone-shots">
+      <figure>
+        <img src="../assets/img/web-review.png" alt="The review card in the web client" loading="lazy" style="max-width:100%">
+        <figcaption>The same queue in the browser</figcaption>
+      </figure>
+      <figure>
+        <img src="../assets/img/android-review.png" alt="The review card in the Android app" loading="lazy">
+        <figcaption>… and on the phone</figcaption>
+      </figure>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Ten minutes beats an hour</strong> A short daily sitting keeps the queue short. If it has grown anyway, pick one group and work through that — the rest waits patiently.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">🧭</span>
+      <p><strong>Rate honestly</strong> <code>Easy</code> on an item you half-remembered pushes it a month away. <code>Again</code> costs you nothing but two days.</p>
+    </div>
+
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

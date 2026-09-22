@@ -40,13 +40,19 @@
         <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html" class="active">Backup &amp; troubleshooting</a></li>
       </ul>
       <p class="sidebar-title">On this page</p>
       <ul>
         <li><a href="#data-location">Data location</a></li>
         <li><a href="#backup">Backup strategies</a></li>
-        <li><a href="#safety">Deletion safety</a></li>
+        <li><a href="#automatic">Automatic backups on the server</a></li>
+        <li><a href="#export">Export and import</a></li>
+        <li><a href="#safety">Deletion safety rules</a></li>
         <li><a href="#troubleshooting">Troubleshooting</a></li>
       </ul>
     </nav>
@@ -55,7 +61,7 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Backup &amp; troubleshooting</p>
     <h1>Backup &amp; troubleshooting</h1>
-    <p class="lead">Lexicon keeps structured data in one SQLite file and optional attachment files beside it. Copy both for a complete backup.</p>
+    <p class="lead">Lexicon keeps structured data in one SQLite file and optional attachment files beside it. Copy both for a complete backup — or let the server do it for you.</p>
 
     <h2 id="data-location">Data location</h2>
     <table>
@@ -85,6 +91,25 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <span class="callout-icon">💡</span>
       <p><strong>Automate it</strong> A scheduled copy of the database and blob directory protects both metadata and attachments. If your lexicon is mission-critical, back up more often.</p>
     </div>
+
+    <h2 id="automatic">Automatic backups on the server</h2>
+    <p>If you run <a href="server-and-clients.html">LexiconServer</a>, it can do the whole job for you. Give it a directory and it backs the dictionary up on its own:</p>
+    <pre><code>LexiconServer --database ~/lexicon/lexicon.db --backup-dir ~/lexicon-backups</code></pre>
+    <ul>
+      <li>Every <strong>24 hours</strong> by default (<code>--backup-interval H</code>), keeping the newest <strong>14</strong> backups (<code>--backup-keep N</code>); older ones are removed.</li>
+      <li>Each backup holds a <strong>consistent copy of the database</strong> taken while the server keeps running, a portable <strong>JSON export</strong>, and the <strong>blob files</strong> the dictionary refers to.</li>
+      <li>Files that did not change are <strong>shared between backups through hard links</strong>, so fourteen backups cost far less than fourteen copies.</li>
+      <li><code>LexiconServer backup --backup-dir DIR</code> makes one on demand — handy before an upgrade.</li>
+    </ul>
+
+    <h2 id="export">Export and import</h2>
+    <p>A backup of the raw files is the safest copy; an <strong>export</strong> is the portable one:</p>
+    <ul>
+      <li><code>File → Export...</code> writes the whole dictionary as <strong>one documented JSON file</strong>, optionally with the files its blob and image values refer to.</li>
+      <li><code>File → Import...</code> merges such a file into the open dictionary: groups, types and fields are matched by name, and items that are already there are left untouched.</li>
+      <li>The web client and the Android app offer the same two actions, and <code>LexiconServer export</code> and <code>LexiconServer import</code> do it from the command line.</li>
+      <li>Alarms, reviews, links and metadata all travel with it. The format is described in <code>docs/export-format.md</code>.</li>
+    </ul>
 
     <h2 id="safety">Deletion safety rules</h2>
     <p>Blob files are deduplicated by SHA-256: multiple Item values can refer to the same physical file. Removing a value, Item, Field, or Type leaves the file in place. Use <strong>Tools → Blob maintenance…</strong> to scan for unused files. A normal Scan checks references and paths; Full integrity check also hashes file contents. Missing means a referenced file is absent; Hash mismatch means its contents are corrupt. Restore these from backup rather than deleting them. Only the explicitly confirmed Delete unused blobs action removes canonical, still-unreferenced files after rechecking references and contents. Unexpected files and symlinks are reported but not collected.</p>
@@ -124,8 +149,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
     <p>Open an issue on <a href="https://github.com/robertvokac/lexicon/issues" target="_blank" rel="noopener">GitHub</a> with your OS, Qt version, and the exact error message.</p>
 
     <div class="page-nav">
-      <a class="prev" href="search-and-navigation.html"><span class="dir">← Previous</span>Search &amp; navigation</a>
-      <a class="next" href="../developers/index.html"><span class="dir">Next →</span>Developer Docs</a>
+      <a class="prev" href="server-and-clients.html"><span class="dir">← Previous</span>Server, web &amp; Android</a>
     </div>
   </main>
 

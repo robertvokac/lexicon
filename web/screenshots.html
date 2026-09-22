@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Screenshots — Lexicon</title>
-<meta name="description" content="Screenshots of Lexicon, the desktop knowledge dictionary: main window, Markdown editor, metadata management, links and backlinks.">
+<meta name="description" content="Screenshots of Lexicon in all three clients: the Qt desktop application, the web client in a browser and the native Android app - main window, item editor, relationship graph, review, alarms, Inbox and images.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -31,49 +31,293 @@
 <main class="section">
   <div class="container">
     <h1 style="text-align:center">Screenshots</h1>
-    <p class="section-lead">A tour of Lexicon's interface. Click any image to view it full size.</p>
+    <p class="section-lead">One dictionary in three clients. The shots share one small sample dictionary: C++ and OpenGL ES terms, a few books, and a <code>Term</code> type with <code>Standard</code>, <code>Difficulty</code> and <code>Diagram</code> fields. Click any image to view it full size.</p>
+    <p style="text-align:center"><a class="btn btn-ghost" href="#desktop">Desktop client</a> <a class="btn btn-ghost" href="#web">Web client</a> <a class="btn btn-ghost" href="#android">Android app</a></p>
 
+    <h2 id="desktop">Desktop client</h2>
+    <p>The Qt Widgets application, which opens the SQLite database directly.</p>
     <div class="gallery">
       <figure>
-        <img src="assets/img/Screenshot.png" alt="Main window — filters, searchable item table, pagination, rendered Markdown content, and link/backlink preview">
+        <img src="assets/img/desktop-main.png" alt="Main window — filters, searchable item table, pagination, rendered Markdown content with a diagram, and the link and backlink preview" loading="lazy">
         <figcaption>
           <strong>Main window</strong>
-          <span>Filters, searchable item table, pagination, rendered Markdown content, and link/backlink preview — all in one screen.</span>
+          <span>Filters above the column names, the item table, the rendered content with its images, and the links below it — all on one screen.</span>
         </figcaption>
       </figure>
       <figure>
-        <img src="assets/img/Screenshot_General.png" alt="Item editor — General tab with group, title, disambiguation, status, understanding, and pinned fields">
+        <img src="assets/img/desktop-dark-main.png" alt="The same main window in the dark theme" loading="lazy">
         <figcaption>
-          <strong>Item editor — General tab</strong>
-          <span>Basic identity and state of an item: group, title, disambiguation, status, understanding level, and pinned flag.</span>
+          <strong>Dark mode</strong>
+          <span>The whole application switches from the View menu, and remembers your choice.</span>
         </figcaption>
       </figure>
       <figure>
-        <img src="assets/img/Screenshot_Content.png" alt="Item editor — Content tab with Markdown editor on the left and live preview on the right">
+        <img src="assets/img/desktop-editor-general.png" alt="Item editor — General tab with group, type, title, disambiguation, status, understanding and pinned" loading="lazy">
         <figcaption>
-          <strong>Item editor — Content tab</strong>
-          <span>Markdown editor on the left, live rendered preview on the right, plus a formatting toolbar.</span>
+          <strong>Item editor — General</strong>
+          <span>Identity and state of an item: group, type, title, disambiguation, status, understanding level and pinned flag.</span>
         </figcaption>
       </figure>
       <figure>
-        <img src="assets/img/Screenshot_Metadata.png" alt="Item editor — Metadata tab for managing tags, flags, and aliases">
+        <img src="assets/img/desktop-editor-content.png" alt="Item editor — Content tab with the Markdown source on the left and the live preview on the right" loading="lazy">
         <figcaption>
-          <strong>Item editor — Metadata tab</strong>
-          <span>Manage tags, flags, and aliases with dedicated add/edit/remove controls.</span>
+          <strong>Item editor — Content</strong>
+          <span>Markdown on the left, the rendered preview on the right, and a formatting toolbar above them.</span>
         </figcaption>
       </figure>
       <figure>
-        <img src="assets/img/Screenshot_Links.png" alt="Item editor — Links tab for creating outgoing relationships to other items">
+        <img src="assets/img/desktop-editor-values.png" alt="Item editor — Values tab with the fields of the item's type and an image field showing a thumbnail" loading="lazy">
         <figcaption>
-          <strong>Item editor — Links tab</strong>
-          <span>Create and maintain outgoing typed relationships to other items.</span>
+          <strong>Item editor — Values</strong>
+          <span>The fields of the item's type, including an image field with its thumbnail.</span>
         </figcaption>
       </figure>
       <figure>
-        <img src="assets/img/Screenshot_Backlinks.png" alt="Item editor — Backlinks tab showing incoming relationships from other items">
+        <img src="assets/img/desktop-editor-metadata.png" alt="Item editor — Metadata tab with tags, flags, aliases and properties" loading="lazy">
         <figcaption>
-          <strong>Item editor — Backlinks tab</strong>
-          <span>Create and maintain incoming relationships — see who references this item.</span>
+          <strong>Item editor — Metadata</strong>
+          <span>Tags, flags, aliases and key/value properties, each with add, edit and remove.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-editor-links.png" alt="Item editor — Links tab with outgoing typed relationships" loading="lazy">
+        <figcaption>
+          <strong>Item editor — Links</strong>
+          <span>Outgoing typed relationships, and Add links from content for the names the text already mentions.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-editor-backlinks.png" alt="Item editor — Backlinks tab with incoming relationships from other items" loading="lazy">
+        <figcaption>
+          <strong>Item editor — Backlinks</strong>
+          <span>Who points at this item — created from either end.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-graph.png" alt="The relationship graph of one item with labelled arrows to its neighbours" loading="lazy">
+        <figcaption>
+          <strong>Relationship graph</strong>
+          <span>The neighbourhood of an item up to three links away. Zoom in and out, fit it again, or take it full screen.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-dark-graph.png" alt="The relationship graph in the dark theme" loading="lazy">
+        <figcaption>
+          <strong>Relationship graph, dark</strong>
+          <span>The same graph after dark.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-review.png" alt="A review card with the item title and the four ratings" loading="lazy">
+        <figcaption>
+          <strong>Review</strong>
+          <span>What is due, one card at a time: the answer on request, then Again, Hard, Good or Easy.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-alarms.png" alt="The alarm list with the soonest alarm first" loading="lazy">
+        <figcaption>
+          <strong>Alarms</strong>
+          <span>Every alarm in one list, the soonest first; the one still ringing is in bold.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-alarm-ring.png" alt="The Alarm window with Dismiss, Snooze 10 min, Snooze 1 hour and Later" loading="lazy">
+        <figcaption>
+          <strong>An alarm going off</strong>
+          <span>The Alarm window stays on top until you answer it — dismiss it once and it stops ringing on every device.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-inbox.png" alt="The Inbox dialog with a title, the idea as plain text, and Save" loading="lazy">
+        <figcaption>
+          <strong>Inbox</strong>
+          <span>A title and a few lines, saved to Default without a type. File it properly later.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-image.png" alt="The image viewer showing a diagram at full size" loading="lazy">
+        <figcaption>
+          <strong>Image viewer</strong>
+          <span>An image value at full size, fitted to the window when it opens.</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <h2 id="web">Web client</h2>
+    <p>Static HTML, CSS and JavaScript against <code>LexiconServer</code> — no build step, no framework.</p>
+    <div class="gallery">
+      <figure>
+        <img src="assets/img/web-main.png" alt="The web client in a desktop browser: search, the item table and the rendered content" loading="lazy">
+        <figcaption>
+          <strong>Web client</strong>
+          <span>The same screen in a browser: search, filters, the table and the content of the selected item.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-editor.png" alt="The web item editor, Content tab, with Markdown and its preview" loading="lazy">
+        <figcaption>
+          <strong>Web item editor</strong>
+          <span>The editor with the same six tabs, Markdown and preview side by side.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-editor-values.png" alt="The web item editor, Values tab, with an image field and its thumbnail" loading="lazy">
+        <figcaption>
+          <strong>Values with an image</strong>
+          <span>Typed fields in the browser, images included — choose, view, download or clear.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-graph.png" alt="The relationship graph in the web client" loading="lazy">
+        <figcaption>
+          <strong>Graph in the browser</strong>
+          <span>Zoom with the buttons, the keys or Ctrl and the wheel; drag the background to move around.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-review.png" alt="A review card in the web client" loading="lazy">
+        <figcaption>
+          <strong>Review in the browser</strong>
+          <span>The same queue and the same ratings as the desktop.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-alarms.png" alt="The alarm list in the web client" loading="lazy">
+        <figcaption>
+          <strong>Alarms in the browser</strong>
+          <span>Add, edit and delete alarms, and allow system notifications for them.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-alarm-ring.png" alt="An alarm ringing over the web client, with Dismiss and snooze buttons" loading="lazy">
+        <figcaption>
+          <strong>An alarm in the browser</strong>
+          <span>A panel over the page, a short chime, and a system notification when the browser allows it.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-phone.png" alt="The web client on a phone-sized screen in the dark theme" loading="lazy" style="max-width:300px; display:block; margin:0 auto">
+        <figcaption>
+          <strong>On a phone</strong>
+          <span>Below 860 pixels the client becomes a phone layout, with the secondary actions behind one menu.</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <h2 id="android">Android app</h2>
+    <p>Kotlin and Jetpack Compose, against the same server.</p>
+    <div class="gallery gallery-phones">
+      <figure>
+        <img src="assets/img/android-login.png" alt="The Android sign-in screen with the server address, user name and password" loading="lazy">
+        <figcaption>
+          <strong>Sign in</strong>
+          <span>The server address, once.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-items.png" alt="The Android items list" loading="lazy">
+        <figcaption>
+          <strong>Items</strong>
+          <span>Server-side search, filters and sorting.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-item.png" alt="An item on Android with its values and rendered content" loading="lazy">
+        <figcaption>
+          <strong>An item</strong>
+          <span>Values, content and links.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-item-image.png" alt="An item on Android showing its image below the content" loading="lazy">
+        <figcaption>
+          <strong>Images</strong>
+          <span>Under the content, full size on a tap.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-editor-content.png" alt="The Android editor, Content tab" loading="lazy">
+        <figcaption>
+          <strong>Editor — Content</strong>
+          <span>Markdown with a preview.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-editor-values.png" alt="The Android editor, Values tab" loading="lazy">
+        <figcaption>
+          <strong>Editor — Values</strong>
+          <span>The fields of the item's type.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-graph.png" alt="The relationship graph in the Android app" loading="lazy">
+        <figcaption>
+          <strong>Graph</strong>
+          <span>Zoom, fit, and the items listed below.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-graph-full.png" alt="The relationship graph on Android, full screen and zoomed in" loading="lazy">
+        <figcaption>
+          <strong>Graph, full screen</strong>
+          <span>The whole screen for the graph.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-review.png" alt="A review card in the Android app" loading="lazy">
+        <figcaption>
+          <strong>Review</strong>
+          <span>The same queue on the phone.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-alarms.png" alt="The alarm list in the Android app" loading="lazy">
+        <figcaption>
+          <strong>Alarms</strong>
+          <span>With date and time pickers.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-notification.png" alt="An Android notification for an alarm with Dismiss and Snooze 10 min" loading="lazy">
+        <figcaption>
+          <strong>A ringing alarm</strong>
+          <span>Even when the app is closed.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-inbox.png" alt="The Inbox on Android with a title and the idea" loading="lazy">
+        <figcaption>
+          <strong>Inbox</strong>
+          <span>Offline too — sent when the server is back.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-image-viewer.png" alt="The full-size image viewer in the Android app" loading="lazy">
+        <figcaption>
+          <strong>Image viewer</strong>
+          <span>Pinch to zoom.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-drawer.png" alt="The Android navigation drawer with Items, Review, Alarms and more" loading="lazy">
+        <figcaption>
+          <strong>Drawer</strong>
+          <span>Everything one tap away.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-dark-items.png" alt="The Android items list in the dark theme" loading="lazy">
+        <figcaption>
+          <strong>Dark mode</strong>
+          <span>The app follows the phone.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-dark-item.png" alt="An item in the Android app in the dark theme" loading="lazy">
+        <figcaption>
+          <strong>An item, dark</strong>
+          <span>The same item after dark.</span>
         </figcaption>
       </figure>
     </div>
@@ -81,6 +325,7 @@
     <p style="text-align:center; margin-top:2.5rem">
       <a class="btn btn-primary" href="users/getting-started.html">Learn how to use it</a>
       <a class="btn btn-ghost" href="users/installation.html">Install Lexicon</a>
+      <a class="btn btn-ghost" href="users/server-and-clients.html">Server, web &amp; Android</a>
     </p>
   </div>
 </main>

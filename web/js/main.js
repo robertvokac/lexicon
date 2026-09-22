@@ -49,7 +49,7 @@
 
   /* ----- Lightbox for screenshots ----- */
 
-  var zoomables = document.querySelectorAll("figure.screenshot img, .gallery img, [data-zoom]");
+  var zoomables = document.querySelectorAll("figure.screenshot img, .gallery img, .phone-shots img, [data-zoom]");
 
   if (zoomables.length > 0) {
     var lightbox = document.createElement("div");

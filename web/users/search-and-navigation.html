@@ -40,6 +40,10 @@
         <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html" class="active">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
       </ul>
       <p class="sidebar-title">On this page</p>
@@ -59,15 +63,17 @@
     <p class="lead">A knowledge base is only as good as your ability to find things in it. Lexicon combines free-text search, filters above the table columns, sorting, and pagination.</p>
 
     <h2 id="search">Free-text search</h2>
-    <p>The <code>Search</code> box at the top of the main window matches against <strong>five fields</strong> at once:</p>
+    <p>The <code>Search</code> box at the top of the main window matches against <strong>six fields</strong> at once:</p>
     <ul>
       <li>title</li>
       <li>disambiguation</li>
       <li>aliases</li>
       <li>tags</li>
       <li>flags</li>
+      <li>the Markdown content</li>
     </ul>
     <p>Because aliases are searched too, a well-maintained alias list means you find <em>Resource Acquisition Is Initialization</em> just by typing <code>RAII</code>.</p>
+    <p>The content is searched with a full-text index that <strong>ignores diacritics</strong>, so <code>prilis</code> finds <em>Příliš</em> and <code>naive</code> finds <em>naïve</em>. An item whose title matches exactly comes first, then the other title matches, then the ones found by their content. The web client and the Android app search the same way — the server runs the same query.</p>
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
       <p><strong>Search-to-create</strong> If a search comes up empty, click <code>Add</code> — the new item's title is prefilled from your search text. Searching and capturing become one motion.</p>
@@ -115,11 +121,15 @@
       <li><code>View → Light mode</code></li>
       <li><code>View → Dark mode</code></li>
     </ul>
-    <p>Your preference is persisted between sessions.</p>
+    <p>Your preference is persisted between sessions. The web client has the same switch and otherwise follows your system, and the Android app follows the phone's theme.</p>
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-dark-main.png" alt="The Lexicon main window in the dark theme" loading="lazy">
+      <figcaption>The same window in dark mode.</figcaption>
+    </figure>
 
     <div class="page-nav">
       <a class="prev" href="links-and-relationships.html"><span class="dir">← Previous</span>Links &amp; relationships</a>
-      <a class="next" href="backup-and-troubleshooting.html"><span class="dir">Next →</span>Backup &amp; troubleshooting</a>
+      <a class="next" href="review.html"><span class="dir">Next →</span>Review</a>
     </div>
   </main>
 

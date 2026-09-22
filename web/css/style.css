@@ -424,6 +424,18 @@ figure.screenshot figcaption {
   text-align: center;
 }
 
+/* Phone and tablet screenshots, narrow and side by side */
+.phone-shots { display: flex; flex-wrap: wrap; gap: 1.2rem; justify-content: center; margin: 1.5rem 0; }
+.phone-shots figure { margin: 0; flex: 0 1 220px; max-width: 220px; }
+.phone-shots img {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  cursor: zoom-in;
+}
+.phone-shots figcaption { font-size: 0.82rem; color: var(--muted); margin-top: 0.4rem; text-align: center; }
+
 /* Steps list */
 ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
 ol.steps > li {
@@ -458,6 +470,10 @@ ol.steps > li::before {
 
 .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-top: 2rem; }
 @media (max-width: 720px) { .gallery { grid-template-columns: 1fr; } }
+
+/* Phone screenshots are tall and narrow: more of them fit in a row */
+.gallery-phones { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 900px) { .gallery-phones { grid-template-columns: repeat(2, 1fr); } }
 
 .gallery figure { margin: 0; }
 .gallery img {

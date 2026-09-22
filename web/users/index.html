@@ -40,7 +40,18 @@
         <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#what">What is Lexicon?</a></li>
+        <li><a href="#concepts">Core concepts</a></li>
+        <li><a href="#quick-start">Quick start checklist</a></li>
+        <li><a href="#chapters">Guide chapters</a></li>
       </ul>
       <p class="sidebar-title">See also</p>
       <ul>
@@ -55,16 +66,17 @@
     <h1>User Guide</h1>
     <p class="lead">Welcome! This guide takes you from installing Lexicon to running a well-organized, interlinked knowledge dictionary.</p>
 
-    <h2>What is Lexicon?</h2>
-    <p>Lexicon is a free, open-source desktop application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>items</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
+    <h2 id="what">What is Lexicon?</h2>
+    <p>Lexicon is a free, open-source application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>items</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
     <p>Data is stored locally in a SQLite file, with optional attachments in an adjacent directory — no account, no cloud, no telemetry. You own your knowledge.</p>
+    <p>There are <strong>three clients over one dictionary</strong>: the Qt desktop application, which opens the database file directly, and a web client and a native Android app, which talk to <code>LexiconServer</code> next to that same file. What you write in one shows up in the others — including <a href="review.html">reviews</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>.</p>
 
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot.png" alt="Lexicon main window with filters, item table, and rendered content">
+      <img src="../assets/img/desktop-main.png" alt="Lexicon main window with filters, item table, and rendered content" loading="lazy">
       <figcaption>The main window: everything you need on one screen.</figcaption>
     </figure>
 
-    <h2>Core concepts</h2>
+    <h2 id="concepts">Core concepts</h2>
     <p>Five ideas are enough to understand the whole application:</p>
     <table>
       <tr><th>Concept</th><th>What it is</th><th>Example</th></tr>
@@ -74,18 +86,20 @@
       <tr><td><strong>Alias</strong></td><td>An alternate name or synonym that also matches in search.</td><td><code>RAII</code> for <em>Resource Acquisition Is Initialization</em></td></tr>
       <tr><td><strong>Link</strong></td><td>A typed relationship between two items (with automatic backlinks).</td><td><code>std::vector</code> — <em>Is A</em> → <code>container</code></td></tr>
     </table>
+    <p>Three more take you from a dictionary to a study tool: <strong><a href="review.html">review</a></strong> brings due items back one card at a time, <strong><a href="alarms.html">alarms</a></strong> ring in every client, and the <strong><a href="inbox.html">Inbox</a></strong> catches an idea before it is gone.</p>
 
-    <h2>Quick start checklist</h2>
+    <h2 id="quick-start">Quick start checklist</h2>
     <ol class="steps">
       <li><strong><a href="installation.html">Install and launch Lexicon</a>.</strong> The database file is created automatically on first start.</li>
       <li><strong><a href="getting-started.html">Organize your groups</a></strong> via <code>Manage → Groups...</code>. A <code>Default</code> group is ready when you start.</li>
       <li><strong>Add a few items</strong> with the <code>Add</code> button and fill in their titles.</li>
       <li><strong><a href="editing-items.html">Write content in Markdown</a></strong> in the Content tab and watch the live preview.</li>
       <li><strong><a href="links-and-relationships.html">Connect related items</a></strong> with typed links to grow your concept graph.</li>
-      <li><strong><a href="backup-and-troubleshooting.html">Set up a backup habit</a></strong> — copy the database and its adjacent blobs directory.</li>
+      <li><strong><a href="review.html">Review what you wrote</a></strong> — the items due now, one card at a time.</li>
+      <li><strong><a href="backup-and-troubleshooting.html">Set up a backup habit</a></strong> — copy the database and its adjacent blobs directory, or let the server back it up for you.</li>
     </ol>
 
-    <h2>Guide chapters</h2>
+    <h2 id="chapters">Guide chapters</h2>
     <div class="grid grid-2" style="margin-top:1.2rem">
       <a class="card card-link" href="installation.html">
         <h3>📦 Installation</h3>
@@ -106,6 +120,22 @@
       <a class="card card-link" href="search-and-navigation.html">
         <h3>🔎 Search &amp; navigation</h3>
         <p>Search, filters, sorting, pagination, global overviews, and switching between light and dark mode.</p>
+      </a>
+      <a class="card card-link" href="review.html">
+        <h3>🎓 Review</h3>
+        <p>Spaced repetition over your own items: what is due, the answer on request, and four ratings.</p>
+      </a>
+      <a class="card card-link" href="alarms.html">
+        <h3>⏰ Alarms</h3>
+        <p>Reminders that ring on the desktop, in the browser and on the phone — until you dismiss them.</p>
+      </a>
+      <a class="card card-link" href="inbox.html">
+        <h3>📥 Inbox</h3>
+        <p>Catch an idea in one step, even without a connection, and file it properly later.</p>
+      </a>
+      <a class="card card-link" href="server-and-clients.html">
+        <h3>🖧 Server, web &amp; Android</h3>
+        <p>Run LexiconServer and use the same dictionary from a browser and from your phone.</p>
       </a>
       <a class="card card-link" href="backup-and-troubleshooting.html">
         <h3>🛟 Backup &amp; troubleshooting</h3>

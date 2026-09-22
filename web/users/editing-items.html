@@ -40,14 +40,19 @@
         <li><a href="editing-items.html" class="active">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
       </ul>
       <p class="sidebar-title">On this page</p>
       <ul>
-        <li><a href="#general">General tab</a></li>
-        <li><a href="#content">Content tab (Markdown)</a></li>
-        <li><a href="#values">Values tab</a></li>
-        <li><a href="#metadata">Metadata tab</a></li>
+        <li><a href="#general">General tab — identity and state</a></li>
+        <li><a href="#content">Content tab — write in Markdown</a></li>
+        <li><a href="#values">Values tab — custom fields</a></li>
+        <li><a href="#metadata">Metadata tab — tags, flags, aliases, properties</a></li>
+        <li><a href="#saving">Saving, and what happens if someone else was faster</a></li>
       </ul>
     </nav>
   </aside>
@@ -59,7 +64,7 @@
 
     <h2 id="general">General tab — identity and state</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_General.png" alt="Item editor General tab with group, title, disambiguation, status, understanding, and pinned fields">
+      <img src="../assets/img/desktop-editor-general.png" alt="Item editor General tab with group, title, disambiguation, status, understanding, and pinned fields" loading="lazy">
       <figcaption>The General tab: where an item gets its identity.</figcaption>
     </figure>
     <table>
@@ -87,12 +92,12 @@
     </table>
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
-      <p><strong>Review workflow</strong> Filter for <em>Understanding = Recognized</em> to get an instant list of concepts you should revisit. Update the level as you learn — watching it climb is great motivation.</p>
+      <p><strong>The level is also the schedule</strong> <a href="review.html">Review</a> brings an item back 1, 2, 5, 12 or 30 days after you last saw it, following exactly this scale — and a rating moves the level for you. Filtering for <em>Understanding = Recognized</em> still gives an instant list of what to revisit.</p>
     </div>
 
     <h2 id="content">Content tab — write in Markdown</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_Content.png" alt="Item editor Content tab with Markdown source on the left and rendered preview on the right">
+      <img src="../assets/img/desktop-editor-content.png" alt="Item editor Content tab with Markdown source on the left and rendered preview on the right" loading="lazy">
       <figcaption>Markdown source on the left, live rendered preview on the right.</figcaption>
     </figure>
     <p>The Content tab is a split view: the <strong>left pane</strong> holds the raw Markdown, the <strong>right pane</strong> renders it as HTML. The preview updates automatically as you type.</p>
@@ -123,14 +128,36 @@ std::vector&lt;int&gt; a = make_data();
 std::vector&lt;int&gt; b = std::move(a); // no copy
 ```</code></pre>
 
+    <p>Write <code>[[Title]]</code> to point at another item; in the preview it opens that item, and Lexicon offers to create it when there is none. See <a href="links-and-relationships.html#wiki">Links &amp; relationships</a>.</p>
+
     <h2 id="values">Values tab — custom fields</h2>
     <p>When an item has a type, its Values tab shows that type's fields in position order. Fields can use integer, float, text, date, time, timestamp, boolean, enum, blob, or other values. Date/time values use ISO format; enum fields show their configured choices. The tab is disabled when the item has no type.</p>
     <p>For a blob field, enter a file path or choose one with <code>Browse...</code>. Click <code>Import</code> to see its SHA-256 hash immediately, or save the item to import the entered path. This replaces that item's previous blob value. The bytes are stored under <code>blobs</code> next to <code>lexicon.db</code>; <code>Save as...</code> exports the current file.</p>
+
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-editor-values.png" alt="Item editor Values tab with typed fields and an image field showing a thumbnail" loading="lazy">
+      <figcaption>The Values tab of a typed item, with an image field and its thumbnail.</figcaption>
+    </figure>
+
+    <h3 id="images">Image fields</h3>
+    <p>An <strong>Image</strong> field holds a picture — a diagram, a formula, a photo of a whiteboard:</p>
+    <ul>
+      <li><strong>Choose image...</strong> stores a PNG, JPEG, GIF, WebP or BMP file. The kind is read from the file itself, not from its name.</li>
+      <li>The editor shows a <strong>thumbnail</strong> and what the image is; <strong>View...</strong>, or a click on the thumbnail, opens it at full size.</li>
+      <li><strong>Save as...</strong> writes the picture back to a file and <strong>Clear</strong> removes it.</li>
+      <li>The item preview shows every image <strong>under the item's content</strong>, and the item table shows a small picture in the column of that field.</li>
+    </ul>
+    <p>The web client and the Android app choose, show and save images the same way — including the full-size viewer.</p>
+
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-image.png" alt="The image viewer showing a diagram at full size" loading="lazy">
+      <figcaption>The viewer fits the whole picture when it opens; zoom in to read the detail.</figcaption>
+    </figure>
     <p>In the main window, selecting a specific Type adds columns for these values and filters for each field. Text filters match part of a value; other fields use exact matches.</p>
 
     <h2 id="metadata">Metadata tab — tags, flags, aliases, properties</h2>
     <figure class="screenshot">
-      <img src="../assets/img/Screenshot_Metadata.png" alt="Item editor Metadata tab with lists for tags, flags, and aliases">
+      <img src="../assets/img/desktop-editor-metadata.png" alt="Item editor Metadata tab with lists for tags, flags, and aliases" loading="lazy">
       <figcaption>Tags, flags, aliases, and additional properties have Add / Edit / Remove controls.</figcaption>
     </figure>
     <table>
@@ -149,6 +176,9 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
       <span class="callout-icon">ℹ️</span>
       <p><strong>Tags vs. flags</strong> If it describes <em>what the item is about</em>, it's a tag. If it describes <em>what you still need to do with it</em>, it's a flag.</p>
     </div>
+
+    <h2 id="saving">Saving, and what happens if someone else was faster</h2>
+    <p>Every item carries a <strong>revision</strong> that moves on with each change to it, its values or its links. If another client — the desktop, the browser or the phone — saved the item after you opened it, your save is not written silently over theirs. Lexicon lists what differs and offers to <strong>Overwrite</strong> the newer version, <strong>Reload</strong> it and drop your changes, or go back to editing.</p>
 
     <div class="page-nav">
       <a class="prev" href="getting-started.html"><span class="dir">← Previous</span>Getting started</a>

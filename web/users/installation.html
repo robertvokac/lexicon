@@ -40,7 +40,20 @@
         <li><a href="editing-items.html">Editing items</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#linux">Linux (Debian / Ubuntu)</a></li>
+        <li><a href="#windows">Windows</a></li>
+        <li><a href="#macos">macOS</a></li>
+        <li><a href="#first-launch">First launch</a></li>
+        <li><a href="#other">The server, the web client and the Android app</a></li>
       </ul>
       <p class="sidebar-title">See also</p>
       <ul>
@@ -54,7 +67,7 @@
     <h1>Installation</h1>
     <p class="lead">Lexicon is built from source with CMake and Qt 6. It runs on Linux, Windows, and macOS.</p>
 
-    <h2>Requirements</h2>
+    <h2 id="requirements">Requirements</h2>
     <table>
       <tr><th>Component</th><th>Version / notes</th></tr>
       <tr><td>CMake</td><td>3.21 or newer</td></tr>
@@ -63,7 +76,7 @@
       <tr><td>SQLite Qt driver</td><td>Usually included with Qt packages (<code>libqt6sql6-sqlite</code> on Debian/Ubuntu)</td></tr>
     </table>
 
-    <h2>Linux (Debian / Ubuntu)</h2>
+    <h2 id="linux">Linux (Debian / Ubuntu)</h2>
     <ol class="steps">
       <li>
         <strong>Install the build tools and Qt 6:</strong>
@@ -91,7 +104,7 @@ cmake --build build --target Lexicon -j</code></pre>
       <p><strong>Desktop integration</strong> The repository ships a <code>lexicon.desktop</code> file. Copy it to <code>~/.local/share/applications/</code> (and adjust the paths inside) to launch Lexicon from your application menu.</p>
     </div>
 
-    <h2>Windows</h2>
+    <h2 id="windows">Windows</h2>
     <ol class="steps">
       <li><strong>Install Qt 6</strong> using the official Qt Online Installer, including the <em>MSVC</em> or <em>MinGW</em> toolchain matching your compiler.</li>
       <li><strong>Install CMake</strong> (3.21+) and make sure it is on your <code>PATH</code>.</li>
@@ -103,7 +116,7 @@ cmake --build build --target Lexicon --config Release</code></pre>
       <li><strong>Run</strong> <code>build\Release\Lexicon.exe</code>. On Windows, Lexicon builds as a GUI application (no console window).</li>
     </ol>
 
-    <h2>macOS</h2>
+    <h2 id="macos">macOS</h2>
     <ol class="steps">
       <li>
         <strong>Install the prerequisites</strong> with Homebrew:
@@ -117,7 +130,7 @@ cmake --build build --target Lexicon -j
       </li>
     </ol>
 
-    <h2>First launch</h2>
+    <h2 id="first-launch">First launch</h2>
     <p>There is no setup wizard — Lexicon takes care of itself:</p>
     <ul>
       <li>On startup, Lexicon <strong>creates or opens</strong> the database file <code>lexicon.db</code> in the same directory as the executable.</li>
@@ -129,6 +142,12 @@ cmake --build build --target Lexicon -j
       <span class="callout-icon">ℹ️</span>
       <p><strong>Where is my data?</strong> Structured data is stored in <code>lexicon.db</code> next to the executable. Blob attachments are stored in the adjacent <code>blobs</code> directory. See <a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a> for backup strategies.</p>
     </div>
+
+    <h2 id="other">The server, the web client and the Android app</h2>
+    <p>The desktop client is enough on its own. To reach the same dictionary from a browser or a phone, build <code>LexiconServer</code> — it needs <strong>no Qt</strong>, only a C++23 compiler, SQLite and OpenSSL:</p>
+    <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target LexiconServer -j</code></pre>
+    <p>The web client in <code>lexicon-web/</code> is static content with no build step, and the Android app is built from <code>lexicon-android/</code> with Gradle. <a href="server-and-clients.html">Server, web &amp; Android</a> walks through running them.</p>
 
     <div class="page-nav">
       <a class="prev" href="index.html"><span class="dir">← Previous</span>Overview</a>

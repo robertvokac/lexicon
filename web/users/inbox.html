@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inbox — Lexicon</title>
+<meta name="description" content="The Lexicon Inbox: catch an idea with a title and a few lines in one step, into the Default group without a type - on Android even without a connection, sent when the server is back.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html" class="active">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#catch">Catch an idea</a></li>
+        <li><a href="#offline">Offline on Android</a></li>
+        <li><a href="#sort">Sorting it out later</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Inbox</p>
+    <h1>Inbox</h1>
+    <p class="lead">An idea you have to file properly is an idea you will not write down. The Inbox takes a title and a few lines and saves them in one step — sorting out the group, the type and the links can wait.</p>
+
+    <h2 id="catch">Catch an idea</h2>
+    <table>
+      <tr><th>Client</th><th>How to open it</th></tr>
+      <tr><td>Desktop</td><td>The <code>Inbox</code> button next to <code>Add ...</code>, or <code>File → Inbox...</code> (<code>Ctrl+I</code>)</td></tr>
+      <tr><td>Web client</td><td>The <code>Inbox</code> button above the table (behind the <code>⋯</code> menu on a phone)</td></tr>
+      <tr><td>Android</td><td>The <strong>Inbox: save an idea</strong> action in the top bar</td></tr>
+    </table>
+    <p>The form has two fields, a title and the idea itself as plain text, and one <strong>Save</strong> button. Whatever the filters happen to show, the item goes to the <code>Default</code> group <strong>without a type</strong>, so nothing has to be decided in the moment.</p>
+
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-inbox.png" alt="The desktop Inbox dialog: a title, the idea as plain text, and Save" loading="lazy">
+      <figcaption>Two fields and a button — that is the whole idea.</figcaption>
+    </figure>
+
+    <h2 id="offline">Offline on Android</h2>
+    <p>On the phone the Inbox also works <strong>without a connection</strong> — on a train, in a basement, or with the server switched off at home:</p>
+    <ol class="steps">
+      <li>Save the idea as usual. If the server cannot be reached, it waits on the phone and a banner says so: <em>1 idea waits on this phone and is sent when the server can be reached.</em></li>
+      <li><strong>Show</strong> lists what is waiting; <strong>Send now</strong> tries again straight away.</li>
+      <li>As soon as the server answers, the ideas go out in the order you wrote them and the banner disappears.</li>
+    </ol>
+
+    <div class="phone-shots">
+      <figure>
+        <img src="../assets/img/android-inbox.png" alt="The Inbox on Android: a title and the idea" loading="lazy">
+        <figcaption>The Inbox on Android</figcaption>
+      </figure>
+    </div>
+
+    <h2 id="sort">Sorting it out later</h2>
+    <p>Inbox items are ordinary items, so the usual tools empty the Inbox:</p>
+    <ul>
+      <li>Filter <code>Group = Default</code> and <code>Type = All types</code> to see everything that was caught in a hurry.</li>
+      <li>Open an item, move it to the right group, give it a type and fill in the <a href="editing-items.html">fields</a>.</li>
+      <li>Add <a href="links-and-relationships.html">links</a> — or write <code>[[wiki links]]</code> in the content and let <strong>Add links from content</strong> do it.</li>
+    </ul>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Empty it on a schedule</strong> Ten minutes on a Sunday is enough to turn a week of caught ideas into real items — and an <a href="alarms.html">alarm</a> can remind you.</p>
+    </div>
+
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
