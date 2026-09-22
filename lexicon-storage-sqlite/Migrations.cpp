@@ -285,6 +285,16 @@ void applyMigrations(const Connection &db) {
             // NULL for an item never reviewed.
             "ALTER TABLE item ADD COLUMN reviewed_at TEXT;",
             "CREATE INDEX idx_item_reviewed_at ON item(reviewed_at);"
+        }},
+        {23, {
+            "CREATE TABLE alarm ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " title TEXT NOT NULL CHECK(TRIM(title) <> ''),"
+            " description TEXT NOT NULL DEFAULT '',"
+            // UTC "YYYY-MM-DDTHH:MM:SSZ", so text order is time order.
+            " fires_at TEXT NOT NULL"
+            ");",
+            "CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);"
         }}
     };
 

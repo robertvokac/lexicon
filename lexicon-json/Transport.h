@@ -54,6 +54,7 @@ Json toJson(const PropertyRecord &property);
 Json toJson(const LinkRecord &link);
 Json toJson(const ItemRecord &item);
 Json toJson(const UsageValueRecord &usage);
+Json toJson(const AlarmRecord &alarm);
 template <class T> Json toJsonArray(const std::vector<T> &values) {
   Json array = Json::array();
   for (const auto &value : values)
@@ -66,6 +67,7 @@ GroupRecord groupFromJson(const Json &json);
 ItemTypeRecord typeFromJson(const Json &json);
 ItemFieldRecord fieldFromJson(const Json &json);
 LinkRecord linkFromJson(const Json &json);
+AlarmRecord alarmFromJson(const Json &json);
 ItemRecord itemFromJson(const Json &json);
 std::vector<LinkRecord> linksFromJson(const Json &json);
 

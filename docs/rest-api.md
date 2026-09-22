@@ -366,6 +366,28 @@ review. The item is due again after 1, 2, 5, 12 or 30 days for `Unknown`,
 `Recognized`, `Understood`, `Practiced` and `Mastered`; raising the
 understanding in the editor moves the next review out the same way.
 
+## Alarms
+
+```http
+GET    /api/v1/alarms        → { "alarms": [ ... ] }
+GET    /api/v1/alarms/{id}   → { "alarm": { ... } }
+POST   /api/v1/alarms        → 201 { "alarm": { ... } }
+PUT    /api/v1/alarms/{id}   → 200 { "alarm": { ... } }
+DELETE /api/v1/alarms/{id}   → 204
+```
+
+```json
+{ "id": 4, "title": "Dentist", "description": "Bring the card.", "firesAt": "2026-10-02T08:30:00Z" }
+```
+
+An alarm is a reminder at a moment: a `title` (required, trimmed), a
+`description` (plain text, may be empty) and `firesAt`, the moment it goes off
+as UTC `YYYY-MM-DDTHH:MM:SSZ`. A time without seconds (`2026-10-02T08:30Z`) is
+accepted and stored with `:00`; a time without the `Z`, or an impossible date,
+is refused with 400. Clients show and edit the time in the viewer's own time
+zone. The list is ordered by `firesAt`, the soonest first, and includes alarms
+that have already gone off. The server stores alarms; it does not ring them.
+
 ## Export and import
 
 ```http
@@ -382,7 +404,7 @@ created and skipped:
 ```json
 { "report": { "groupsCreated": 0, "typesCreated": 0, "fieldsCreated": 0,
   "itemsCreated": 12, "itemsSkipped": 3, "linksCreated": 9, "blobsImported": 2,
-  "warnings": ["Item 'Monoid': 1 value(s) do not fit its fields here and were left out."] } }
+  "alarmsCreated": 1, "warnings": ["Item 'Monoid': 1 value(s) do not fit its fields here and were left out."] } }
 ```
 
 A document that is not an export, or has a format version this server does

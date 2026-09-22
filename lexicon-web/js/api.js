@@ -245,6 +245,12 @@ export class LexiconApi {
     }
 
     // Review -----------------------------------------------------------------
+    // Alarms, the soonest first. Times are UTC "YYYY-MM-DDTHH:MM:SSZ".
+    async alarms() { return (await this.get('/alarms')).alarms; }
+    async createAlarm(alarm) { return (await this.post('/alarms', alarm)).alarm; }
+    async updateAlarm(id, alarm) { return (await this.put(`/alarms/${id}`, alarm)).alarm; }
+    deleteAlarm(id) { return this.delete(`/alarms/${id}`); }
+
     reviewQueue(groupId, limit = 20) {
         const query = new URLSearchParams({ limit: String(limit) });
         if (groupId > 0) query.set('groupId', String(groupId));

@@ -17,4 +17,8 @@ Result<void> validateField(const ItemFieldRecord &field);
 Result<void> validateItem(const ItemRecord &item,
                           const std::vector<ItemFieldRecord> &fields);
 Result<void> validateLink(const LinkRecord &link);
+// "YYYY-MM-DDTHH:MM[:SS]Z" as "YYYY-MM-DDTHH:MM:SSZ", or empty when the text
+// is not such a UTC time.
+std::string normalizedUtcTime(std::string_view text);
+Result<void> validateAlarm(const AlarmRecord &alarm);
 } // namespace lexicon

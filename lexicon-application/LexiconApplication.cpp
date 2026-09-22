@@ -250,6 +250,10 @@ Result<DictionaryExport> ExchangeService::exportDictionary() {
     for (auto &link : *links)
       dictionary.links.push_back(std::move(link));
   }
+  auto alarms = repository_.loadAlarms();
+  if (!alarms)
+    return std::unexpected(alarms.error());
+  dictionary.alarms = std::move(*alarms);
   return dictionary;
 }
 
@@ -509,6 +513,26 @@ Result<ImportReport> ExchangeService::importDictionary(
     if (auto stored = repository_.saveLink(link); !stored)
       return std::unexpected(stored.error());
     ++report.linksCreated;
+  }
+
+  // Alarms, unless one with the same title already goes off at that moment.
+  if (!dictionary.alarms.empty()) {
+    auto existing = repository_.loadAlarms();
+    if (!existing)
+      return std::unexpected(existing.error());
+    for (const auto &source : dictionary.alarms) {
+      const auto firesAt = normalizedUtcTime(source.firesAt);
+      const bool present = std::any_of(existing->begin(), existing->end(), [&](const auto &alarm) {
+        return alarm.title == trim(source.title) && alarm.firesAt == firesAt;
+      });
+      if (present)
+        continue;
+      AlarmRecord alarm = source;
+      alarm.id = -1;
+      if (auto saved = repository_.saveAlarm(alarm); !saved)
+        return std::unexpected(Error{saved.error().code, "Alarm '" + source.title + "': " + saved.error().message});
+      ++report.alarmsCreated;
+    }
   }
 
   if (auto committed = unit.commit(); !committed)

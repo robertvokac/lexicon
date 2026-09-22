@@ -710,6 +710,15 @@ body.resizing { cursor: row-resize; user-select: none; }
 
 .value-table th { background: var(--surface-alt); position: sticky; top: 0; }
 
+.alarm-table tbody tr[data-id] { cursor: default; }
+.alarm-table tbody tr.past td { color: var(--text-muted); }
+.alarm-table tbody tr.selected td { background: var(--selection); color: var(--selection-text); }
+.alarm-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.alarm-table .alarm-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.alarm-table .alarm-description { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alarms { display: flex; flex-direction: column; gap: 6px; }
+.alarm-summary { margin: 0; }
+
 /* --- Responsive ------------------------------------------------------- */
 @media (max-width: 860px) {
     .metadata-grid,

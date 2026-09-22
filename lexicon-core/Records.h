@@ -120,6 +120,13 @@ struct ItemRecord {
   std::string reviewedAt;
   std::string reviewDueAt;
 };
+// A reminder at a moment: when it goes off, as UTC "YYYY-MM-DDTHH:MM:SSZ".
+struct AlarmRecord {
+  int id = -1;
+  std::string title;
+  std::string description;
+  std::string firesAt;
+};
 struct UsageValueRecord {
   std::string value;
   int usageCount = 0;

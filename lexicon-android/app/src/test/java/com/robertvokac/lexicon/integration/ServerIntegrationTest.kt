@@ -8,6 +8,7 @@ import com.robertvokac.lexicon.api.Session
 import com.robertvokac.lexicon.api.SessionAccess
 import com.robertvokac.lexicon.auth.SessionManager
 import com.robertvokac.lexicon.auth.SessionState
+import com.robertvokac.lexicon.model.AlarmWrite
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.FieldWrite
 import com.robertvokac.lexicon.model.GroupWrite
@@ -318,6 +319,33 @@ class ServerIntegrationTest {
             assertTrue(after.items.none { it.id == created.id })
             assertEquals(before.dueCount - 1, after.dueCount)
             api.deleteItem(created.id)
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
+    fun alarmsOverRealRest() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val title = "Dentist ${System.nanoTime()}"
+            val created = api.createAlarm(AlarmWrite(" $title ", "Bring the card.", "2030-01-02T09:15:00Z"))
+            val id = checkNotNull(created.id)
+            assertEquals(title, created.title)
+            assertTrue(api.alarms().any { it.id == id && it.firesAt == "2030-01-02T09:15:00Z" })
+            val moved = api.updateAlarm(id, AlarmWrite(title, "", "2030-01-03T08:00:00Z"))
+            assertEquals("2030-01-03T08:00:00Z", moved.firesAt)
+            assertEquals("", moved.description)
+            try {
+                api.createAlarm(AlarmWrite("Never", "", "2030-02-30T08:00:00Z"))
+                fail("expected a refusal")
+            } catch (failure: ApiException.Validation) {
+                assertTrue(failure.message!!.contains("UTC"))
+            }
+            api.deleteAlarm(id)
+            assertTrue(api.alarms().none { it.id == id })
         } finally {
             environment.close()
         }

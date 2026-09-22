@@ -1,6 +1,7 @@
 package com.robertvokac.lexicon.testing
 
 import com.robertvokac.lexicon.api.LexiconJson
+import com.robertvokac.lexicon.model.Alarm
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.Group
 import com.robertvokac.lexicon.model.Item
@@ -59,6 +60,7 @@ class FakeLexiconServer : Dispatcher() {
     var exportDocument = """{"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[]}"""
     val imports = mutableListOf<ByteArray>()
     val reviews = mutableListOf<Pair<Int, ReviewRating>>()
+    val alarms = mutableListOf<Alarm>()
     private var nextId = 100
 
     /** Queries with this search text answer only after [slowQueryMillis]. */
@@ -187,6 +189,24 @@ class FakeLexiconServer : Dispatcher() {
                 val id = segments[1].toInt()
                 if (!groups.removeIf { it.id == id }) return notFound()
                 items.values.removeIf { it.groupId == id }
+                noContent()
+            }
+            path == "/alarms" && method == "GET" -> json(buildJsonObject { put("alarms", encode(alarms.sortedWith(compareBy({ it.firesAt }, { it.id })))) })
+            path == "/alarms" && method == "POST" -> {
+                val alarm = alarmFrom(bodyObject(request), nextId++) ?: return error(400, "validation", "An alarm needs a title and a UTC time.")
+                alarms += alarm
+                json(buildJsonObject { put("alarm", encode(alarm)) }, 201)
+            }
+            segments.size == 2 && segments[0] == "alarms" && method == "PUT" -> {
+                val id = segments[1].toInt()
+                val index = alarms.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return notFound()
+                val alarm = alarmFrom(bodyObject(request), id) ?: return error(400, "validation", "An alarm needs a title and a UTC time.")
+                alarms[index] = alarm
+                json(buildJsonObject { put("alarm", encode(alarm)) })
+            }
+            segments.size == 2 && segments[0] == "alarms" && method == "DELETE" -> {
+                val id = segments[1].toInt()
+                if (!alarms.removeIf { it.id == id }) return notFound()
                 noContent()
             }
             path == "/types" && method == "GET" -> {
@@ -472,6 +492,14 @@ class FakeLexiconServer : Dispatcher() {
             }
         })
     })
+
+    /** As the server stores it: a trimmed title and a UTC time with seconds. */
+    private fun alarmFrom(body: JsonObject, id: Int): Alarm? {
+        val title = body["title"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val firesAt = body["firesAt"]?.jsonPrimitive?.contentOrNull?.takeIf { it.length == 20 && it.endsWith("Z") } ?: return null
+        runCatching { java.time.Instant.parse(firesAt) }.getOrNull() ?: return null
+        return Alarm(id, title, body["description"]?.jsonPrimitive?.contentOrNull.orEmpty(), firesAt)
+    }
 
     private fun bodyObject(request: RecordedRequest): JsonObject =
         LexiconJson.parseToJsonElement(request.body?.utf8().orEmpty().ifEmpty { "{}" }).jsonObject

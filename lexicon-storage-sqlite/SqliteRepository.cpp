@@ -844,6 +844,51 @@ SqliteRepository::Result<int> SqliteRepository::findItemId(const std::string &ti
     throw Failure("Item not found.", lexicon::Error::Code::NotFound);
   });
 }
+SqliteRepository::Result<std::vector<lexicon::AlarmRecord>> SqliteRepository::loadAlarms() {
+  return guarded([&] {
+    Statement stmt(impl_->db, "SELECT id, title, description, fires_at FROM alarm ORDER BY fires_at, id;");
+    std::vector<lexicon::AlarmRecord> alarms;
+    while (stmt.step()) alarms.push_back({stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3)});
+    return alarms;
+  });
+}
+SqliteRepository::Result<lexicon::AlarmRecord> SqliteRepository::loadAlarm(int alarmId) {
+  return guarded([&] {
+    Statement stmt(impl_->db, "SELECT id, title, description, fires_at FROM alarm WHERE id = ?;");
+    stmt.bind(alarmId);
+    require(stmt.step(), "Alarm not found.", lexicon::Error::Code::NotFound);
+    return lexicon::AlarmRecord{stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3)};
+  });
+}
+SqliteRepository::Result<int> SqliteRepository::saveAlarm(const lexicon::AlarmRecord &alarm) {
+  return guarded([&] {
+    valid(lexicon::validateAlarm(alarm));
+    const auto firesAt = lexicon::normalizedUtcTime(alarm.firesAt);
+    Transaction tx(impl_->db, "lexicon_write");
+    int id = alarm.id;
+    if (id < 0) {
+      Statement(impl_->db, "INSERT INTO alarm(title, description, fires_at) VALUES(?, ?, ?);")
+          .bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt).run();
+      id = impl_->db.lastId();
+    } else {
+      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, fires_at = ? WHERE id = ?;")
+          .bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt).bind(id).run();
+      requireChanged(impl_->db, "Alarm");
+    }
+    logOperation(impl_->db, "alarm", id, alarm.id < 0 ? 1 : 2);
+    tx.commit();
+    return id;
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::deleteAlarm(int alarmId) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_write");
+    Statement(impl_->db, "DELETE FROM alarm WHERE id = ?;").bind(alarmId).run();
+    requireChanged(impl_->db, "Alarm");
+    logOperation(impl_->db, "alarm", alarmId, 3);
+    tx.commit();
+  });
+}
 SqliteRepository::Result<void> SqliteRepository::beginUnitOfWork() {
   return guarded([&] {
     require(impl_->unitState == Impl::UnitState::Idle,

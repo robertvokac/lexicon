@@ -34,6 +34,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.robertvokac.lexicon.AppContainer
 import com.robertvokac.lexicon.LexiconApplication
 import com.robertvokac.lexicon.api.LexiconJson
+import com.robertvokac.lexicon.model.Alarm
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.LinkType
@@ -47,7 +48,10 @@ import com.robertvokac.lexicon.testing.waitFor
 import com.robertvokac.lexicon.testing.waitForCondition
 import com.robertvokac.lexicon.testing.waitForText
 import com.robertvokac.lexicon.testing.waitUntilGone
+import com.robertvokac.lexicon.ui.alarms.AlarmTimes
 import kotlinx.coroutines.runBlocking
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -530,6 +534,49 @@ class LexiconFlowsTest {
         compose.onNode(hasText("Save") and hasClickAction()).assertIsNotEnabled()
         compose.waitForText("slow.pdf (", substring = true)
         compose.onNode(hasText("Save") and hasClickAction()).assertIsEnabled()
+    }
+
+    @Test
+    fun alarmsAreListedAddedChangedAndDeleted() {
+        fake.alarms += Alarm(7, "Old call", "", "2001-05-06T07:08:00Z")
+        login()
+        openDrawer("Alarms")
+        compose.waitForText("Old call")
+        compose.waitForText("gone off", substring = true)
+        compose.onNodeWithContentDescription("Add alarm").performClick()
+        compose.waitForText("Add alarm")
+        inDialog("Save").performClick()
+        compose.waitForText("Enter a title.")
+        field("Title").performTextInput("Dentist")
+        field("Date").performTextReplacement("2030-01-02")
+        field("Time").performTextReplacement("25:99")
+        inDialog("Save").performClick()
+        compose.waitForText("Enter a date as YYYY-MM-DD and a time as HH:MM.")
+        field("Time").performTextReplacement("10:15")
+        field("Description").performTextInput("Bring the card.")
+        inDialog("Save").performClick()
+        compose.waitForCondition { fake.requestsTo("POST", "/api/v1/alarms").isNotEmpty() }
+        // Typed in local time, sent in UTC.
+        val expected = AlarmTimes.format(LocalDateTime.of(2030, 1, 2, 10, 15).atZone(ZoneId.systemDefault()).toInstant())
+        val created = lastBody("POST", "/api/v1/alarms")
+        assertEquals("Dentist", created["title"]!!.jsonPrimitive.content)
+        assertEquals(expected, created["firesAt"]!!.jsonPrimitive.content)
+        assertEquals("Bring the card.", created["description"]!!.jsonPrimitive.content)
+        compose.waitFor(hasContentDescription("Delete alarm Dentist"))
+        compose.onNodeWithText("2030-01-02 10:15", substring = true).assertIsDisplayed()
+
+        compose.onNode(hasText("Dentist") and hasClickAction()).performClick()
+        compose.waitForText("Edit alarm")
+        field("Time").performTextReplacement("08:00")
+        inDialog("Save").performClick()
+        compose.waitForCondition { fake.requestsTo("PUT", "/api/v1/alarms/${fake.alarms.first { it.title == "Dentist" }.id}").isNotEmpty() }
+        compose.waitForText("2030-01-02 08:00", substring = true)
+
+        compose.onNodeWithContentDescription("Delete alarm Dentist").performClick()
+        compose.waitForText("Delete the alarm 'Dentist'?")
+        inDialog("Delete").performClick()
+        compose.waitUntilGone(hasContentDescription("Delete alarm Dentist"))
+        assertTrue(fake.alarms.none { it.title == "Dentist" })
     }
 
     @Test

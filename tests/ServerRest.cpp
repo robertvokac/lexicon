@@ -784,6 +784,58 @@ void checkReview(Checks &checks) {
   checks.expectEqual(client.get("/api/v1/review?limit=0").status, 400, "the limit must be positive");
 }
 
+void checkAlarms(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  checks.expect(parse(client.get("/api/v1/alarms")).at("alarms").empty(), "there are no alarms at first");
+
+  const auto created = client.post("/api/v1/alarms",
+                                   R"({"title":" Dentist ","description":"Bring the card.","firesAt":"2026-10-02T08:30Z"})");
+  checks.expectEqual(created.status, 201, "an alarm can be created");
+  const auto alarm = parse(created).at("alarm");
+  const int alarmId = alarm.value("id", 0);
+  checks.expect(alarmId > 0, "and gets an ID");
+  checks.expectEqual(alarm.value("title", std::string{}), "Dentist", "its title is trimmed");
+  checks.expectEqual(alarm.value("firesAt", std::string{}), "2026-10-02T08:30:00Z", "its time gets seconds");
+  client.post("/api/v1/alarms", R"({"title":"Standup","firesAt":"2026-09-30T07:00:00Z"})");
+
+  const auto list = parse(client.get("/api/v1/alarms")).at("alarms");
+  checks.expectEqual(static_cast<long long>(list.size()), 2, "both alarms are listed");
+  checks.expectEqual(list.at(0).value("title", std::string{}), "Standup", "the soonest first");
+  checks.expectEqual(list.at(1).value("description", std::string{}), "Bring the card.", "with its description");
+
+  const auto path = "/api/v1/alarms/" + std::to_string(alarmId);
+  const auto updated = client.put(path, R"({"title":"Dentist","description":"","firesAt":"2026-10-03T09:00:00Z"})");
+  checks.expectEqual(updated.status, 200, "an alarm can be changed");
+  checks.expectEqual(parse(client.get(path)).at("alarm").value("firesAt", std::string{}), "2026-10-03T09:00:00Z",
+                     "and keeps the new time");
+
+  checks.expectEqual(client.post("/api/v1/alarms", R"({"title":" ","firesAt":"2026-10-02T08:30:00Z"})").status, 400,
+                     "an alarm needs a title");
+  checks.expectEqual(client.post("/api/v1/alarms", R"({"title":"Late","firesAt":"2026-02-30T08:30:00Z"})").status, 400,
+                     "and a real date");
+  checks.expectEqual(client.post("/api/v1/alarms", R"({"title":"Local","firesAt":"2026-10-02T08:30:00"})").status, 400,
+                     "given in UTC");
+  checks.expectEqual(client.post("/api/v1/alarms", R"({"title":"Local"})").status, 400, "and it needs a time");
+  checks.expectEqual(client.put("/api/v1/alarms/999999", R"({"title":"Ghost","firesAt":"2026-10-02T08:30:00Z"})").status,
+                     404, "changing a missing alarm is a not-found error");
+
+  checks.expectEqual(client.remove(path).status, 204, "an alarm can be deleted");
+  checks.expectEqual(client.get(path).status, 404, "and is gone");
+  checks.expectEqual(client.remove(path).status, 404, "deleting it again is a not-found error");
+
+  // Alarms travel with the export and are not doubled by importing it again.
+  const auto exported = client.get("/api/v1/export");
+  checks.expectEqual(static_cast<long long>(parse(exported).at("alarms").size()), 1, "the export carries alarms");
+  checks.expectEqual(parse(client.post("/api/v1/import", exported.body)).at("report").value("alarmsCreated", -1), 0,
+                     "an alarm already here is not imported again");
+  ServerHarness destination;
+  Session other(destination, checks);
+  checks.expectEqual(parse(other.client().post("/api/v1/import", exported.body)).at("report").value("alarmsCreated", 0),
+                     1, "and is created on another server");
+}
+
 void checkExportImport(Checks &checks) {
   // The export of one server imports into another.
   ServerHarness source;
@@ -976,5 +1028,6 @@ int main() {
   checkExportImport(checks);
   checkReview(checks);
   checkGraph(checks);
+  checkAlarms(checks);
   return checks.summarize("server_rest");
 }

@@ -1,5 +1,6 @@
 // The desktop dialogs added after the original client, driven offscreen
 // against a real database: each check clicks what a person would click.
+#include "AlarmsDialog.h"
 #include "ApplicationContext.h"
 #include "GraphDialog.h"
 #include "GraphLayout.h"
@@ -10,12 +11,15 @@
 #include "SqliteRepository.h"
 
 #include <QApplication>
+#include <QDateTimeEdit>
+#include <QTimeZone>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTableWidget>
 #include <QTextBrowser>
 #include <QTimer>
 
@@ -189,6 +193,48 @@ void checkInbox(lexicon::LexiconApplication &application) {
             child<QLabel>(twin, "inboxError")->text().contains("already exists"),
         "a title already in Default is refused with the reason");
 }
+void checkAlarms(lexicon::LexiconApplication &application) {
+  AlarmEditDialog editor(lexicon::AlarmRecord{});
+  editor.show();
+  auto *title = child<QLineEdit>(editor, "alarmTitle");
+  auto *when = child<QDateTimeEdit>(editor, "alarmFiresAt");
+  auto *description = child<QPlainTextEdit>(editor, "alarmDescription");
+  auto *save = child<QPushButton>(editor, "alarmSave");
+  auto *error = child<QLabel>(editor, "alarmError");
+  if (!title || !when || !description || !save || !error) return;
+  check(when->dateTime() > QDateTime::currentDateTime(), "a new alarm starts in the future");
+  save->click();
+  check(editor.isVisible() && error->text() == "Enter a title.", "an alarm needs a title");
+  title->setText("Renew the passport");
+  description->setPlainText("Photos first.");
+  // Shown in local time, stored in UTC.
+  when->setDateTime(QDateTime(QDate(2030, 1, 2), QTime(9, 15), QTimeZone::UTC).toLocalTime());
+  shot(editor, "alarm-edit");
+  save->click();
+  check(editor.result() == QDialog::Accepted && editor.alarm().id > 0, "the alarm is saved");
+  check(editor.alarm().firesAt == "2030-01-02T09:15:00Z", "at the chosen moment, in UTC");
+  check(alarmtime::fromUtcText(editor.alarm().firesAt) == when->dateTime(), "which reads back as shown");
+
+  lexicon::AlarmRecord past{-1, "Old call", "", "2001-05-06T07:08:00Z"};
+  check(application.alarms.saveAlarm(past).has_value(), "an alarm in the past can be kept");
+  AlarmsDialog list;
+  list.show();
+  auto *table = child<QTableWidget>(list, "alarmTable");
+  auto *summary = child<QLabel>(list, "alarmSummary");
+  if (!table || !summary) return;
+  check(list.alarmCount() == 2 && table->rowCount() == 2, "the list shows every alarm");
+  check(table->item(0, 1)->text() == "Old call" && table->item(1, 1)->text() == "Renew the passport",
+        "the soonest first");
+  check(table->item(1, 2)->text() == "Photos first.", "with its description");
+  check(table->item(0, 0)->toolTip() == "Already gone off", "one already gone off is marked");
+  check(summary->text() == "2 alarm(s), 1 still to go off", "the summary counts what is still to come");
+  shot(list, "alarms");
+  list.selectAlarm(editor.alarm().id);
+  list.deleteSelected(false);
+  check(list.alarmCount() == 1 && table->rowCount() == 1 && table->item(0, 1)->text() == "Old call",
+        "a deleted alarm leaves the list");
+  check(!application.alarms.loadAlarm(editor.alarm().id).has_value(), "and the database");
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -208,6 +254,7 @@ int main(int argc, char **argv) {
   checkWikiLinks(application, group);
   checkGraph(application, group);
   checkInbox(application);
+  checkAlarms(application);
 
   if (failures == 0) std::cout << "desktop_gui_smoke: all checks passed\n";
   return failures == 0 ? 0 : 1;

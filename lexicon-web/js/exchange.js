@@ -70,8 +70,9 @@ export async function importDictionary() {
         },
     });
     if (!report) return false;
-    const summary = `Imported ${report.itemsCreated} item(s), ${report.linksCreated} link(s) and `
-        + `${report.blobsImported} file(s); ${report.itemsSkipped} item(s) were already here. `
+    const summary = `Imported ${report.itemsCreated} item(s), ${report.linksCreated} link(s), `
+        + `${report.blobsImported} file(s) and ${report.alarmsCreated ?? 0} alarm(s); `
+        + `${report.itemsSkipped} item(s) were already here. `
         + `Created ${report.groupsCreated} group(s), ${report.typesCreated} type(s) and `
         + `${report.fieldsCreated} field(s).`;
     const warnings = el('ul', { class: 'import-warnings' },

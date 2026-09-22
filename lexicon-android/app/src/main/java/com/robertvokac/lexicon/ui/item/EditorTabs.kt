@@ -382,7 +382,7 @@ private fun PickerTextField(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateDialog(initial: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun DateDialog(initial: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
     val pickerState = rememberDatePickerState(initialSelectedDateMillis = FieldValues.dateToPickerMillis(initial))
     DatePickerDialog(
         onDismissRequest = onDismiss,
@@ -399,7 +399,7 @@ private fun DateDialog(initial: String, onPicked: (String) -> Unit, onDismiss: (
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeDialog(initial: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun TimeDialog(initial: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
     val (hour, minute) = FieldValues.timeParts(initial) ?: (12 to 0)
     val pickerState = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = true)
     AlertDialog(

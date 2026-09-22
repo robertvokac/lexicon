@@ -109,7 +109,8 @@ Result<std::string> exportDocument(LexiconApplication &application, bool include
                 {"groups", http::toJsonArray(dictionary->groups)},
                 {"types", std::move(types)},
                 {"items", http::toJsonArray(dictionary->items)},
-                {"links", std::move(links)}};
+                {"links", std::move(links)},
+                {"alarms", http::toJsonArray(dictionary->alarms)}};
   if (includeFiles) {
     std::set<std::string> hashes;
     for (const auto &item : dictionary->items)
@@ -163,6 +164,9 @@ Result<ImportReport> importDocument(LexiconApplication &application, std::string
       dictionary.items.push_back(http::itemFromJson(item));
     for (const auto &link : requiredArray(document, "links"))
       dictionary.links.push_back(http::linkFromJson(link));
+    if (document.contains("alarms"))
+      for (const auto &alarm : requiredArray(document, "alarms"))
+        dictionary.alarms.push_back(http::alarmFromJson(alarm));
     if (document.contains("blobs")) {
       for (const auto &blob : requiredArray(document, "blobs")) {
         const auto hash = http::requiredString(blob, "hash");
@@ -186,15 +190,16 @@ Json toJson(const ImportReport &report) {
               {"itemsSkipped", report.itemsSkipped},
               {"linksCreated", report.linksCreated},
               {"blobsImported", report.blobsImported},
+              {"alarmsCreated", report.alarmsCreated},
               {"warnings", report.warnings}};
 }
 
 std::string describe(const ImportReport &report) {
   std::string text = std::format(
-      "Imported {} item(s), {} link(s) and {} file(s); {} item(s) were already here. "
+      "Imported {} item(s), {} link(s), {} file(s) and {} alarm(s); {} item(s) were already here. "
       "Created {} group(s), {} type(s) and {} field(s).",
-      report.itemsCreated, report.linksCreated, report.blobsImported, report.itemsSkipped,
-      report.groupsCreated, report.typesCreated, report.fieldsCreated);
+      report.itemsCreated, report.linksCreated, report.blobsImported, report.alarmsCreated,
+      report.itemsSkipped, report.groupsCreated, report.typesCreated, report.fieldsCreated);
   for (const auto &warning : report.warnings)
     text += "\n- " + warning;
   return text;

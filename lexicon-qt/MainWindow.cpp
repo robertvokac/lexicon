@@ -10,6 +10,7 @@
 #include "ReviewDialog.h"
 #include "GraphDialog.h"
 #include "InboxDialog.h"
+#include "AlarmsDialog.h"
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
@@ -308,6 +309,12 @@ void MainWindow::setupMenus() {
     auto* typesAction = manageMenu->addAction("Types...");
     connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
     connect(typesAction, &QAction::triggered, this, &MainWindow::openTypeManager);
+    manageMenu->addSeparator();
+    auto* alarmsAction = manageMenu->addAction("Alarms...");
+    connect(alarmsAction, &QAction::triggered, this, [this] {
+        AlarmsDialog dialog(this);
+        dialog.exec();
+    });
 
     auto* toolsMenu = menuBar()->addMenu("Tools");
     auto* maintenanceAction = toolsMenu->addAction("Blob maintenance...");

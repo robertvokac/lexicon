@@ -1,5 +1,9 @@
 package com.robertvokac.lexicon.api
 
+import com.robertvokac.lexicon.model.Alarm
+import com.robertvokac.lexicon.model.AlarmEnvelope
+import com.robertvokac.lexicon.model.AlarmWrite
+import com.robertvokac.lexicon.model.AlarmsEnvelope
 import com.robertvokac.lexicon.model.BlobEnvelope
 import com.robertvokac.lexicon.model.CountEnvelope
 import com.robertvokac.lexicon.model.DefaultGroupEnvelope
@@ -169,6 +173,19 @@ class LexiconApi(private val client: ApiClient) {
 
     suspend fun itemGraph(id: Int, depth: Int = 2, limit: Int = 100): ItemGraph =
         client.get("items/$id/graph", ItemGraph.serializer(), query = mapOf("depth" to depth.toString(), "limit" to limit.toString()))
+
+    // Alarms ------------------------------------------------------------------
+
+    /** Every alarm, the soonest first. */
+    suspend fun alarms(): List<Alarm> = client.get("alarms", AlarmsEnvelope.serializer()).alarms
+
+    suspend fun createAlarm(alarm: AlarmWrite): Alarm =
+        client.post("alarms", alarm, AlarmWrite.serializer(), AlarmEnvelope.serializer()).alarm
+
+    suspend fun updateAlarm(id: Int, alarm: AlarmWrite): Alarm =
+        client.put("alarms/$id", alarm, AlarmWrite.serializer(), AlarmEnvelope.serializer()).alarm
+
+    suspend fun deleteAlarm(id: Int) = client.send("DELETE", "alarms/$id")
 
     // Review ------------------------------------------------------------------
 

@@ -39,4 +39,7 @@ data object SettingsRoute
 data object ReviewRoute
 
 @Serializable
+data object AlarmsRoute
+
+@Serializable
 data class GraphRoute(val itemId: Int)

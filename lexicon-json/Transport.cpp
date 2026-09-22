@@ -295,6 +295,23 @@ Json toJson(const ItemRecord &item) {
       {"reviewDueAt", item.reviewDueAt.empty() ? Json(nullptr) : Json(item.reviewDueAt)}};
 }
 
+Json toJson(const AlarmRecord &alarm) {
+  return Json{{"id", alarm.id > 0 ? Json(alarm.id) : Json(nullptr)},
+              {"title", alarm.title},
+              {"description", alarm.description},
+              {"firesAt", alarm.firesAt}};
+}
+
+AlarmRecord alarmFromJson(const Json &json) {
+  requireObject(json, "Alarm");
+  AlarmRecord alarm;
+  alarm.id = optionalId(json, "id");
+  alarm.title = requiredString(json, "title");
+  alarm.description = optionalString(json, "description");
+  alarm.firesAt = requiredString(json, "firesAt");
+  return alarm;
+}
+
 Json toJson(const UsageValueRecord &usage) {
   return Json{{"value", usage.value}, {"usageCount", usage.usageCount}};
 }

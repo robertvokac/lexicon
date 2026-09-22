@@ -212,6 +212,27 @@ private:
   Repository &repository_;
 };
 
+class AlarmService {
+public:
+  explicit AlarmService(Repository &repository) : repository_(repository) {}
+  // The soonest first.
+  Result<std::vector<AlarmRecord>> loadAlarms() { return repository_.loadAlarms(); }
+  Result<AlarmRecord> loadAlarm(int id) { return repository_.loadAlarm(id); }
+  // Creates the alarm when its id is -1; returns the stored alarm.
+  Result<AlarmRecord> saveAlarm(const AlarmRecord &alarm) {
+    if (auto valid = validateAlarm(alarm); !valid)
+      return std::unexpected(valid.error());
+    auto id = repository_.saveAlarm(alarm);
+    if (!id)
+      return std::unexpected(id.error());
+    return repository_.loadAlarm(*id);
+  }
+  Result<void> deleteAlarm(int id) { return repository_.deleteAlarm(id); }
+
+private:
+  Repository &repository_;
+};
+
 class ReviewService {
 public:
   explicit ReviewService(Repository &repository) : repository_(repository) {}
@@ -239,6 +260,7 @@ struct DictionaryExport {
   std::vector<TypeExport> types;
   std::vector<ItemRecord> items;
   std::vector<LinkRecord> links;
+  std::vector<AlarmRecord> alarms;
 };
 struct ImportReport {
   int groupsCreated = 0;
@@ -249,6 +271,7 @@ struct ImportReport {
   int itemsSkipped = 0;
   int linksCreated = 0;
   int blobsImported = 0;
+  int alarmsCreated = 0;
   // What could not be imported as it was, in words.
   std::vector<std::string> warnings;
 };
@@ -278,7 +301,8 @@ public:
   explicit LexiconApplication(Repository &repository)
       : items(repository), types(repository), groups(repository),
         links(repository), search(repository), configuration(repository),
-        blobs(repository), exchange(repository), review(repository) {}
+        blobs(repository), exchange(repository), review(repository),
+        alarms(repository) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -288,5 +312,6 @@ public:
   BlobService blobs;
   ExchangeService exchange;
   ReviewService review;
+  AlarmService alarms;
 };
 } // namespace lexicon

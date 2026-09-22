@@ -9,6 +9,7 @@ import { MainView } from './items.js';
 import { showValueOverview } from './overviews.js';
 import { openReview } from './review.js';
 import { openTypeManager } from './types.js';
+import { openAlarms } from './alarms.js';
 import { button, clear, el, readLocal, readSession, writeLocal, writeSession } from './utils.js';
 
 const STORAGE = {
@@ -225,6 +226,8 @@ class Application {
                             if (await openTypeManager()) await this.view.refreshAll();
                         },
                     },
+                    { separator: true },
+                    { label: 'Alarms...', action: () => openAlarms() },
                 ],
             },
             {
@@ -320,6 +323,9 @@ class Application {
             const menu = el('div', { class: 'menu' }, [trigger, popup]);
             trigger.addEventListener('click', (event) => {
                 event.stopPropagation();
+                // In the phone drawer every menu is already open and its name
+                // is a heading: a tap on it must not close the drawer.
+                if (this.menuBar.classList.contains('menu-open')) return;
                 const open = menu.classList.contains('open');
                 closeAll();
                 if (!open) {

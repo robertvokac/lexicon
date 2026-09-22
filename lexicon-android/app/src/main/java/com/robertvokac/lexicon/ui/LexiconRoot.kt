@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
@@ -63,6 +64,8 @@ import com.robertvokac.lexicon.auth.Identity
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.share.LaunchRequest
 import com.robertvokac.lexicon.storage.ThemePreference
+import com.robertvokac.lexicon.ui.alarms.AlarmsScreen
+import com.robertvokac.lexicon.ui.alarms.AlarmsViewModel
 import com.robertvokac.lexicon.ui.common.LocalAppContainer
 import com.robertvokac.lexicon.ui.common.lexiconViewModel
 import com.robertvokac.lexicon.ui.groups.GroupsScreen
@@ -79,6 +82,7 @@ import com.robertvokac.lexicon.ui.login.LoginScreen
 import com.robertvokac.lexicon.ui.login.LoginViewModel
 import com.robertvokac.lexicon.ui.login.StartingScreen
 import com.robertvokac.lexicon.ui.login.UnreachableScreen
+import com.robertvokac.lexicon.ui.navigation.AlarmsRoute
 import com.robertvokac.lexicon.ui.navigation.EditItemRoute
 import com.robertvokac.lexicon.ui.navigation.GraphRoute
 import com.robertvokac.lexicon.ui.navigation.GroupsRoute
@@ -214,6 +218,7 @@ private enum class Destination(val label: String) {
     Review("Review"),
     Groups("Groups"),
     Types("Types"),
+    Alarms("Alarms"),
     Tags("All tags"),
     Flags("All flags"),
     Aliases("All aliases"),
@@ -258,6 +263,7 @@ private fun MainScaffold(
             Destination.Review -> ReviewRoute
             Destination.Groups -> GroupsRoute
             Destination.Types -> TypesRoute
+            Destination.Alarms -> AlarmsRoute
             Destination.Tags -> OverviewRoute(OverviewKind.Tags.name)
             Destination.Flags -> OverviewRoute(OverviewKind.Flags.name)
             Destination.Aliases -> OverviewRoute(OverviewKind.Aliases.name)
@@ -291,6 +297,7 @@ private fun MainScaffold(
                     DrawerHeading("Manage")
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
                     DrawerEntry(Destination.Types, Icons.Filled.Category, ::go)
+                    DrawerEntry(Destination.Alarms, Icons.Filled.Alarm, ::go)
                     DrawerHeading("Overview")
                     DrawerEntry(Destination.Tags, Icons.AutoMirrored.Filled.Label, ::go)
                     DrawerEntry(Destination.Flags, Icons.Filled.Flag, ::go)
@@ -475,6 +482,9 @@ private fun LexiconNavHost(
         }
         composable<SettingsRoute> {
             SettingsScreen(lexiconViewModel { app, _ -> SettingsViewModel(app) }, onBack = back)
+        }
+        composable<AlarmsRoute> {
+            AlarmsScreen(lexiconViewModel { app, _ -> AlarmsViewModel(app) }, onBack = back)
         }
         composable<ReviewRoute> {
             ReviewScreen(

@@ -220,6 +220,10 @@ accept it; install a proper certificate instead.
 - **Manage.** Groups (add, edit, delete, with the desktop's warning that the
   items go too) and types with their fields (the item and value counts come from
   the server before anything destructive happens).
+- **Alarms.** Every alarm, the soonest first, with the date and time it goes
+  off in the phone's time zone; those already gone off are marked. **+** adds
+  one, a tap edits it: a title, a date and a time (typed, or chosen with the
+  date and time pickers) and a description. The server stores the time in UTC.
 - **Review.** The items due now, one card at a time: the title, **Show answer**
   for the content, then **Again**, **Hard**, **Good** or **Easy**, each saying
   when the item comes back. Items rated Again return in the same sitting.

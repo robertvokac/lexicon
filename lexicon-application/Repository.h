@@ -61,6 +61,12 @@ public:
   virtual Result<void> beginUnitOfWork() = 0;
   virtual Result<void> commitUnitOfWork() = 0;
   virtual Result<void> rollbackUnitOfWork() = 0;
+  // Alarms, the soonest first.
+  virtual Result<std::vector<AlarmRecord>> loadAlarms() = 0;
+  virtual Result<AlarmRecord> loadAlarm(int alarmId) = 0;
+  // Inserts an alarm with id -1, updates any other; returns its ID.
+  virtual Result<int> saveAlarm(const AlarmRecord &alarm) = 0;
+  virtual Result<void> deleteAlarm(int alarmId) = 0;
   virtual Result<std::string> importBlob(const std::string &sourcePath) = 0;
   // The same for bytes held in memory, such as a file carried in an export.
   virtual Result<std::string> importBlobData(const std::string &data) = 0;

@@ -53,6 +53,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - An Inbox for ideas: a title and plain text, saved to `Default` without a type in one step
+- Alarms: reminders with a title, a description and the date and time they go off, listed and edited in every client
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
 - A relationship graph of the items around one item, up to three links away
@@ -503,7 +504,13 @@ Theme preference is persisted between sessions.
 
 An item is due again 1, 2, 5, 12 or 30 days after its last review, for `Unknown`, `Recognized`, `Understood`, `Practiced` and `Mastered`. Items never reviewed are due at once and come after the overdue ones. The group box limits the review to one group; **Skip** leaves an item for later. The web client (`View -> Review...`) and the Android app (**Review** in the drawer) show the same queue.
 
-### 12) Editing and deletion safety notes
+### 12) Alarms
+
+`Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title and the first line of its description. Alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a small form - a title, the date and time it goes off, and a plain-text description; **Delete** asks first.
+
+Times are entered and shown in your own time zone and stored in UTC, so an alarm set on the desktop in Prague shows the same moment in the web client or on a phone elsewhere. The web client has the same dialog under `Manage -> Alarms...`, and the Android app lists alarms under **Alarms** in the drawer, with date and time pickers. Alarms are stored and travel with export and import; Lexicon does not yet ring them or send notifications.
+
+### 13) Editing and deletion safety notes
 
 - Deleting an item removes its aliases/tags/flags and related links due to cascade rules.
 - Deleting a group removes all contained items.
@@ -526,6 +533,7 @@ Core tables:
 - `tag`
 - `flag`
 - `link`
+- `alarm`
 - `log`
 - `configuration`
 
@@ -603,7 +611,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

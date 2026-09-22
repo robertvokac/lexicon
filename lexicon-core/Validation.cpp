@@ -165,6 +165,22 @@ Result<void> validateItem(const ItemRecord &item,
   }
   return {};
 }
+std::string normalizedUtcTime(std::string_view text) {
+  static const std::regex pattern(R"(^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(:\d{2})?Z$)");
+  std::cmatch match;
+  const std::string value(text);
+  if (!std::regex_match(value.c_str(), match, pattern) || !dateValid(match.str(1)) ||
+      !timeValid(match.str(2) + (match[3].matched ? match.str(3) : std::string())))
+    return {};
+  return match.str(1) + "T" + match.str(2) + (match[3].matched ? match.str(3) : ":00") + "Z";
+}
+Result<void> validateAlarm(const AlarmRecord &alarm) {
+  if (trim(alarm.title).empty())
+    return invalid("Alarm title cannot be empty.");
+  if (normalizedUtcTime(alarm.firesAt).empty())
+    return invalid("An alarm needs a time as UTC YYYY-MM-DDTHH:MM:SSZ.");
+  return {};
+}
 Result<void> validateLink(const LinkRecord &link) {
   if (link.fromItemId <= 0 || link.toItemId <= 0)
     return invalid("Both link endpoints are required.");

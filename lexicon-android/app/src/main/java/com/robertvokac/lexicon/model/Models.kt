@@ -247,10 +247,11 @@ data class ImportReport(
     val itemsSkipped: Int = 0,
     val linksCreated: Int = 0,
     val blobsImported: Int = 0,
+    val alarmsCreated: Int = 0,
     val warnings: List<String> = emptyList(),
 ) {
     val summary: String
-        get() = "Imported $itemsCreated item(s), $linksCreated link(s) and $blobsImported file(s); " +
+        get() = "Imported $itemsCreated item(s), $linksCreated link(s), $blobsImported file(s) and $alarmsCreated alarm(s); " +
             "$itemsSkipped item(s) were already here. Created $groupsCreated group(s), $typesCreated type(s) " +
             "and $fieldsCreated field(s)."
 }
@@ -308,6 +309,21 @@ internal data class ReviewRequest(val rating: ReviewRating)
 @Serializable internal data class ItemEnvelope(val item: Item)
 
 @Serializable internal data class ImportEnvelope(val report: ImportReport)
+
+/** A reminder: [firesAt] is UTC "YYYY-MM-DDTHH:MM:SSZ". */
+@Serializable
+data class Alarm(
+    val id: Int? = null,
+    val title: String,
+    val description: String = "",
+    val firesAt: String,
+)
+
+@Serializable
+data class AlarmWrite(val title: String, val description: String = "", val firesAt: String)
+
+@Serializable internal data class AlarmsEnvelope(val alarms: List<Alarm>)
+@Serializable internal data class AlarmEnvelope(val alarm: Alarm)
 
 @Serializable internal data class GroupsEnvelope(val groups: List<Group>)
 @Serializable internal data class GroupEnvelope(val group: Group)

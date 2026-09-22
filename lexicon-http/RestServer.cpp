@@ -1259,6 +1259,74 @@ void RestServer::Impl::registerRoutes() {
               "loadAliasUsage");
   });
 
+  // Alarms -----------------------------------------------------------------
+  api.Get("/api/v1/alarms", [this](const Request &, Response &response) {
+    auto alarms = guarded.with([](LexiconApplication &application) { return application.alarms.loadAlarms(); });
+    if (!alarms) {
+      respondError(response, alarms.error(), "loadAlarms");
+      return;
+    }
+    respondJson(response, 200, Json{{"alarms", toJsonArray(*alarms)}});
+  });
+
+  api.Get("/api/v1/alarms/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto alarm = guarded.with([id](LexiconApplication &application) { return application.alarms.loadAlarm(*id); });
+    if (!alarm) {
+      respondError(response, alarm.error(), "loadAlarm");
+      return;
+    }
+    respondJson(response, 200, Json{{"alarm", toJson(*alarm)}});
+  });
+
+  const auto saveAlarm = [this](AlarmRecord alarm, Response &response, int status) {
+    auto saved = guarded.with([&alarm](LexiconApplication &application) { return application.alarms.saveAlarm(alarm); });
+    if (!saved) {
+      respondError(response, saved.error(), "saveAlarm");
+      return;
+    }
+    respondJson(response, status, Json{{"alarm", toJson(*saved)}});
+  };
+
+  api.Post("/api/v1/alarms", [this, saveAlarm](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto alarm = alarmFromJson(*body);
+    if (alarm.id > 0) {
+      respondFailure(response, {400, "validation", "A new alarm must not carry an ID."});
+      return;
+    }
+    alarm.id = -1;
+    saveAlarm(std::move(alarm), response, 201);
+  });
+
+  api.Put("/api/v1/alarms/:id", [this, saveAlarm](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto alarm = alarmFromJson(*body);
+    alarm.id = *id;
+    saveAlarm(std::move(alarm), response, 200);
+  });
+
+  api.Delete("/api/v1/alarms/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) { return application.alarms.deleteAlarm(*id); });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteAlarm");
+      return;
+    }
+    respondNoContent(response);
+  });
+
   // Export and import --------------------------------------------------------
   api.Get("/api/v1/export", [this](const Request &request, Response &response) {
     const auto blobs = queryValue(request, "blobs");
