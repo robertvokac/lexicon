@@ -89,7 +89,9 @@ cmake --build build --target Lexicon -j
     <pre><code>cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLEXICON_BUILD_DESKTOP=OFF
 cmake --build build --target LexiconServer -j
 ./build/LexiconServer auth set-user --database ~/lexicon/lexicon.db
-./build/LexiconServer --database ~/lexicon/lexicon.db --allowed-origin http://127.0.0.1:8080</code></pre>
+./build/LexiconServer --database ~/lexicon/lexicon.db --allowed-origin http://127.0.0.1:8080
+# or let the server serve the client too, on its own port:
+./build/LexiconServer --database ~/lexicon/lexicon.db --web-dir lexicon-web</code></pre>
     <p>The web client in <code>lexicon-web/</code> is static files: serve them with any web server, or locally with <code>python3 tools/serve-web.py --port 8080</code>. The Android app builds with <code>./gradlew assembleDebug</code> in <code>lexicon-android/</code>. <code>docs/server.md</code>, <code>lexicon-web/README.md</code> and <code>lexicon-android/README.md</code> cover deployment, TLS, backups and signing.</p>
 
     <h2 id="tests">Tests</h2>

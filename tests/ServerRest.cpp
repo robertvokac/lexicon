@@ -3,13 +3,19 @@
 #include "support/HttpTestClient.h"
 #include "support/ServerHarness.h"
 
+#include "Utf8Path.h"
+
 #include <nlohmann/json.hpp>
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
 
 using lexicontest::Checks;
+using lexicontest::HarnessOptions;
 using lexicontest::HttpResponse;
 using lexicontest::HttpTestClient;
 using lexicontest::ServerHarness;
@@ -1100,6 +1106,96 @@ void checkQuickAdd(Checks &checks) {
   checks.expect(twin.body.find("already exists in this group") != std::string::npos,
                 "and the answer says the item already exists");
 }
+// The static client the server can serve itself: --web-dir in the config.
+void checkWebClient(Checks &checks) {
+  namespace fs = std::filesystem;
+  const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto root = fs::temp_directory_path() / ("lexicon-web-test-" + std::to_string(unique));
+  const auto web = root / "lexicon-web";
+  std::error_code error;
+  fs::create_directories(web / "js", error);
+  const auto write = [](const fs::path &path, const std::string &text) {
+    std::ofstream file(path, std::ios::binary);
+    file << text;
+  };
+  write(web / "index.html", "<!DOCTYPE html><title>Lexicon</title><script src=\"js/app.js\"></script>");
+  write(web / "js" / "app.js", "// the client\n");
+  write(root / "secret.txt", "not for the web");
+
+  HarnessOptions options;
+  options.webDirectory = lexicon::pathToUtf8(web);
+  ServerHarness harness(options);
+  checks.expect(harness.started(), "the server starts with a web directory: " + harness.startupError());
+  if (!harness.started())
+    return;
+  HttpTestClient client("127.0.0.1", harness.port());
+
+  const auto page = client.get("/web/");
+  checks.expectEqual(page.status, 200, "the web client is served at /web/");
+  checks.expect(page.body.find("<title>Lexicon</title>") != std::string::npos,
+                "and it is the index page");
+  checks.expect(page.header("Content-Type").find("text/html") != std::string::npos,
+                "with its own content type, got '" + page.header("Content-Type") + "'");
+  checks.expect(page.header("Content-Security-Policy").find("script-src 'self'") != std::string::npos,
+                "a policy that lets the client's own scripts run");
+  checks.expectEqual(page.header("Cache-Control"), "no-cache",
+                     "a browser revalidates the client instead of keeping an old copy");
+  checks.expectEqual(client.get("/web/js/app.js").status, 200, "its files are served too");
+
+  const auto bare = client.get("/web");
+  checks.expectEqual(bare.status, 301, "/web without the slash redirects");
+  checks.expectEqual(bare.header("Location"), "/web/", "to /web/, so relative URLs resolve");
+  const auto root_ = client.get("/");
+  checks.expectEqual(root_.status, 302, "the root redirects to the client");
+  checks.expectEqual(root_.header("Location"), "/web/", "at /web/");
+
+  const auto config = client.get("/web/config.js");
+  checks.expectEqual(config.status, 200, "a deployment without config.js gets one");
+  checks.expect(config.body.find("window.location.origin") != std::string::npos,
+                "pointing the client at the origin it was served from");
+
+  // Nothing outside the directory, whatever the path looks like.
+  for (const char *path : {"/web/../secret.txt", "/web/%2e%2e/secret.txt",
+                           "/web/../lexicon-web/index.html"}) {
+    const auto escape = client.get(path);
+    checks.expect(escape.status != 200, std::string("no escape through ") + path +
+                                            ", got " + std::to_string(escape.status));
+  }
+  // Serving files changed nothing about the API.
+  checks.expectEqual(client.get("/api/v1/groups").status, 401,
+                     "the API still needs a token");
+  const auto origin = "http://127.0.0.1:" + std::to_string(harness.port());
+  const auto sameOrigin = client.post(
+      "/api/v1/auth/login",
+      Json{{"username", harness.options().username},
+           {"password", harness.options().password}}.dump(),
+      "application/json", {{"Origin", origin}});
+  checks.expectEqual(sameOrigin.status, 200,
+                     "the client served here may log in, though a browser sends Origin");
+  const auto foreign = client.post(
+      "/api/v1/auth/login",
+      Json{{"username", harness.options().username},
+           {"password", harness.options().password}}.dump(),
+      "application/json", {{"Origin", "https://evil.example"}});
+  checks.expectEqual(foreign.status, 403, "another site is still refused");
+
+  // Without the option the server serves no files at all.
+  ServerHarness apiOnly;
+  HttpTestClient bareClient("127.0.0.1", apiOnly.port());
+  checks.expectEqual(bareClient.get("/web/").status, 404,
+                     "without --web-dir there is nothing at /web/");
+  checks.expectEqual(bareClient.get("/").status, 404, "and the root stays an API 404");
+
+  // A deployment that brings its own config.js keeps it.
+  write(web / "config.js", "window.LEXICON_CONFIG = { apiBaseUrl: 'https://api.example' };\n");
+  ServerHarness withConfig(options);
+  HttpTestClient configured("127.0.0.1", withConfig.port());
+  const auto own = configured.get("/web/config.js");
+  checks.expect(own.body.find("https://api.example") != std::string::npos,
+                "a config.js in the directory wins over the generated one");
+
+  fs::remove_all(root, error);
+}
 } // namespace
 
 int main() {
@@ -1117,5 +1213,6 @@ int main() {
   checkGraph(checks);
   checkAlarms(checks);
   checkImages(checks);
+  checkWebClient(checks);
   return checks.summarize("server_rest");
 }

@@ -168,6 +168,57 @@ class Api:
         return self.call("GET", f"/items/{matches[0]['id']}")["item"] if matches else None
 
 
+q = json.dumps
+
+
+def wait_for_health(base, what="LexiconServer"):
+    deadline = time.time() + 20
+    while True:
+        try:
+            urllib.request.urlopen(base + "/api/v1/health", timeout=2).read()
+            return
+        except OSError:
+            if time.time() > deadline:
+                sys.exit(f"{what} did not start.")
+            time.sleep(0.2)
+
+
+def check_served_client(browser, binary, database, chrome_free_port=free_port):
+    """--web-dir: the server serves the client itself, on its own port and origin."""
+    port = chrome_free_port()
+    base = f"http://127.0.0.1:{port}"
+    process = subprocess.Popen(
+        [binary, "--database", str(database), "--port", str(port), "--web-dir", str(WEB),
+         "--no-session-file", "--quiet"], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    try:
+        wait_for_health(base, "LexiconServer with --web-dir")
+        # The root lands on the client, without any --allowed-origin.
+        browser.navigate(base + "/")
+        browser.wait("!!document.getElementById('login-server')", "the client the server serves")
+        browser.js("localStorage.clear(); sessionStorage.clear(); true")
+        browser.navigate(base + "/")
+        browser.wait("document.readyState === 'complete' && !document.getElementById('login-view').hidden",
+                     "the login form")
+        where = browser.js("window.location.pathname")
+        if where != "/web/":
+            raise Failure(f"the root led to '{where}', not to /web/.")
+        prefilled = browser.js("document.getElementById('login-server').value")
+        if prefilled != base:
+            raise Failure(f"the client points at '{prefilled}', not at the server that served it.")
+        browser.js(f"""(() => {{ const set = (id, value) => {{ const field = document.getElementById(id);
+            field.value = value; field.dispatchEvent(new Event('input', {{bubbles: true}})); }};
+            set('login-username', {q(USER)}); set('login-password', {q(PASSWORD)});
+            document.getElementById('login-submit').click(); return true; }})()""")
+        browser.wait("document.getElementById('login-view').hidden", "the main view of the served client")
+        if browser.errors:
+            raise Failure(f"JavaScript error: {browser.errors[0]}")
+        browser.js("document.getElementById('logout-button').click(); true")
+        browser.wait("!document.getElementById('login-view').hidden", "the login form again")
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+
 def run(browser, web, server):
     b = browser
     q = json.dumps
@@ -407,18 +458,13 @@ def main():
         server_process = subprocess.Popen(
             [options.server, "--database", str(database), "--port", str(port), "--allowed-origin", web.rstrip("/"),
              "--no-session-file", "--quiet"], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        deadline = time.time() + 20
-        while True:
-            try:
-                urllib.request.urlopen(server + "/api/v1/health", timeout=2).read()
-                break
-            except OSError:
-                if time.time() > deadline:
-                    sys.exit("LexiconServer did not start.")
-                time.sleep(0.2)
+        wait_for_health(server)
         browser = Browser(chrome, work / "profile")
         try:
             passed = run(browser, web, server)
+            check_served_client(browser, options.server, database)
+            print("ok  the server serves the client itself")
+            passed += 1
         except Failure as failure:
             shot = pathlib.Path(options.artifacts) / "web-e2e-failure.png"
             try:

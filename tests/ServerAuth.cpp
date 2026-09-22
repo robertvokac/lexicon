@@ -345,6 +345,34 @@ void checkConfigurationGuards(Checks &checks) {
   checks.expect(lexicon::http::validate(badOrigin).has_value(),
                 "an exact origin is accepted");
 
+  // --web-dir serves a copy of lexicon-web, and nothing that holds the
+  // dictionary: everything under it is public.
+  namespace fs = std::filesystem;
+  const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto root = fs::temp_directory_path() / ("lexicon-webdir-test-" + std::to_string(unique));
+  std::error_code ignored;
+  fs::create_directories(root / "client", ignored);
+  ServerConfig web;
+  web.databasePath = lexicon::pathToUtf8(root / "lexicon.db");
+  web.webDirectory = lexicon::pathToUtf8(root / "client");
+  checks.expect(!lexicon::http::validate(web).has_value(),
+                "a web directory without index.html is refused");
+  { std::ofstream page(root / "client" / "index.html"); page << "<!DOCTYPE html>"; }
+  checks.expect(lexicon::http::validate(web).has_value(),
+                "a copy of the client is accepted");
+  web.webDirectory = lexicon::pathToUtf8(root);
+  { std::ofstream page(root / "index.html"); page << "<!DOCTYPE html>"; }
+  checks.expect(!lexicon::http::validate(web).has_value(),
+                "a directory holding the database is refused");
+  ServerConfig missing;
+  missing.webDirectory = lexicon::pathToUtf8(root / "nowhere");
+  checks.expect(!lexicon::http::validate(missing).has_value(),
+                "a web directory that does not exist is refused");
+  fs::remove_all(root, ignored);
+  const auto served = lexicon::http::parseCommandLine({"--web-dir", "/srv/lexicon-web"});
+  checks.expect(served.has_value() && served->config.webDirectory == "/srv/lexicon-web",
+                "--web-dir is parsed");
+
   const auto parsed = lexicon::http::parseCommandLine(
       {"--port", "9000", "--allowed-origin", "https://a.example",
        "--allowed-origin", "https://b.example"});

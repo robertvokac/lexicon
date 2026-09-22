@@ -4,8 +4,11 @@
 SQLite database as the desktop client, composes the same
 `LexiconApplication` services, and exposes them as JSON under `/api/v1`.
 
-> **LexiconServer never serves lexicon-web.** It answers REST calls and nothing
-> else. The web client is static content you deploy wherever you like.
+> **LexiconServer serves no web assets unless you ask it to.** By default it
+> answers REST calls and nothing else, and the web client is static content you
+> deploy wherever you like. With `--web-dir DIR` it also serves that one
+> directory - a copy of `lexicon-web` - read-only under `/web` on the same
+> port; see [Serving the web client](#serving-the-web-client).
 
 ## Architecture
 
@@ -119,7 +122,43 @@ LexiconServer --database ~/lexicon/lexicon.db \
 
 Defaults: `127.0.0.1:8628`, no TLS, no allowed origins. Without at least one
 `--allowed-origin`, browser clients on another origin are refused - that is
-intentional, not a bug.
+intentional, not a bug. A client the server serves itself is not on another
+origin, so it needs no `--allowed-origin`; see below.
+
+## Serving the web client
+
+```bash
+LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web
+```
+
+That is the whole installation for a personal setup: one process, one port.
+
+- The directory is served **read-only under `/web`**, `GET` and `HEAD` only.
+  `/web` redirects to `/web/`, and `/` redirects to `/web/` so opening the
+  port in a browser lands on the client.
+- The client then talks to `/api/v1` **on the same origin**, so no
+  `--allowed-origin` is needed and no CORS preflight happens. (A browser sends
+  `Origin` even on same-origin writes; the server recognises its own `Host`
+  and accepts it. Another site is still refused.)
+- **The API URL configures itself.** `index.html` loads `config.js`; when the
+  directory has none, the server answers that one path with
+  `window.LEXICON_CONFIG = { apiBaseUrl: window.location.origin }`. A
+  `config.js` you put in the directory wins over it, because files are served
+  before routes.
+- Responses carry `Cache-Control: no-cache` and an `ETag`, so an upgraded
+  server never leaves a stale client in a browser cache, and a
+  `Content-Security-Policy` that matches the one the page sets for itself plus
+  `frame-ancestors 'none'`.
+- Only that directory is reachable: `..` in a path is refused, and a symlink
+  that leaves the directory is refused as well.
+- The server checks the directory at startup: it must exist, must hold
+  `index.html`, and must not hold the database, the credentials file, the
+  session file or the `blobs` directory - everything under it is public to
+  anyone who can reach the port.
+
+Behind a reverse proxy nothing changes: proxy the whole origin, and `/web` and
+`/api/v1` arrive together. To serve the client from a different host instead,
+leave `--web-dir` off and use `--allowed-origin`.
 
 ## Options
 
@@ -148,6 +187,7 @@ intentional, not a bug.
 | `--login-failure-window S` | `900` | Rate limit window |
 | `--login-max-failures-total N` | `200` | Failed logins from all clients before 429 (0 disables) |
 | `--login-max-parallel-hashes N` | `2` | Password derivations allowed to run at once |
+| `--web-dir DIR` | off | Serve this copy of `lexicon-web` at `/web` on the same port |
 | `--backup-dir DIR` | off | Back up automatically into this directory (see below) |
 | `--backup-interval H` | `24` | Hours between automatic backups |
 | `--backup-keep N` | `14` | Backups kept; older ones are removed |

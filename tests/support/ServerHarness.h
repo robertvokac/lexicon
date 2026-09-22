@@ -28,6 +28,8 @@ struct HarnessOptions {
   bool configureCredentials = true;
   std::size_t maxJsonBytes = 64 * 1024;
   std::size_t maxBlobBytes = 1024 * 1024;
+  // Served read-only under /web, as --web-dir does.
+  std::string webDirectory;
 };
 
 class ServerHarness {

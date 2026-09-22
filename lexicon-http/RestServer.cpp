@@ -31,6 +31,22 @@ using httplib::Response;
 constexpr int kApiVersion = 1;
 constexpr const char *kJsonContentType = "application/json; charset=utf-8";
 constexpr const char *kBinaryContentType = "application/octet-stream";
+// Where the static web client lives when --web-dir is given.
+constexpr const char *kWebMount = "/web";
+// What the client itself asks for (lexicon-web/index.html) plus
+// frame-ancestors, which a page cannot set for itself. Both policies apply,
+// so they must agree: a browser enforces every policy it is given.
+constexpr const char *kWebContentSecurityPolicy =
+    "default-src 'self'; script-src 'self'; style-src 'self'; "
+    "img-src 'self' data: blob: http: https:; connect-src 'self' http: https:; "
+    "object-src 'none'; base-uri 'none'; form-action 'none'; "
+    "frame-ancestors 'none'";
+
+// The mount itself and everything under it, but not "/website".
+bool isWebPath(const std::string &path) {
+  const std::string mount = kWebMount;
+  return path == mount || path.starts_with(mount + "/");
+}
 
 std::string lowerAscii(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(), [](char ch) {
@@ -38,6 +54,28 @@ std::string lowerAscii(std::string value) {
         std::tolower(static_cast<unsigned char>(ch)));
   });
   return value;
+}
+
+// The origin a browser gives a page this server served: the scheme it
+// listens with and the Host it was asked for. Behind a proxy that terminates
+// TLS the public scheme arrives in X-Forwarded-Proto, which is believed only
+// where a trusted proxy is configured. An Origin header cannot be forged by
+// a page, so matching it against this server's own name identifies our own
+// client, not another site.
+std::string ownOrigin(const Request &request, bool tls,
+                      bool trustForwardedProto) {
+  const auto host = request.get_header_value("Host");
+  if (host.empty())
+    return {};
+  bool secure = tls;
+  if (trustForwardedProto) {
+    const auto forwarded = lowerAscii(request.get_header_value("X-Forwarded-Proto"));
+    if (forwarded == "https")
+      secure = true;
+    else if (forwarded == "http")
+      secure = false;
+  }
+  return (secure ? "https://" : "http://") + host;
 }
 
 // "application/json; charset=utf-8" and "application/json" are accepted;
@@ -233,6 +271,12 @@ bool RestServer::Impl::applyCors(const Request &request,
   if (origin.empty())
     return true;
   response.set_header("Vary", "Origin");
+  // A browser sends Origin with every write request, same-origin ones too.
+  // The client served at /web is then refused unless its own origin counts
+  // as allowed - and being same-origin, it needs no CORS header.
+  if (origin == ownOrigin(request, config.tlsEnabled(),
+                          !config.trustedProxies.empty()))
+    return true;
   if (allowedOrigins.find(origin) == allowedOrigins.end())
     return false;
   // Exact origin only. A wildcard would expose the authenticated API to any
@@ -277,18 +321,36 @@ void RestServer::Impl::createServer() {
     server->set_trusted_proxies(config.trustedProxies);
 
   const bool tls = config.tlsEnabled();
-  server->set_pre_routing_handler([this, tls](const Request &request,
-                                              Response &response) {
+  const bool servesWeb = !config.webDirectory.empty();
+  if (servesWeb && !server->set_mount_point(kWebMount, config.webDirectory))
+    std::cerr << "lexicon-http: cannot serve " << config.webDirectory
+              << " at " << kWebMount << '\n';
+  server->set_pre_routing_handler([this, tls, servesWeb](const Request &request,
+                                                         Response &response) {
     response.set_header("X-Content-Type-Options", "nosniff");
-    // The API returns private data only; no intermediary may store it.
-    response.set_header("Cache-Control", "no-store");
     response.set_header("Referrer-Policy", "no-referrer");
     response.set_header("X-Frame-Options", "DENY");
-    response.set_header("Content-Security-Policy",
-                        "default-src 'none'; frame-ancestors 'none'");
     if (tls)
       response.set_header("Strict-Transport-Security",
                           "max-age=31536000; includeSubDomains");
+    // The web client's own files: unlike the API they are public, they must
+    // be allowed to run their scripts and styles, and a browser revalidates
+    // them so an upgraded server never leaves an old client in a cache.
+    if (servesWeb && isWebPath(request.path)) {
+      response.set_header("Cache-Control", "no-cache");
+      response.set_header("Content-Security-Policy", kWebContentSecurityPolicy);
+      // Without the trailing slash every relative URL in the page would
+      // resolve against the root.
+      if (request.path == kWebMount) {
+        response.set_redirect(std::string(kWebMount) + "/", 301);
+        return httplib::Server::HandlerResponse::Handled;
+      }
+      return httplib::Server::HandlerResponse::Unhandled;
+    }
+    // The API returns private data only; no intermediary may store it.
+    response.set_header("Cache-Control", "no-store");
+    response.set_header("Content-Security-Policy",
+                        "default-src 'none'; frame-ancestors 'none'");
     const bool originAllowed = applyCors(request, response);
     if (request.method == "OPTIONS") {
       if (!originAllowed) {
@@ -390,6 +452,25 @@ void RestServer::Impl::createServer() {
 void RestServer::Impl::registerRoutes() {
   httplib::Server &api = *server;
   publicRoutes = {"/api/v1/health", "/api/v1/auth/login"};
+
+  // The static web client ------------------------------------------------
+  if (!config.webDirectory.empty()) {
+    publicRoutes.insert("/");
+    publicRoutes.insert("/web/config.js");
+    // A deployment may carry its own config.js, and a real file wins: the
+    // file handler runs before the routes. Without one, the client served
+    // here talks to the origin it was loaded from.
+    api.Get("/web/config.js", [](const Request &, Response &response) {
+      response.set_content(
+          "// Served by LexiconServer: the API is on this same origin.\n"
+          "window.LEXICON_CONFIG = { apiBaseUrl: window.location.origin };\n",
+          "application/javascript; charset=utf-8");
+    });
+    // Opening the port in a browser should land on the client, not on a 404.
+    api.Get("/", [](const Request &, Response &response) {
+      response.set_redirect(std::string(kWebMount) + "/", 302);
+    });
+  }
 
   // Health ----------------------------------------------------------------
   api.Get("/api/v1/health", [](const Request &, Response &response) {

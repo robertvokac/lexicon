@@ -73,7 +73,7 @@
 LexiconServer --database ~/lexicon/lexicon.db \
   --allowed-origin http://127.0.0.1:8080 \
   --backup-dir ~/lexicon-backups</code></pre>
-    <p>It listens on <code>127.0.0.1:8628</code> by default and answers REST calls under <code>/api/v1</code>. A browser client served from another address needs that address as an <code>--allowed-origin</code>; without one it is refused on purpose. <code>--backup-dir</code> turns on <a href="backup-and-troubleshooting.html#automatic">automatic backups</a>.</p>
+    <p>It listens on <code>127.0.0.1:8628</code> by default and answers REST calls under <code>/api/v1</code>. A browser client served from another address needs that address as an <code>--allowed-origin</code>; without one it is refused on purpose — unless the server serves the client itself, see below. <code>--backup-dir</code> turns on <a href="backup-and-troubleshooting.html#automatic">automatic backups</a>.</p>
 
     <div class="callout callout-warning">
       <span class="callout-icon">🔒</span>
@@ -81,7 +81,10 @@ LexiconServer --database ~/lexicon/lexicon.db \
     </div>
 
     <h2 id="web">2. The web client in a browser</h2>
-    <p><code>lexicon-web/</code> is static content — HTML, CSS and JavaScript with no build step. Serve the directory with any web server, open it, and sign in with the server's address, your user name and your password.</p>
+    <p><code>lexicon-web/</code> is static content — HTML, CSS and JavaScript with no build step. The shortest way to it is to let the server serve it:</p>
+    <pre><code>LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web</code></pre>
+    <p>Open <code>http://127.0.0.1:8628/</code> and you are on the client: it is served read-only under <code>/web</code> on the same port, it finds the API by itself because it is the same address, and <code>--allowed-origin</code> is not needed at all. One process is then the whole installation.</p>
+    <p>You can also copy the directory to any web server instead — GitHub Pages, nginx, a Raspberry Pi. Then tell the server that address with <code>--allowed-origin</code>, and sign in with the server's address, your user name and your password.</p>
     <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
 
     <div class="phone-shots">

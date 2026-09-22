@@ -45,6 +45,20 @@ cross-site scripting bugs are born. Everything else is application code.
 
 ## Deploy
 
+### The short way: let LexiconServer serve it
+
+```bash
+LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web
+```
+
+The client is then served read-only at `/web` on the server's own port, and
+`/` redirects there. Being same-origin it needs no `--allowed-origin`, no
+`config.js` - the server supplies one pointing at its own origin - and no
+second web server. The headers below are sent for you. See
+[docs/server.md](../docs/server.md#serving-the-web-client).
+
+### The static way: any web server
+
 1. Copy the whole directory to any static HTTP(S) host:
 
    ```bash

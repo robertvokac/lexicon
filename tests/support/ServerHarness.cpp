@@ -104,6 +104,7 @@ ServerHarness::ServerHarness(HarnessOptions options)
   config.loginLimits = options_.loginLimits;
   config.maxJsonBytes = options_.maxJsonBytes;
   config.maxBlobBytes = options_.maxBlobBytes;
+  config.webDirectory = options_.webDirectory;
   config.requestLogging = false;
 
   server_ = std::make_unique<lexicon::http::RestServer>(config, *application_,

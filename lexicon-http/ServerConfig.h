@@ -32,6 +32,9 @@ struct ServerConfig {
   int keepAliveTimeoutSeconds = 5;
   std::size_t keepAliveMaxCount = 20;
   bool requestLogging = true;
+  // The static web client (lexicon-web), served read-only under /web on this
+  // same port. Off while empty.
+  std::string webDirectory;
   // Automatic backups: off while empty.
   std::string backupDirectory;
   int backupIntervalHours = 24;
@@ -52,6 +55,10 @@ Result<void> validate(const ServerConfig &config);
 // Refuses a backup directory inside the Blob store, where its files would be
 // taken for Blobs.
 Result<void> validateBackupDirectory(const ServerConfig &config);
+// Refuses a web directory that is not a copy of lexicon-web, or that holds
+// the database, the credentials, the sessions or the Blobs - everything in it
+// is served to anyone who can reach the port.
+Result<void> validateWebDirectory(const ServerConfig &config);
 
 enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Backup, Help, Version };
 

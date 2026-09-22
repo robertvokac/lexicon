@@ -113,6 +113,8 @@ Result<void> validate(const ServerConfig &config) {
     if (!looksLikeOrigin(origin))
       return invalid("--allowed-origin expects an exact origin such as "
                      "https://lexicon.example.com, got '" + origin + "'.");
+  if (auto web = validateWebDirectory(config); !web)
+    return web;
   return validateBackupDirectory(config);
 }
 
@@ -130,6 +132,39 @@ Result<void> validateBackupDirectory(const ServerConfig &config) {
   return {};
 }
 
+Result<void> validateWebDirectory(const ServerConfig &config) {
+  if (config.webDirectory.empty())
+    return {};
+  std::error_code error;
+  const auto web = fs::weakly_canonical(fs::absolute(utf8Path(config.webDirectory), error), error);
+  if (error)
+    return invalid("Cannot resolve --web-dir: " + error.message());
+  if (!fs::is_directory(web, error))
+    return invalid("--web-dir must be a directory, and " + pathToUtf8(web) +
+                   " is not one.");
+  if (!fs::is_regular_file(web / "index.html", error))
+    return invalid("--web-dir must be a copy of lexicon-web, and " +
+                   pathToUtf8(web) + " has no index.html.");
+  // Everything under the directory is served to anyone who reaches the port,
+  // so the dictionary and its secrets must not be in it.
+  const auto databaseDirectory = fs::absolute(utf8Path(config.databasePath), error).parent_path();
+  const auto within = [&](const fs::path &candidate) {
+    const auto resolved = fs::weakly_canonical(candidate, error);
+    const auto [end, _] = std::mismatch(web.begin(), web.end(), resolved.begin(), resolved.end());
+    return end == web.end();
+  };
+  for (const auto &secret : {fs::absolute(utf8Path(config.databasePath), error),
+                             utf8Path(config.resolvedAuthFilePath()),
+                             utf8Path(config.resolvedSessionFilePath()),
+                             databaseDirectory / "blobs"})
+    if (within(fs::absolute(secret, error)))
+      return invalid("--web-dir " + pathToUtf8(web) +
+                     " holds the dictionary or its credentials; everything in "
+                     "it is served to anyone who can reach the port. Point it "
+                     "at a copy of lexicon-web instead.");
+  return {};
+}
+
 std::string usageText() {
   return R"(LexiconServer - REST/JSON API for Lexicon.
 
@@ -142,8 +177,11 @@ Usage:
   LexiconServer backup --backup-dir DIR [--backup-keep N] [options]
   LexiconServer --help | --version
 
-The server exposes JSON under /api/v1 only. It never serves HTML, CSS,
-JavaScript or any other web asset; deploy lexicon-web on a static host.
+The server exposes JSON under /api/v1. With --web-dir it also serves that
+directory - a copy of lexicon-web - read-only under /web on the same port,
+which needs no --allowed-origin because the client is then same-origin.
+Without it the server answers REST calls only; deploy lexicon-web wherever
+you like.
 
 Options:
   --database PATH            SQLite database file (default: lexicon.db)
@@ -177,6 +215,8 @@ Options:
   --login-max-parallel-hashes N
                              Password derivations allowed to run at once
                              (default: 2)
+  --web-dir DIR              Serve this copy of lexicon-web at /web on the
+                             same port (off unless given)
   --backup-dir DIR           Back up the database, an export and the files here
                              (off unless given; see docs/server.md)
   --backup-interval H        Hours between automatic backups (default: 24)
@@ -277,6 +317,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.allowedOrigins.push_back(*value);
     else if (option == "--trusted-proxy")
       parsed.config.trustedProxies.push_back(*value);
+    else if (option == "--web-dir")
+      parsed.config.webDirectory = *value;
     else if (option == "--backup-dir")
       parsed.config.backupDirectory = *value;
     else {

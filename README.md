@@ -326,7 +326,7 @@ Qt is limited to the frontend and conversion target so another client can use co
                                      static lexicon-web, lexicon-android
 ```
 
-**`LexiconServer` never serves `lexicon-web`.** The server answers versioned REST/JSON under `/api/v1` and nothing else; the web client is static content deployed separately, possibly on a completely different host.
+The server answers versioned REST/JSON under `/api/v1`. It serves no web assets unless asked to: with `--web-dir DIR` it also serves that directory - a copy of `lexicon-web` - read-only under `/web` on the same port, which is the shortest way to a working browser client. Without it the web client is static content deployed separately, possibly on a completely different host.
 
 Qt-free backend build and tests:
 
@@ -365,9 +365,22 @@ domain endpoint, hashes the password with scrypt, rate limits failed logins,
 and refuses to serve password authentication over plaintext HTTP on a public
 address unless you override it explicitly.
 
+`--web-dir` serves the web client from the same port, so one process is the
+whole installation:
+
+```bash
+LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web
+# http://127.0.0.1:8628/ redirects to /web/, and the client talks to /api/v1
+# on the same origin - no --allowed-origin, no second web server.
+```
+
+Only that directory is served, read-only, and the server refuses one that
+holds the database, the credentials, the sessions or the Blobs.
+
 `lexicon-web/` is the browser client: HTML, CSS and vanilla JavaScript modules
 with no bundler, no transpiler and no `npm install`. Copy the directory to any
-static host, point it at the API and log in. It reproduces the desktop
+static host - or hand it to `LexiconServer --web-dir` - point it at the API and
+log in. It reproduces the desktop
 workflows - the filtered item table, the six-tab item editor, group and type
 management, the overview dialogs, Markdown editing with live preview, and light
 and dark themes - and adapts to phones with a responsive layout.
