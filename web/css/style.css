@@ -299,7 +299,9 @@ a.card-link h3 { color: var(--accent); }
 .docs-sidebar li a.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 
 @media (max-width: 820px) {
-  .docs-layout { grid-template-columns: 1fr; gap: 1.5rem; }
+  /* minmax(0, 1fr), or a long line in the content widens the whole page */
+  .docs-layout { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .docs-sidebar, .docs-content { min-width: 0; }
   .docs-sidebar nav { position: static; max-height: none; }
 }
 
