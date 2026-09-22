@@ -72,7 +72,7 @@ void applyMigrations(const Connection &db) {
             " id INTEGER PRIMARY KEY AUTOINCREMENT,"
             " table_name TEXT NOT NULL,"
             " record_id INTEGER NOT NULL,"
-            " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted, 4=read
+            " log_type INTEGER NOT NULL," // 1=created, 2=updated, 3=deleted, 4=read, 5=reviewed
             " happened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ");"
         }},
@@ -279,6 +279,12 @@ void applyMigrations(const Connection &db) {
             // a client saving an item it loaded earlier can be told that
             // someone else changed it in the meantime.
             "ALTER TABLE item ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;"
+        }},
+        {22, {
+            // When the item was last reviewed, as UTC "YYYY-MM-DDTHH:MM:SSZ".
+            // NULL for an item never reviewed.
+            "ALTER TABLE item ADD COLUMN reviewed_at TEXT;",
+            "CREATE INDEX idx_item_reviewed_at ON item(reviewed_at);"
         }}
     };
 

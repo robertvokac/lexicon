@@ -59,6 +59,11 @@ constexpr std::array<std::pair<FieldDataType, const char *>, 10>
                          {FieldDataType::Enum, "Enum"},
                          {FieldDataType::Blob, "Blob"},
                          {FieldDataType::Other, "Other"}}};
+constexpr std::array<std::pair<ReviewRating, const char *>, 4> kReviewRatingNames{
+    {{ReviewRating::Again, "Again"},
+     {ReviewRating::Hard, "Hard"},
+     {ReviewRating::Good, "Good"},
+     {ReviewRating::Easy, "Easy"}}};
 constexpr std::array<std::pair<SortOrder, const char *>, 2> kSortOrderNames{
     {{SortOrder::Ascending, "Ascending"},
      {SortOrder::Descending, "Descending"}}};
@@ -133,6 +138,9 @@ std::optional<FieldDataType> fieldDataTypeFromName(std::string_view text) {
 }
 std::optional<SortOrder> sortOrderFromName(std::string_view text) {
   return lookupValue(kSortOrderNames, text);
+}
+std::optional<ReviewRating> reviewRatingFromName(std::string_view text) {
+  return lookupValue(kReviewRatingNames, text);
 }
 
 const Json &requireObject(const Json &json, const char *what) {
@@ -282,7 +290,9 @@ Json toJson(const ItemRecord &item) {
       {"understanding", name(item.understanding)},
       {"pinned", item.pinned},
       {"content", item.content},
-      {"revision", item.revision}};
+      {"revision", item.revision},
+      {"reviewedAt", item.reviewedAt.empty() ? Json(nullptr) : Json(item.reviewedAt)},
+      {"reviewDueAt", item.reviewDueAt.empty() ? Json(nullptr) : Json(item.reviewDueAt)}};
 }
 
 Json toJson(const UsageValueRecord &usage) {
@@ -363,6 +373,9 @@ ItemRecord itemFromJson(const Json &json) {
   item.pinned = optionalBool(json, "pinned", false);
   // The revision the client based its edit on; absent or 0 skips the check.
   item.revision = std::max(0, optionalInt(json, "revision", 0));
+  // Kept when a new item is created, so an import carries the review
+  // history; a save of an existing item never changes it.
+  item.reviewedAt = optionalString(json, "reviewedAt");
   item.status = ItemStatus::None;
   if (member(json, "status") != nullptr)
     item.status = requiredEnum<ItemStatus>(json, "status", itemStatusFromName,

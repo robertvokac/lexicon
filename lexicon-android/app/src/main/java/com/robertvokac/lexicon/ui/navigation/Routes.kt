@@ -33,3 +33,6 @@ data class OverviewRoute(val kind: String)
 
 @Serializable
 data object SettingsRoute
+
+@Serializable
+data object ReviewRoute

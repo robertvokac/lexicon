@@ -209,6 +209,7 @@ Everything below behaves the same way in both:
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |
 | Light and dark themes | the same, stored per browser |
 | `File -> Export...` and `File -> Import...` | the same, as a download and an upload |
+| `View -> Review...` with Again, Hard, Good and Easy | the same cards and keys 1 to 4, Space shows the answer |
 | Resizable split between the item list and the preview | a draggable splitter whose position is remembered |
 | `CodeHighlighter` for `cpp` code blocks: keywords, strings, comments | the same colours in both themes, plus preprocessor directives and `#include <header>` |
 

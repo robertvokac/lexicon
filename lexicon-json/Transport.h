@@ -3,6 +3,7 @@
 // or lexicon-application.
 #include "Records.h"
 #include "Result.h"
+#include "Review.h"
 
 #include <nlohmann/json.hpp>
 
@@ -43,6 +44,7 @@ std::optional<UnderstandingLevel> understandingFromName(std::string_view name);
 std::optional<LinkType> linkTypeFromName(std::string_view name);
 std::optional<FieldDataType> fieldDataTypeFromName(std::string_view name);
 std::optional<SortOrder> sortOrderFromName(std::string_view name);
+std::optional<ReviewRating> reviewRatingFromName(std::string_view name);
 
 // Records to JSON.
 Json toJson(const GroupRecord &group);

@@ -1,5 +1,6 @@
 #pragma once
 #include "Repository.h"
+#include "Review.h"
 #include "Validation.h"
 
 namespace lexicon {
@@ -197,6 +198,22 @@ private:
   Repository &repository_;
 };
 
+class ReviewService {
+public:
+  explicit ReviewService(Repository &repository) : repository_(repository) {}
+  // The items due for review now; groupId <= 0 means every group.
+  Result<std::vector<ItemRecord>> queue(int groupId, int limit) {
+    return repository_.loadReviewQueue(groupId, limit);
+  }
+  Result<int> countDue(int groupId) { return repository_.countDueItems(groupId); }
+  // Moves the item's understanding by the rating, records the review, and
+  // returns the item as it is now, with its next due date.
+  Result<ItemRecord> review(ItemId id, ReviewRating rating);
+
+private:
+  Repository &repository_;
+};
+
 // A whole dictionary as it travels between databases. The IDs are those of
 // the exporting database; they only connect the records of one export.
 struct TypeExport {
@@ -247,7 +264,7 @@ public:
   explicit LexiconApplication(Repository &repository)
       : items(repository), types(repository), groups(repository),
         links(repository), search(repository), configuration(repository),
-        blobs(repository), exchange(repository) {}
+        blobs(repository), exchange(repository), review(repository) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -256,5 +273,6 @@ public:
   ConfigurationService configuration;
   BlobService blobs;
   ExchangeService exchange;
+  ReviewService review;
 };
 } // namespace lexicon

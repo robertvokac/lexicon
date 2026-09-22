@@ -9,6 +9,7 @@ import com.robertvokac.lexicon.model.ItemQuery
 import com.robertvokac.lexicon.model.ItemType
 import com.robertvokac.lexicon.model.Link
 import com.robertvokac.lexicon.model.LinkType
+import com.robertvokac.lexicon.model.ReviewRating
 import com.robertvokac.lexicon.model.SortColumns
 import com.robertvokac.lexicon.model.SortOrder
 import kotlinx.serialization.json.JsonElement
@@ -57,6 +58,7 @@ class FakeLexiconServer : Dispatcher() {
     /** What GET /export answers, and the bodies POST /import received. */
     var exportDocument = """{"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[]}"""
     val imports = mutableListOf<ByteArray>()
+    val reviews = mutableListOf<Pair<Int, ReviewRating>>()
     private var nextId = 100
 
     /** Queries with this search text answer only after [slowQueryMillis]. */
@@ -293,6 +295,29 @@ class FakeLexiconServer : Dispatcher() {
             path == "/usage/flags" -> usage(items.values.flatMap { it.flags })
             path == "/usage/aliases" -> usage(items.values.flatMap { it.aliases })
             path == "/search/suggestions" -> json(buildJsonObject { put("values", buildJsonArray { items.values.forEach { add(JsonPrimitive(it.title)) } }) })
+            path == "/review" && method == "GET" -> {
+                val due = items.values.filter { it.reviewedAt == null }.sortedBy { it.id }
+                val limit = request.url.queryParameter("limit")?.toInt() ?: 20
+                json(buildJsonObject {
+                    put("items", encode(due.take(limit)))
+                    put("dueCount", due.size)
+                })
+            }
+            segments.size == 3 && segments[0] == "items" && segments[2] == "review" && method == "POST" -> {
+                val id = segments[1].toInt()
+                val item = items[id] ?: return notFound()
+                val rating = ReviewRating.valueOf(bodyObject(request)["rating"]!!.jsonPrimitive.content)
+                val level = rating.levelAfter(item.understanding)
+                val reviewed = item.copy(
+                    understanding = level,
+                    reviewedAt = "2026-09-22T08:00:00Z",
+                    reviewDueAt = "2026-09-2${2 + ReviewRating.intervalDays(level).coerceAtMost(7)}T08:00:00Z",
+                    revision = item.revision + 1,
+                )
+                items[id] = reviewed
+                reviews += id to rating
+                json(buildJsonObject { put("item", encode(reviewed)) })
+            }
             path == "/export" && method == "GET" -> MockResponse.Builder().code(200)
                 .setHeader("Content-Type", "application/json; charset=utf-8")
                 .body(exportDocument).build()

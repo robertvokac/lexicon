@@ -45,6 +45,12 @@ public:
   virtual Result<void> saveLink(const LinkRecord &link) = 0;
   virtual Result<void> deleteLink(int linkId) = 0;
   virtual Result<void> logItemRead(int itemId) = 0;
+  // The items due for review, as list rows: those reviewed before, the most
+  // overdue first, then those never reviewed. groupId <= 0 means all groups.
+  virtual Result<std::vector<ItemRecord>> loadReviewQueue(int groupId, int limit) = 0;
+  virtual Result<int> countDueItems(int groupId) = 0;
+  // Stores the understanding a review left the item at and the review time.
+  virtual Result<void> recordReview(int itemId, UnderstandingLevel level) = 0;
   virtual Result<std::vector<std::string>> loadSuggestions() = 0;
   virtual Result<std::vector<std::string>> loadItemTitles() = 0;
   virtual Result<std::vector<UsageValueRecord>> loadTagUsage() = 0;

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.DrawerValue
@@ -83,12 +84,15 @@ import com.robertvokac.lexicon.ui.navigation.GroupsRoute
 import com.robertvokac.lexicon.ui.navigation.ItemRoute
 import com.robertvokac.lexicon.ui.navigation.ItemsRoute
 import com.robertvokac.lexicon.ui.navigation.OverviewRoute
+import com.robertvokac.lexicon.ui.navigation.ReviewRoute
 import com.robertvokac.lexicon.ui.navigation.SettingsRoute
 import com.robertvokac.lexicon.ui.navigation.TypeRoute
 import com.robertvokac.lexicon.ui.navigation.TypesRoute
 import com.robertvokac.lexicon.ui.overview.OverviewKind
 import com.robertvokac.lexicon.ui.overview.OverviewScreen
 import com.robertvokac.lexicon.ui.overview.OverviewViewModel
+import com.robertvokac.lexicon.ui.review.ReviewScreen
+import com.robertvokac.lexicon.ui.review.ReviewViewModel
 import com.robertvokac.lexicon.ui.settings.SettingsScreen
 import com.robertvokac.lexicon.ui.settings.SettingsViewModel
 import com.robertvokac.lexicon.ui.theme.LexiconTheme
@@ -204,6 +208,7 @@ private fun androidx.compose.ui.graphics.Color.luminanceIsDark(): Boolean =
 
 private enum class Destination(val label: String) {
     Items("Items"),
+    Review("Review"),
     Groups("Groups"),
     Types("Types"),
     Tags("All tags"),
@@ -247,6 +252,7 @@ private fun MainScaffold(
         scope.launch { drawerState.close() }
         val route: Any = when (destination) {
             Destination.Items -> ItemsRoute
+            Destination.Review -> ReviewRoute
             Destination.Groups -> GroupsRoute
             Destination.Types -> TypesRoute
             Destination.Tags -> OverviewRoute(OverviewKind.Tags.name)
@@ -278,6 +284,7 @@ private fun MainScaffold(
                         modifier = Modifier.padding(start = 28.dp, end = 16.dp, bottom = 12.dp),
                     )
                     DrawerEntry(Destination.Items, Icons.AutoMirrored.Filled.List, ::go)
+                    DrawerEntry(Destination.Review, Icons.Filled.School, ::go)
                     DrawerHeading("Manage")
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
                     DrawerEntry(Destination.Types, Icons.Filled.Category, ::go)
@@ -448,6 +455,13 @@ private fun LexiconNavHost(
         }
         composable<SettingsRoute> {
             SettingsScreen(lexiconViewModel { app, _ -> SettingsViewModel(app) }, onBack = back)
+        }
+        composable<ReviewRoute> {
+            ReviewScreen(
+                lexiconViewModel { app, _ -> ReviewViewModel(app) },
+                onBack = back,
+                onOpenItem = { navController.navigate(ItemRoute(it)) },
+            )
         }
     }
 }

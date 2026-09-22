@@ -1001,6 +1001,69 @@ void RestServer::Impl::registerRoutes() {
     respondNoContent(response);
   });
 
+  api.Post("/api/v1/items/:id/review", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto name = requiredString(*body, "rating");
+    const auto rating = reviewRatingFromName(name);
+    if (!rating) {
+      respondFailure(response, {400, "validation",
+                                "'rating' is one of Again, Hard, Good and Easy."});
+      return;
+    }
+    auto item = guarded.with([&](LexiconApplication &application) {
+      return application.review.review(*id, *rating);
+    });
+    if (!item) {
+      respondError(response, item.error(), "review");
+      return;
+    }
+    respondJson(response, 200, Json{{"item", toJson(*item)}});
+  });
+
+  api.Get("/api/v1/review", [this](const Request &request, Response &response) {
+    int groupId = -1;
+    if (const auto raw = queryValue(request, "groupId"); !raw.empty()) {
+      const auto parsed = parseId(raw);
+      if (!parsed) {
+        respondFailure(response, {400, "validation", "'groupId' must be a positive integer."});
+        return;
+      }
+      groupId = *parsed;
+    }
+    int limit = 20;
+    if (const auto raw = queryValue(request, "limit"); !raw.empty()) {
+      const auto parsed = parseId(raw);
+      if (!parsed || *parsed > 200) {
+        respondFailure(response, {400, "validation", "'limit' must be between 1 and 200."});
+        return;
+      }
+      limit = *parsed;
+    }
+    struct Queue {
+      std::vector<ItemRecord> items;
+      int dueCount = 0;
+    };
+    auto queue = guarded.with([&](LexiconApplication &application) -> Result<Queue> {
+      auto items = application.review.queue(groupId, limit);
+      if (!items)
+        return std::unexpected(items.error());
+      auto due = application.review.countDue(groupId);
+      if (!due)
+        return std::unexpected(due.error());
+      return Queue{std::move(*items), *due};
+    });
+    if (!queue) {
+      respondError(response, queue.error(), "reviewQueue");
+      return;
+    }
+    respondJson(response, 200, Json{{"items", toJsonArray(queue->items)}, {"dueCount", queue->dueCount}});
+  });
+
   const auto sendLinks = [this](int itemId, bool incoming, Response &response) {
     auto links = guarded.with([itemId, incoming](LexiconApplication &application) {
       return incoming ? application.links.loadBacklinks(itemId)

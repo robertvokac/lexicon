@@ -222,9 +222,15 @@ An item:
   "understanding": "Practiced",
   "pinned": false,
   "content": "# Monoid\n\nMarkdown source.",
-  "revision": 4
+  "revision": 4,
+  "reviewedAt": "2026-09-20T08:15:00Z",
+  "reviewDueAt": "2026-10-02T08:15:00Z"
 }
 ```
+
+`reviewedAt` and `reviewDueAt` are UTC and `null` for an item never reviewed,
+which is due at once. Saving an item keeps its review time; a new item may be
+created with one, which is how an import carries the review history.
 
 `fieldValues` is keyed by field ID as a string, because JSON object keys are
 strings. Values keep the representation the database stores: `YYYY-MM-DD` for
@@ -322,6 +328,26 @@ GET /api/v1/blobs/{hash}
 The hash is the value to store in a `Blob` field. Uploads over
 `--max-blob-bytes` are rejected with 413; a hash that is not 64 lowercase hex
 characters is rejected with 400; an unknown hash is 404.
+
+## Review
+
+```http
+GET  /api/v1/review?groupId=3&limit=20   → { "items": [ ... ], "dueCount": 57 }
+POST /api/v1/items/{id}/review           → 200 { "item": { ... } }
+{ "rating": "Good" }
+```
+
+The queue holds the items due now, as list rows: those reviewed before, the
+most overdue first, then those never reviewed, oldest first. `groupId` is
+optional; `limit` is 1 to 200 and defaults to 20. `dueCount` counts every due
+item, not only the ones returned.
+
+A review moves the understanding by its `rating` - `Again` one level down,
+`Hard` not at all, `Good` one up, `Easy` two up, within `Unknown` and
+`Mastered` - records the time, moves the item's `revision` on and logs the
+review. The item is due again after 1, 2, 5, 12 or 30 days for `Unknown`,
+`Recognized`, `Understood`, `Practiced` and `Mastered`; raising the
+understanding in the editor moves the next review out the same way.
 
 ## Export and import
 

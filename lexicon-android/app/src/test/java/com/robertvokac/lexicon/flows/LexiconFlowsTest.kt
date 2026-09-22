@@ -36,6 +36,8 @@ import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.LinkType
+import com.robertvokac.lexicon.model.UnderstandingLevel
+import com.robertvokac.lexicon.model.ReviewRating
 import com.robertvokac.lexicon.ui.LaunchRequests
 import com.robertvokac.lexicon.ui.LexiconRoot
 import com.robertvokac.lexicon.testing.FakeLexiconServer
@@ -406,6 +408,30 @@ class LexiconFlowsTest {
         assertArrayEquals(document, fake.imports.single())
         assertEquals("application/json; charset=utf-8", fake.requestsTo("POST", "/api/v1/import").single().headers["Content-Type"])
         compose.onNode(hasText("Imported 2 item(s)", substring = true) and hasAnyAncestor(isDialog())).assertIsDisplayed()
+    }
+
+    @Test
+    fun reviewShowsTheAnswerOnRequestAndRatesIt() {
+        login()
+        openDrawer("Review")
+        compose.waitForText("3 due")
+        compose.onNodeWithText("RAII").assertIsDisplayed()
+        compose.onNodeWithText("Resource acquisition is initialization.").assertDoesNotExist()
+        compose.onNode(hasText("Show answer") and hasClickAction()).performClick()
+        compose.waitForText("Resource acquisition is initialization.")
+        compose.onNode(hasText("Good (2 days)") and hasClickAction()).performScrollTo().performClick()
+        compose.waitForText("Object lifetime")
+        assertEquals(listOf(raii.id!! to ReviewRating.Good), fake.reviews.toList())
+        assertEquals(UnderstandingLevel.Recognized, fake.items.getValue(raii.id!!).understanding)
+
+        compose.onNode(hasText("Show answer") and hasClickAction()).performClick()
+        compose.onNode(hasText("Again (1 day)") and hasClickAction()).performScrollTo().performClick()
+        compose.waitForText("Pointer provenance")
+        compose.onNode(hasText("Skip") and hasClickAction()).performClick()
+        // Forgotten, so it comes back in the same sitting.
+        compose.waitForText("Object lifetime")
+        compose.onNode(hasText("Skip") and hasClickAction()).performClick()
+        compose.waitForText("2 reviewed", substring = true)
     }
 
     @Test

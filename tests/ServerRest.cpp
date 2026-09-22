@@ -704,6 +704,35 @@ void checkBlobs(Checks &checks) {
   checks.expectEqual(leftovers, 0, "blob staging files are cleaned up");
 }
 
+void checkReview(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const int itemId = parse(client.post("/api/v1/items",
+                                       Json{{"item", Json{{"groupId", groupId}, {"title", "Functor"}}}}.dump()))
+                         .value("id", 0);
+  client.post("/api/v1/items", Json{{"item", Json{{"groupId", groupId}, {"title", "Monad"}}}}.dump());
+
+  const auto queue = client.get("/api/v1/review?limit=1");
+  checks.expectEqual(queue.status, 200, "the review queue is available");
+  checks.expectEqual(parse(queue).value("dueCount", 0), 2, "it counts every due item");
+  checks.expectEqual(static_cast<long long>(parse(queue).at("items").size()), 1, "and returns up to the limit");
+  checks.expect(parse(queue).at("items").at(0).at("reviewedAt").is_null(), "a new item was never reviewed");
+
+  const auto path = "/api/v1/items/" + std::to_string(itemId) + "/review";
+  checks.expectEqual(client.post(path, R"({"rating":"Perfect"})").status, 400, "an unknown rating is refused");
+  const auto reviewed = client.post(path, R"({"rating":"Good"})");
+  checks.expectEqual(reviewed.status, 200, "a review is recorded");
+  const auto item = parse(reviewed).at("item");
+  checks.expectEqual(item.value("understanding", std::string{}), "Recognized", "Good climbs a level");
+  checks.expect(item.at("reviewDueAt").is_string(), "the next review date is reported");
+  checks.expectEqual(parse(client.get("/api/v1/review")).value("dueCount", 0), 1, "one item is left to review");
+  checks.expectEqual(client.post("/api/v1/items/999999/review", R"({"rating":"Good"})").status, 404,
+                     "reviewing a missing item is a not-found error");
+  checks.expectEqual(client.get("/api/v1/review?limit=0").status, 400, "the limit must be positive");
+}
+
 void checkExportImport(Checks &checks) {
   // The export of one server imports into another.
   ServerHarness source;
@@ -894,5 +923,6 @@ int main() {
   checkQuickAdd(checks);
   checkConflicts(checks);
   checkExportImport(checks);
+  checkReview(checks);
   return checks.summarize("server_rest");
 }

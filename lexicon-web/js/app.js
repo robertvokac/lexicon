@@ -7,6 +7,7 @@ import { exportDictionary, importDictionary } from './exchange.js';
 import { openGroupManager } from './groups.js';
 import { MainView } from './items.js';
 import { showValueOverview } from './overviews.js';
+import { openReview } from './review.js';
 import { openTypeManager } from './types.js';
 import { button, clear, el, readLocal, readSession, writeLocal, writeSession } from './utils.js';
 
@@ -229,6 +230,13 @@ class Application {
             {
                 label: 'View',
                 entries: [
+                    {
+                        label: 'Review...',
+                        action: async () => {
+                            if (await openReview(this.view.groups)) await this.view.refreshAll();
+                        },
+                    },
+                    { separator: true },
                     { label: 'All tags...', action: () => showValueOverview('tags') },
                     { label: 'All flags...', action: () => showValueOverview('flags') },
                     { label: 'All aliases...', action: () => showValueOverview('aliases') },

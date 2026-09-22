@@ -114,6 +114,11 @@ struct ItemRecord {
   // carries a positive revision is refused when the stored one has moved on;
   // 0 saves unconditionally.
   int revision = 0;
+  // When the item was last reviewed and when it is due again, as UTC
+  // "YYYY-MM-DDTHH:MM:SSZ"; both empty for an item never reviewed, which is
+  // due now. Saving an item keeps them; a review sets them.
+  std::string reviewedAt;
+  std::string reviewDueAt;
 };
 struct UsageValueRecord {
   std::string value;

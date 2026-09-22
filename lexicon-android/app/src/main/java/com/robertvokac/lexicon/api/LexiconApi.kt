@@ -12,6 +12,11 @@ import com.robertvokac.lexicon.model.GroupWrite
 import com.robertvokac.lexicon.model.GroupsEnvelope
 import com.robertvokac.lexicon.model.Health
 import com.robertvokac.lexicon.model.ImportEnvelope
+import com.robertvokac.lexicon.model.Item
+import com.robertvokac.lexicon.model.ItemEnvelope
+import com.robertvokac.lexicon.model.ReviewQueue
+import com.robertvokac.lexicon.model.ReviewRating
+import com.robertvokac.lexicon.model.ReviewRequest
 import com.robertvokac.lexicon.model.ImportReport
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
@@ -160,6 +165,22 @@ class LexiconApi(private val client: ApiClient) {
         require(isBlobHash(hash)) { "A blob is addressed by its lowercase SHA-256 hash." }
         client.download("blobs/$hash", output, onProgress)
     }
+
+    // Review ------------------------------------------------------------------
+
+    suspend fun reviewQueue(groupId: Int?, limit: Int = 20): ReviewQueue =
+        client.get(
+            "review",
+            ReviewQueue.serializer(),
+            query = buildMap {
+                put("limit", limit.toString())
+                if (groupId != null) put("groupId", groupId.toString())
+            },
+        )
+
+    /** Records a review; the answer is the item with its new understanding and next review. */
+    suspend fun reviewItem(id: Int, rating: ReviewRating): Item =
+        client.post("items/$id/review", ReviewRequest(rating), ReviewRequest.serializer(), ItemEnvelope.serializer()).item
 
     // Export and import -------------------------------------------------------
 

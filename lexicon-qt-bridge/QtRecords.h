@@ -109,6 +109,8 @@ struct ItemRecord {
   bool pinned = false;
   QString content;
   int revision = 0;
+  QString reviewedAt;
+  QString reviewDueAt;
 };
 struct UsageValueRecord {
   QString value;

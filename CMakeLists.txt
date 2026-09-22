@@ -64,6 +64,7 @@ set(MD4QT_SRC
 add_library(lexicon-core STATIC
     lexicon-core/Records.h
     lexicon-core/Result.h
+    lexicon-core/Review.h
     lexicon-core/Utf8Path.h
     lexicon-core/Utf8Path.cpp
     lexicon-core/Validation.h
@@ -213,6 +214,16 @@ if (LEXICON_BUILD_DESKTOP)
     target_include_directories(lexicon-qt-bridge PUBLIC lexicon-qt-bridge)
     target_link_libraries(lexicon-qt-bridge PUBLIC lexicon-core Qt${QT_VERSION_MAJOR}::Core)
 
+    # md4qt and the converter on top of it, shared by the desktop client and
+    # its GUI tests so md4qt is compiled once.
+    add_library(lexicon-markdown STATIC
+        lexicon-qt/MarkdownConverter.h
+        lexicon-qt/MarkdownConverter.cpp
+        ${MD4QT_SRC}
+    )
+    target_include_directories(lexicon-markdown PUBLIC 3rdparty/md4qt/src lexicon-qt)
+    target_link_libraries(lexicon-markdown PUBLIC Qt${QT_VERSION_MAJOR}::Core)
+
     add_executable(Lexicon
         lexicon-qt/main.cpp
         lexicon-qt/ApplicationContext.h
@@ -233,17 +244,16 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/BlobMaintenanceDialog.cpp
         lexicon-qt/ValueListDialog.h
         lexicon-qt/ValueListDialog.cpp
-        lexicon-qt/MarkdownConverter.h
-        lexicon-qt/MarkdownConverter.cpp
-        ${MD4QT_SRC}
+        lexicon-qt/ReviewDialog.h
+        lexicon-qt/ReviewDialog.cpp
     )
 
-    target_include_directories(Lexicon PRIVATE 3rdparty/md4qt/src)
     target_link_libraries(Lexicon PRIVATE
         lexicon-application
         lexicon-storage-sqlite
         lexicon-json
         lexicon-qt-bridge
+        lexicon-markdown
         Qt${QT_VERSION_MAJOR}::Widgets
     )
 
@@ -264,6 +274,20 @@ if (LEXICON_BUILD_DESKTOP)
             Qt${QT_VERSION_MAJOR}::Widgets)
         add_test(NAME blob_gui_smoke COMMAND lexicon-blob-gui-smoke)
         set_tests_properties(blob_gui_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+        # The desktop dialogs added since, driven offscreen.
+        add_executable(lexicon-desktop-gui-smoke
+            tests/DesktopGuiSmoke.cpp
+            lexicon-qt/ApplicationContext.cpp
+            lexicon-qt/ReviewDialog.h
+            lexicon-qt/ReviewDialog.cpp
+        )
+        target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
+        target_link_libraries(lexicon-desktop-gui-smoke PRIVATE
+            lexicon-application lexicon-storage-sqlite lexicon-json lexicon-qt-bridge
+            lexicon-markdown Qt${QT_VERSION_MAJOR}::Widgets)
+        add_test(NAME desktop_gui_smoke COMMAND lexicon-desktop-gui-smoke)
+        set_tests_properties(desktop_gui_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endif()
 endif()
 
@@ -296,6 +320,11 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-search PRIVATE lexicon-application lexicon-storage-sqlite SQLite::SQLite3)
     set_target_properties(lexicon-search PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME search COMMAND lexicon-search)
+
+    add_executable(lexicon-review tests/Review.cpp)
+    target_link_libraries(lexicon-review PRIVATE lexicon-application lexicon-storage-sqlite SQLite::SQLite3)
+    set_target_properties(lexicon-review PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME review COMMAND lexicon-review)
 
     add_executable(lexicon-exchange tests/Exchange.cpp)
     target_link_libraries(lexicon-exchange PRIVATE lexicon-json lexicon-storage-sqlite)

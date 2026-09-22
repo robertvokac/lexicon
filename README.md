@@ -51,6 +51,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
+- Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - A Qt-free REST server and an independently deployable static web client with the same capabilities
 - A native Android client (Kotlin, Jetpack Compose) for the same server
 
@@ -455,7 +456,20 @@ Appearance:
 
 Theme preference is persisted between sessions.
 
-### 11) Editing and deletion safety notes
+### 11) Review what you learned
+
+`View -> Review...` (`Ctrl+R`) goes through the items that are due, one card at a time: the title first, then **Show answer** for the rendered content, then a rating:
+
+| Rating | Understanding | Next review for an `Understood` item |
+| --- | --- | --- |
+| `Again` (key 1) | one level down | 2 days, and once more in this sitting |
+| `Hard` (key 2) | unchanged | 5 days |
+| `Good` (key 3) | one level up | 12 days |
+| `Easy` (key 4) | two levels up | 30 days |
+
+An item is due again 1, 2, 5, 12 or 30 days after its last review, for `Unknown`, `Recognized`, `Understood`, `Practiced` and `Mastered`. Items never reviewed are due at once and come after the overdue ones. The group box limits the review to one group; **Skip** leaves an item for later. The web client (`View -> Review...`) and the Android app (**Review** in the drawer) show the same queue.
+
+### 12) Editing and deletion safety notes
 
 - Deleting an item removes its aliases/tags/flags and related links due to cascade rules.
 - Deleting a group removes all contained items.
@@ -555,7 +569,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; review with spaced repetition
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

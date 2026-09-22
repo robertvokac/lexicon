@@ -833,3 +833,12 @@ body.resizing { cursor: row-resize; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
 }
+
+/* Review */
+.review-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.review-card { display: flex; flex-direction: column; gap: 8px; }
+.review-title { font-size: 1.6em; margin: 8px 0 0; overflow-wrap: anywhere; }
+.review-details { margin: 0; }
+.review-content { max-height: 50vh; overflow: auto; }
+.review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.review-done { text-align: center; margin: 24px 0; }

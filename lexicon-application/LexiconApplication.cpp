@@ -112,6 +112,15 @@ ItemService::saveItemWithLinks(const ItemRecord &item,
 } // namespace lexicon
 
 namespace lexicon {
+Result<ItemRecord> ReviewService::review(ItemId id, ReviewRating rating) {
+  auto item = repository_.loadItem(id);
+  if (!item)
+    return item;
+  if (auto recorded = repository_.recordReview(id, levelAfterReview(item->understanding, rating)); !recorded)
+    return std::unexpected(recorded.error());
+  return repository_.loadItem(id);
+}
+
 std::string blobHashOf(const ItemFieldRecord &field, const std::string &value) {
   return field.dataType == FieldDataType::Blob ? value : std::string{};
 }

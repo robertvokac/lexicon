@@ -1,6 +1,7 @@
 #include "SqliteRepository.h"
 #include "SqliteInternal.h"
 #include "Utf8Path.h"
+#include "Review.h"
 #include "Validation.h"
 
 #include <algorithm>
@@ -13,6 +14,7 @@
 #include <openssl/evp.h>
 #include <set>
 #include <random>
+#include <regex>
 #include <vector>
 #include <type_traits>
 #include <utility>
@@ -409,6 +411,49 @@ const char *kSearchRank =
   "ELSE 5 END";
 } // namespace
 
+namespace {
+// When an item is due for review: its last review plus the interval for its
+// understanding. NULL for an item never reviewed.
+std::string reviewDueSql() {
+  std::string sql = "strftime('%Y-%m-%dT%H:%M:%SZ', t.reviewed_at, '+' || CASE t.understanding";
+  for (int level = 0; level <= static_cast<int>(lexicon::UnderstandingLevel::Mastered); ++level)
+    sql += " WHEN " + std::to_string(level) + " THEN " +
+           std::to_string(lexicon::reviewIntervalDays(static_cast<lexicon::UnderstandingLevel>(level)));
+  return sql + " ELSE 1 END || ' days')";
+}
+const char *kNow = "strftime('%Y-%m-%dT%H:%M:%SZ', 'now')";
+
+// The columns of an item list row, read by readItemRow.
+std::string itemRowSelect() {
+  return "SELECT t.id, m.name, t.group_id, t.title, t.disambiguation, "
+         "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.item_id = t.id), '') AS aliases, "
+         "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.item_id = t.id), '') AS tags, "
+         "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.item_id = t.id), '') AS flags, "
+         "t.understanding, t.status, t.pinned, "
+         "COALESCE(ty.name || CASE WHEN ty.group_id IS NULL THEN ' (All groups)' ELSE '' END, ''), "
+         "t.revision, COALESCE(t.reviewed_at, ''), COALESCE(" + reviewDueSql() + ", '') "
+         "FROM item t JOIN item_group m ON m.id = t.group_id "
+         "LEFT JOIN item_type ty ON ty.id = t.item_type_id ";
+}
+lexicon::ItemRecord readItemRow(const Statement &stmt) {
+  lexicon::ItemRecord item;
+  item.id = stmt.integer(0); item.groupName = stmt.text(1); item.groupId = stmt.integer(2);
+  item.title = stmt.text(3); item.disambiguation = stmt.text(4);
+  item.aliases = splitJoined(stmt.text(5)); item.tags = splitJoined(stmt.text(6));
+  item.flags = splitJoined(stmt.text(7));
+  item.understanding = static_cast<lexicon::UnderstandingLevel>(stmt.integer(8));
+  item.status = static_cast<lexicon::ItemStatus>(stmt.integer(9));
+  item.pinned = stmt.integer(10) != 0; item.itemTypeName = stmt.text(11);
+  item.revision = stmt.integer(12);
+  item.reviewedAt = stmt.text(13); item.reviewDueAt = stmt.text(14);
+  return item;
+}
+bool reviewTime(const std::string &text) {
+  static const std::regex pattern(R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$)");
+  return std::regex_match(text, pattern);
+}
+} // namespace
+
 SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteRepository::loadItems(
     int groupId, int typeId, const std::vector<ItemValueFilter> &valueFilters,
     const std::string &searchText, const ItemColumnFilters &columnFilters,
@@ -419,16 +464,7 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
   return guarded([&] {
     const bool searching = !lexicon::trim(searchText).empty();
     if (searching && impl_->fullText) storage::refreshSearchIndex(impl_->db);
-    std::string sql =
-      "SELECT t.id, m.name, t.group_id, t.title, t.disambiguation, "
-      "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.item_id = t.id), '') AS aliases, "
-      "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.item_id = t.id), '') AS tags, "
-      "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.item_id = t.id), '') AS flags, "
-      "t.understanding, t.status, t.pinned, "
-      "COALESCE(ty.name || CASE WHEN ty.group_id IS NULL THEN ' (All groups)' ELSE '' END, ''), "
-      "t.revision "
-      "FROM item t JOIN item_group m ON m.id = t.group_id "
-      "LEFT JOIN item_type ty ON ty.id = t.item_type_id WHERE 1 = 1 ";
+    std::string sql = itemRowSelect() + "WHERE 1 = 1 ";
     appendFilters(sql, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                   propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
     std::string order;
@@ -474,18 +510,7 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
     }
     if (limit > 0) stmt.bind(limit).bind(offset);
     std::vector<ItemRecord> items;
-    while (stmt.step()) {
-      ItemRecord item;
-      item.id = stmt.integer(0); item.groupName = stmt.text(1); item.groupId = stmt.integer(2);
-      item.title = stmt.text(3); item.disambiguation = stmt.text(4);
-      item.aliases = splitJoined(stmt.text(5)); item.tags = splitJoined(stmt.text(6));
-      item.flags = splitJoined(stmt.text(7));
-      item.understanding = static_cast<lexicon::UnderstandingLevel>(stmt.integer(8));
-      item.status = static_cast<lexicon::ItemStatus>(stmt.integer(9));
-      item.pinned = stmt.integer(10) != 0; item.itemTypeName = stmt.text(11);
-      item.revision = stmt.integer(12);
-      items.push_back(std::move(item));
-    }
+    while (stmt.step()) items.push_back(readItemRow(stmt));
     if (typeId > 0 && !items.empty()) {
       std::string valuesSql = "SELECT item_id, item_field_id, value FROM item_value WHERE item_id IN (";
       for (std::size_t i = 0; i < items.size(); ++i) valuesSql += i ? ",?" : "?";
@@ -521,7 +546,7 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
     Statement stmt(impl_->db,
       "SELECT t.id, t.group_id, m.name, t.title, COALESCE(t.disambiguation, ''), "
       "t.understanding, t.status, t.pinned, COALESCE(t.content, ''), t.item_type_id, COALESCE(ty.name, ''), "
-      "t.revision "
+      "t.revision, COALESCE(t.reviewed_at, ''), COALESCE(" + reviewDueSql() + ", '') "
       "FROM item t JOIN item_group m ON m.id = t.group_id "
       "LEFT JOIN item_type ty ON ty.id = t.item_type_id WHERE t.id = ?;");
     stmt.bind(itemId);
@@ -534,6 +559,7 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
     item.pinned = stmt.integer(7) != 0; item.content = stmt.text(8);
     item.itemTypeId = stmt.isNull(9) ? -1 : stmt.integer(9); item.itemTypeName = stmt.text(10);
     item.revision = stmt.integer(11);
+    item.reviewedAt = stmt.text(12); item.reviewDueAt = stmt.text(13);
     Statement values(impl_->db, "SELECT item_field_id, value FROM item_value WHERE item_id = ?;");
     values.bind(itemId);
     while (values.step()) item.fieldValues[values.integer(0)] = values.text(1);
@@ -582,11 +608,13 @@ int saveItemNative(const Connection &db, const std::string &databasePath,
   }
   int id = item.id;
   if (id < 0) {
-    Statement(db, "INSERT INTO item(group_id, title, disambiguation, understanding, status, pinned, content, item_type_id) "
-                  "VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?);")
+    // A new item may arrive with its review history, from an import.
+    Statement(db, "INSERT INTO item(group_id, title, disambiguation, understanding, status, pinned, content, item_type_id, reviewed_at) "
+                  "VALUES(?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, NULLIF(?, ''));")
       .bind(item.groupId).bind(lexicon::trim(item.title)).bind(lexicon::trim(item.disambiguation))
       .bind(static_cast<int>(item.understanding)).bind(static_cast<int>(item.status)).bind(item.pinned ? 1 : 0)
-      .bind(item.content).nullableId(item.itemTypeId).run();
+      .bind(item.content).nullableId(item.itemTypeId)
+      .bind(reviewTime(item.reviewedAt) ? item.reviewedAt : std::string{}).run();
     id = db.lastId();
   } else {
     Statement(db, "UPDATE item SET group_id = ?, title = ?, disambiguation = NULLIF(?, ''), "
@@ -715,6 +743,37 @@ SqliteRepository::Result<void> SqliteRepository::logItemRead(int itemId) {
     Statement(impl_->db, "INSERT INTO log(table_name, record_id, log_type) "
                          "SELECT 'item', id, 4 FROM item WHERE id = ?;").bind(itemId).run();
     requireChanged(impl_->db, "Item");
+  });
+}
+SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteRepository::loadReviewQueue(int groupId, int limit) {
+  return guarded([&] {
+    const auto due = reviewDueSql();
+    Statement stmt(impl_->db, itemRowSelect() +
+        "WHERE (? <= 0 OR t.group_id = ?) AND (t.reviewed_at IS NULL OR " + due + " <= " + kNow + ") "
+        "ORDER BY t.reviewed_at IS NULL, " + due + ", t.id LIMIT ?;");
+    stmt.bind(groupId).bind(groupId).bind(limit > 0 ? limit : -1);
+    std::vector<ItemRecord> items;
+    while (stmt.step()) items.push_back(readItemRow(stmt));
+    return items;
+  });
+}
+SqliteRepository::Result<int> SqliteRepository::countDueItems(int groupId) {
+  return guarded([&] {
+    Statement stmt(impl_->db, "SELECT COUNT(*) FROM item t WHERE (? <= 0 OR t.group_id = ?) "
+                              "AND (t.reviewed_at IS NULL OR " + reviewDueSql() + " <= " + kNow + ");");
+    stmt.bind(groupId).bind(groupId);
+    return stmt.step() ? stmt.integer(0) : 0;
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::recordReview(int itemId, lexicon::UnderstandingLevel level) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_write");
+    Statement(impl_->db, std::string("UPDATE item SET understanding = ?, reviewed_at = ") + kNow +
+                             ", revision = revision + 1 WHERE id = ?;")
+        .bind(static_cast<int>(level)).bind(itemId).run();
+    requireChanged(impl_->db, "Item");
+    logOperation(impl_->db, "item", itemId, 5); // 5 = reviewed
+    tx.commit();
   });
 }
 SqliteRepository::Result<std::vector<std::string>> SqliteRepository::loadSuggestions() {

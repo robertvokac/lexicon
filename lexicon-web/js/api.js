@@ -241,6 +241,17 @@ export class LexiconApi {
         return this.request('GET', `/blobs/${hash}`, { expect: 'blob' });
     }
 
+    // Review -----------------------------------------------------------------
+    reviewQueue(groupId, limit = 20) {
+        const query = new URLSearchParams({ limit: String(limit) });
+        if (groupId > 0) query.set('groupId', String(groupId));
+        return this.get(`/review?${query.toString()}`);
+    }
+
+    async reviewItem(id, rating) {
+        return (await this.post(`/items/${id}/review`, { rating })).item;
+    }
+
     // Export and import ------------------------------------------------------
     exportDictionary(includeFiles) {
         return this.request('GET', `/export?blobs=${includeFiles ? 'true' : 'false'}`, {

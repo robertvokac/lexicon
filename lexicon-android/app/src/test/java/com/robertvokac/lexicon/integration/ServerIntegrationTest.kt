@@ -16,6 +16,7 @@ import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.LinkType
 import com.robertvokac.lexicon.model.Property
 import com.robertvokac.lexicon.model.PropertyFilter
+import com.robertvokac.lexicon.model.ReviewRating
 import com.robertvokac.lexicon.model.TypeWrite
 import com.robertvokac.lexicon.model.UnderstandingLevel
 import com.robertvokac.lexicon.model.ValueFilter
@@ -292,6 +293,31 @@ class ServerIntegrationTest {
             val restored = api.importDictionary(bytes.size.toLong(), { ByteArrayInputStream(bytes) }) { _, _ -> }
             assertEquals(1, restored.itemsCreated)
             assertEquals(title, api.item(api.resolveItem(title, "")).item.title)
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
+    fun reviewOverRealRest() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val groupId = api.defaultGroupId()
+            val title = "Reviewed ${System.nanoTime()}"
+            val created = api.createItem(EditorRules.saveRequest(EditorFields(groupId = groupId, title = title), "", emptyList()))
+            val before = api.reviewQueue(groupId, 200)
+            assertTrue(before.items.any { it.id == created.id })
+            val reviewed = api.reviewItem(created.id, ReviewRating.Easy)
+            assertEquals(ReviewRating.Easy.levelAfter(UnderstandingLevel.Unknown), reviewed.understanding)
+            val reviewedAt = checkNotNull(reviewed.reviewedAt)
+            assertTrue(reviewedAt.endsWith("Z"))
+            assertTrue(checkNotNull(reviewed.reviewDueAt) > reviewedAt)
+            val after = api.reviewQueue(groupId, 200)
+            assertTrue(after.items.none { it.id == created.id })
+            assertEquals(before.dueCount - 1, after.dueCount)
+            api.deleteItem(created.id)
         } finally {
             environment.close()
         }

@@ -7,6 +7,7 @@
 #include "FilterHeaderView.h"
 #include "PropertyFilterDialog.h"
 #include "BlobMaintenanceDialog.h"
+#include "ReviewDialog.h"
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
@@ -302,6 +303,14 @@ void MainWindow::setupMenus() {
     });
 
     auto* viewMenu = menuBar()->addMenu("View");
+    auto* reviewAction = viewMenu->addAction("Review...");
+    reviewAction->setShortcut(QKeySequence("Ctrl+R"));
+    connect(reviewAction, &QAction::triggered, this, [this] {
+        ReviewDialog dialog(this);
+        dialog.exec();
+        if (dialog.changedItems()) refreshAll();
+    });
+    viewMenu->addSeparator();
     auto* tagsAction = viewMenu->addAction("All tags...");
     auto* flagsAction = viewMenu->addAction("All flags...");
     auto* aliasesAction = viewMenu->addAction("All aliases...");

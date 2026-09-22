@@ -63,6 +63,9 @@ public:
   Result<void> saveLink(const LinkRecord &link) override;
   Result<void> deleteLink(int linkId) override;
   Result<void> logItemRead(int itemId) override;
+  Result<std::vector<ItemRecord>> loadReviewQueue(int groupId, int limit) override;
+  Result<int> countDueItems(int groupId) override;
+  Result<void> recordReview(int itemId, lexicon::UnderstandingLevel level) override;
   Result<std::vector<std::string>> loadSuggestions() override;
   Result<std::vector<std::string>> loadItemTitles() override;
   Result<std::vector<UsageValueRecord>> loadTagUsage() override;

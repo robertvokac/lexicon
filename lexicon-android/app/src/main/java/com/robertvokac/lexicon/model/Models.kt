@@ -100,6 +100,9 @@ data class Item(
     val content: String = "",
     /** Moves on with every change to the item, its values or its links. */
     val revision: Int = 0,
+    /** Last review and next one, UTC "YYYY-MM-DDTHH:MM:SSZ"; null when never reviewed (due now). */
+    val reviewedAt: String? = null,
+    val reviewDueAt: String? = null,
 ) {
     val displayTitle: String get() = formatItemTitle(title, disambiguation)
 
@@ -252,7 +255,40 @@ data class ImportReport(
             "and $fieldsCreated field(s)."
 }
 
+/** How well an item was remembered in a review (POST /items/{id}/review). */
+enum class ReviewRating(val step: Int) {
+    Again(-1),
+    Hard(0),
+    Good(1),
+    Easy(2),
+    ;
+
+    /** The understanding a review with this rating leaves an item at, as the server computes it. */
+    fun levelAfter(current: UnderstandingLevel): UnderstandingLevel =
+        UnderstandingLevel.entries[(current.ordinal + step).coerceIn(0, UnderstandingLevel.entries.size - 1)]
+
+    companion object {
+        /** Days until the next review, by the understanding after one (lexicon-core/Review.h). */
+        fun intervalDays(level: UnderstandingLevel): Int = when (level) {
+            UnderstandingLevel.Unknown -> 1
+            UnderstandingLevel.Recognized -> 2
+            UnderstandingLevel.Understood -> 5
+            UnderstandingLevel.Practiced -> 12
+            UnderstandingLevel.Mastered -> 30
+        }
+    }
+}
+
+/** GET /review: the items due now, and how many are due in all. */
+@Serializable
+data class ReviewQueue(val items: List<Item>, val dueCount: Int)
+
+@Serializable
+internal data class ReviewRequest(val rating: ReviewRating)
+
 // Response envelopes -------------------------------------------------------
+
+@Serializable internal data class ItemEnvelope(val item: Item)
 
 @Serializable internal data class ImportEnvelope(val report: ImportReport)
 

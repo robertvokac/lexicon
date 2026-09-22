@@ -210,6 +210,9 @@ accept it; install a proper certificate instead.
 - **Manage.** Groups (add, edit, delete, with the desktop's warning that the
   items go too) and types with their fields (the item and value counts come from
   the server before anything destructive happens).
+- **Review.** The items due now, one card at a time: the title, **Show answer**
+  for the content, then **Again**, **Hard**, **Good** or **Easy**, each saying
+  when the item comes back. Items rated Again return in the same sitting.
 - **Overview.** All tags, all flags and all aliases with their usage counts.
 - **Settings.** Server, session, theme (system, light, dark), page size and
   versions, and **Export…** and **Import…** of the whole dictionary as one
