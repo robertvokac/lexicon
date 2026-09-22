@@ -227,7 +227,8 @@ void GraphDialog::reload() {
         const QPointF side(-dy / length * 5, dx / length * 5);
         m_scene->addPolygon(QPolygonF({end, end + back + side, end + back - side}), QPen(lines), QBrush(lines));
         auto* label = m_scene->addSimpleText(linkLabel(link), small);
-        label->setBrush(lines.darker(130));
+        // Muted, but readable on the dark theme too.
+        label->setBrush(palette.color(QPalette::PlaceholderText));
         const QRectF box = label->boundingRect();
         label->setPos((start + end) / 2 - QPointF(box.width() / 2, box.height() / 2));
     }
