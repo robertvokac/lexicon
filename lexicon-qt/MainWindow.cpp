@@ -151,8 +151,8 @@ void MainWindow::setupUi() {
     m_searchEdit->setMinimumWidth(400);
     m_searchEdit->setMaximumWidth(600);
     searchRowLayout->addWidget(quickAddButton);
-    searchRowLayout->addWidget(inboxButton);
     searchRowLayout->addWidget(addButton);
+    searchRowLayout->addWidget(inboxButton);
     searchRowLayout->addWidget(editButton);
     searchRowLayout->addWidget(deleteButton);
     searchRowLayout->addWidget(columnsButton);

@@ -161,7 +161,7 @@ export class MainView {
         this.overflowMenu = el('div', { class: 'menu overflow-menu' },
             [this.overflowTrigger, this.overflowPopup]);
         this.inlineActions = el('div', { class: 'action-buttons' }, [
-            this.quickAddButton, this.inboxButton, this.addButton, this.editButton,
+            this.quickAddButton, this.addButton, this.inboxButton, this.editButton,
             this.deleteButton, this.columnsButton, this.propertyFilterButton,
         ]);
 
@@ -539,7 +539,7 @@ export class MainView {
         }
         // On a phone the secondary actions live behind the overflow menu.
         const host = this.compact ? this.overflowPopup : this.inlineActions;
-        for (const action of [this.inboxButton, this.addButton, this.editButton, this.deleteButton,
+        for (const action of [this.addButton, this.inboxButton, this.editButton, this.deleteButton,
             this.columnsButton, this.propertyFilterButton]) {
             action.classList.toggle('menu-item', this.compact);
             if (action.parentElement !== host) host.appendChild(action);
