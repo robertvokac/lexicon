@@ -157,6 +157,21 @@ LexiconServer --database ~/lexicon.db \
 Open <http://127.0.0.1:8080/> and log in with the user you created with
 `LexiconServer auth set-user`.
 
+### Tests
+
+```bash
+node --test lexicon-web/tests/*.test.mjs
+python3 tools/web-e2e.py --server build/LexiconServer
+```
+
+The first runs the unit tests of the modules that need no browser: wiki
+links, the graph layout, alarm times, image values. Name the files: Node 22
+reads a directory argument as a module. The second drives the whole client
+in headless Chrome or Chromium against a fresh `LexiconServer` - sign in,
+Inbox, edit and save, search, groups, types, review, alarms, sign out - and
+checks each step through the REST API; any uncaught JavaScript error fails
+it. It needs only Python and the browser, and CI runs both on every push.
+
 ## What the client stores in your browser
 
 | Key | Storage | Purpose |

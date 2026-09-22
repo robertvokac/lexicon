@@ -1,7 +1,8 @@
 # Builds and tests everything on every push and pull request: the Qt-free
-# backend and LexiconServer, the Qt desktop client and its offscreen GUI
-# tests, the web client, and the Android app - including its tests against a
-# real LexiconServer from the first job. The emulator tests run on request.
+# backend and LexiconServer with the web client's tests and a browser run
+# against that server, the Qt desktop client with its offscreen GUI tests,
+# and the Android app - including its tests against a real LexiconServer from
+# the first job. The emulator tests run on request.
 name: CI
 
 on:
@@ -23,24 +24,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Built on the runner's own Ubuntu, so the server it keeps runs in the
+  # Android and browser jobs, which use the same system.
   backend:
-    name: Server, desktop and web
+    name: Server and web
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install the build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build g++-14 qt6-base-dev libgl-dev libsqlite3-dev libssl-dev
+            cmake ninja-build g++-14 libsqlite3-dev libssl-dev
 
       - name: Configure
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_CXX_COMPILER=g++-14
+          -DLEXICON_BUILD_DESKTOP=OFF
           -DBUILD_TESTING=ON
 
       - name: Build
@@ -50,9 +54,10 @@ jobs:
         run: ctest --test-dir build --output-on-failure --parallel 4
 
       - name: Web client tests
+        # Files, not the directory: Node 22 takes a directory for a module.
         # Alarm times again in a zone with a half-hour offset.
         run: |
-          node --test lexicon-web/tests/
+          node --test lexicon-web/tests/*.test.mjs
           TZ=Asia/Kolkata node --test lexicon-web/tests/alarmtime.test.mjs
 
       - name: Web client modules parse
@@ -61,11 +66,66 @@ jobs:
             node --input-type=module --check < "$module" || { echo "::error file=$module::does not parse"; exit 1; }
           done
 
-      - name: Keep the server for the Android jobs
+      - name: Keep the server for the Android and browser jobs
         uses: actions/upload-artifact@v4
         with:
           name: LexiconServer
           path: build/LexiconServer
+          retention-days: 7
+
+  # md4qt needs Qt 6.6 or newer; Ubuntu 24.04 has 6.4. Debian 13 has 6.8,
+  # the Qt Lexicon is developed with.
+  desktop:
+    name: Desktop (Debian 13, Qt 6.8)
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    timeout-minutes: 45
+    steps:
+      - name: Install the build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates git cmake ninja-build g++ qt6-base-dev libgl-dev libsqlite3-dev libssl-dev
+
+      - uses: actions/checkout@v5
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel 4
+
+  web-browser:
+    name: Web client in a browser
+    needs: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: LexiconServer
+          path: server
+
+      - name: Sign in, Inbox, edit, search, groups, types, review, alarms, sign out
+        run: |
+          chmod +x server/LexiconServer
+          mkdir -p artifacts
+          python3 tools/web-e2e.py --server server/LexiconServer --artifacts artifacts
+
+      - name: Keep the failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-failure
+          path: artifacts
           retention-days: 7
 
   android:
@@ -77,7 +137,7 @@ jobs:
       run:
         working-directory: lexicon-android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v4
         with:
@@ -123,7 +183,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v4
         with:
