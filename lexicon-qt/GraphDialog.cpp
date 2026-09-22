@@ -53,10 +53,22 @@ public:
     }
 
 protected:
+    // A graphics item that is neither selectable nor movable ignores the
+    // press, and an ignored press brings neither the release nor the double
+    // click here: the clicks were lost and the view scrolled instead.
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override {
+        if (event->button() != Qt::LeftButton) {
+            QGraphicsEllipseItem::mousePressEvent(event);
+            return;
+        }
+        event->accept();
+    }
     // Queued: centring rebuilds the scene, and with it this item.
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override {
         QGraphicsEllipseItem::mouseReleaseEvent(event);
         if (event->button() != Qt::LeftButton || m_itemId == m_dialog->centreItemId()) return;
+        // A press that travelled was a drag over the node, not a click on it.
+        if ((event->scenePos() - event->buttonDownScenePos(Qt::LeftButton)).manhattanLength() > 8) return;
         QMetaObject::invokeMethod(m_dialog, [dialog = m_dialog, id = m_itemId] { dialog->centreOn(id); },
                                   Qt::QueuedConnection);
     }

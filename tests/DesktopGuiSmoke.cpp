@@ -16,6 +16,9 @@
 #include <QCheckBox>
 #include <QFile>
 #include <QFrame>
+#include <QGraphicsItem>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QImage>
 #include <QPainter>
 #include <QDateTimeEdit>
@@ -180,11 +183,27 @@ void checkGraph(lexicon::LexiconApplication &application, int group) {
     QApplication::processEvents();
     check(!dialog.isFullScreen() && dialog.isVisible(), "Escape leaves full screen and keeps the dialog open");
   }
+  // Where a node is on screen, for the clicks the hint promises.
+  auto *view = dialog.findChild<QGraphicsView *>();
+  const auto nodeCentre = [&](int itemId) {
+    QPoint where(-1, -1);
+    if (!view) return where;
+    for (auto *item : view->scene()->items())
+      if (item->data(0).toInt() == itemId) where = view->mapFromScene(item->sceneBoundingRect().center());
+    return where;
+  };
+  check(nodeCentre(abelian) != QPoint(-1, -1), "the graph draws a node for Abelian group");
+  QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), nodeCentre(abelian));
+  QApplication::processEvents();
+  check(dialog.centreItemId() == abelian, "a click on a node centres the graph on it");
+
   dialog.centreOn(module);
   check(dialog.nodeCount() == 3 && dialog.centreItemId() == module,
         "centring on Module reloads around it, where Field is three links away");
-  dialog.openItem(module);
-  check(dialog.openedItemId() == module && dialog.result() == QDialog::Accepted, "opening an item closes the dialog with it");
+  QTest::mouseDClick(view->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), nodeCentre(abelian));
+  QApplication::processEvents();
+  check(dialog.openedItemId() == abelian && dialog.result() == QDialog::Accepted,
+        "a double click on a node opens that item and closes the dialog");
 
   // The layout keeps every item apart and the centre in the middle.
   const std::vector<int> depths{0, 1, 1, 1, 2, 2, 2, 2, 2};
