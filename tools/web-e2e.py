@@ -266,6 +266,40 @@ def run(browser, web, server):
         type_into(".search-input", "")
         b.wait("document.querySelectorAll('tbody tr').length >= 2", "the full list again")
 
+    @step("zoom the relationship graph and fill the window with it")
+    def _():
+        client = api["client"]
+        client.call("POST", "/links", {"fromItemId": client.item("Pointer provenance")["id"],
+                                       "toItemId": client.item("Object lifetime")["id"], "linkType": "Related"})
+        b.js("""[...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes('Pointer provenance')).click(); true""")
+        b.wait("!!document.querySelector('tbody tr.selected')", "the selection")
+        menu("View", "Relationship graph...")
+        b.wait("document.querySelectorAll('dialog[open] .graph-node').length === 2", "both items in the graph")
+        width = "parseFloat(document.querySelector('dialog[open] svg.graph').style.width)"
+        fitted = b.js(width)
+        click("dialog[open] button", "+")
+        click("dialog[open] button", "+")
+        b.wait(f"Math.abs({width} - {fitted} * 1.5625) <= 1", "the graph zoomed in twice")
+        click("dialog[open] button", "\u2212")
+        b.wait(f"Math.abs({width} - {fitted} * 1.25) <= 1", "the graph zoomed out")
+        click("dialog[open] button", "Fit")
+        b.wait(f"Math.abs({width} - {fitted}) <= 1", "the graph fitted again")
+        window = "window.innerWidth"
+        click("dialog[open] button", "Full screen")
+        b.wait(f"document.querySelector('dialog[open]').getBoundingClientRect().width === {window}"
+               " && document.querySelector('dialog[open] .graph-canvas').clientHeight > window.innerHeight * 0.6",
+               "the graph filling the window")
+        # Escape leaves full screen and keeps the graph open.
+        b.call("Input.dispatchKeyEvent", session=b.session, type="keyDown", key="Escape", code="Escape",
+               windowsVirtualKeyCode=27)
+        b.call("Input.dispatchKeyEvent", session=b.session, type="keyUp", key="Escape", code="Escape",
+               windowsVirtualKeyCode=27)
+        b.wait(f"document.querySelector('dialog[open] .graph-canvas') !== null"
+               f" && document.querySelector('dialog[open]').getBoundingClientRect().width < {window}",
+               "the graph back in its dialog")
+        click("dialog[open] button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the graph to close")
+
     @step("add a group")
     def _():
         menu("Manage", "Groups...")

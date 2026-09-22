@@ -324,9 +324,10 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/ImageValueView.cpp
         )
         target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
+        find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
         target_link_libraries(lexicon-desktop-gui-smoke PRIVATE
             lexicon-application lexicon-storage-sqlite lexicon-json lexicon-qt-bridge
-            lexicon-markdown Qt${QT_VERSION_MAJOR}::Widgets)
+            lexicon-markdown Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Test)
         add_test(NAME desktop_gui_smoke COMMAND lexicon-desktop-gui-smoke)
         set_tests_properties(desktop_gui_smoke PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endif()

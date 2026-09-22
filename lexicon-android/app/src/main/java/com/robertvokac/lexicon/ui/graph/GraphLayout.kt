@@ -20,6 +20,27 @@ object GraphLayout {
     private const val IDEAL = 120.0
     private const val ITERATIONS = 250
 
+    /** How the graph sits on a canvas: pixels per layout unit, and the layout point at the canvas centre. */
+    data class Fit(val scale: Double, val centreX: Double, val centreY: Double)
+
+    /**
+     * Fits every point into [width] x [height] pixels with [margin] pixels to
+     * spare on each side, for the node circles and captions, but never larger
+     * than [maxScale], so two items do not fill a tablet.
+     */
+    fun fit(points: List<Point>, width: Int, height: Int, margin: Double, maxScale: Double): Fit {
+        if (points.isEmpty() || width <= 0 || height <= 0) return Fit(maxScale, 0.0, 0.0)
+        val minX = points.minOf { it.x }
+        val maxX = points.maxOf { it.x }
+        val minY = points.minOf { it.y }
+        val maxY = points.maxOf { it.y }
+        val roomX = max(1.0, width - 2 * margin)
+        val roomY = max(1.0, height - 2 * margin)
+        val scaleX = if (maxX > minX) roomX / (maxX - minX) else maxScale
+        val scaleY = if (maxY > minY) roomY / (maxY - minY) else maxScale
+        return Fit(min(min(scaleX, scaleY), maxScale), (minX + maxX) / 2, (minY + maxY) / 2)
+    }
+
     /** [depths] of node i from the centre, node 0; [edges] as index pairs. */
     fun layout(depths: List<Int>, edges: List<Pair<Int, Int>>): List<Point> {
         val count = depths.size

@@ -12,7 +12,10 @@
 #include <QGraphicsSimpleTextItem>
 #include <QGraphicsView>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QPushButton>
+#include <QShortcut>
 #include <QMessageBox>
 #include <QPalette>
 #include <QVBoxLayout>
@@ -96,13 +99,36 @@ GraphDialog::GraphDialog(int itemId, QWidget* parent) : QDialog(parent), m_centr
     m_summary = new QLabel(this);
     m_summary->setObjectName("graphSummary");
     top->addWidget(m_summary);
+    top->addSpacing(12);
+    const auto tool = [this, top](const QString& text, const QString& name, const QString& tip) {
+        auto* button = new QPushButton(text, this);
+        button->setObjectName(name);
+        button->setToolTip(tip);
+        button->setAutoDefault(false);
+        top->addWidget(button);
+        return button;
+    };
+    auto* zoomIn = tool("+", "graphZoomIn", "Zoom in (Ctrl++)");
+    auto* zoomOut = tool(QString::fromUtf8("\u2212"), "graphZoomOut", "Zoom out (Ctrl+-)");
+    auto* fitButton = tool("Fit", "graphFit", "Show the whole graph (Ctrl+0)");
+    m_fullScreenButton = tool("Full screen", "graphFullScreen", "Use the whole screen (F11)");
+    m_fullScreenButton->setCheckable(true);
+    connect(zoomIn, &QPushButton::clicked, this, [this] { zoomBy(1.25); });
+    connect(zoomOut, &QPushButton::clicked, this, [this] { zoomBy(1 / 1.25); });
+    connect(fitButton, &QPushButton::clicked, this, &GraphDialog::fit);
+    connect(m_fullScreenButton, &QPushButton::toggled, this, &GraphDialog::setFullScreen);
+    for (const auto& keys : {QKeySequence(QKeySequence::ZoomIn), QKeySequence("Ctrl+=")})
+        connect(new QShortcut(keys, this), &QShortcut::activated, this, [this] { zoomBy(1.25); });
+    connect(new QShortcut(QKeySequence::ZoomOut, this), &QShortcut::activated, this, [this] { zoomBy(1 / 1.25); });
+    connect(new QShortcut(QKeySequence("Ctrl+0"), this), &QShortcut::activated, this, &GraphDialog::fit);
+    connect(new QShortcut(QKeySequence("F11"), this), &QShortcut::activated, m_fullScreenButton, &QPushButton::toggle);
     root->addLayout(top);
     m_scene = new QGraphicsScene(this);
     m_view = new ZoomingView(m_scene, this);
     m_view->setRenderHint(QPainter::Antialiasing);
     m_view->setDragMode(QGraphicsView::ScrollHandDrag);
     root->addWidget(m_view, 1);
-    auto* hint = new QLabel("Click an item to centre on it, double-click to open it. The wheel zooms.", this);
+    auto* hint = new QLabel("Click an item to centre on it, double-click to open it. The wheel zooms; drag to move.", this);
     hint->setEnabled(false);
     root->addWidget(hint);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
@@ -120,6 +146,30 @@ void GraphDialog::showEvent(QShowEvent* event) {
 void GraphDialog::resizeEvent(QResizeEvent* event) {
     QDialog::resizeEvent(event);
     fit();
+}
+
+void GraphDialog::zoomBy(double factor) {
+    const double next = zoom() * factor;
+    if (next < 0.05 || next > 8) return;
+    m_view->scale(factor, factor);
+}
+
+double GraphDialog::zoom() const { return m_view->transform().m11(); }
+
+void GraphDialog::setFullScreen(bool fullScreen) {
+    if (fullScreen == isFullScreen()) return;
+    if (fullScreen) showFullScreen(); else showNormal();
+    const QSignalBlocker blocker(m_fullScreenButton);
+    m_fullScreenButton->setChecked(fullScreen);
+    m_fullScreenButton->setText(fullScreen ? "Exit full screen" : "Full screen");
+}
+
+void GraphDialog::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Escape && isFullScreen()) {
+        setFullScreen(false);
+        return;
+    }
+    QDialog::keyPressEvent(event);
 }
 
 void GraphDialog::fit() {

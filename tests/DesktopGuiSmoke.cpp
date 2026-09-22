@@ -31,6 +31,7 @@
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QTimer>
+#include <QtTest/QTest>
 
 #include <chrono>
 #include <cmath>
@@ -158,6 +159,27 @@ void checkGraph(lexicon::LexiconApplication &application, int group) {
   if (summary) check(summary->text().startsWith("4 item(s), 3 link(s)"), "the summary counts, got " + summary->text().toStdString());
   dialog.show();
   shot(dialog, "graph");
+  // Zoom in and out with the buttons, back to the fit, and the whole screen.
+  auto *zoomIn = child<QPushButton>(dialog, "graphZoomIn");
+  auto *zoomOut = child<QPushButton>(dialog, "graphZoomOut");
+  auto *fitButton = child<QPushButton>(dialog, "graphFit");
+  auto *fullScreen = child<QPushButton>(dialog, "graphFullScreen");
+  if (zoomIn && zoomOut && fitButton && fullScreen) {
+    const double fitted = dialog.zoom();
+    zoomIn->click();
+    zoomIn->click();
+    check(std::abs(dialog.zoom() - fitted * 1.5625) < 1e-9, "the + button zooms in");
+    zoomOut->click();
+    check(std::abs(dialog.zoom() - fitted * 1.25) < 1e-9, "the - button zooms out");
+    fitButton->click();
+    check(std::abs(dialog.zoom() - fitted) < 1e-9, "Fit shows the whole graph again");
+    fullScreen->click();
+    QApplication::processEvents();
+    check(dialog.isFullScreen() && fullScreen->text() == "Exit full screen", "Full screen gives the graph the screen");
+    QTest::keyClick(&dialog, Qt::Key_Escape);
+    QApplication::processEvents();
+    check(!dialog.isFullScreen() && dialog.isVisible(), "Escape leaves full screen and keeps the dialog open");
+  }
   dialog.centreOn(module);
   check(dialog.nodeCount() == 3 && dialog.centreItemId() == module,
         "centring on Module reloads around it, where Field is three links away");

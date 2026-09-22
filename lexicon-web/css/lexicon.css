@@ -900,10 +900,24 @@ img.broken { font-size: 0.85em; color: var(--text-muted); padding: 6px; }
 a.wiki-link { text-decoration-style: dotted; }
 
 /* Relationship graph */
-.graph-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.graph-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.graph-summary-slot { flex: 1 1 auto; }
+.graph-tools { display: flex; gap: 4px; flex-wrap: wrap; }
+.graph-tool { min-width: 36px; }
+.graph-tool[aria-pressed="true"] { border-color: var(--accent); }
 .graph-canvas { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-    height: min(62vh, 640px); overflow: auto; display: flex; align-items: center; justify-content: center; }
-svg.graph { width: 100%; height: 100%; }
+    height: min(62vh, 640px); overflow: auto; display: flex; }
+.graph-canvas.panning { cursor: grabbing; user-select: none; }
+/* margin: auto centres the drawing and, unlike justify-content, lets every
+   part of a zoomed one be scrolled to. */
+svg.graph { flex: none; margin: auto; }
+/* Full screen: the graph takes the whole window, the canvas all it can. */
+.dialog.graph-full-screen { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+    margin: 0; border: 0; border-radius: 0; }
+.graph-full-screen .dialog-form { height: 100%; max-height: none; }
+.graph-full-screen .dialog-body { display: flex; }
+.graph-full-screen .graph-dialog { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.graph-full-screen .graph-canvas { flex: 1 1 auto; height: auto; min-height: 0; }
 .graph-edge { stroke: var(--border-strong); stroke-width: 1.5; }
 .graph-arrow { fill: var(--border-strong); }
 .graph-edge-label { fill: var(--text-muted); font-size: 11px; }

@@ -1,5 +1,7 @@
 // The items around one item as a graph: links are arrows labelled with their
 // type. A click centres the graph on another item; a double click opens it.
+// The graph fits the canvas; it zooms in and out (buttons, + and -, Ctrl and
+// the wheel), a drag of the background pans it, and it can fill the window.
 import { api } from './api.js';
 import { openDialog } from './dialogs.js';
 import { layoutGraph } from './graphlayout.js';
@@ -7,6 +9,9 @@ import { clear, el, fillSelect, formatItemTitle, linkDescription } from './utils
 
 const SVG = 'http://www.w3.org/2000/svg';
 const RADIUS = 26;
+const ZOOM_STEP = 1.25;
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 8;
 
 function svg(tag, attributes = {}, children = []) {
     const node = document.createElementNS(SVG, tag);
@@ -31,6 +36,11 @@ export function openGraph(itemId) {
     ], 2);
     const summary = el('span', { class: 'hint graph-summary' });
     const canvas = el('div', { class: 'graph-canvas' });
+    // The drawn graph: its size in layout units, and the zoom over the size
+    // that fits the canvas.
+    let drawing = null;
+    let natural = { width: 1, height: 1 };
+    let zoom = 1;
     const status = el('p', { class: 'dialog-error', role: 'alert', hidden: true });
     // Closes the dialog with the item to open.
     const openItem = (id) => {
@@ -38,6 +48,92 @@ export function openGraph(itemId) {
         const dialog = canvas.closest('dialog');
         if (dialog) dialog.close();
     };
+
+    // Never drawn larger than life when it fits: a small graph stays small.
+    function fittedScale() {
+        const room = { width: Math.max(canvas.clientWidth - 4, 1), height: Math.max(canvas.clientHeight - 4, 1) };
+        return Math.min(room.width / natural.width, room.height / natural.height, 1);
+    }
+
+    // Sizes the drawing for the zoom and keeps the middle of the view where
+    // it was.
+    function applyZoom() {
+        if (!drawing) return;
+        const middle = {
+            x: (canvas.scrollLeft + canvas.clientWidth / 2) / Math.max(canvas.scrollWidth, 1),
+            y: (canvas.scrollTop + canvas.clientHeight / 2) / Math.max(canvas.scrollHeight, 1),
+        };
+        const scale = fittedScale() * zoom;
+        drawing.style.width = `${Math.floor(natural.width * scale)}px`;
+        drawing.style.height = `${Math.floor(natural.height * scale)}px`;
+        canvas.scrollLeft = middle.x * canvas.scrollWidth - canvas.clientWidth / 2;
+        canvas.scrollTop = middle.y * canvas.scrollHeight - canvas.clientHeight / 2;
+        zoomOut.disabled = zoom <= MIN_ZOOM;
+        zoomIn.disabled = zoom >= MAX_ZOOM;
+    }
+
+    function zoomBy(factor) {
+        zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+        applyZoom();
+    }
+
+    function fit() {
+        zoom = 1;
+        applyZoom();
+    }
+
+    const zoomIn = el('button', { type: 'button', class: 'secondary graph-tool', text: '+',
+        title: 'Zoom in (+)', 'aria-label': 'Zoom in', onclick: () => zoomBy(ZOOM_STEP) });
+    const zoomOut = el('button', { type: 'button', class: 'secondary graph-tool', text: '\u2212',
+        title: 'Zoom out (-)', 'aria-label': 'Zoom out', onclick: () => zoomBy(1 / ZOOM_STEP) });
+    const fitButton = el('button', { type: 'button', class: 'secondary graph-tool', text: 'Fit',
+        title: 'Fit the graph (0)', onclick: fit });
+    const fullScreen = el('button', { type: 'button', class: 'secondary graph-tool', text: 'Full screen',
+        'aria-pressed': 'false', onclick: () => setFullScreen(!isFullScreen()) });
+
+    const isFullScreen = () => fullScreen.getAttribute('aria-pressed') === 'true';
+
+    // Fills the browser window; the dialog keeps its buttons.
+    function setFullScreen(on) {
+        const dialog = canvas.closest('dialog');
+        if (dialog) dialog.classList.toggle('graph-full-screen', on);
+        fullScreen.setAttribute('aria-pressed', String(on));
+        fullScreen.textContent = on ? 'Exit full screen' : 'Full screen';
+        applyZoom();
+    }
+
+    // A size change of the canvas (full screen, a resized window) fits the
+    // drawing again at the same zoom.
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(() => applyZoom()).observe(canvas);
+    }
+
+    canvas.addEventListener('wheel', (event) => {
+        if (!event.ctrlKey) return; // A plain wheel scrolls.
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+    }, { passive: false });
+
+    // A mouse drag on the background pans; a finger scrolls the canvas anyway.
+    canvas.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'mouse' || event.button !== 0 || event.target.closest('.graph-node')) return;
+        const start = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop };
+        canvas.setPointerCapture(event.pointerId);
+        canvas.classList.add('panning');
+        const move = (moved) => {
+            canvas.scrollLeft = start.left - (moved.clientX - start.x);
+            canvas.scrollTop = start.top - (moved.clientY - start.y);
+        };
+        const stop = () => {
+            canvas.classList.remove('panning');
+            canvas.removeEventListener('pointermove', move);
+            canvas.removeEventListener('pointerup', stop);
+            canvas.removeEventListener('pointercancel', stop);
+        };
+        canvas.addEventListener('pointermove', move);
+        canvas.addEventListener('pointerup', stop);
+        canvas.addEventListener('pointercancel', stop);
+    });
 
     async function load() {
         status.hidden = true;
@@ -66,7 +162,8 @@ export function openGraph(itemId) {
         const minY = Math.min(...ys) - margin;
         const width = Math.max(...xs) - Math.min(...xs) + 2 * margin;
         const height = Math.max(...ys) - Math.min(...ys) + 2 * margin;
-        const drawing = svg('svg', {
+        natural = { width, height };
+        drawing = svg('svg', {
             viewBox: `${minX} ${minY} ${width} ${height}`,
             class: 'graph',
             role: 'img',
@@ -75,8 +172,6 @@ export function openGraph(itemId) {
             id: 'graph-arrow', viewBox: '0 0 10 10', refX: 10, refY: 5,
             markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse',
         }, [svg('path', { d: 'M 0 0 L 10 5 L 0 10 z', class: 'graph-arrow' })])])]);
-        // Never drawn larger than life on a wide screen.
-        drawing.style.maxWidth = `${Math.max(width, 320)}px`;
         for (const edge of graph.edges) {
             const from = points[index.get(edge.fromItemId)];
             const to = points[index.get(edge.toItemId)];
@@ -127,24 +222,49 @@ export function openGraph(itemId) {
             drawing.appendChild(group);
         });
         canvas.appendChild(drawing);
+        // Another centre is another graph: it starts fitted.
+        fit();
         summary.textContent = `${graph.nodes.length} item(s), ${graph.edges.length} link(s)`
             + (graph.truncated ? ', more not shown' : '');
     }
 
+    const body = el('div', { class: 'graph-dialog' }, [
+        el('div', { class: 'graph-header' }, [el('label', { text: 'Depth:' }), depthSelect,
+            el('span', { class: 'graph-summary-slot' }, [summary]),
+            el('span', { class: 'graph-tools' }, [zoomOut, zoomIn, fitButton, fullScreen])]),
+        canvas,
+        status,
+        el('p', { class: 'hint', text: 'Click an item to centre on it, double-click or Enter to open it. '
+            + 'Zoom with + and \u2212 or Ctrl and the wheel, drag the background to move around.' }),
+    ]);
+    body.addEventListener('keydown', (event) => {
+        if (event.target.matches('select, input, textarea') || event.altKey || event.metaKey) return;
+        if (event.key === '+' || event.key === '=') zoomBy(ZOOM_STEP);
+        else if (event.key === '-') zoomBy(1 / ZOOM_STEP);
+        else if (event.key === '0') fit();
+        else return;
+        event.preventDefault();
+    });
+
     depthSelect.addEventListener('change', load);
     load();
-    return openDialog({
+    const shown = openDialog({
         title: 'Relationship graph',
-        body: el('div', { class: 'graph-dialog' }, [
-            el('div', { class: 'graph-header' }, [el('label', { text: 'Depth:' }), depthSelect,
-                el('span', { class: 'spacer' }), summary]),
-            canvas,
-            status,
-            el('p', { class: 'hint', text: 'Click an item to centre on it, double-click or Enter to open it.' }),
-        ]),
+        body,
         wide: true,
         showAccept: false,
         cancelLabel: 'Close',
         extraActions: [{ label: 'Open centre', onClick: () => openItem(centre) }],
-    }).then(() => opened);
+    });
+    // Escape leaves full screen first, the next one closes the graph. The
+    // key itself, as the browser may not let a page cancel the cancel event.
+    const dialog = canvas.closest('dialog');
+    if (dialog) {
+        dialog.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape' || !isFullScreen()) return;
+            event.preventDefault();
+            setFullScreen(false);
+        }, true);
+    }
+    return shown.then(() => opened);
 }
