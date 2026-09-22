@@ -39,6 +39,10 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    // The picture is fitted to the scroll area's viewport whenever that
+    // changes size - also when it is first laid out, after the dialog's own
+    // resize, when a fit to the unsized viewport would show a thumbnail.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void updatePicture();

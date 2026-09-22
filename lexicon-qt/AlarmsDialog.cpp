@@ -154,7 +154,13 @@ void AlarmsDialog::reload(int selectId) {
         for (int column = 0; column < cells.size(); ++column) {
             auto* cell = new QTableWidgetItem(cells[column]);
             cell->setData(Qt::UserRole, alarm.id);
-            if (gone) {
+            if (gone && alarm.dismissedAt.empty()) {
+                // Gone off and nobody has dismissed it: it rings until then.
+                QFont bold = cell->font();
+                bold.setBold(true);
+                cell->setFont(bold);
+                cell->setToolTip("Ringing");
+            } else if (gone) {
                 cell->setForeground(past);
                 cell->setToolTip("Already gone off");
             } else if (column == 2 && !description.isEmpty()) {

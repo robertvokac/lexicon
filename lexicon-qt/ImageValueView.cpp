@@ -5,6 +5,7 @@
 #include <QCache>
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QEvent>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -104,6 +105,7 @@ ImageViewDialog::ImageViewDialog(const QImage& image, const QString& title, QWid
     m_picture->setAlignment(Qt::AlignCenter);
     m_scroll->setWidget(m_picture);
     m_scroll->setWidgetResizable(true);
+    m_scroll->viewport()->installEventFilter(this);
     root->addWidget(m_scroll, 1);
     auto* bottom = new QHBoxLayout();
     auto* fit = new QCheckBox("Fit to window", this);
@@ -125,6 +127,11 @@ ImageViewDialog::ImageViewDialog(const QImage& image, const QString& title, QWid
 void ImageViewDialog::setFitsWindow(bool fit) {
     m_fit = fit;
     updatePicture();
+}
+
+bool ImageViewDialog::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_scroll->viewport() && event->type() == QEvent::Resize) updatePicture();
+    return QDialog::eventFilter(watched, event);
 }
 
 void ImageViewDialog::resizeEvent(QResizeEvent* event) {

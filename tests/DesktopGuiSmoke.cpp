@@ -236,7 +236,8 @@ void checkAlarms(lexicon::LexiconApplication &application) {
   check(table->item(0, 1)->text() == "Old call" && table->item(1, 1)->text() == "Renew the passport",
         "the soonest first");
   check(table->item(1, 2)->text() == "Photos first.", "with its description");
-  check(table->item(0, 0)->toolTip() == "Already gone off", "one already gone off is marked");
+  check(table->item(0, 0)->toolTip() == "Ringing" && table->item(0, 0)->font().bold(),
+        "one gone off and not dismissed is marked as ringing");
   check(summary->text() == "2 alarm(s), 1 still to go off", "the summary counts what is still to come");
   shot(list, "alarms");
   list.selectAlarm(editor.alarm().id);
@@ -319,6 +320,7 @@ void checkImages(lexicon::LexiconApplication &application, int group, const fs::
   auto *fit = child<QCheckBox>(viewer, "imageFit");
   if (!picture || !fit) return;
   check(picture->pixmap().width() < 400, "a large image is fitted to the window");
+  check(picture->pixmap().width() >= 200, "and fills it rather than showing a thumbnail");
   fit->setChecked(false);
   check(picture->pixmap().size() == QSize(400, 300), "and shown at its own size on request");
   check(!imagevalues::thumbnail(value, 24).isNull() && imagevalues::thumbnail(value, 24).width() == 24,
