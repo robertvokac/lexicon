@@ -52,6 +52,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
+- An Inbox for ideas: a title and plain text, saved to `Default` without a type in one step
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
 - A relationship graph of the items around one item, up to three links away
@@ -378,6 +379,7 @@ Use these controls to browse large lexicons without loading everything into one 
 You have two add options in the main toolbar:
 
 - `Add`: quick add path; title is prefilled from current search text
+- `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group without a type, whatever the filters show
 - `Add ...`: full add dialog path
 
 Both actions use the selected Type filter for the new item. With `All groups` selected, a group-scoped type also determines the new item's group.
@@ -601,7 +603,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; review with spaced repetition; `[[wiki links]]` between items; a relationship graph
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

@@ -251,6 +251,8 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/GraphLayout.h
         lexicon-qt/GraphDialog.h
         lexicon-qt/GraphDialog.cpp
+        lexicon-qt/InboxDialog.h
+        lexicon-qt/InboxDialog.cpp
     )
 
     target_link_libraries(Lexicon PRIVATE
@@ -291,6 +293,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/GraphLayout.h
             lexicon-qt/GraphDialog.h
             lexicon-qt/GraphDialog.cpp
+            lexicon-qt/InboxDialog.h
+            lexicon-qt/InboxDialog.cpp
         )
         target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
         target_link_libraries(lexicon-desktop-gui-smoke PRIVATE

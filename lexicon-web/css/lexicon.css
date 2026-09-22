@@ -862,3 +862,6 @@ svg.graph { width: 100%; height: 100%; }
 .graph-node:focus-visible circle, .graph-node:hover circle { stroke: var(--accent); stroke-width: 3; }
 .graph-node:focus { outline: none; }
 .graph-caption { fill: var(--text); font-size: 13px; }
+
+/* Inbox */
+.inbox-content { width: 100%; font-family: var(--font-ui); resize: vertical; }

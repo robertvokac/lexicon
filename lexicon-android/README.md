@@ -195,6 +195,8 @@ accept it; install a proper certificate instead.
   the same rule as the desktop's Add. Items already named like that anywhere
   are shown first, and nothing is added until you choose **Add anyway**.
   **More…** opens the full editor instead, the desktop's Add ….
+- **Inbox.** The tray button above the list catches an idea: a title and plain
+  text, saved to `Default` without a type, whatever the filters show.
 - **Item page.** Title, group and type, status, understanding, pinned, tags,
   flags, aliases, values (with **Save as…** for blobs), properties, the rendered
   Markdown content, links and backlinks. Links open the item they point to,

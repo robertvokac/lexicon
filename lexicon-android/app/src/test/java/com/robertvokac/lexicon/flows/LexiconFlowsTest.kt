@@ -211,6 +211,26 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun theInboxSavesAnIdeaToDefaultWithoutAType() {
+        login()
+        compose.onNodeWithContentDescription("Inbox: save an idea").performClick()
+        compose.waitForText("Saved to Default, without a type. Sort it out later.")
+        inDialog("Save").performClick()
+        compose.waitForText("Enter a title.")
+        assertTrue(fake.requestsTo("POST", "/api/v1/items").isEmpty())
+        field("Title").performTextInput("Lock-free queue")
+        field("Idea").performTextInput("Try a ring buffer.\nMeasure it first.")
+        inDialog("Save").performClick()
+        compose.waitForCondition { fake.requestsTo("POST", "/api/v1/items").isNotEmpty() }
+        val item = lastBody("POST", "/api/v1/items")["item"]!!.jsonObject
+        assertEquals("Lock-free queue", item["title"]!!.jsonPrimitive.content)
+        assertEquals("Try a ring buffer.\nMeasure it first.", item["content"]!!.jsonPrimitive.content)
+        assertEquals(1, item["groupId"]!!.jsonPrimitive.int)
+        assertEquals("null", item["itemTypeId"].toString())
+        compose.waitForText("Lock-free queue")
+    }
+
+    @Test
     fun quickAddShowsAnItemThatAlreadyExistsInsteadOfAddingIt() {
         login()
         compose.onNodeWithContentDescription("Quick add item").performClick()

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
@@ -83,6 +85,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -163,6 +166,7 @@ fun ItemsScreen(
                     IconButton(onClick = onOpenDrawer) { Icon(Icons.Filled.Menu, contentDescription = "Open navigation") }
                 },
                 actions = {
+                    IconButton(onClick = viewModel::openInbox) { Icon(Icons.Filled.Inbox, contentDescription = "Inbox: save an idea") }
                     IconButton(onClick = { showFilters = true }) {
                         val active = state.filters.activeCount
                         BadgedBox(badge = { if (active > 0) Badge { Text(active.toString()) } }) {
@@ -250,6 +254,15 @@ fun ItemsScreen(
         FilterSheet(state = state, viewModel = viewModel, onDismiss = { showFilters = false })
     }
 
+    state.inbox?.let { inbox ->
+        InboxDialog(
+            state = inbox,
+            onTitleChange = viewModel::setInboxTitle,
+            onContentChange = viewModel::setInboxContent,
+            onSave = viewModel::submitInbox,
+            onDismiss = viewModel::dismissInbox,
+        )
+    }
     state.quickAdd?.let { quickAdd ->
         QuickAddDialog(
             state = quickAdd,
@@ -561,6 +574,56 @@ private fun QuickAddDialog(
                 TextButton(onClick = onDismiss, enabled = !state.busy) { Text("Cancel") }
             }
         },
+    )
+    LaunchedEffect(Unit) { focus.requestFocus() }
+}
+
+/** An idea, caught quickly: a title and plain text, saved to Default without a type. */
+@Composable
+private fun InboxDialog(
+    state: InboxState,
+    onTitleChange: (String) -> Unit,
+    onContentChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    AlertDialog(
+        onDismissRequest = { if (!state.busy) onDismiss() },
+        title = { Text("Inbox") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Saved to Default, without a type. Sort it out later.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SyncedTextField(
+                    value = state.title,
+                    onValueChange = onTitleChange,
+                    label = "Title",
+                    singleLine = true,
+                    enabled = !state.busy,
+                    isError = state.error != null,
+                    supportingText = state.error,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+                SyncedTextField(
+                    value = state.content,
+                    onValueChange = onContentChange,
+                    label = "Idea",
+                    singleLine = false,
+                    minLines = 5,
+                    enabled = !state.busy,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = { TextButton(onClick = onSave, enabled = !state.busy) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !state.busy) { Text("Cancel") } },
     )
     LaunchedEffect(Unit) { focus.requestFocus() }
 }

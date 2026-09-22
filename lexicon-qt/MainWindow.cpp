@@ -9,6 +9,7 @@
 #include "BlobMaintenanceDialog.h"
 #include "ReviewDialog.h"
 #include "GraphDialog.h"
+#include "InboxDialog.h"
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
@@ -129,6 +130,8 @@ void MainWindow::setupUi() {
     m_searchEdit->setPlaceholderText("Search titles, aliases, tags, flags and content...");
 
     auto* quickAddButton = new QPushButton("Add", centralWidget);
+    auto* inboxButton = new QPushButton("Inbox", centralWidget);
+    inboxButton->setToolTip("Save an idea quickly: a title and plain text, in Default without a type (Ctrl+I)");
     auto* addButton = new QPushButton("Add ...", centralWidget);
     auto* editButton = new QPushButton("Edit", centralWidget);
     auto* deleteButton = new QPushButton("Delete", centralWidget);
@@ -144,6 +147,7 @@ void MainWindow::setupUi() {
     m_searchEdit->setMinimumWidth(400);
     m_searchEdit->setMaximumWidth(600);
     searchRowLayout->addWidget(quickAddButton);
+    searchRowLayout->addWidget(inboxButton);
     searchRowLayout->addWidget(addButton);
     searchRowLayout->addWidget(editButton);
     searchRowLayout->addWidget(deleteButton);
@@ -263,6 +267,7 @@ void MainWindow::setupUi() {
         resetPaginationAndRefresh();
     });
     connect(quickAddButton, &QPushButton::clicked, this, &MainWindow::quickAdd);
+    connect(inboxButton, &QPushButton::clicked, this, &MainWindow::openInbox);
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addItem);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedItem);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedItem);
@@ -285,6 +290,10 @@ void MainWindow::setupMenus() {
     auto* fileMenu = menuBar()->addMenu("File");
     auto* refreshAction = fileMenu->addAction("Refresh");
     connect(refreshAction, &QAction::triggered, this, &MainWindow::refreshAll);
+    fileMenu->addSeparator();
+    auto* inboxAction = fileMenu->addAction("Inbox...");
+    inboxAction->setShortcut(QKeySequence("Ctrl+I"));
+    connect(inboxAction, &QAction::triggered, this, &MainWindow::openInbox);
     fileMenu->addSeparator();
     auto* exportAction = fileMenu->addAction("Export...");
     auto* importAction = fileMenu->addAction("Import...");
@@ -883,6 +892,12 @@ void MainWindow::quickAdd() {
     }
 
     m_searchEdit->clear();
+    refreshAll();
+}
+
+void MainWindow::openInbox() {
+    InboxDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) return;
     refreshAll();
 }
 

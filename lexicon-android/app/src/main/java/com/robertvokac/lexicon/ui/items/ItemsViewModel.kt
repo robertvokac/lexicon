@@ -47,6 +47,14 @@ data class QuickAddState(
     val duplicates: DuplicateCheck? = null,
 )
 
+/** The Inbox: an idea caught quickly, as plain text, in Default and without a type. */
+data class InboxState(
+    val title: String = "",
+    val content: String = "",
+    val busy: Boolean = false,
+    val error: String? = null,
+)
+
 data class DuplicateCheck(
     val title: String,
     val groupName: String,
@@ -75,6 +83,7 @@ data class ItemsUiState(
     val flags: List<String> = emptyList(),
     val selectedItemId: Int? = null,
     val quickAdd: QuickAddState? = null,
+    val inbox: InboxState? = null,
     val pendingDelete: Item? = null,
     val deleting: Boolean = false,
     val message: UserMessage? = null,
@@ -436,6 +445,39 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update {
                     it.copy(quickAdd = it.quickAdd?.copy(busy = false, error = failure.userMessage() ?: it.quickAdd.error))
                 }
+            }
+        }
+    }
+
+    // Inbox -------------------------------------------------------------------
+
+    fun openInbox() = _state.update { it.copy(inbox = InboxState()) }
+
+    fun setInboxTitle(title: String) = _state.update { it.copy(inbox = it.inbox?.copy(title = title, error = null)) }
+
+    fun setInboxContent(content: String) = _state.update { it.copy(inbox = it.inbox?.copy(content = content)) }
+
+    fun dismissInbox() = _state.update { it.copy(inbox = null) }
+
+    /** Saves the idea to Default, without a type, whatever the filters show. */
+    fun submitInbox() {
+        val inbox = _state.value.inbox ?: return
+        if (inbox.busy) return
+        val title = inbox.title.trim()
+        if (title.isEmpty()) {
+            _state.update { it.copy(inbox = inbox.copy(error = "Enter a title.")) }
+            return
+        }
+        _state.update { it.copy(inbox = inbox.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            try {
+                val groupId = api.defaultGroupId()
+                val saved = api.createItem(SaveItemRequest(ItemWrite(groupId = groupId, title = title, content = inbox.content)))
+                _state.update { it.copy(inbox = null, message = UserMessage("Saved “$title” to the Inbox.", openItemId = saved.id)) }
+                container.dataChanges.itemChanged(saved.id)
+            } catch (failure: ApiException) {
+                // Everything typed stays, with the reason.
+                _state.update { it.copy(inbox = it.inbox?.copy(busy = false, error = failure.userMessage() ?: it.inbox.error)) }
             }
         }
     }

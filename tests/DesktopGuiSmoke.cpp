@@ -3,6 +3,7 @@
 #include "ApplicationContext.h"
 #include "GraphDialog.h"
 #include "GraphLayout.h"
+#include "InboxDialog.h"
 #include "ItemEditDialog.h"
 #include "MarkdownConverter.h"
 #include "ReviewDialog.h"
@@ -10,7 +11,9 @@
 
 #include <QApplication>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QPlainTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTextBrowser>
@@ -159,6 +162,33 @@ void checkGraph(lexicon::LexiconApplication &application, int group) {
   check(closest > 60, "no two items overlap, closest " + std::to_string(closest));
   check(graphlayout::layout(depths, edges)[5].x == points[5].x, "the layout is the same every time");
 }
+
+void checkInbox(lexicon::LexiconApplication &application) {
+  InboxDialog dialog;
+  dialog.show();
+  auto *title = child<QLineEdit>(dialog, "inboxTitle");
+  auto *content = child<QPlainTextEdit>(dialog, "inboxContent");
+  auto *save = child<QPushButton>(dialog, "inboxSave");
+  auto *error = child<QLabel>(dialog, "inboxError");
+  if (!title || !content || !save || !error) return;
+  save->click();
+  check(dialog.isVisible() && error->text() == "Enter a title.", "a title is required");
+  title->setText("Lock-free queue");
+  content->setPlainText("Try a ring buffer.\nMeasure it first.");
+  shot(dialog, "inbox");
+  save->click();
+  check(dialog.result() == QDialog::Accepted && dialog.savedItemId() > 0, "the idea is saved");
+  const auto item = application.items.loadItem(dialog.savedItemId());
+  check(item && item->groupName == "Default" && item->itemTypeId <= 0 &&
+            item->content == "Try a ring buffer.\nMeasure it first.",
+        "in Default, without a type, with the text as typed");
+  InboxDialog twin;
+  child<QLineEdit>(twin, "inboxTitle")->setText("Lock-free queue");
+  child<QPushButton>(twin, "inboxSave")->click();
+  check(twin.result() != QDialog::Accepted &&
+            child<QLabel>(twin, "inboxError")->text().contains("already exists"),
+        "a title already in Default is refused with the reason");
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -177,6 +207,7 @@ int main(int argc, char **argv) {
   checkReview(application, group);
   checkWikiLinks(application, group);
   checkGraph(application, group);
+  checkInbox(application);
 
   if (failures == 0) std::cout << "desktop_gui_smoke: all checks passed\n";
   return failures == 0 ? 0 : 1;

@@ -1,7 +1,7 @@
 // The main window: search and actions, the filtered item table with its filter
 // row, pagination, the Markdown preview and the link/backlink preview.
 import { api } from './api.js';
-import { confirmDialog, errorDialog, messageDialog, openDialog } from './dialogs.js';
+import { confirmDialog, errorDialog, field, messageDialog, openDialog } from './dialogs.js';
 import { clearDraft, latestDraft } from './drafts.js';
 import { openGraph } from './graph.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
@@ -125,6 +125,10 @@ export class MainView {
             class: 'primary',
             title: 'Quick add the search text as a new item',
         });
+        this.inboxButton = button('Inbox', {
+            class: 'secondary',
+            title: 'Save an idea quickly: a title and plain text, in Default without a type',
+        });
         this.addButton = button('Add ...', {
             class: 'secondary',
             title: 'Open the full item editor',
@@ -155,7 +159,7 @@ export class MainView {
         this.overflowMenu = el('div', { class: 'menu overflow-menu' },
             [this.overflowTrigger, this.overflowPopup]);
         this.inlineActions = el('div', { class: 'action-buttons' }, [
-            this.quickAddButton, this.addButton, this.editButton,
+            this.quickAddButton, this.inboxButton, this.addButton, this.editButton,
             this.deleteButton, this.columnsButton, this.propertyFilterButton,
         ]);
 
@@ -533,7 +537,7 @@ export class MainView {
         }
         // On a phone the secondary actions live behind the overflow menu.
         const host = this.compact ? this.overflowPopup : this.inlineActions;
-        for (const action of [this.addButton, this.editButton, this.deleteButton,
+        for (const action of [this.inboxButton, this.addButton, this.editButton, this.deleteButton,
             this.columnsButton, this.propertyFilterButton]) {
             action.classList.toggle('menu-item', this.compact);
             if (action.parentElement !== host) host.appendChild(action);
@@ -610,6 +614,7 @@ export class MainView {
             }
         });
         this.quickAddButton.addEventListener('click', () => this.quickAdd());
+        this.inboxButton.addEventListener('click', () => this.openInbox());
         this.addButton.addEventListener('click', () => this.addItem());
         this.editButton.addEventListener('click', () => this.editSelectedItem());
         this.deleteButton.addEventListener('click', () => this.deleteSelectedItem());
@@ -1253,6 +1258,46 @@ export class MainView {
         } catch (error) {
             if (!error.isUnauthorized) await errorDialog(error.message);
         }
+    }
+
+    // An idea, caught quickly: a title and plain text, saved to Default without
+    // a type whatever the filters show.
+    async openInbox() {
+        const title = el('input', { type: 'text', maxlength: '2000', autocomplete: 'off' });
+        const content = el('textarea', { rows: '8', class: 'inbox-content', placeholder: 'Plain text' });
+        const saved = await openDialog({
+            title: 'Inbox',
+            body: el('div', {}, [
+                el('p', { class: 'hint', text: 'Saved to Default, without a type. Sort it out later.' }),
+                field('Title:', title),
+                field('Idea:', content),
+            ]),
+            acceptLabel: 'Save',
+            initialFocus: title,
+            // A stray tap beside the dialog must not throw the idea away.
+            closeOnBackdrop: false,
+            onAccept: async ({ fail }) => {
+                const text = title.value.trim();
+                if (!text) {
+                    fail('Enter a title.');
+                    title.focus();
+                    return undefined;
+                }
+                try {
+                    const groupId = await api.defaultGroupId();
+                    const result = await api.createItem({
+                        item: { groupId, itemTypeId: null, title: text, content: content.value },
+                    });
+                    return result.id;
+                } catch (error) {
+                    fail(error.message);
+                    return undefined;
+                }
+            },
+        });
+        if (!saved) return;
+        await this.refreshGroups();
+        await this.refreshItems();
     }
 
     async addItem(title = this.searchInput.value.trim(), disambiguation = '') {
