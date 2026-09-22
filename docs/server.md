@@ -148,6 +148,9 @@ intentional, not a bug.
 | `--login-failure-window S` | `900` | Rate limit window |
 | `--login-max-failures-total N` | `200` | Failed logins from all clients before 429 (0 disables) |
 | `--login-max-parallel-hashes N` | `2` | Password derivations allowed to run at once |
+| `--backup-dir DIR` | off | Back up automatically into this directory (see below) |
+| `--backup-interval H` | `24` | Hours between automatic backups |
+| `--backup-keep N` | `14` | Backups kept; older ones are removed |
 | `--quiet` | off | Do not log one line per request |
 
 ## Sessions across restarts
@@ -288,6 +291,57 @@ system's, and on network shares (NFS, SMB) they are not reliable enough for
 two processes to write safely.
 
 ## Backups while the server runs
+
+### Automatic backups
+
+```bash
+LexiconServer --database ~/lexicon/lexicon.db --backup-dir /backup/lexicon \
+  --backup-interval 24 --backup-keep 14
+```
+
+With `--backup-dir` the server backs itself up: at start when the newest backup
+is older than the interval (at once when there is none), then every
+`--backup-interval` hours. A failed backup is logged and tried again an hour
+later. Each backup is a directory of its own, complete by itself:
+
+```text
+/backup/lexicon/
+  lexicon-backup-2026-09-22T08-00-00Z/
+    lexicon.db             consistent copy of the database (SQLite VACUUM INTO)
+    lexicon-export.json    the same dictionary in the export format, readable by any Lexicon
+    blobs/ab/cdef...       the Blob files
+    backup.json            what the backup holds; written last
+  lexicon-backup-2026-09-21T08-00-00Z/
+  ...
+```
+
+- The copy is taken on a connection of its own while the server keeps
+  answering; SQLite's locks make it one consistent moment.
+- Blob files never change, so a file already in the previous backup is shared
+  with it through a hard link: it takes no space again, and removing the older
+  backup leaves it in the newer one. Where hard links are impossible (another
+  file system, FAT) the file is copied.
+- A backup is built under a temporary `.partial-...` name and renamed when
+  complete, so an interrupted one never looks like a backup. A partial
+  directory older than a day is cleared away by the next backup.
+- After a new backup succeeds, all but the newest `--backup-keep` are removed.
+  Nothing is removed while backups fail.
+- The credentials file and the sessions are not backed up: re-create the user
+  with `auth set-user`, and people sign in again.
+- Backups hold every note in the dictionary. On POSIX they are created
+  owner-only (mode 0700 directories, 0600 files); on Windows they inherit the
+  ACL of the backup directory, so choose one only you can read. The backup
+  directory must not be inside `blobs/`.
+
+`LexiconServer backup --backup-dir DIR [--backup-keep N]` makes one backup now,
+with the same layout and rotation, also while the server runs - for cron, or
+before an upgrade.
+
+To restore, stop the server and copy one backup's `lexicon.db` and `blobs/`
+back next to each other (`cp -a` copies shared files as ordinary files), or import its
+`lexicon-export.json` into another database with `LexiconServer import`.
+
+### By hand
 
 `lexicon.db` and the `blobs/` directory next to it are the complete data set.
 Copying `lexicon.db` with `cp` while something writes to it can capture half a

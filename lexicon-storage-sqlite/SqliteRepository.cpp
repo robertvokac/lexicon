@@ -1543,3 +1543,17 @@ SqliteRepository::collectUnusedBlobs(const lexicon::BlobMaintenanceReport &scan)
     return result;
   });
 }
+SqliteRepository::Result<void> SqliteRepository::snapshotTo(const std::string &targetPath) {
+  return guarded([&] {
+    require(!impl_->path.empty(), "Database is not open.", lexicon::Error::Code::Storage);
+    require(impl_->unitState == Impl::UnitState::Idle, "Cannot copy the database inside a unit of work.",
+            lexicon::Error::Code::Storage);
+    std::error_code error;
+    require(!fs::exists(utf8Path(targetPath), error), "The snapshot file already exists: " + targetPath,
+            lexicon::Error::Code::Storage);
+    Statement(impl_->db, "VACUUM INTO ?;").bind(targetPath).run();
+  });
+}
+std::string SqliteRepository::blobDirectory(const std::string &databasePath) {
+  return lexicon::pathToUtf8(blobRoot(databasePath));
+}

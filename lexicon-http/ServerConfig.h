@@ -32,6 +32,10 @@ struct ServerConfig {
   int keepAliveTimeoutSeconds = 5;
   std::size_t keepAliveMaxCount = 20;
   bool requestLogging = true;
+  // Automatic backups: off while empty.
+  std::string backupDirectory;
+  int backupIntervalHours = 24;
+  int backupKeep = 14;
 
   bool tlsEnabled() const {
     return !tlsCertificatePath.empty() && !tlsPrivateKeyPath.empty();
@@ -45,8 +49,11 @@ bool isLoopbackAddress(const std::string &address);
 // Refuses a configuration that would expose password authentication over
 // plaintext HTTP, or that is internally inconsistent.
 Result<void> validate(const ServerConfig &config);
+// Refuses a backup directory inside the Blob store, where its files would be
+// taken for Blobs.
+Result<void> validateBackupDirectory(const ServerConfig &config);
 
-enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Help, Version };
+enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Backup, Help, Version };
 
 struct CommandLine {
   Command command = Command::Serve;

@@ -1,6 +1,7 @@
 // Composition root for LexiconServer: SqliteRepository + LexiconApplication +
 // HTTP adapter. No Qt, no HTML, no static files.
 #include "AuthState.h"
+#include "Backup.h"
 #include "Exchange.h"
 #include "FilePath.h"
 #include "LexiconApplication.h"
@@ -15,6 +16,7 @@
 #include <iterator>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -235,6 +237,21 @@ int importDictionary(const lexicon::http::CommandLine &command) {
   return 0;
 }
 
+// One backup now, for cron or before an upgrade; works while the server runs.
+int backupNow(const ServerConfig &config) {
+  if (auto valid = lexicon::http::validateBackupDirectory(config); !valid) {
+    std::cerr << valid.error().message << '\n';
+    return 2;
+  }
+  auto made = lexicon::backup::createBackup({config.databasePath, config.backupDirectory, config.backupKeep});
+  if (!made) {
+    std::cerr << made.error().message << '\n';
+    return 1;
+  }
+  std::cout << lexicon::backup::describe(*made) << '\n';
+  return 0;
+}
+
 int serve(const ServerConfig &config) {
   if (auto valid = lexicon::http::validate(config); !valid) {
     std::cerr << valid.error().message << '\n';
@@ -298,7 +315,24 @@ int serve(const ServerConfig &config) {
   std::cout << "This server never serves lexicon-web; deploy it separately.\n"
             << std::flush;
 
+  // Backups run in a thread of their own, on a connection of their own.
+  std::unique_ptr<lexicon::backup::BackupScheduler> backups;
+  if (!config.backupDirectory.empty()) {
+    const auto existing = lexicon::backup::listBackups(config.backupDirectory);
+    std::cout << "Backups: " << config.backupDirectory << ", every " << config.backupIntervalHours
+              << " h, keeping " << config.backupKeep << " ("
+              << (existing.empty() ? std::string("none yet") : "newest " + existing.front().name) << ")\n"
+              << std::flush;
+    backups = std::make_unique<lexicon::backup::BackupScheduler>(
+        lexicon::backup::BackupOptions{config.databasePath, config.backupDirectory, config.backupKeep},
+        std::chrono::hours(config.backupIntervalHours),
+        [](const std::string &line) { std::cout << line << '\n' << std::flush; });
+    backups->start();
+  }
+
   const auto listened = server.listen();
+  if (backups)
+    backups->stop();
   runningServer.store(nullptr);
   if (!listened) {
     std::cerr << listened.error().message << '\n';
@@ -346,6 +380,8 @@ int main(int argc, char *argv[]) {
     return exportDictionary(*parsed);
   case Command::Import:
     return importDictionary(*parsed);
+  case Command::Backup:
+    return backupNow(parsed->config);
   case Command::Serve:
     break;
   }

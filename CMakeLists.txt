@@ -156,8 +156,16 @@ if (LEXICON_BUILD_SERVER)
     endif()
     set_target_properties(lexicon-http PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
+    add_library(lexicon-backup STATIC
+        lexicon-server/Backup.h
+        lexicon-server/Backup.cpp
+    )
+    target_include_directories(lexicon-backup PUBLIC lexicon-server)
+    target_link_libraries(lexicon-backup PUBLIC lexicon-application lexicon-storage-sqlite lexicon-json Threads::Threads)
+    set_target_properties(lexicon-backup PROPERTIES AUTOMOC OFF AUTORCC OFF)
+
     add_executable(LexiconServer lexicon-server/main.cpp)
-    target_link_libraries(LexiconServer PRIVATE lexicon-http lexicon-storage-sqlite)
+    target_link_libraries(LexiconServer PRIVATE lexicon-http lexicon-storage-sqlite lexicon-backup)
     set_target_properties(LexiconServer PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
     if (BUILD_TESTING)
@@ -175,6 +183,11 @@ if (LEXICON_BUILD_SERVER)
             PRIVATE lexicon-cpp-httplib OpenSSL::Crypto)
         set_target_properties(lexicon-server-test-support PROPERTIES
             AUTOMOC OFF AUTORCC OFF)
+
+        add_executable(lexicon-backup-test tests/Backup.cpp)
+        target_link_libraries(lexicon-backup-test PRIVATE lexicon-backup lexicon-http)
+        set_target_properties(lexicon-backup-test PROPERTIES AUTOMOC OFF AUTORCC OFF)
+        add_test(NAME backup COMMAND lexicon-backup-test)
 
         foreach(suite server-auth:ServerAuth:server_auth
                       server-rest:ServerRest:server_rest
@@ -196,7 +209,7 @@ endif()
 # The backend must remain usable when Qt is not installed.
 set(LEXICON_QT_FREE_TARGETS lexicon-core lexicon-application lexicon-storage-sqlite lexicon-json)
 if (LEXICON_BUILD_SERVER)
-    list(APPEND LEXICON_QT_FREE_TARGETS lexicon-http LexiconServer)
+    list(APPEND LEXICON_QT_FREE_TARGETS lexicon-http lexicon-backup LexiconServer)
 endif()
 foreach(target ${LEXICON_QT_FREE_TARGETS})
     get_target_property(direct_links ${target} LINK_LIBRARIES)

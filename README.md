@@ -563,6 +563,8 @@ Design notes:
 **The SQLite database and Blob directory together form the complete Lexicon data set.**
 Backing up only `lexicon.db` is insufficient when Blob Fields are used.
 
+`LexiconServer --backup-dir DIR` backs the dictionary up automatically, every 24 hours by default, keeping the newest 14 backups: each a consistent copy of the database, a portable export and the Blob files, with unchanged files shared between backups through hard links. `LexiconServer backup --backup-dir DIR` makes one on demand. See [docs/server.md](docs/server.md#backups-while-the-server-runs).
+
 `File -> Export...` writes the whole dictionary as one JSON file, optionally with the files Blob values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. The web client and the Android app offer the same, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
 
 ### Blob lifecycle and maintenance
@@ -622,7 +624,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms; Image values
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

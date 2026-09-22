@@ -23,6 +23,12 @@ public:
   using SortOrder = lexicon::SortOrder;
 
   Result<void> open(const std::string &utf8Path);
+  // A consistent copy of the whole database in a new file at [targetPath],
+  // taken with SQLite's VACUUM INTO while other connections keep working.
+  // The target must not exist yet.
+  Result<void> snapshotTo(const std::string &targetPath);
+  // Where the Blob files of the database at [databasePath] live.
+  static std::string blobDirectory(const std::string &databasePath);
 
   Result<std::map<std::string, std::string>> loadConfiguration() override;
   Result<void>

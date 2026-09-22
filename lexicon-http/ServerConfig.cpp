@@ -2,6 +2,7 @@
 
 #include "Utf8Path.h"
 
+#include <algorithm>
 #include <charconv>
 #include <filesystem>
 
@@ -112,6 +113,20 @@ Result<void> validate(const ServerConfig &config) {
     if (!looksLikeOrigin(origin))
       return invalid("--allowed-origin expects an exact origin such as "
                      "https://lexicon.example.com, got '" + origin + "'.");
+  return validateBackupDirectory(config);
+}
+
+Result<void> validateBackupDirectory(const ServerConfig &config) {
+  if (config.backupDirectory.empty())
+    return {};
+  std::error_code error;
+  const auto blobs = fs::weakly_canonical(fs::absolute(utf8Path(config.databasePath), error).parent_path() / "blobs", error);
+  const auto backups = fs::weakly_canonical(fs::absolute(utf8Path(config.backupDirectory), error), error);
+  if (error)
+    return invalid("Cannot resolve --backup-dir: " + error.message());
+  const auto [blobEnd, _] = std::mismatch(blobs.begin(), blobs.end(), backups.begin(), backups.end());
+  if (blobEnd == blobs.end())
+    return invalid("--backup-dir must not be inside the Blob directory " + pathToUtf8(blobs) + ".");
   return {};
 }
 
@@ -124,6 +139,7 @@ Usage:
   LexiconServer auth show [options]
   LexiconServer export [--output FILE] [--with-files] [options]
   LexiconServer import --input FILE [options]
+  LexiconServer backup --backup-dir DIR [--backup-keep N] [options]
   LexiconServer --help | --version
 
 The server exposes JSON under /api/v1 only. It never serves HTML, CSS,
@@ -161,6 +177,10 @@ Options:
   --login-max-parallel-hashes N
                              Password derivations allowed to run at once
                              (default: 2)
+  --backup-dir DIR           Back up the database, an export and the files here
+                             (off unless given; see docs/server.md)
+  --backup-interval H        Hours between automatic backups (default: 24)
+  --backup-keep N            Backups kept; older ones are removed (default: 14)
   --quiet                    Do not write a request log line per request
   -h, --help                 Show this help
   --version                  Show the version
@@ -196,6 +216,9 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
     } else if (command == "import") {
       ++index;
       parsed.command = Command::Import;
+    } else if (command == "backup") {
+      ++index;
+      parsed.command = Command::Backup;
     } else {
       return invalid("Unknown command '" + command + "'.");
     }
@@ -254,6 +277,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.allowedOrigins.push_back(*value);
     else if (option == "--trusted-proxy")
       parsed.config.trustedProxies.push_back(*value);
+    else if (option == "--backup-dir")
+      parsed.config.backupDirectory = *value;
     else {
       auto number = [&](long long low, long long high) {
         return wholeNumber(option, *value, low, high);
@@ -319,6 +344,16 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
         if (!count)
           return std::unexpected(count.error());
         parsed.config.loginLimits.maxFailuresTotal = static_cast<int>(*count);
+      } else if (option == "--backup-interval") {
+        auto hours = number(1, 24 * 365);
+        if (!hours)
+          return std::unexpected(hours.error());
+        parsed.config.backupIntervalHours = static_cast<int>(*hours);
+      } else if (option == "--backup-keep") {
+        auto count = number(1, 1000);
+        if (!count)
+          return std::unexpected(count.error());
+        parsed.config.backupKeep = static_cast<int>(*count);
       } else if (option == "--login-max-parallel-hashes") {
         auto count = number(1, AuthState::maxHashSlots);
         if (!count)
@@ -331,6 +366,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
   }
   if (parsed.command == Command::Import && parsed.exchangePath.empty())
     return invalid("import needs --input FILE.");
+  if (parsed.command == Command::Backup && parsed.config.backupDirectory.empty())
+    return invalid("backup needs --backup-dir DIR.");
   return parsed;
 }
 } // namespace lexicon::http
