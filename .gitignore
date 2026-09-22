@@ -12,6 +12,10 @@
 cmake-build-debug/*
 
 
+# Python leaves these next to the tools it runs
+__pycache__/
+*.pyc
+
 # Server runtime state must never be committed
 lexicon-auth.json
 lexicon-auth.json.new
