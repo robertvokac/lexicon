@@ -44,14 +44,16 @@ Every failure uses one envelope:
 | 401 | `unauthorized` | Missing, unknown or expired token; wrong credentials |
 | 403 | `origin_not_allowed` | The `Origin` header is not in the allowlist |
 | 404 | `not_found` | No such record or endpoint |
+| 409 | `conflict` | The item was saved by someone else after this client loaded it |
 | 413 | `payload_too_large` | Body over `--max-json-bytes` or `--max-blob-bytes` |
 | 415 | `unsupported_media_type` | Wrong `Content-Type` |
 | 429 | `too_many_requests` | Login rate limit; carries `Retry-After` |
 | 500 | `storage`, `internal` | The server could not complete the operation |
 
 Application errors map as `Validation → 400`, `NotFound → 404`,
-`Storage → 500`. Storage messages stay on the server: SQL, file system paths,
-stack traces, passwords and tokens never appear in a response.
+`Conflict → 409`, `Storage → 500`. Storage messages stay on the server: SQL,
+file system paths, stack traces, passwords and tokens never appear in a
+response.
 
 ## Health
 
@@ -211,7 +213,8 @@ An item:
   "status": "Draft",
   "understanding": "Practiced",
   "pinned": false,
-  "content": "# Monoid\n\nMarkdown source."
+  "content": "# Monoid\n\nMarkdown source.",
+  "revision": 4
 }
 ```
 
@@ -220,6 +223,26 @@ strings. Values keep the representation the database stores: `YYYY-MM-DD` for
 `Date`, `HH:MM[:SS]` for `Time`, `YYYY-MM-DDTHH:MM[:SS]` for `Timestamp`,
 `true`/`false` for `Boolean`, one of `enumOptions` for `Enum`, and a 64
 character lowercase SHA-256 for `Blob`.
+
+### Revisions and conflicts
+
+`revision` counts the changes to an item. It moves on whenever the item is
+saved, whenever one of its links or backlinks is added, changed or removed,
+and whenever a type or field change removes one of its values. A link that is
+sent again unchanged, as every save of the item at its other end does, leaves
+it alone.
+
+A client that sends back the `revision` it loaded gets `409 conflict` if the
+item has changed since, and nothing is written:
+
+```json
+{ "error": { "code": "conflict", "message": "This item was changed elsewhere after you opened it." } }
+```
+
+The client then loads the item again and lets the person choose: save over the
+newer version by repeating the request with its `revision`, or drop the edit.
+A save without `revision`, or with `0`, is not checked. All three Lexicon
+clients send it.
 
 ### Saving an item with its links
 

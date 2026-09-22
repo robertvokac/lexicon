@@ -245,6 +245,33 @@ class ServerIntegrationTest {
     }
 
     @Test
+    fun aSaveBasedOnAnOldRevisionIsAConflict() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val groupId = api.defaultGroupId()
+            val created = api.createItem(EditorRules.saveRequest(EditorFields(groupId = groupId, title = "Conflict ${System.nanoTime()}"), "", emptyList()))
+            val opened = EditorFields(groupId = groupId, title = created.item.title, revision = created.item.revision)
+            val first = api.updateItem(created.id, EditorRules.saveRequest(opened, "From the phone.", emptyList()))
+            assertTrue(first.item.revision > created.item.revision)
+            try {
+                api.updateItem(created.id, EditorRules.saveRequest(opened, "From the desktop.", emptyList()))
+                fail("expected a conflict")
+            } catch (_: ApiException.Conflict) {
+            }
+            val newer = api.item(created.id, withLinks = true)
+            assertEquals("From the phone.", newer.item.content)
+            assertEquals(listOf("Content"), EditorRules.conflictDifferences(opened, "From the desktop.", newer))
+            val overwritten = api.updateItem(created.id, EditorRules.saveRequest(EditorRules.overwriting(opened, newer), "From the desktop.", emptyList()))
+            assertEquals("From the desktop.", overwritten.item.content)
+            api.deleteItem(created.id)
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
     fun anOversizedBlobIsRefused() = runBlocking {
         val environment = TestEnvironment()
         try {

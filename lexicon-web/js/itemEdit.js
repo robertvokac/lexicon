@@ -331,6 +331,70 @@ async function propertyDialog(title, property, existing, skipIndex) {
     });
 }
 
+function sortedText(values) {
+    return JSON.stringify([...(values || [])].sort());
+}
+
+// The other end of a link, its type, position and label: what a save changes.
+function linkKeys(links, otherEnd) {
+    return sortedText(links.map((link) => [otherEnd(link), link.linkType, link.position,
+        link.customValue || ''].join('|')));
+}
+
+// Names what the editor would save differently from the version the server
+// holds now, so the choice below is an informed one.
+function differences(mine, links, backlinks, current) {
+    const theirs = current.item;
+    const names = [];
+    const compare = (label, left, right) => { if (left !== right) names.push(label); };
+    compare('Title', mine.title, theirs.title);
+    compare('Disambiguation', mine.disambiguation, theirs.disambiguation || '');
+    compare('Group', mine.groupId, theirs.groupId);
+    compare('Type', mine.itemTypeId || null, theirs.itemTypeId || null);
+    compare('Status', mine.status, theirs.status);
+    compare('Understanding', mine.understanding, theirs.understanding);
+    compare('Pinned', mine.pinned, theirs.pinned);
+    compare('Content', mine.content, theirs.content || '');
+    compare('Values', JSON.stringify(Object.entries(mine.fieldValues).sort()),
+        JSON.stringify(Object.entries(theirs.fieldValues || {}).sort()));
+    compare('Tags', sortedText(mine.tags), sortedText(theirs.tags));
+    compare('Flags', sortedText(mine.flags), sortedText(theirs.flags));
+    compare('Aliases', sortedText(mine.aliases), sortedText(theirs.aliases));
+    compare('Properties',
+        sortedText(mine.properties.map((property) => `${property.key.toLowerCase()}=${property.value}`)),
+        sortedText((theirs.properties || []).map((property) => `${property.key.toLowerCase()}=${property.value}`)));
+    compare('Links', linkKeys(links, (link) => link.itemId),
+        linkKeys(current.links, (link) => link.toItemId));
+    compare('Backlinks', linkKeys(backlinks, (link) => link.itemId),
+        linkKeys(current.backlinks, (link) => link.fromItemId));
+    return names;
+}
+
+// Another client saved the item after this editor opened it. Resolves with
+// 'overwrite', 'reload', or null to keep editing.
+function askAboutConflict(names) {
+    return openDialog({
+        title: 'Item changed elsewhere',
+        body: el('div', {}, [
+            el('p', { class: 'confirm', text: 'This item was changed elsewhere after you opened it.' }),
+            el('p', {
+                class: 'confirm',
+                text: names.length ? `Your version differs in: ${names.join(', ')}.`
+                    : 'Its saved version now matches yours.',
+            }),
+            el('p', {
+                class: 'hint',
+                text: 'Overwrite saves your version over the newer one. Reload discards your '
+                    + 'changes and shows the newer version.',
+            }),
+        ]),
+        acceptLabel: 'Overwrite',
+        cancelLabel: 'Keep editing',
+        extraActions: [{ label: 'Reload', onClick: ({ close }) => close('reload') }],
+        onAccept: () => 'overwrite',
+    });
+}
+
 // Asks what to do with unsaved changes found in the browser. Resolves with
 // 'use', 'discard', or null when the question is put off.
 export function askAboutDraft(stored, laterLabel = 'Cancel') {
@@ -410,6 +474,9 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
         links = restore.links || [];
         backlinks = restore.backlinks || [];
     }
+    // The revision the edit is based on. A restored draft keeps the one it
+    // started from, so changes made elsewhere since then are noticed.
+    let baseRevision = record.revision || 0;
     let typeChangeConfirmed = false;
     // Pending values survive switching types back and forth, as in Qt.
     const pendingValues = { ...(record.fieldValues || {}) };
@@ -759,6 +826,7 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
                 aliases: [...aliases],
                 properties: properties.map((property) => ({ ...property })),
                 fieldValues: { ...pendingValues },
+                revision: baseRevision,
             },
             links: links.map((link) => ({ ...link })),
             backlinks: backlinks.map((link) => ({ ...link })),
@@ -807,6 +875,7 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
             }
             const payload = {
                 item: {
+                    revision: baseRevision,
                     groupId: Number.parseInt(groupSelect.value, 10),
                     itemTypeId: typeId,
                     title: titleInput.value.trim(),
@@ -836,21 +905,55 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
                     position: link.position,
                 })),
             };
-            try {
-                // One request, one unit of work: the item and both link
-                // directions are committed together or not at all.
-                const result = itemId
-                    ? await api.updateItem(itemId, payload)
-                    : await api.createItem(payload);
-                return result.id;
-            } catch (error) {
-                fail(error.message);
-                return undefined;
+            for (;;) {
+                try {
+                    // One request, one unit of work: the item and both link
+                    // directions are committed together or not at all.
+                    const result = itemId
+                        ? await api.updateItem(itemId, payload)
+                        : await api.createItem(payload);
+                    return result.id;
+                } catch (error) {
+                    if (error.status !== 409 || !itemId) {
+                        fail(error.message);
+                        return undefined;
+                    }
+                }
+                let current;
+                try {
+                    current = await api.getItem(itemId, ['links', 'backlinks']);
+                } catch (error) {
+                    fail(error.message);
+                    return undefined;
+                }
+                const choice = await askAboutConflict(
+                    differences(payload.item, links, backlinks, current));
+                if (choice === 'reload') return { reload: true };
+                if (choice !== 'overwrite') return undefined;
+                baseRevision = current.item.revision;
+                payload.item.revision = baseRevision;
+                // A link removed in the meantime is created again, since its
+                // ID no longer exists.
+                const existing = new Set([...current.links, ...current.backlinks]
+                    .map((link) => link.id));
+                for (const entry of [...payload.links, ...payload.backlinks]) {
+                    if (entry.id !== null && !existing.has(entry.id)) entry.id = null;
+                }
+                for (const link of [...links, ...backlinks]) {
+                    if (link.id !== null && link.id !== undefined && !existing.has(link.id)) {
+                        link.id = null;
+                    }
+                }
             }
         },
     });
 
     refreshPreview.cancel();
+    if (saved && saved.reload) {
+        // The newer version replaces this edit, draft and all.
+        keeper.stop(false);
+        return openItemEditor({ itemId, groups, restore: null });
+    }
     // A cancel is a decision, unless the session ended under the editor: then
     // the draft waits for the next sign-in.
     keeper.stop(saved === null && !api.authenticated);

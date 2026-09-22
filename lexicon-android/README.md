@@ -203,6 +203,9 @@ accept it; install a proper certificate instead.
   request, which the server commits as one unit of work. Changing the type
   asks first when field values would be lost, with their number. A failed save
   keeps everything typed and says why; leaving with unsaved changes asks first.
+  If another client saved the item after the editor opened it, the server
+  refuses the save (409) and the app names what differs, then offers
+  **Overwrite**, **Reload** or **Keep editing**.
 - **Manage.** Groups (add, edit, delete, with the desktop's warning that the
   items go too) and types with their fields (the item and value counts come from
   the server before anything destructive happens).

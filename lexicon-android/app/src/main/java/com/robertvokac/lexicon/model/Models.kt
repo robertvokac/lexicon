@@ -98,6 +98,8 @@ data class Item(
     val understanding: UnderstandingLevel = UnderstandingLevel.Unknown,
     val pinned: Boolean = false,
     val content: String = "",
+    /** Moves on with every change to the item, its values or its links. */
+    val revision: Int = 0,
 ) {
     val displayTitle: String get() = formatItemTitle(title, disambiguation)
 
@@ -191,6 +193,8 @@ data class ItemWrite(
     val aliases: List<String> = emptyList(),
     val properties: List<Property> = emptyList(),
     val fieldValues: Map<String, String> = emptyMap(),
+    /** The revision the edit started from; the server refuses the save with 409 once it has moved on. 0 skips the check. */
+    val revision: Int = 0,
 )
 
 /**

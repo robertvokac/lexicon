@@ -58,6 +58,14 @@ std::vector<std::string> strings(const Connection &db, const std::string &sql, i
   while (stmt.step()) result.push_back(stmt.text(0));
   return result;
 }
+// Every change that an open editor of the item would overwrite moves its
+// revision on, so a save based on the old revision is refused.
+void bumpRevision(const Connection &db, int itemId) {
+  Statement(db, "UPDATE item SET revision = revision + 1 WHERE id = ?;").bind(itemId).run();
+}
+void bumpRevisions(const Connection &db, const std::string &whereSql, int id) {
+  Statement(db, "UPDATE item SET revision = revision + 1 WHERE " + whereSql + ";").bind(id).run();
+}
 void logOperation(const Connection &db, const char *table, int id, int type) {
   Statement(db, "INSERT INTO log(table_name, record_id, log_type) VALUES(?, ?, ?);")
       .bind(table).bind(id).bind(type).run();
@@ -251,6 +259,7 @@ SqliteRepository::Result<int> SqliteRepository::countItemsForType(int itemTypeId
 }
 SqliteRepository::Result<void> SqliteRepository::deleteItemType(int itemTypeId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    bumpRevisions(impl_->db, "item_type_id = ?", itemTypeId);
     Statement(impl_->db, "DELETE FROM item_type WHERE id = ?;").bind(itemTypeId).run();
     requireChanged(impl_->db, "Type");
     logOperation(impl_->db, "item_type", itemTypeId, 3); tx.commit(); });
@@ -272,8 +281,10 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemField
       require(old.step(), "Field not found.", lexicon::Error::Code::NotFound);
       bool invalidated = old.integer(0) != static_cast<int>(field.dataType)
                       || jsonArray(impl_->db, old.text(1)) != options;
-      if (invalidated)
+      if (invalidated) {
+        bumpRevisions(impl_->db, "id IN (SELECT item_id FROM item_value WHERE item_field_id = ?)", id);
         Statement(impl_->db, "DELETE FROM item_value WHERE item_field_id = ?;").bind(id).run();
+      }
       Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ? WHERE id = ?;")
           .bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType)).bind(field.position).bind(json).bind(id).run();
       requireChanged(impl_->db, "Field");
@@ -292,6 +303,7 @@ SqliteRepository::Result<int> SqliteRepository::countFieldValues(int fieldId) {
 }
 SqliteRepository::Result<void> SqliteRepository::deleteItemField(int fieldId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    bumpRevisions(impl_->db, "id IN (SELECT item_id FROM item_value WHERE item_field_id = ?)", fieldId);
     Statement(impl_->db, "DELETE FROM item_field WHERE id = ?;").bind(fieldId).run();
     requireChanged(impl_->db, "Field");
     logOperation(impl_->db, "item_field", fieldId, 3); tx.commit(); });
@@ -377,7 +389,8 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
       "COALESCE((SELECT GROUP_CONCAT(g.name, ', ') FROM tag g WHERE g.item_id = t.id), '') AS tags, "
       "COALESCE((SELECT GROUP_CONCAT(f.name, ', ') FROM flag f WHERE f.item_id = t.id), '') AS flags, "
       "t.understanding, t.status, t.pinned, "
-      "COALESCE(ty.name || CASE WHEN ty.group_id IS NULL THEN ' (All groups)' ELSE '' END, '') "
+      "COALESCE(ty.name || CASE WHEN ty.group_id IS NULL THEN ' (All groups)' ELSE '' END, ''), "
+      "t.revision "
       "FROM item t JOIN item_group m ON m.id = t.group_id "
       "LEFT JOIN item_type ty ON ty.id = t.item_type_id WHERE 1 = 1 ";
     appendFilters(sql, groupId, typeId, valueFilters, searchText, columnFilters,
@@ -428,6 +441,7 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
       item.understanding = static_cast<lexicon::UnderstandingLevel>(stmt.integer(8));
       item.status = static_cast<lexicon::ItemStatus>(stmt.integer(9));
       item.pinned = stmt.integer(10) != 0; item.itemTypeName = stmt.text(11);
+      item.revision = stmt.integer(12);
       items.push_back(std::move(item));
     }
     if (typeId > 0 && !items.empty()) {
@@ -463,7 +477,8 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
   return guarded([&] {
     Statement stmt(impl_->db,
       "SELECT t.id, t.group_id, m.name, t.title, COALESCE(t.disambiguation, ''), "
-      "t.understanding, t.status, t.pinned, COALESCE(t.content, ''), t.item_type_id, COALESCE(ty.name, '') "
+      "t.understanding, t.status, t.pinned, COALESCE(t.content, ''), t.item_type_id, COALESCE(ty.name, ''), "
+      "t.revision "
       "FROM item t JOIN item_group m ON m.id = t.group_id "
       "LEFT JOIN item_type ty ON ty.id = t.item_type_id WHERE t.id = ?;");
     stmt.bind(itemId);
@@ -475,6 +490,7 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
     item.status = static_cast<lexicon::ItemStatus>(stmt.integer(6));
     item.pinned = stmt.integer(7) != 0; item.content = stmt.text(8);
     item.itemTypeId = stmt.isNull(9) ? -1 : stmt.integer(9); item.itemTypeName = stmt.text(10);
+    item.revision = stmt.integer(11);
     Statement values(impl_->db, "SELECT item_field_id, value FROM item_value WHERE item_id = ?;");
     values.bind(itemId);
     while (values.step()) item.fieldValues[values.integer(0)] = values.text(1);
@@ -501,9 +517,13 @@ int saveItemNative(const Connection &db, const std::string &databasePath,
   {
     // A missing Item stays NotFound even when its title matches another.
     if (item.id >= 0) {
-      Statement existing(db, "SELECT 1 FROM item WHERE id = ?;");
+      Statement existing(db, "SELECT revision FROM item WHERE id = ?;");
       existing.bind(item.id);
       if (!existing.step()) throw Failure("Item not found.", lexicon::Error::Code::NotFound);
+      // Checked under the write lock, so no other save can slip in between.
+      if (item.revision > 0 && existing.integer(0) != item.revision)
+        throw Failure("This item was changed elsewhere after you opened it.",
+                      lexicon::Error::Code::Conflict);
     }
     const std::string title = lexicon::trim(item.title);
     const std::string disambiguation = lexicon::trim(item.disambiguation);
@@ -527,7 +547,8 @@ int saveItemNative(const Connection &db, const std::string &databasePath,
     id = db.lastId();
   } else {
     Statement(db, "UPDATE item SET group_id = ?, title = ?, disambiguation = NULLIF(?, ''), "
-                  "understanding = ?, status = ?, pinned = ?, content = ?, item_type_id = ? WHERE id = ?;")
+                  "understanding = ?, status = ?, pinned = ?, content = ?, item_type_id = ?, "
+                  "revision = revision + 1 WHERE id = ?;")
       .bind(item.groupId).bind(lexicon::trim(item.title)).bind(lexicon::trim(item.disambiguation))
       .bind(static_cast<int>(item.understanding)).bind(static_cast<int>(item.status)).bind(item.pinned ? 1 : 0)
       .bind(item.content).nullableId(item.itemTypeId).bind(id).run();
@@ -608,16 +629,40 @@ SqliteRepository::Result<void> SqliteRepository::saveLink(const LinkRecord &link
         .bind(customValue).run();
       id = impl_->db.lastId();
     } else {
+      int oldFrom = -1, oldTo = -1;
+      bool unchanged = false;
+      {
+        Statement old(impl_->db, "SELECT from_item_id, to_item_id, link_type, position, custom_value FROM link WHERE id = ?;");
+        old.bind(id);
+        require(old.step(), "Link not found.", lexicon::Error::Code::NotFound);
+        oldFrom = old.integer(0);
+        oldTo = old.integer(1);
+        unchanged = oldFrom == link.fromItemId && oldTo == link.toItemId &&
+                    old.integer(2) == static_cast<int>(link.linkType) &&
+                    old.integer(3) == link.position && old.text(4) == customValue;
+      }
+      // Saving an item resends all of its links. An unchanged one is left
+      // alone, so the items at its other end keep their revision.
+      if (unchanged) {
+        tx.commit();
+        return;
+      }
       Statement(impl_->db, "UPDATE link SET from_item_id = ?, to_item_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;")
         .bind(link.fromItemId).bind(link.toItemId).bind(static_cast<int>(link.linkType)).bind(link.position)
         .bind(customValue).bind(id).run();
       requireChanged(impl_->db, "Link");
+      if (oldFrom != link.fromItemId && oldFrom != link.toItemId) bumpRevision(impl_->db, oldFrom);
+      if (oldTo != link.fromItemId && oldTo != link.toItemId) bumpRevision(impl_->db, oldTo);
     }
+    bumpRevision(impl_->db, link.fromItemId);
+    if (link.toItemId != link.fromItemId) bumpRevision(impl_->db, link.toItemId);
     logOperation(impl_->db, "link", id, link.id < 0 ? 1 : 2); tx.commit();
   });
 }
 SqliteRepository::Result<void> SqliteRepository::deleteLink(int linkId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    bumpRevisions(impl_->db, "id IN (SELECT from_item_id FROM link WHERE id = ?1 "
+                             "UNION SELECT to_item_id FROM link WHERE id = ?1)", linkId);
     Statement(impl_->db, "DELETE FROM link WHERE id = ?;").bind(linkId).run();
     requireChanged(impl_->db, "Link");
     logOperation(impl_->db, "link", linkId, 3); tx.commit(); });

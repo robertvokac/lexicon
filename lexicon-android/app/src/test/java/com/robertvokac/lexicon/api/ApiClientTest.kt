@@ -122,6 +122,10 @@ class ApiClientTest {
         val notFound = failureFor(errorResponse(404, "not_found", "Item not found."))
         assertTrue(notFound is ApiException.NotFound)
 
+        val conflict = failureFor(errorResponse(409, "conflict", "This item was changed elsewhere after you opened it."))
+        assertTrue(conflict is ApiException.Conflict)
+        assertEquals("This item was changed elsewhere after you opened it.", conflict.message)
+
         val tooLarge = failureFor(errorResponse(413, "payload_too_large", "The upload exceeds the configured blob size limit."))
         assertTrue(tooLarge is ApiException.PayloadTooLarge)
         assertTrue(tooLarge.message!!.contains("--max-blob-bytes"))

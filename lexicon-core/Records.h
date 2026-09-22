@@ -110,6 +110,10 @@ struct ItemRecord {
   UnderstandingLevel understanding = UnderstandingLevel::Unknown;
   bool pinned = false;
   std::string content;
+  // Counts every change to the item, its values and its links. A save that
+  // carries a positive revision is refused when the stored one has moved on;
+  // 0 saves unconditionally.
+  int revision = 0;
 };
 struct UsageValueRecord {
   std::string value;

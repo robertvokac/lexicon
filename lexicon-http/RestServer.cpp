@@ -103,6 +103,8 @@ ApiFailure failureForStatus(int status) {
   case 415:
     return {415, "unsupported_media_type",
             "The request content type is not supported."};
+  case 409:
+    return {409, "conflict", "The record was changed by someone else."};
   case 429:
     return {429, "too_many_requests", "Too many requests."};
   default:
@@ -905,6 +907,8 @@ void RestServer::Impl::registerRoutes() {
     }
     auto item = itemFromJson(*itemJson);
     item.id = itemId; // -1 creates, a positive value updates.
+    if (itemId <= 0)
+      item.revision = 0;
     auto links = body.contains("links") ? linksFromJson(body.at("links"))
                                         : std::vector<LinkRecord>{};
     auto backlinks = body.contains("backlinks")

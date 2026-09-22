@@ -247,6 +247,45 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun aSaveOverAnotherClientsChangeAsksFirst() {
+        login()
+        compose.onNodeWithText("RAII").performClick()
+        compose.waitForText("Resource acquisition is initialization.")
+        openEditor()
+        fake.changeElsewhere(raii.id!!) { it.copy(content = "Changed on the desktop.") }
+        field("Title").performTextReplacement("RAII idiom")
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        compose.waitForText("Item changed elsewhere")
+        compose.onNodeWithText("Your version differs in: Title, Content.").assertIsDisplayed()
+        assertEquals("Changed on the desktop.", fake.items.getValue(raii.id!!).content)
+
+        inDialog("Overwrite").performClick()
+        compose.waitForCondition { fake.items.getValue(raii.id!!).title == "RAII idiom" }
+        val puts = fake.requestsTo("PUT", "/api/v1/items/${raii.id}")
+        assertEquals(2, puts.size)
+        val revisions = puts.map {
+            LexiconJson.parseToJsonElement(it.body!!.utf8()).jsonObject["item"]!!.jsonObject["revision"]!!.jsonPrimitive.int
+        }
+        assertEquals(listOf(1, 2), revisions)
+        assertEquals("Resource acquisition is initialization.", fake.items.getValue(raii.id!!).content)
+    }
+
+    @Test
+    fun reloadingAfterAConflictShowsTheNewerVersion() {
+        login()
+        compose.onNodeWithText("RAII").performClick()
+        compose.waitForText("Resource acquisition is initialization.")
+        openEditor()
+        fake.changeElsewhere(raii.id!!) { it.copy(title = "RAII (desktop)") }
+        field("Title").performTextReplacement("RAII idiom")
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        compose.waitForText("Item changed elsewhere")
+        inDialog("Reload").performClick()
+        compose.waitFor(hasSetTextAction() and hasText("RAII (desktop)"))
+        assertEquals(1, fake.requestsTo("PUT", "/api/v1/items/${raii.id}").size)
+    }
+
+    @Test
     fun aRefusedSaveKeepsWhatWasTyped() {
         fake.addItem(Item(title = "Taken"))
         login()

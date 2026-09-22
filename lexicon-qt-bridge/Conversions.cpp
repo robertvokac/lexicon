@@ -112,7 +112,8 @@ lexicon::ItemRecord toCore(const ItemRecord &v) {
           static_cast<lexicon::ItemStatus>(v.status),
           static_cast<lexicon::UnderstandingLevel>(v.understanding),
           v.pinned,
-          toCore(v.content)};
+          toCore(v.content),
+          v.revision};
 }
 ItemRecord toQt(const lexicon::ItemRecord &v) {
   return {v.id,
@@ -130,7 +131,8 @@ ItemRecord toQt(const lexicon::ItemRecord &v) {
           static_cast<ItemStatus>(v.status),
           static_cast<UnderstandingLevel>(v.understanding),
           v.pinned,
-          toQt(v.content)};
+          toQt(v.content),
+          v.revision};
 }
 lexicon::UsageValueRecord toCore(const UsageValueRecord &v) {
   return {toCore(v.value), v.usageCount};

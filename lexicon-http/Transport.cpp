@@ -91,6 +91,8 @@ ApiFailure toApiFailure(const Error &error) {
     return {400, "validation", error.message};
   case Error::Code::NotFound:
     return {404, "not_found", error.message};
+  case Error::Code::Conflict:
+    return {409, "conflict", error.message};
   case Error::Code::Storage:
     break;
   }
@@ -279,7 +281,8 @@ Json toJson(const ItemRecord &item) {
       {"status", name(item.status)},
       {"understanding", name(item.understanding)},
       {"pinned", item.pinned},
-      {"content", item.content}};
+      {"content", item.content},
+      {"revision", item.revision}};
 }
 
 Json toJson(const UsageValueRecord &usage) {
@@ -358,6 +361,8 @@ ItemRecord itemFromJson(const Json &json) {
   item.flags = stringArray(json, "flags");
   item.content = optionalString(json, "content");
   item.pinned = optionalBool(json, "pinned", false);
+  // The revision the client based its edit on; absent or 0 skips the check.
+  item.revision = std::max(0, optionalInt(json, "revision", 0));
   item.status = ItemStatus::None;
   if (member(json, "status") != nullptr)
     item.status = requiredEnum<ItemStatus>(json, "status", itemStatusFromName,

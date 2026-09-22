@@ -186,6 +186,7 @@ class ApiClient(
             401 -> ApiException.Unauthorized(serverMessage ?: "Authentication is required.")
             403 -> ApiException.Forbidden(serverMessage ?: "The server does not allow this request.")
             404 -> ApiException.NotFound(serverMessage ?: "The server has no such record.")
+            409 -> ApiException.Conflict(serverMessage ?: "The record was changed elsewhere.")
             413 -> ApiException.PayloadTooLarge(
                 (serverMessage ?: "The request is too large.") +
                     " The server's size limit is set with --max-blob-bytes and --max-json-bytes.",

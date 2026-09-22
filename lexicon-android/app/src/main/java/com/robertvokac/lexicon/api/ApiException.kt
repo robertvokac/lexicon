@@ -18,6 +18,9 @@ sealed class ApiException(message: String, cause: Throwable? = null) : Exception
     /** 404: no such record. */
     class NotFound(message: String) : ApiException(message)
 
+    /** 409: the record changed elsewhere after this client loaded it. */
+    class Conflict(message: String) : ApiException(message)
+
     /** 413: the body is over the server's --max-json-bytes or --max-blob-bytes. */
     class PayloadTooLarge(message: String) : ApiException(message)
 

@@ -75,6 +75,9 @@ protected:
 
 private:
     void updateMarkdownStyles();
+    // Asked when the item changed elsewhere since it was opened. Returns true
+    // when the save should be repeated over the newer version.
+    bool resolveConflict(const ItemRecord& mine);
     void updateLinksList();
     void refreshTypes();
     void typeSelectionChanged();
@@ -94,6 +97,7 @@ private:
     static void setListValues(QListWidget* list, const QStringList& values);
 
     int m_itemId = -1;
+    int m_revision = 0;
 
     QComboBox* m_groupCombo = nullptr;
     QComboBox* m_typeCombo = nullptr;

@@ -203,6 +203,7 @@ Everything below behaves the same way in both:
 | `ItemEditDialog` General, Content, Values, Metadata, Links, Backlinks | the same six tabs, saved in one atomic request |
 | Markdown toolbar (B, I, H2-H4, lists, quote, rule, code, code block, link, table) | the same buttons with a live preview |
 | Type change confirmation before field values are discarded | the same confirmation and counts |
+| Overwrite, Reload or Cancel when the item was saved elsewhere in the meantime | the same choice, also for a restored draft |
 | `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
 | `PropertyFilterDialog` (key exact, value contains, empty value matches any) | the same semantics with Add/Edit/Remove/Clear/Apply |
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |

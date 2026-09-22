@@ -1,8 +1,11 @@
 package com.robertvokac.lexicon.ui.item
 
 import com.robertvokac.lexicon.model.FieldDataType
+import com.robertvokac.lexicon.model.Item
+import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemStatus
+import com.robertvokac.lexicon.model.Link
 import com.robertvokac.lexicon.model.LinkType
 import com.robertvokac.lexicon.model.Property
 import org.junit.Assert.assertEquals
@@ -13,6 +16,32 @@ import org.junit.Test
 class EditorRulesTest {
     private fun link(key: Long, id: Int?, itemId: Int, title: String, type: LinkType, custom: String = "", position: Int = 0) =
         LinkEntry(key, id, itemId, title, type, custom, position)
+
+    @Test
+    fun aConflictNamesWhatDiffers() {
+        val fields = EditorFields(groupId = 1, title = "Monoid", tags = listOf("algebra"), revision = 3,
+            links = listOf(link(1, 10, 2, "Semigroup", LinkType.Related)))
+        val newer = ItemBundle(
+            item = Item(id = 7, groupId = 1, title = "Monoid", tags = listOf("algebra", "maths"), content = "Changed", revision = 5),
+            links = listOf(Link(id = 10, fromItemId = 7, toItemId = 2, linkType = LinkType.Related)),
+        )
+        assertEquals(listOf("Content", "Tags"), EditorRules.conflictDifferences(fields, "Original", newer))
+        assertEquals(emptyList<String>(), EditorRules.conflictDifferences(fields.copy(tags = listOf("maths", "algebra")), "Changed", newer))
+    }
+
+    @Test
+    fun overwritingTakesTheNewRevisionAndRecreatesRemovedLinks() {
+        val fields = EditorFields(groupId = 1, title = "Monoid", revision = 3,
+            links = listOf(link(1, 10, 2, "Semigroup", LinkType.Related), link(2, 11, 3, "Group", LinkType.PartOf)))
+        val newer = ItemBundle(
+            item = Item(id = 7, groupId = 1, title = "Monoid", revision = 5),
+            links = listOf(Link(id = 10, fromItemId = 7, toItemId = 2, linkType = LinkType.Related)),
+        )
+        val overwriting = EditorRules.overwriting(fields, newer)
+        assertEquals(5, overwriting.revision)
+        assertEquals(listOf(10, null), overwriting.links.map { it.id })
+        assertEquals(5, EditorRules.saveRequest(overwriting, "", emptyList()).item.revision)
+    }
 
     @Test
     fun theSaveRequestIsTheCompleteState() {

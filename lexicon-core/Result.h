@@ -5,7 +5,8 @@
 
 namespace lexicon {
 struct Error {
-  enum class Code { Validation, NotFound, Storage };
+  // Conflict: the record changed since the caller loaded it.
+  enum class Code { Validation, NotFound, Storage, Conflict };
   Code code;
   std::string message;
 };

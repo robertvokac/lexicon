@@ -108,6 +108,7 @@ struct ItemRecord {
   UnderstandingLevel understanding = UnderstandingLevel::Unknown;
   bool pinned = false;
   QString content;
+  int revision = 0;
 };
 struct UsageValueRecord {
   QString value;

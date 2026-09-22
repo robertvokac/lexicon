@@ -449,6 +449,7 @@ Theme preference is persisted between sessions.
 
 - Deleting an item removes its aliases/tags/flags and related links due to cascade rules.
 - Deleting a group removes all contained items.
+- Every item has a revision that moves on with each change to it, its values or its links. If another client (the desktop, the web client or the Android app) saved an item after you opened it, your save is not written. Lexicon lists what differs and lets you **Overwrite** the newer version, **Reload** it and drop your changes, or go back to editing.
 - Keep regular backups if your lexicon is mission-critical.
 
 ## Database model

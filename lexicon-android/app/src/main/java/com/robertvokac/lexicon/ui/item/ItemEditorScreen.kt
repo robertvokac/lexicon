@@ -15,7 +15,9 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +31,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -180,6 +183,7 @@ fun ItemEditorScreen(viewModel: ItemEditorViewModel, onClose: (savedItemId: Int?
             destructive = true,
         )
     }
+    state.conflict?.let { conflict -> ConflictDialog(conflict, viewModel) }
     state.saveNeedsTypeConfirmation?.let { count ->
         ConfirmDialog(
             title = "Change type",
@@ -190,6 +194,43 @@ fun ItemEditorScreen(viewModel: ItemEditorViewModel, onClose: (savedItemId: Int?
             destructive = true,
         )
     }
+}
+
+/** Another client saved the item first: overwrite it, take its version, or keep editing. */
+@Composable
+private fun ConflictDialog(conflict: SaveConflict, viewModel: ItemEditorViewModel) {
+    AlertDialog(
+        onDismissRequest = viewModel::keepEditingAfterConflict,
+        title = { Text("Item changed elsewhere") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("This item was changed elsewhere after you opened it.")
+                Text(
+                    if (conflict.differences.isEmpty()) "Its saved version now matches yours."
+                    else "Your version differs in: ${conflict.differences.joinToString(", ")}.",
+                )
+                Text(
+                    "Overwrite saves your version over the newer one. Reload discards your changes and shows the newer version.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = viewModel::overwriteConflict,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                ),
+            ) { Text("Overwrite") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = viewModel::reloadAfterConflict) { Text("Reload") }
+                TextButton(onClick = viewModel::keepEditingAfterConflict) { Text("Keep editing") }
+            }
+        },
+    )
 }
 
 private fun tabLabel(tab: EditorTab, state: EditorState): String = when (tab) {

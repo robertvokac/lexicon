@@ -86,13 +86,18 @@ public:
   bool logItemRead(int itemId, QString *errorMessage = nullptr) {
     return qtbridge::success(core_.logItemRead(itemId), errorMessage);
   }
+  // conflict is set when the item changed elsewhere after it was loaded.
   bool saveItemWithLinks(const ItemRecord &item, const QList<LinkRecord> &links,
                          const QList<LinkRecord> &backlinks,
                          int *savedId = nullptr,
-                         QString *errorMessage = nullptr) {
+                         QString *errorMessage = nullptr,
+                         bool *conflict = nullptr) {
     auto result =
         core_.saveItemWithLinks(qtbridge::toCore(item), qtbridge::toCore(links),
                                 qtbridge::toCore(backlinks));
+    if (conflict)
+      *conflict = !result &&
+                  result.error().code == lexicon::Error::Code::Conflict;
     if (!result) {
       if (errorMessage)
         *errorMessage = qtbridge::toQt(result.error().message);

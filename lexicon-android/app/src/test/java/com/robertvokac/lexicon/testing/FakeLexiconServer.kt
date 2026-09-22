@@ -75,9 +75,15 @@ class FakeLexiconServer : Dispatcher() {
     fun addItem(item: Item): Item {
         val id = item.id ?: nextId++
         val group = groups.first { it.id == (item.groupId ?: 1) }
-        val stored = item.copy(id = id, groupId = group.id, groupName = group.name)
+        val stored = item.copy(id = id, groupId = group.id, groupName = group.name, revision = maxOf(1, item.revision))
         items[id] = stored
         return stored
+    }
+
+    /** Another client saves [id]: its revision moves on. */
+    fun changeElsewhere(id: Int, change: (Item) -> Item) = synchronized(this) {
+        val item = items.getValue(id)
+        items[id] = change(item).copy(revision = item.revision + 1)
     }
 
     fun addType(name: String, groupId: Int? = null): ItemType {
@@ -347,6 +353,9 @@ class FakeLexiconServer : Dispatcher() {
         require(title.isNotEmpty()) { "Item title cannot be empty." }
         if (id != null && id !in items) return notFound()
         val decoded = LexiconJson.decodeFromJsonElement(Item.serializer(), itemJson)
+        if (id != null && decoded.revision > 0 && decoded.revision != items.getValue(id).revision) {
+            return error(409, "conflict", "This item was changed elsewhere after you opened it.")
+        }
         val groupId = decoded.groupId ?: 1
         val duplicate = items.values.any { it.id != id && it.groupId == groupId && it.title == title && it.disambiguation == decoded.disambiguation }
         require(!duplicate) { "'$title' already exists in this group." }
@@ -358,6 +367,7 @@ class FakeLexiconServer : Dispatcher() {
             groupName = groups.first { it.id == groupId }.name,
             itemTypeName = type?.name.orEmpty(),
             title = title,
+            revision = (items[itemId]?.revision ?: 0) + 1,
         )
         val outgoing = body["links"]?.jsonArray.orEmpty().map { it.jsonObject }
         val incoming = body["backlinks"]?.jsonArray.orEmpty().map { it.jsonObject }

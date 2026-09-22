@@ -1,5 +1,7 @@
 #include "ItemEditDialog.h"
 
+#include <algorithm>
+
 #include "ApplicationContext.h"
 #include "MarkdownConverter.h"
 #include <QCheckBox>
@@ -21,6 +23,7 @@
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QScrollArea>
+#include <QSet>
 #include <QSignalBlocker>
 #include <QShowEvent>
 #include <QSpinBox>
@@ -464,6 +467,7 @@ void ItemEditDialog::refreshFields() {
 
 void ItemEditDialog::setItem(const ItemRecord& item) {
     m_itemId = item.id;
+    m_revision = item.revision;
     m_originalTypeId = item.itemTypeId;
     m_originalFieldValues = item.fieldValues;
     m_originalTypeChangeConfirmed = false;
@@ -519,6 +523,7 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
 ItemRecord ItemEditDialog::item() const {
     ItemRecord result;
     result.id = m_itemId;
+    result.revision = m_revision;
     result.groupId = m_groupCombo->currentData().toInt();
     result.groupName = m_groupCombo->currentText();
     result.itemTypeId = m_typeCombo->currentData().toInt();
@@ -1083,11 +1088,97 @@ void ItemEditDialog::validateAndAccept() {
         m_pendingBlobPaths.remove(it.key());
     }
 
-    ItemRecord t = item();
-    QString error;
-    if (!services().items.saveItemWithLinks(t, m_currentLinks, m_currentBacklinks, &m_itemId, &error)) {
-        QMessageBox::critical(this, "Error", "Failed to save item: " + error);
-        return;
+    for (;;) {
+        ItemRecord t = item();
+        QString error;
+        bool conflict = false;
+        if (services().items.saveItemWithLinks(t, m_currentLinks, m_currentBacklinks, &m_itemId,
+                                               &error, &conflict)) {
+            accept();
+            return;
+        }
+        if (!conflict) {
+            QMessageBox::critical(this, "Error", "Failed to save item: " + error);
+            return;
+        }
+        if (!resolveConflict(t)) return;
     }
-    accept();
+}
+
+namespace {
+QString linkKey(const LinkRecord& link) {
+    return QString("%1>%2:%3:%4:%5").arg(link.fromItemId).arg(link.toItemId)
+        .arg(static_cast<int>(link.linkType)).arg(link.position).arg(link.customValue);
+}
+QStringList linkKeys(const QList<LinkRecord>& links) {
+    QStringList keys;
+    for (const auto& link : links) keys << linkKey(link);
+    keys.sort();
+    return keys;
+}
+QString propertiesKey(const QList<PropertyRecord>& properties) {
+    QStringList keys;
+    for (const auto& property : properties) keys << property.key.toLower() + "=" + property.value;
+    keys.sort();
+    return keys.join('\n');
+}
+QStringList sorted(QStringList values) {
+    values.sort();
+    return values;
+}
+}
+
+bool ItemEditDialog::resolveConflict(const ItemRecord& mine) {
+    ItemRecord theirs;
+    QString error;
+    if (!services().items.loadItem(m_itemId, theirs, &error)) {
+        QMessageBox::critical(this, "Error", "The item changed elsewhere and cannot be reloaded: " + error);
+        return false;
+    }
+    const auto theirLinks = services().links.loadLinks(m_itemId);
+    const auto theirBacklinks = services().links.loadBacklinks(m_itemId);
+
+    QStringList differences;
+    if (mine.title != theirs.title) differences << "Title";
+    if (mine.disambiguation != theirs.disambiguation) differences << "Disambiguation";
+    if (mine.groupId != theirs.groupId) differences << "Group";
+    if (std::max(0, mine.itemTypeId) != std::max(0, theirs.itemTypeId)) differences << "Type";
+    if (mine.status != theirs.status) differences << "Status";
+    if (mine.understanding != theirs.understanding) differences << "Understanding";
+    if (mine.pinned != theirs.pinned) differences << "Pinned";
+    if (mine.content != theirs.content) differences << "Content";
+    if (mine.fieldValues != theirs.fieldValues) differences << "Values";
+    if (sorted(mine.tags) != sorted(theirs.tags)) differences << "Tags";
+    if (sorted(mine.flags) != sorted(theirs.flags)) differences << "Flags";
+    if (sorted(mine.aliases) != sorted(theirs.aliases)) differences << "Aliases";
+    if (propertiesKey(mine.properties) != propertiesKey(theirs.properties)) differences << "Properties";
+    if (linkKeys(m_currentLinks) != linkKeys(theirLinks)) differences << "Links";
+    if (linkKeys(m_currentBacklinks) != linkKeys(theirBacklinks)) differences << "Backlinks";
+
+    QString text = "This item was changed elsewhere after you opened it.";
+    text += differences.isEmpty()
+        ? "\n\nIts saved version now matches yours."
+        : "\n\nYour version differs in: " + differences.join(", ") + ".";
+    QMessageBox box(QMessageBox::Warning, "Item changed elsewhere", text, QMessageBox::NoButton, this);
+    box.setInformativeText("Overwrite saves your version over the newer one. "
+                           "Reload discards your changes and shows the newer version. "
+                           "Cancel returns to editing.");
+    auto* overwrite = box.addButton("Overwrite", QMessageBox::DestructiveRole);
+    auto* reload = box.addButton("Reload", QMessageBox::ActionRole);
+    box.addButton(QMessageBox::Cancel);
+    box.setDefaultButton(QMessageBox::Cancel);
+    box.exec();
+    if (box.clickedButton() == overwrite) {
+        m_revision = theirs.revision;
+        // A link removed in the meantime is created again rather than
+        // updated, since its ID no longer exists.
+        QSet<int> existing;
+        for (const auto& link : theirLinks) existing.insert(link.id);
+        for (const auto& link : theirBacklinks) existing.insert(link.id);
+        for (auto& link : m_currentLinks) if (link.id > 0 && !existing.contains(link.id)) link.id = -1;
+        for (auto& link : m_currentBacklinks) if (link.id > 0 && !existing.contains(link.id)) link.id = -1;
+        return true;
+    }
+    if (box.clickedButton() == reload) setItem(theirs);
+    return false;
 }

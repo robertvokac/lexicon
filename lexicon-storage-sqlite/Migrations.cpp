@@ -273,6 +273,12 @@ void applyMigrations(const Connection &db) {
             " \"key\" TEXT PRIMARY KEY NOT NULL CHECK(TRIM(\"key\") <> ''),"
             " value TEXT NOT NULL"
             ");"
+        }},
+        {21, {
+            // Bumped by every change to an item, its values or its links, so
+            // a client saving an item it loaded earlier can be told that
+            // someone else changed it in the meantime.
+            "ALTER TABLE item ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;"
         }}
     };
 

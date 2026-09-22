@@ -1,6 +1,7 @@
 package com.robertvokac.lexicon.ui.item
 
 import com.robertvokac.lexicon.model.IncomingLinkWrite
+import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.ItemWrite
@@ -45,6 +46,8 @@ data class EditorFields(
     val values: Map<Int, String> = emptyMap(),
     val links: List<LinkEntry> = emptyList(),
     val backlinks: List<LinkEntry> = emptyList(),
+    /** The revision the edit is based on; 0 for a new item. */
+    val revision: Int = 0,
 )
 
 /** The editor's saved-state snapshot: survives a configuration change or process death. */
@@ -133,6 +136,7 @@ object EditorRules {
                 aliases = fields.aliases,
                 properties = fields.properties,
                 fieldValues = values,
+                revision = fields.revision,
             ),
             links = fields.links.map {
                 OutgoingLinkWrite(it.id, it.itemId, it.linkType, customValueFor(it), it.position)
@@ -142,6 +146,57 @@ object EditorRules {
             },
         )
     }
+
+    /**
+     * What a save of [fields] and [content] would change in [current], the
+     * version another client saved in the meantime, by field name.
+     */
+    fun conflictDifferences(fields: EditorFields, content: String, current: ItemBundle): List<String> {
+        val theirs = current.item
+        val mine = fields.values.filterValues { it.isNotBlank() }.mapValues { it.value.trim() }
+        val stored = theirs.fieldValues.mapNotNull { (key, value) -> key.toIntOrNull()?.let { it to value } }.toMap()
+        return buildList {
+            if (fields.title.trim() != theirs.title) add("Title")
+            if (fields.disambiguation.trim() != theirs.disambiguation) add("Disambiguation")
+            if (fields.groupId != theirs.groupId) add("Group")
+            if (fields.typeId != theirs.itemTypeId) add("Type")
+            if (fields.status != theirs.status) add("Status")
+            if (fields.understanding != theirs.understanding) add("Understanding")
+            if (fields.pinned != theirs.pinned) add("Pinned")
+            if (content != theirs.content) add("Content")
+            if (mine != stored) add("Values")
+            if (fields.tags.sorted() != theirs.tags.sorted()) add("Tags")
+            if (fields.flags.sorted() != theirs.flags.sorted()) add("Flags")
+            if (fields.aliases.sorted() != theirs.aliases.sorted()) add("Aliases")
+            if (fields.properties.map { asciiFold(it.key) to it.value }.sortedBy { it.first } !=
+                theirs.properties.map { asciiFold(it.key) to it.value }.sortedBy { it.first }
+            ) add("Properties")
+            val myLinks = fields.links.map { linkKey(it.itemId, it.linkType, it.position, customValueFor(it)) }
+            val theirLinks = current.links.map { linkKey(it.toItemId, it.linkType, it.position, it.customValue) }
+            if (myLinks.sorted() != theirLinks.sorted()) add("Links")
+            val myBacklinks = fields.backlinks.map { linkKey(it.itemId, it.linkType, it.position, customValueFor(it)) }
+            val theirBacklinks = current.backlinks.map { linkKey(it.fromItemId, it.linkType, it.position, it.customValue) }
+            if (myBacklinks.sorted() != theirBacklinks.sorted()) add("Backlinks")
+        }
+    }
+
+    /**
+     * Prepares [fields] to be saved over [current]: its revision, and links
+     * the other client removed turned into new ones, since their IDs are gone.
+     */
+    fun overwriting(fields: EditorFields, current: ItemBundle): EditorFields {
+        val existing = (current.links + current.backlinks).mapNotNull { it.id }.toSet()
+        fun LinkEntry.kept() = if (id != null && id !in existing) copy(id = null) else this
+        return fields.copy(
+            revision = current.item.revision,
+            links = fields.links.map { it.kept() },
+            backlinks = fields.backlinks.map { it.kept() },
+        )
+    }
+
+    /** The other end of a link, its type, position and label: what a save changes. */
+    private fun linkKey(other: Int?, type: LinkType, position: Int, customValue: String) =
+        "$other|$type|$position|$customValue"
 
     private fun customValueFor(link: LinkEntry): String =
         if (link.linkType == LinkType.Custom) link.customValue.trim() else ""

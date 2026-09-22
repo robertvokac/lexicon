@@ -14,6 +14,7 @@ import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.model.Group
+import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.ItemType
@@ -62,6 +63,13 @@ data class TypeChangeRequest(
 
 data class BlobStatus(val text: String, val busy: Boolean)
 
+/** A save refused because another client saved the item first. */
+data class SaveConflict(
+    /** The parts of the item where this edit and the newer version differ. */
+    val differences: List<String>,
+    val current: ItemBundle,
+)
+
 data class EditorState(
     val itemId: Int?,
     val loading: Boolean = true,
@@ -83,6 +91,7 @@ data class EditorState(
     val aliasSuggestions: List<String> = emptyList(),
     val fromShare: Boolean = false,
     val message: String? = null,
+    val conflict: SaveConflict? = null,
 ) {
     val isNew: Boolean get() = itemId == null
     val saving: Boolean get() = save == SaveStatus.Saving
@@ -177,6 +186,7 @@ class ItemEditorViewModel(
                         values = originalValues,
                         links = EditorRules.sortedLinks(bundle.links.mapNotNull { it.toEntry(incoming = false) }),
                         backlinks = EditorRules.sortedLinks(bundle.backlinks.mapNotNull { it.toEntry(incoming = true) }),
+                        revision = item.revision,
                     )
                     text = item.content
                 } else {
@@ -500,6 +510,8 @@ class ItemEditorViewModel(
                 val saved = if (current.itemId != null) api.updateItem(current.itemId, request) else api.createItem(request)
                 _state.update { it.copy(save = SaveStatus.Saved(saved.id)) }
                 container.dataChanges.itemChanged(saved.id)
+            } catch (_: ApiException.Conflict) {
+                showConflict(checkNotNull(current.itemId))
             } catch (failure: ApiException) {
                 // Everything typed stays; the person can fix it or retry.
                 _state.update {
@@ -507,6 +519,35 @@ class ItemEditorViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun showConflict(itemId: Int) {
+        try {
+            val newer = api.item(itemId, withLinks = true)
+            val differences = EditorRules.conflictDifferences(_state.value.fields, content.text.toString(), newer)
+            _state.update { it.copy(save = SaveStatus.Idle, conflict = SaveConflict(differences, newer)) }
+        } catch (failure: ApiException) {
+            _state.update {
+                it.copy(save = SaveStatus.Failed(failure.userMessage() ?: "Your session ended. Sign in again, then save."))
+            }
+        }
+    }
+
+    /** Saves this edit over the version another client saved. */
+    fun overwriteConflict() {
+        val conflict = _state.value.conflict ?: return
+        _state.update { it.copy(conflict = null, fields = EditorRules.overwriting(it.fields, conflict.current)) }
+        performSave()
+    }
+
+    /** Drops this edit and shows the version another client saved. */
+    fun reloadAfterConflict() {
+        _state.update { it.copy(conflict = null, save = SaveStatus.Idle) }
+        load(null)
+    }
+
+    fun keepEditingAfterConflict() = _state.update {
+        it.copy(conflict = null, save = SaveStatus.Failed("Not saved: the item was changed elsewhere."))
     }
 
     fun messageShown() = _state.update { it.copy(message = null) }

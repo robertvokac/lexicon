@@ -690,6 +690,106 @@ void checkBlobs(Checks &checks) {
   checks.expectEqual(leftovers, 0, "blob staging files are cleaned up");
 }
 
+void checkConflicts(Checks &checks) {
+  // Two clients edit the same item: the second save is based on a revision
+  // that no longer exists and must be refused instead of silently winning.
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId =
+      parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const auto create = [&](const std::string &title) {
+    return parse(client.post("/api/v1/items",
+                             Json{{"item", Json{{"groupId", groupId},
+                                                {"title", title}}}}
+                                 .dump()));
+  };
+  const auto createdA = create("Monoid");
+  const int a = createdA.value("id", 0);
+  const int first = createdA.at("item").value("revision", 0);
+  checks.expect(first > 0, "a new item reports a revision");
+  const auto path = "/api/v1/items/" + std::to_string(a);
+  const auto save = [&](const std::string &content, int revision) {
+    Json item{{"groupId", groupId}, {"title", "Monoid"}, {"content", content}};
+    if (revision > 0)
+      item["revision"] = revision;
+    return client.put(path, Json{{"item", item}}.dump());
+  };
+
+  const auto phone = save("from the phone", first);
+  checks.expectEqual(phone.status, 200, "a save based on the current revision works");
+  const int second = parse(phone).at("item").value("revision", 0);
+  checks.expect(second > first, "a save moves the revision on");
+
+  const auto desktop = save("from the desktop", first);
+  checks.expectEqual(desktop.status, 409, "a save based on an old revision is refused");
+  checks.expectEqual(parse(desktop).at("error").value("code", std::string{}),
+                     "conflict", "the refusal is a conflict");
+  checks.expectEqual(
+      parse(client.get(path)).at("item").value("content", std::string{}),
+      "from the phone", "the refused save changed nothing");
+  checks.expectEqual(save("overwritten", second).status, 200,
+                     "saving over the newer revision works once it is known");
+  checks.expectEqual(save("no revision", 0).status, 200,
+                     "a save without a revision is not checked");
+
+  // A link added from the other end changes this item too.
+  const int current = parse(client.get(path)).at("item").value("revision", 0);
+  const int b = create("Semigroup").value("id", 0);
+  const auto linkB = [&](const Json &links) {
+    return client.put("/api/v1/items/" + std::to_string(b),
+                      Json{{"item", Json{{"groupId", groupId}, {"title", "Semigroup"}}},
+                           {"links", links}}
+                          .dump());
+  };
+  const auto linked = linkB(Json::array({Json{{"toItemId", a},
+                                              {"linkType", "Related"},
+                                              {"position", 0}}}));
+  checks.expectEqual(linked.status, 200, "the other item saves a link");
+  const int afterLink = parse(client.get(path)).at("item").value("revision", 0);
+  checks.expect(afterLink > current, "a new backlink moves the revision on");
+  checks.expectEqual(save("stale", current).status, 409,
+                     "a save that does not know the new backlink is refused");
+
+  // Resending an unchanged link leaves the other end alone.
+  const auto links = parse(client.get("/api/v1/items/" + std::to_string(b) + "/links"))
+                         .at("links");
+  const int linkId = links.at(0).value("id", 0);
+  checks.expectEqual(linkB(Json::array({Json{{"id", linkId},
+                                             {"toItemId", a},
+                                             {"linkType", "Related"},
+                                             {"position", 0}}}))
+                         .status,
+                     200, "the other item saves again");
+  checks.expectEqual(parse(client.get(path)).at("item").value("revision", 0),
+                     afterLink, "an unchanged link does not move the revision");
+  checks.expectEqual(client.remove("/api/v1/links/" + std::to_string(linkId)).status,
+                     204, "the link can be deleted");
+  checks.expect(parse(client.get(path)).at("item").value("revision", 0) > afterLink,
+                "deleting a backlink moves the revision on");
+
+  // Clearing a field's values changes every item that had one.
+  const int typeId = parse(client.post("/api/v1/types",
+                                       Json{{"name", "Structure"}, {"groupId", groupId}}.dump()))
+                         .at("type").value("id", 0);
+  const int fieldId =
+      parse(client.post("/api/v1/types/" + std::to_string(typeId) + "/fields",
+                        Json{{"name", "Order"}, {"dataType", "Integer"}}.dump()))
+          .at("field").value("id", 0);
+  const auto typed = client.put(
+      path, Json{{"item", Json{{"groupId", groupId},
+                               {"title", "Monoid"},
+                               {"itemTypeId", typeId},
+                               {"fieldValues", Json{{std::to_string(fieldId), "3"}}}}}}
+                .dump());
+  checks.expectEqual(typed.status, 200, "the item gets a typed value");
+  const int typedRevision = parse(typed).at("item").value("revision", 0);
+  checks.expectEqual(client.remove("/api/v1/fields/" + std::to_string(fieldId)).status,
+                     204, "the field can be deleted");
+  checks.expect(parse(client.get(path)).at("item").value("revision", 0) > typedRevision,
+                "deleting a field with values moves the revision on");
+}
+
 void checkQuickAdd(Checks &checks) {
   // The web Quick Add flow: resolve the default group, then create a titled
   // item with nothing else set.
@@ -731,5 +831,6 @@ int main() {
   checkSearchAndUsage(checks);
   checkBlobs(checks);
   checkQuickAdd(checks);
+  checkConflicts(checks);
   return checks.summarize("server_rest");
 }
