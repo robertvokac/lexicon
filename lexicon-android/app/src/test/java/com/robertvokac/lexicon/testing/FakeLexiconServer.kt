@@ -113,7 +113,14 @@ class FakeLexiconServer : Dispatcher() {
     fun requestsTo(method: String, path: String): List<RecordedRequest> =
         requests.filter { it.method == method && it.url.encodedPath == path }
 
+    /** Every request answers 503, like a server behind a proxy that is down. */
+    @Volatile var unavailable = false
+
     override fun dispatch(request: RecordedRequest): MockResponse {
+        if (unavailable) {
+            requests += request
+            return error(503, "unavailable", "The server is not available.")
+        }
         if (request.url.encodedPath.endsWith("/blobs") && blobDelayMillis > 0) Thread.sleep(blobDelayMillis)
         val slow = slowQuery
         if (slow != null && request.url.encodedPath.endsWith("/items/query") && request.body?.utf8()?.contains("\"searchText\":\"$slow\"") == true) {

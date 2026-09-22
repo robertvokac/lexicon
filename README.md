@@ -52,7 +52,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
-- An Inbox for ideas: a title and plain text, saved to `Default` without a type in one step
+- An Inbox for ideas: a title and plain text, saved to `Default` without a type in one step; on Android also without a connection, sent when the server is back
 - Alarms: reminders with a title, a description and the date and time they go off, listed and edited in every client
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
@@ -624,7 +624,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups; an offline Inbox on Android
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

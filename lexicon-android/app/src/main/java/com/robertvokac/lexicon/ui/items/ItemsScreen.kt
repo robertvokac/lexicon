@@ -2,6 +2,7 @@ package com.robertvokac.lexicon.ui.items
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -21,10 +22,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
@@ -54,6 +57,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -79,6 +83,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
@@ -89,6 +94,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.robertvokac.lexicon.inbox.PendingIdea
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.SortOrder
@@ -200,6 +206,7 @@ fun ItemsScreen(
                 },
             )
             ActiveFilterChips(state, viewModel, onShowFilters = { showFilters = true })
+            if (state.waitingIdeas.isNotEmpty()) WaitingIdeasBanner(state.waitingIdeas, onShow = viewModel::openWaitingIdeas)
             if ((state.loading || state.refreshing) && state.items.isNotEmpty()) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
@@ -252,6 +259,17 @@ fun ItemsScreen(
 
     if (showFilters) {
         FilterSheet(state = state, viewModel = viewModel, onDismiss = { showFilters = false })
+    }
+
+    if (state.showWaitingIdeas) {
+        WaitingIdeasDialog(
+            ideas = state.waitingIdeas,
+            sending = state.sendingIdeas,
+            onSend = viewModel::sendWaitingIdeas,
+            onEdit = viewModel::editWaitingIdea,
+            onDelete = viewModel::deleteWaitingIdea,
+            onDismiss = viewModel::closeWaitingIdeas,
+        )
     }
 
     state.inbox?.let { inbox ->
@@ -578,9 +596,89 @@ private fun QuickAddDialog(
     LaunchedEffect(Unit) { focus.requestFocus() }
 }
 
+/** Ideas saved on this phone while the server could not be reached. */
+@Composable
+private fun WaitingIdeasBanner(ideas: List<PendingIdea>, onShow: () -> Unit) {
+    val refused = ideas.count { it.problem != null }
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable(role = Role.Button, onClickLabel = "Show") { onShow() },
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Text(
+                (if (ideas.size == 1) "1 idea waits on this phone" else "${ideas.size} ideas wait on this phone") +
+                    if (refused > 0) ", $refused refused by the server" else "",
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+            )
+            Text("Show", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun WaitingIdeasDialog(
+    ideas: List<PendingIdea>,
+    sending: Boolean,
+    onSend: () -> Unit,
+    onEdit: (PendingIdea) -> Unit,
+    onDelete: (PendingIdea) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var deleting by remember { mutableStateOf<PendingIdea?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Waiting on this phone") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Inbox ideas saved while the server could not be reached. They go to the server by themselves as soon as it can be reached.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                for (idea in ideas) {
+                    Column {
+                        Text(idea.title, style = MaterialTheme.typography.titleSmall)
+                        if (idea.content.isNotBlank()) {
+                            Text(idea.content, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        idea.problem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                        Row {
+                            TextButton(onClick = { onEdit(idea) }) { Text("Edit") }
+                            TextButton(onClick = { deleting = idea }) { Text("Delete") }
+                        }
+                    }
+                }
+                if (sending) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = { TextButton(onClick = onSend, enabled = !sending && ideas.any { it.problem == null }) { Text("Send now") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+    deleting?.let { idea ->
+        ConfirmDialog(
+            title = "Delete idea",
+            message = "Delete “${idea.title}”? It has not reached the server, so it is gone for good.",
+            confirmLabel = "Delete",
+            onConfirm = {
+                deleting = null
+                onDelete(idea)
+            },
+            onDismiss = { deleting = null },
+            destructive = true,
+        )
+    }
+}
+
 /** An idea, caught quickly: a title and plain text, saved to Default without a type. */
 @Composable
-private fun InboxDialog(
+internal fun InboxDialog(
     state: InboxState,
     onTitleChange: (String) -> Unit,
     onContentChange: (String) -> Unit,

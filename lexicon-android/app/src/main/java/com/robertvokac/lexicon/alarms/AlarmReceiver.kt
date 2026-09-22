@@ -21,7 +21,11 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             AlarmRinger.ACTION_DISMISS -> AlarmRinger.idFrom(intent)?.let { id -> later(application) { ringer.dismiss(id) } }
             AlarmRinger.ACTION_SNOOZE -> AlarmRinger.idFrom(intent)?.let { id -> later(application) { ringer.snooze(id) } }
-            AlarmRinger.ACTION_SYNC -> later(application) { ringer.sync() }
+            AlarmRinger.ACTION_SYNC -> later(application) {
+                ringer.sync()
+                // Ideas caught offline go out too, even with the app closed.
+                application.container.flushOutbox()
+            }
         }
     }
 }

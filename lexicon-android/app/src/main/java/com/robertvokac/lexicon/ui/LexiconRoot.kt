@@ -1,5 +1,7 @@
 package com.robertvokac.lexicon.ui
 
+import android.net.ConnectivityManager
+import android.net.Network
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -72,6 +75,8 @@ import com.robertvokac.lexicon.ui.alarms.AlarmsScreen
 import com.robertvokac.lexicon.ui.alarms.AlarmsViewModel
 import com.robertvokac.lexicon.ui.common.LocalAppContainer
 import com.robertvokac.lexicon.ui.common.lexiconViewModel
+import com.robertvokac.lexicon.ui.graph.GraphScreen
+import com.robertvokac.lexicon.ui.graph.GraphViewModel
 import com.robertvokac.lexicon.ui.groups.GroupsScreen
 import com.robertvokac.lexicon.ui.groups.GroupsViewModel
 import com.robertvokac.lexicon.ui.item.EditorStart
@@ -79,6 +84,8 @@ import com.robertvokac.lexicon.ui.item.ItemDetailScreen
 import com.robertvokac.lexicon.ui.item.ItemDetailViewModel
 import com.robertvokac.lexicon.ui.item.ItemEditorScreen
 import com.robertvokac.lexicon.ui.item.ItemEditorViewModel
+import com.robertvokac.lexicon.ui.items.InboxDialog
+import com.robertvokac.lexicon.ui.items.InboxState
 import com.robertvokac.lexicon.ui.items.ItemsScreen
 import com.robertvokac.lexicon.ui.items.ItemsViewModel
 import com.robertvokac.lexicon.ui.login.CompatibilityScreen
@@ -100,8 +107,6 @@ import com.robertvokac.lexicon.ui.navigation.TypesRoute
 import com.robertvokac.lexicon.ui.overview.OverviewKind
 import com.robertvokac.lexicon.ui.overview.OverviewScreen
 import com.robertvokac.lexicon.ui.overview.OverviewViewModel
-import com.robertvokac.lexicon.ui.graph.GraphScreen
-import com.robertvokac.lexicon.ui.graph.GraphViewModel
 import com.robertvokac.lexicon.ui.review.ReviewScreen
 import com.robertvokac.lexicon.ui.review.ReviewViewModel
 import com.robertvokac.lexicon.ui.settings.SettingsScreen
@@ -163,6 +168,25 @@ fun LexiconRoot(
         LaunchedEffect(dark) { onDarkThemeChanged(dark) }
         CompositionLocalProvider(LocalAppContainer provides container) {
             LaunchedEffect(Unit) { container.sessions.start() }
+            // The network is back: send the ideas waiting on this phone, or try
+            // the server again if it was out of reach.
+            val connectivityContext = LocalContext.current.applicationContext
+            DisposableEffect(container) {
+                val connectivity = connectivityContext.getSystemService(ConnectivityManager::class.java)
+                val callback = object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        container.applicationScope.launch {
+                            when (container.sessions.state.value) {
+                                is SessionState.SignedIn -> container.flushOutbox()
+                                is SessionState.Unreachable -> container.sessions.retry()
+                                else -> Unit
+                            }
+                        }
+                    }
+                }
+                val registered = runCatching { connectivity?.registerDefaultNetworkCallback(callback) }.isSuccess
+                onDispose { if (registered) runCatching { connectivity?.unregisterNetworkCallback(callback) } }
+            }
             val session by container.sessions.state.collectAsStateWithLifecycle()
             val applicationContext = LocalContext.current.applicationContext
             val ringer = remember(container) { AlarmRinger(applicationContext, container) }
@@ -173,6 +197,7 @@ fun LexiconRoot(
                 when (val current = session) {
                     is SessionState.SignedIn -> {
                         ringingFor = true
+                        container.flushOutbox()
                         ringer.sync()
                     }
                     is SessionState.SignedOut -> if (ringingFor && current.retained == null) {
@@ -219,12 +244,37 @@ fun LexiconRoot(
                         onRetry = { container.sessions.retry() },
                         onChangeServer = { container.sessions.abandonStoredSession() },
                     )
-                    is SessionState.Unreachable -> UnreachableScreen(
-                        server = current.server.value,
-                        message = current.message,
-                        onRetry = { container.sessions.retry() },
-                        onSignIn = { container.sessions.abandonStoredSession() },
-                    )
+                    is SessionState.Unreachable -> {
+                        val ideas by container.outbox.ideas.collectAsStateWithLifecycle()
+                        var offlineIdea by remember { mutableStateOf<InboxState?>(null) }
+                        val scope = rememberCoroutineScope()
+                        UnreachableScreen(
+                            server = current.server.value,
+                            message = current.message,
+                            onRetry = { container.sessions.retry() },
+                            onSignIn = { container.sessions.abandonStoredSession() },
+                            waitingIdeas = ideas.count { it.server == current.server.value && it.username == current.username },
+                            onSaveIdea = { offlineIdea = InboxState() },
+                        )
+                        offlineIdea?.let { idea ->
+                            InboxDialog(
+                                state = idea,
+                                onTitleChange = { offlineIdea = idea.copy(title = it, error = null) },
+                                onContentChange = { offlineIdea = idea.copy(content = it) },
+                                onSave = {
+                                    if (idea.title.isBlank()) {
+                                        offlineIdea = idea.copy(error = "Enter a title.")
+                                    } else {
+                                        scope.launch {
+                                            container.outbox.add(idea.title, idea.content, current.server.value, current.username)
+                                            offlineIdea = null
+                                        }
+                                    }
+                                },
+                                onDismiss = { offlineIdea = null },
+                            )
+                        }
+                    }
                     is SessionState.SignedIn -> Unit
                 }
             }

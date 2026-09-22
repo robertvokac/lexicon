@@ -197,6 +197,17 @@ accept it; install a proper certificate instead.
   **More…** opens the full editor instead, the desktop's Add ….
 - **Inbox.** The tray button above the list catches an idea: a title and plain
   text, saved to `Default` without a type, whatever the filters show.
+- **Offline Inbox.** An idea never waits for the network. When the server
+  cannot be reached - no signal, the server or a proxy down, the session
+  expired - the idea is kept on the phone and a banner above the list says how
+  many wait. They go out by themselves, oldest first, when the network comes
+  back, when someone signs in, and every half hour in the background, even
+  with the app closed; **Send now** tries at once. An app started without the
+  server offers **Save an idea for later** on its "Cannot reach the server"
+  screen. An idea goes only to the server and account it was caught for. If
+  the server refuses one (its title is already in `Default`), it waits with
+  the reason for **Edit** or **Delete**; a save whose answer was lost on the
+  way is recognised and not sent twice.
 - **Item page.** Title, group and type, status, understanding, pinned, tags,
   flags, aliases, values (with **Save as…** for blobs), properties, the rendered
   Markdown content, links and backlinks. Links open the item they point to,
@@ -345,7 +356,9 @@ after typing stops, and the item page composes only the visible blocks.
   backed up. The session file is excluded from cloud backup and device transfer
   ([`data_extraction_rules.xml`](app/src/main/res/xml/data_extraction_rules.xml),
   and [`backup_rules.xml`](app/src/main/res/xml/backup_rules.xml) for Android 11
-  and older); its Keystore key never leaves the device anyway.
+  and older); its Keystore key never leaves the device anyway. Inbox ideas
+  waiting for the server live in `noBackupFilesDir`, which is never backed up,
+  and are deleted from the phone once the server has them.
 - **Exported components.** Only `MainActivity`, for the launcher, the share
   sheet and the Quick Add shortcut. Incoming intents are validated in
   `LaunchIntents`: only `ACTION_SEND` with `text/plain` and the Quick Add action

@@ -5,6 +5,8 @@
     <!-- Talking to LexiconServer. Blob files go through the Storage Access
          Framework and need no storage permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- To send Inbox ideas saved offline as soon as the network is back. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Alarms: a notification when one goes off (asked for on the Alarms
          screen), at the minute when the person allows exact alarms, and again
          after a restart. -->

@@ -6,18 +6,22 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.robertvokac.lexicon.api.ApiClient
+import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.auth.AesGcmSecretCipher
 import com.robertvokac.lexicon.auth.KeystoreKeys
 import com.robertvokac.lexicon.auth.SecretCipher
 import com.robertvokac.lexicon.auth.SessionManager
+import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.auth.TokenStore
+import com.robertvokac.lexicon.inbox.IdeaOutbox
 import com.robertvokac.lexicon.storage.SettingsStore
 import com.robertvokac.lexicon.util.DataChanges
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 // Two files: settings may be backed up, the session never is (see
@@ -39,6 +43,8 @@ class AppContainer(
     /** Work that must outlive a screen, such as telling the server about a logout. */
     val applicationScope: CoroutineScope,
     val defaultServerUrl: String,
+    /** Where Inbox ideas wait while the server cannot be reached. */
+    outboxFile: File,
 ) {
     val sessions: SessionManager = SessionManager(
         api = { api },
@@ -49,6 +55,17 @@ class AppContainer(
     )
     val api: LexiconApi = LexiconApi(ApiClient(httpClient, sessions))
     val dataChanges = DataChanges()
+    val outbox = IdeaOutbox(outboxFile) { api }
+
+    /** Sends the Inbox ideas waiting on this phone, when someone is signed in. */
+    suspend fun flushOutbox(): Int {
+        val session = sessions.state.value as? SessionState.SignedIn ?: return 0
+        return try {
+            outbox.flush(session.identity.server.value, session.identity.username)
+        } catch (_: ApiException) {
+            0
+        }
+    }
 
     companion object {
         fun create(context: Context): AppContainer {
@@ -65,6 +82,8 @@ class AppContainer(
                 allowCleartextDevelopmentHosts = BuildConfig.DEBUG,
                 applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
                 defaultServerUrl = BuildConfig.DEFAULT_SERVER_URL,
+                // noBackupFilesDir: private notes stay off cloud backups.
+                outboxFile = File(application.noBackupFilesDir, "inbox-outbox.json"),
             )
         }
 

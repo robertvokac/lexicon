@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.robertvokac.lexicon.AppContainer
 import com.robertvokac.lexicon.api.ApiException
+import com.robertvokac.lexicon.auth.Identity
 import com.robertvokac.lexicon.auth.SessionState
+import com.robertvokac.lexicon.inbox.IdeaOutbox
+import com.robertvokac.lexicon.inbox.PendingIdea
 import com.robertvokac.lexicon.model.ColumnFilters
 import com.robertvokac.lexicon.model.Group
 import com.robertvokac.lexicon.model.Item
@@ -30,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -53,6 +57,8 @@ data class InboxState(
     val content: String = "",
     val busy: Boolean = false,
     val error: String? = null,
+    /** The idea waiting on this phone that is being edited, if any. */
+    val waitingId: String? = null,
 )
 
 data class DuplicateCheck(
@@ -84,6 +90,10 @@ data class ItemsUiState(
     val selectedItemId: Int? = null,
     val quickAdd: QuickAddState? = null,
     val inbox: InboxState? = null,
+    /** Inbox ideas of this account waiting on this phone for the server. */
+    val waitingIdeas: List<PendingIdea> = emptyList(),
+    val showWaitingIdeas: Boolean = false,
+    val sendingIdeas: Boolean = false,
     val pendingDelete: Item? = null,
     val deleting: Boolean = false,
     val message: UserMessage? = null,
@@ -118,6 +128,20 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
                 if (change.kind != DataChanges.Kind.Items) loadReferenceData()
                 else refreshUsage()
                 reload(keepLoaded = true)
+            }
+        }
+        viewModelScope.launch {
+            combine(container.outbox.ideas, container.sessions.state) { ideas, _ ->
+                identity()?.let { me -> ideas.filter { it.server == me.server.value && it.username == me.username } }.orEmpty()
+            }.collect { mine ->
+                _state.update { it.copy(waitingIdeas = mine, showWaitingIdeas = it.showWaitingIdeas && mine.isNotEmpty()) }
+            }
+        }
+        viewModelScope.launch {
+            container.outbox.delivered.filter { it > 0 }.collect { count ->
+                container.outbox.deliveredShown()
+                _state.update { it.copy(message = UserMessage(if (count == 1) "Sent 1 idea saved on this phone." else "Sent $count ideas saved on this phone.")) }
+                container.dataChanges.itemChanged(null)
             }
         }
         viewModelScope.launch {
@@ -453,6 +477,13 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openInbox() = _state.update { it.copy(inbox = InboxState()) }
 
+    /** The signed-in account, or the one whose session expired under this screen. */
+    private fun identity(): Identity? = when (val session = container.sessions.state.value) {
+        is SessionState.SignedIn -> session.identity
+        is SessionState.SignedOut -> session.retained
+        else -> null
+    }
+
     fun setInboxTitle(title: String) = _state.update { it.copy(inbox = it.inbox?.copy(title = title, error = null)) }
 
     fun setInboxContent(content: String) = _state.update { it.copy(inbox = it.inbox?.copy(content = content)) }
@@ -473,13 +504,62 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 val groupId = api.defaultGroupId()
                 val saved = api.createItem(SaveItemRequest(ItemWrite(groupId = groupId, title = title, content = inbox.content)))
+                inbox.waitingId?.let { container.outbox.remove(it) }
                 _state.update { it.copy(inbox = null, message = UserMessage("Saved “$title” to the Inbox.", openItemId = saved.id)) }
                 container.dataChanges.itemChanged(saved.id)
             } catch (failure: ApiException) {
-                // Everything typed stays, with the reason.
-                _state.update { it.copy(inbox = it.inbox?.copy(busy = false, error = failure.userMessage() ?: it.inbox.error)) }
+                val me = identity()
+                if (me != null && IdeaOutbox.keepsForLater(failure)) {
+                    // No connection, the server away or the session gone: the
+                    // idea waits on this phone instead of being lost.
+                    val waitingId = inbox.waitingId
+                    if (waitingId != null) {
+                        container.outbox.update(waitingId, title, inbox.content)
+                    } else {
+                        container.outbox.add(title, inbox.content, me.server.value, me.username)
+                    }
+                    _state.update {
+                        it.copy(inbox = null, message = UserMessage("Saved “$title” on this phone. It goes to the server as soon as it can."))
+                    }
+                } else {
+                    // Everything typed stays, with the reason.
+                    _state.update { it.copy(inbox = it.inbox?.copy(busy = false, error = failure.userMessage() ?: it.inbox.error)) }
+                }
             }
         }
+    }
+
+    // Ideas waiting on this phone --------------------------------------------
+
+    fun openWaitingIdeas() = _state.update { it.copy(showWaitingIdeas = true) }
+
+    fun closeWaitingIdeas() = _state.update { it.copy(showWaitingIdeas = false) }
+
+    /** Tries to send them now. */
+    fun sendWaitingIdeas() {
+        val me = identity() ?: return
+        if (_state.value.sendingIdeas) return
+        _state.update { it.copy(sendingIdeas = true) }
+        viewModelScope.launch {
+            try {
+                val sent = container.outbox.flush(me.server.value, me.username)
+                if (sent == 0 && _state.value.waitingIdeas.any { it.problem == null }) {
+                    _state.update { it.copy(message = UserMessage("The server cannot be reached yet. The ideas stay on this phone.")) }
+                }
+            } catch (failure: ApiException) {
+                _state.update { it.copy(message = failure.userMessage()?.let(::UserMessage)) }
+            } finally {
+                _state.update { it.copy(sendingIdeas = false) }
+            }
+        }
+    }
+
+    /** Opens the Inbox with the idea, to change it and send it again. */
+    fun editWaitingIdea(idea: PendingIdea) =
+        _state.update { it.copy(showWaitingIdeas = false, inbox = InboxState(title = idea.title, content = idea.content, waitingId = idea.id)) }
+
+    fun deleteWaitingIdea(idea: PendingIdea) {
+        viewModelScope.launch { container.outbox.remove(idea.id) }
     }
 
     /** Items anywhere whose title, full title or alias is exactly [text], ignoring case. */

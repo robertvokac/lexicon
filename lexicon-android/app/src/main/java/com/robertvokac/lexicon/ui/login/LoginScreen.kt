@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
@@ -185,8 +186,32 @@ fun CompatibilityScreen(server: String, message: String, onRetry: () -> Unit, on
 
 /** A stored session could not be verified because the server did not answer. */
 @Composable
-fun UnreachableScreen(server: String, message: String, onRetry: () -> Unit, onSignIn: () -> Unit, modifier: Modifier = Modifier) {
-    StatusScreen("Cannot reach the server", server, message, onRetry, "Sign in again", onSignIn, modifier)
+fun UnreachableScreen(
+    server: String,
+    message: String,
+    onRetry: () -> Unit,
+    onSignIn: () -> Unit,
+    modifier: Modifier = Modifier,
+    waitingIdeas: Int = 0,
+    onSaveIdea: (() -> Unit)? = null,
+) {
+    StatusScreen("Cannot reach the server", server, message, onRetry, "Sign in again", onSignIn, modifier) {
+        // An idea should not wait for the network: it waits on the phone.
+        if (onSaveIdea != null) {
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            OutlinedButton(onClick = onSaveIdea) { Text("Save an idea for later") }
+            Text(
+                when (waitingIdeas) {
+                    0 -> "It is kept on this phone and sent when the server can be reached."
+                    1 -> "1 idea waits on this phone and is sent when the server can be reached."
+                    else -> "$waitingIdeas ideas wait on this phone and are sent when the server can be reached."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
 }
 
 @Composable
@@ -198,6 +223,7 @@ private fun StatusScreen(
     otherLabel: String,
     onOther: () -> Unit,
     modifier: Modifier,
+    extra: @Composable () -> Unit = {},
 ) {
     Surface(modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
@@ -211,6 +237,7 @@ private fun StatusScreen(
                 Text(message, textAlign = TextAlign.Center)
                 Button(onClick = onRetry) { Text("Retry") }
                 OutlinedButton(onClick = onOther) { Text(otherLabel) }
+                extra()
             }
         }
     }

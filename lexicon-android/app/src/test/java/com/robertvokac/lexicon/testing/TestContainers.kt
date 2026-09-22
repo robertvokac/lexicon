@@ -44,6 +44,7 @@ class TestEnvironment(
         allowCleartextDevelopmentHosts = true,
         applicationScope = scope,
         defaultServerUrl = "",
+        outboxFile = File(directory, "inbox-outbox.json"),
     )
 
     fun close() {
