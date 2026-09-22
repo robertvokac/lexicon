@@ -2,6 +2,8 @@
 #include "SqliteRepository.h"
 #include "Validation.h"
 
+#include <sqlite3.h>
+
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -19,6 +21,14 @@ template <class T> bool success(const lexicon::Result<T> &result, const char *me
   if (result) return true;
   std::cerr << message << ": " << result.error().message << '\n';
   return false;
+}
+bool fts5Available() {
+  sqlite3 *db = nullptr;
+  if (sqlite3_open(":memory:", &db) != SQLITE_OK) return false;
+  const bool available =
+      sqlite3_exec(db, "CREATE VIRTUAL TABLE probe USING fts5(x);", nullptr, nullptr, nullptr) == SQLITE_OK;
+  sqlite3_close(db);
+  return available;
 }
 struct TemporaryDirectory {
   fs::path path;
@@ -135,10 +145,12 @@ int main() {
     if (!success(upperId, "Create uppercase UTF-8 item")) return 1;
     auto exactMatch = app.items.countItems(-1, -1, {}, "Étiquette", {}, {});
     auto foldedMatch = app.items.countItems(-1, -1, {}, "étiquette", {}, {});
+    // The substring search folds ASCII case only; the full-text index, where
+    // SQLite has FTS5, folds case and diacritics in every script.
     if (!success(exactMatch, "Exact UTF-8 search") ||
         !success(foldedMatch, "Non-ASCII case search") ||
-        !expect(*exactMatch == 1 && *foldedMatch == 0,
-                "Non-ASCII search unexpectedly case folded")) return 1;
+        !expect(*exactMatch == 1 && *foldedMatch == (fts5Available() ? 1 : 0),
+                "Non-ASCII case folding does not follow the search index")) return 1;
     loaded->title = "Updated item";
     if (!success(app.items.saveItem(*loaded), "Update item")) return 1;
     auto reloaded = app.items.loadItem(*created);

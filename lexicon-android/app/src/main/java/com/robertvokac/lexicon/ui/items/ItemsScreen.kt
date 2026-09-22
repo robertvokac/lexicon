@@ -305,7 +305,7 @@ private fun SearchField(text: String, onTextChange: (String) -> Unit, onSubmit: 
     OutlinedTextField(
         value = text,
         onValueChange = onTextChange,
-        placeholder = { Text("Search title, alias, tag, flag…") },
+        placeholder = { Text("Search titles, tags, content…") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (text.isNotEmpty()) {

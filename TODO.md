@@ -11,6 +11,6 @@ Lexicon currently has Groups, Items, Types, Fields, typed Values, Links and Back
 
 ## Product features
 
-- [ ] Improve search result ranking so exact title matches appear first.
+- [x] Improve search result ranking so exact title matches appear first.
 - [ ] Export and import Items and Groups in a documented format.
 - [ ] Add an optional graph view of Item relationships.

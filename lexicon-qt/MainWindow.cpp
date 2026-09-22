@@ -117,7 +117,7 @@ void MainWindow::setupUi() {
 
     auto* searchRowLayout = new QHBoxLayout();
     m_searchEdit = new QLineEdit(centralWidget);
-    m_searchEdit->setPlaceholderText("Search title, disambiguation, alias, tag, or flag...");
+    m_searchEdit->setPlaceholderText("Search titles, aliases, tags, flags and content...");
 
     auto* quickAddButton = new QPushButton("Add", centralWidget);
     auto* addButton = new QPushButton("Add ...", centralWidget);

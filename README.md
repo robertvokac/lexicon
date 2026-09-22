@@ -43,7 +43,8 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Markdown item content editor with formatting toolbar and live preview
 - Global read-only overviews for all tags, flags, and aliases
 - Fast filtering and search:
-  - search in title, disambiguation, alias, tag, and flag
+  - search in title, disambiguation, alias, tag, flag, and Markdown content
+  - full-text search of the content that ignores diacritics (`prilis` finds `Příliš`), with the exact title first
   - per-column filters above the table headers, including type fields
   - property key/value filters via `Filter Properties...`
 - Pagination for large datasets
@@ -199,7 +200,9 @@ Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 
 Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. Migration versions and schema are unchanged; old QtSql databases are covered by version 10 and version 20 compatibility fixtures.
 
-Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding.
+Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding. The one exception is the full-text search index (below), which folds case and diacritics in every script.
+
+Item search uses an SQLite FTS5 table, `item_search`, over titles, disambiguations, aliases, tags, flags and content, created when the database is opened by a SQLite that has FTS5. Nothing writes to it while an item is saved: the index keeps the revision of each item it indexed, and a search first re-indexes the items whose revision moved on, so it also follows changes made by another program. A SQLite without FTS5 opens the same database and searches content as a plain substring.
 
 Qt is limited to the frontend and conversion target so another client can use core, application, and native SQLite without Qt. `LexiconServer` is exactly that second client: it composes `SqliteRepository` with `LexiconApplication` and adds an HTTP adapter, without duplicating a single domain rule.
 
@@ -320,6 +323,11 @@ Search matches these fields:
 - aliases
 - tags
 - flags
+- content
+
+Titles and the other short fields match any part of the text, ignoring ASCII case. Content is searched word by word: every word you type must occur, as the start of a word, and case and diacritics do not matter (`zlutoucky kun` finds `žluťoučký kůň`). Text without such a word, like `C++`, is matched as a substring of the content.
+
+Results are ranked: the item titled exactly what you typed comes first, then items with it as an alias, titles starting with it, titles containing it, items where it is a disambiguation, alias, tag or flag, and last the items that only mention it in their content. The column you sort by orders the items within each of these groups.
 
 The central table supports:
 
@@ -551,7 +559,6 @@ Backup strategies:
 - export to CSV/JSON
 - add new unique indexes
 - export to static HTML
-- improve search ranking so exact match appears first
 
 ## License
 

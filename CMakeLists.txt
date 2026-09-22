@@ -87,6 +87,7 @@ add_library(lexicon-storage-sqlite STATIC
     lexicon-storage-sqlite/SqliteRepository.cpp
     lexicon-storage-sqlite/SqliteInternal.h
     lexicon-storage-sqlite/Migrations.cpp
+    lexicon-storage-sqlite/SearchIndex.cpp
 )
 target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
 target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application PRIVATE SQLite::SQLite3 OpenSSL::Crypto)
@@ -267,7 +268,7 @@ if (BUILD_TESTING)
     add_test(NAME application_integration COMMAND lexicon-application-integration)
 
     add_executable(lexicon-sqlite-compatibility tests/SqliteCompatibility.cpp)
-    target_link_libraries(lexicon-sqlite-compatibility PRIVATE lexicon-application lexicon-storage-sqlite)
+    target_link_libraries(lexicon-sqlite-compatibility PRIVATE lexicon-application lexicon-storage-sqlite SQLite::SQLite3)
     target_compile_definitions(lexicon-sqlite-compatibility PRIVATE
         LEXICON_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
     set_target_properties(lexicon-sqlite-compatibility PROPERTIES AUTOMOC OFF AUTORCC OFF)
@@ -277,6 +278,13 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-repository-correctness PRIVATE lexicon-application lexicon-storage-sqlite)
     set_target_properties(lexicon-repository-correctness PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME repository_correctness COMMAND lexicon-repository-correctness)
+
+    add_executable(lexicon-search tests/Search.cpp)
+    # SQLite directly as well: the test edits the database behind the
+    # repository's back, as another program would.
+    target_link_libraries(lexicon-search PRIVATE lexicon-application lexicon-storage-sqlite SQLite::SQLite3)
+    set_target_properties(lexicon-search PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME search COMMAND lexicon-search)
 
     add_executable(lexicon-blob-maintenance tests/BlobMaintenance.cpp)
     target_link_libraries(lexicon-blob-maintenance PRIVATE lexicon-application lexicon-storage-sqlite)

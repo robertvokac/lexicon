@@ -609,6 +609,20 @@ void checkSearchAndUsage(Checks &checks) {
                      404, "an unknown title is a not-found error");
   checks.expectEqual(client.get("/api/v1/items/resolve?title=").status, 400,
                      "an empty title is rejected");
+
+  // The search text also finds item content, and the exact title leads.
+  client.post("/api/v1/items",
+              Json{{"item", Json{{"groupId", groupId},
+                                 {"title", "Group"},
+                                 {"content", "A monoid in which every element has an inverse."}}}}
+                  .dump());
+  const auto found = parse(client.post("/api/v1/items/query",
+                                       Json{{"searchText", "monoid"}, {"sortColumn", 0}}.dump()));
+  checks.expectEqual(found.value("totalCount", 0), 2, "the search text finds content");
+  checks.expectEqual(found.at("items").at(0).value("title", std::string{}), "Monoid",
+                     "the exact title comes first");
+  checks.expectEqual(found.at("items").at(1).value("title", std::string{}), "Group",
+                     "an item mentioning the text in its content follows");
 }
 
 void checkBlobs(Checks &checks) {

@@ -132,6 +132,8 @@ std::vector<std::string> splitJoined(const std::string &joined) {
 struct SqliteRepository::Impl {
   Connection db;
   std::string path;
+  // Whether this SQLite has FTS5 and the database has the item_search index.
+  bool fullText = false;
   enum class UnitState { Idle, Active, Failed } unitState = UnitState::Idle;
   // Whether the unit of work opened the outer BEGIN IMMEDIATE transaction.
   bool unitOwnsTransaction = false;
@@ -146,6 +148,7 @@ SqliteRepository::Result<void> SqliteRepository::open(const std::string &path) {
     try {
       impl_->db.open(path);
       storage::applyMigrations(impl_->db);
+      impl_->fullText = storage::openSearchIndex(impl_->db);
       impl_->path = path;
     } catch (...) {
       impl_->db.close();
@@ -310,7 +313,8 @@ SqliteRepository::Result<void> SqliteRepository::deleteItemField(int fieldId) {
 }
 
 namespace {
-void appendFilters(std::string &sql, int groupId, int typeId,
+// fullText: whether the item_search index can be used for the search text.
+void appendFilters(std::string &sql, bool fullText, int groupId, int typeId,
                    const std::vector<lexicon::ItemValueFilter> &values,
                    const std::string &searchText,
                    const lexicon::ItemColumnFilters &columns,
@@ -338,13 +342,22 @@ void appendFilters(std::string &sql, int groupId, int typeId,
   if (pinned >= 0) sql += "AND t.pinned = ? ";
   if (!lexicon::trim(tag).empty()) sql += "AND EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND tg.name = ?) ";
   if (!lexicon::trim(flag).empty()) sql += "AND EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND fg.name = ?) ";
-  if (!lexicon::trim(searchText).empty())
+  if (!lexicon::trim(searchText).empty()) {
     sql += "AND (LOWER(t.title) LIKE ? OR LOWER(COALESCE(t.disambiguation, '')) LIKE ? "
            "OR EXISTS (SELECT 1 FROM alias a WHERE a.item_id = t.id AND LOWER(a.alias) LIKE ?) "
            "OR EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND LOWER(tg.name) LIKE ?) "
-           "OR EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND LOWER(fg.name) LIKE ?)) ";
+           "OR EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND LOWER(fg.name) LIKE ?) ";
+    // Item content is searched too: word by word through the index, or as a
+    // substring where SQLite has no FTS5 or the text has no word to index,
+    // like "C++".
+    if (fullText && !storage::fullTextQuery(lexicon::trim(searchText)).empty())
+      sql += "OR t.id IN (SELECT rowid FROM item_search WHERE item_search MATCH ?) ";
+    else
+      sql += "OR INSTR(LOWER(COALESCE(t.content, '')), ?) > 0 ";
+    sql += ") ";
+  }
 }
-void bindFilters(Statement &stmt, int groupId, int typeId,
+void bindFilters(Statement &stmt, bool fullText, int groupId, int typeId,
                  const std::vector<lexicon::ItemValueFilter> &values,
                  const std::string &searchText,
                  const lexicon::ItemColumnFilters &columns,
@@ -369,10 +382,31 @@ void bindFilters(Statement &stmt, int groupId, int typeId,
   if (!lexicon::trim(tag).empty()) stmt.bind(lexicon::trim(tag));
   if (!lexicon::trim(flag).empty()) stmt.bind(lexicon::trim(flag));
   if (!lexicon::trim(searchText).empty()) {
-    std::string like = "%" + lexicon::asciiFold(lexicon::trim(searchText)) + "%";
+    const std::string folded = lexicon::asciiFold(lexicon::trim(searchText));
+    const std::string like = "%" + folded + "%";
     for (int i = 0; i < 5; ++i) stmt.bind(like);
+    const std::string match = storage::fullTextQuery(lexicon::trim(searchText));
+    if (fullText && !match.empty()) stmt.bind(match);
+    else stmt.bind(folded);
   }
 }
+
+// While searching, the item titled exactly what was typed comes first, then
+// the items with it as an alias, titles starting with it, titles containing
+// it, other matching fields, and last the items that only mention it in their
+// content. The chosen column order applies within each of these. The
+// parameters are named, so they are numbered after the filters' and each is
+// bound once.
+const char *kSearchRank =
+  "CASE WHEN LOWER(t.title) = :exact THEN 0 "
+  "WHEN EXISTS (SELECT 1 FROM alias a WHERE a.item_id = t.id AND LOWER(a.alias) = :exact) THEN 1 "
+  "WHEN LOWER(t.title) LIKE :prefix THEN 2 "
+  "WHEN LOWER(t.title) LIKE :contains THEN 3 "
+  "WHEN LOWER(COALESCE(t.disambiguation, '')) LIKE :contains "
+  "OR EXISTS (SELECT 1 FROM alias a WHERE a.item_id = t.id AND LOWER(a.alias) LIKE :contains) "
+  "OR EXISTS (SELECT 1 FROM tag tg WHERE tg.item_id = t.id AND LOWER(tg.name) LIKE :contains) "
+  "OR EXISTS (SELECT 1 FROM flag fg WHERE fg.item_id = t.id AND LOWER(fg.name) LIKE :contains) THEN 4 "
+  "ELSE 5 END";
 } // namespace
 
 SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteRepository::loadItems(
@@ -383,6 +417,8 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
     int understandingFilter, int statusFilter, int pinnedFilter, int limit,
     int offset, int sortColumn, SortOrder sortOrder) {
   return guarded([&] {
+    const bool searching = !lexicon::trim(searchText).empty();
+    if (searching && impl_->fullText) storage::refreshSearchIndex(impl_->db);
     std::string sql =
       "SELECT t.id, m.name, t.group_id, t.title, t.disambiguation, "
       "COALESCE((SELECT GROUP_CONCAT(a.alias, ', ') FROM alias a WHERE a.item_id = t.id), '') AS aliases, "
@@ -393,7 +429,7 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
       "t.revision "
       "FROM item t JOIN item_group m ON m.id = t.group_id "
       "LEFT JOIN item_type ty ON ty.id = t.item_type_id WHERE 1 = 1 ";
-    appendFilters(sql, groupId, typeId, valueFilters, searchText, columnFilters,
+    appendFilters(sql, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                   propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
     std::string order;
     switch (sortColumn) {
@@ -421,15 +457,21 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
           ? "CAST(" + value + " AS REAL)" : value + " COLLATE NOCASE";
       }
     }
-    sql += "ORDER BY " + order + (sortOrder == SortOrder::Ascending ? " ASC " : " DESC ");
+    sql += "ORDER BY ";
+    if (searching) sql += std::string(kSearchRank) + ", ";
+    sql += order + (sortOrder == SortOrder::Ascending ? " ASC " : " DESC ");
     if (sortColumn == 1) sql += ", m.name COLLATE NOCASE";
     if (sortColumn != 3) sql += ", t.title COLLATE NOCASE";
     if (sortColumn != 4) sql += ", COALESCE(t.disambiguation, '') COLLATE NOCASE";
     sql += ", t.id ASC ";
     if (limit > 0) sql += "LIMIT ? OFFSET ? ";
     Statement stmt(impl_->db, sql);
-    bindFilters(stmt, groupId, typeId, valueFilters, searchText, columnFilters,
+    bindFilters(stmt, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                 propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
+    if (searching) {
+      const auto folded = lexicon::asciiFold(lexicon::trim(searchText));
+      stmt.bind(folded).bind(folded + "%").bind("%" + folded + "%");
+    }
     if (limit > 0) stmt.bind(limit).bind(offset);
     std::vector<ItemRecord> items;
     while (stmt.step()) {
@@ -463,11 +505,12 @@ SqliteRepository::Result<int> SqliteRepository::countItems(
     const std::string &tagFilter, const std::string &flagFilter,
     int understandingFilter, int statusFilter, int pinnedFilter) {
   return guarded([&] {
+    if (impl_->fullText && !lexicon::trim(searchText).empty()) storage::refreshSearchIndex(impl_->db);
     std::string sql = "SELECT COUNT(*) FROM item t WHERE 1 = 1 ";
-    appendFilters(sql, groupId, typeId, valueFilters, searchText, columnFilters,
+    appendFilters(sql, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                   propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
     Statement stmt(impl_->db, sql);
-    bindFilters(stmt, groupId, typeId, valueFilters, searchText, columnFilters,
+    bindFilters(stmt, impl_->fullText, groupId, typeId, valueFilters, searchText, columnFilters,
                 propertyFilters, tagFilter, flagFilter, understandingFilter, statusFilter, pinnedFilter);
     return stmt.step() ? stmt.integer(0) : 0;
   });

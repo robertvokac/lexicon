@@ -129,4 +129,11 @@ public:
 inline void run(const Connection &db, const std::string &sql) { Statement(db, sql).run(); }
 inline int scalar(const Connection &db, const std::string &sql) { Statement stmt(db, sql); return stmt.step() ? stmt.integer(0) : 0; }
 void applyMigrations(const Connection &db);
+// Creates the full-text index when this SQLite has FTS5; false otherwise.
+bool openSearchIndex(const Connection &db);
+// Re-indexes the items whose revision changed since they were last indexed.
+void refreshSearchIndex(const Connection &db);
+// The FTS5 MATCH expression for what the user typed; empty when no word in
+// it is worth a full-text match.
+std::string fullTextQuery(const std::string &text);
 } // namespace storage

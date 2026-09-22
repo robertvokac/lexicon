@@ -170,7 +170,15 @@ POST /api/v1/items/query
 Every field is optional. The semantics are the ones the application already
 implements: property keys match exactly and their values are a contains match,
 an empty property value matches any value for that key, `columnFilters.id` is
-an exact ID, the other column filters and `searchText` are contains matches.
+an exact ID, and the other column filters are contains matches.
+
+`searchText` is a contains match on the title, disambiguation, aliases, tags
+and flags, and also searches the content: through the server's full-text index
+every word must occur as a word prefix, ignoring case and diacritics; text
+without a word of two letters or more, like `C++`, is a contains match on the
+content instead. While `searchText` is set, the results are ranked before the
+sort column applies: exact title, exact alias, title prefix, title contains,
+another field contains, content only.
 `sortColumn` is the column index used by both clients - 0 `Id`, 1 `Group`,
 2 `Type`, 3 `Title`, 4 `Disambiguation`, 5 `Tags`, 6 `Flags`, 7 `Aliases`,
 8 `Status`, 9 `Understanding`, 10 `Pinned`, and 11 onwards the fields of the

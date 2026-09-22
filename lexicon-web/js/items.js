@@ -114,7 +114,7 @@ export class MainView {
             type: 'search',
             id: 'search-input',
             class: 'search-input',
-            placeholder: 'Search title, disambiguation, alias, tag, or flag...',
+            placeholder: 'Search titles, aliases, tags, flags and content...',
             list: 'search-suggestions',
             autocomplete: 'off',
             ...LITERAL_TEXT,

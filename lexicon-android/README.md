@@ -181,9 +181,10 @@ accept it; install a proper certificate instead.
   the items as a list, loaded a page at a time as you scroll. Pull down to
   refresh. Tap an item to read it; long-press, or use its ⋮ button, to edit or
   delete it.
-- **Search.** Title, disambiguation, aliases, tags and flags, as on the desktop.
-  The query runs on the server a moment after typing stops; typing on cancels
-  the request that is still running.
+- **Search.** Title, disambiguation, aliases, tags, flags and content, as on the
+  desktop, with the server's ranking: the exact title first. The query runs on
+  the server a moment after typing stops; typing on cancels the request that
+  is still running.
 - **Filters and sort.** The filter button opens a sheet with every filter of the
   desktop's filter row: group, type and the selected type's fields, ID, title,
   disambiguation, alias, tag, flag, status, understanding, pinned, and property
