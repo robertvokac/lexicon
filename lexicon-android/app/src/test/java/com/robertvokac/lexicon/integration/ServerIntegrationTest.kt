@@ -12,6 +12,7 @@ import com.robertvokac.lexicon.model.AlarmWrite
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.FieldWrite
 import com.robertvokac.lexicon.model.GroupWrite
+import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.ItemQuery
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.LinkType
@@ -22,6 +23,7 @@ import com.robertvokac.lexicon.model.TypeWrite
 import com.robertvokac.lexicon.model.UnderstandingLevel
 import com.robertvokac.lexicon.model.ValueFilter
 import com.robertvokac.lexicon.testing.TestEnvironment
+import com.robertvokac.lexicon.testing.TestImages
 import com.robertvokac.lexicon.ui.item.EditorFields
 import com.robertvokac.lexicon.ui.item.EditorRules
 import com.robertvokac.lexicon.ui.item.LinkEntry
@@ -346,6 +348,51 @@ class ServerIntegrationTest {
             }
             api.deleteAlarm(id)
             assertTrue(api.alarms().none { it.id == id })
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
+    fun imagesOverRealRest() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val groupId = api.defaultGroupId()
+            val type = api.createType(TypeWrite("Figure ${System.nanoTime()}", groupId = groupId))
+            val field = api.createField(checkNotNull(type.id), FieldWrite("Diagram", FieldDataType.Image))
+            assertEquals(FieldDataType.Image, field.dataType)
+            val png = TestImages.png(12, 8)
+            val uploaded = api.uploadBlobDetailed(png.size.toLong(), { ByteArrayInputStream(png) }) { _, _ -> }
+            assertEquals("image/png", uploaded.mediaType)
+            val text = "no picture".toByteArray()
+            assertNull(api.uploadBlobDetailed(text.size.toLong(), { ByteArrayInputStream(text) }) { _, _ -> }.mediaType)
+            val value = ImageValues.format("image/png", uploaded.hash)
+            val fieldKey = checkNotNull(field.id)
+            val created = api.createItem(
+                EditorRules.saveRequest(
+                    EditorFields(groupId = groupId, typeId = type.id, title = "Pipeline ${System.nanoTime()}", values = mapOf(fieldKey to value)),
+                    "",
+                    listOf(field),
+                ),
+            )
+            assertEquals(value, api.item(created.id).item.fieldValue(fieldKey))
+            assertArrayEquals(png, api.blobBytes(uploaded.hash))
+            try {
+                api.createItem(
+                    EditorRules.saveRequest(
+                        EditorFields(groupId = groupId, typeId = type.id, title = "Wrong ${System.nanoTime()}", values = mapOf(fieldKey to "image/gif:${uploaded.hash}")),
+                        "",
+                        listOf(field),
+                    ),
+                )
+                fail("expected a refusal")
+            } catch (failure: ApiException.Validation) {
+                assertTrue(failure.message!!.contains("image/png, not image/gif"))
+            }
+            api.deleteItem(created.id)
+            api.deleteType(checkNotNull(type.id))
         } finally {
             environment.close()
         }

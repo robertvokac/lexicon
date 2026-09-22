@@ -265,6 +265,12 @@ progress line, and the item cannot be saved until the upload has finished;
 `413` from the server (`--max-blob-bytes`) is reported as such. A download that
 fails or is cancelled deletes the incomplete document again.
 
+An Image field works the same way but offers only PNG, JPEG, GIF, WebP and BMP
+documents, checks the file's first bytes before uploading it, and shows the
+picture: a thumbnail in the editor and on the item page, and the whole image
+over the screen on a tap, with pinch to zoom. Pictures are decoded at the size
+they are shown and kept in memory while it allows.
+
 Blob maintenance — scanning, verifying and garbage collecting the blob
 directory — remains a local desktop and server administration feature. The REST
 API does not expose it and neither does the app.
@@ -354,7 +360,7 @@ the Qt and web clients, with an Android interaction model.
 | Quick Add (Default group rule) and Add … | Yes, with the web client's duplicate check |
 | Item editor: General, Content, Values, Metadata, Links, Backlinks | Yes, one screen with six tabs |
 | Markdown editing with toolbar and preview | Yes |
-| Values for every data type | Integer, Float, Text, Date, Time, Timestamp (native pickers), Boolean, Enum, Blob, Other |
+| Values for every data type | Integer, Float, Text, Date, Time, Timestamp (native pickers), Boolean, Enum, Blob, Other, Image |
 | Tags, flags, aliases, properties | Yes, with usage suggestions |
 | Links and backlinks, including Custom | Yes, with a server-side item search |
 | Blob upload and download | Yes, through the system document picker |

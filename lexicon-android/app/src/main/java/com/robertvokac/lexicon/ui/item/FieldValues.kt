@@ -1,6 +1,7 @@
 package com.robertvokac.lexicon.ui.item
 
 import com.robertvokac.lexicon.model.FieldDataType
+import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.ItemField
 import java.time.LocalDate
 import java.time.LocalTime
@@ -35,6 +36,7 @@ object FieldValues {
             FieldDataType.Boolean -> text == "true" || text == "false"
             FieldDataType.Enum -> text in field.enumOptions
             FieldDataType.Blob -> sha256.matches(text)
+            FieldDataType.Image -> ImageValues.parse(text) != null
             FieldDataType.Text, FieldDataType.Other -> true
         }
         if (ok) return null

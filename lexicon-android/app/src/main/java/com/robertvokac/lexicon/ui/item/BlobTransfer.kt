@@ -6,6 +6,7 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconApi
+import com.robertvokac.lexicon.model.UploadedBlob
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -37,10 +38,29 @@ class BlobTransfer(private val api: LexiconApi, private val resolver: ContentRes
         Document(name, size)
     }
 
+    /** The first bytes of a picked document, enough to tell an image by. */
+    suspend fun head(uri: Uri, count: Int = 16): ByteArray = withContext(Dispatchers.IO) {
+        val stream = resolver.openInputStream(uri) ?: throw FileNotFoundException("The document cannot be read.")
+        stream.use { input ->
+            val buffer = ByteArray(count)
+            var filled = 0
+            while (filled < count) {
+                val read = input.read(buffer, filled, count - filled)
+                if (read < 0) break
+                filled += read
+            }
+            buffer.copyOf(filled)
+        }
+    }
+
     /** Streams the document to the server and returns its SHA-256. */
-    suspend fun upload(uri: Uri, size: Long, onProgress: (Long, Long) -> Unit): String {
+    suspend fun upload(uri: Uri, size: Long, onProgress: (Long, Long) -> Unit): String =
+        uploadDetailed(uri, size, onProgress).hash
+
+    /** Streams the document to the server; the answer says whether it is an image. */
+    suspend fun uploadDetailed(uri: Uri, size: Long, onProgress: (Long, Long) -> Unit): UploadedBlob {
         try {
-            return api.uploadBlob(
+            return api.uploadBlobDetailed(
                 size = size,
                 open = { resolver.openInputStream(uri) ?: throw FileNotFoundException("The document cannot be read.") },
                 onProgress = onProgress,

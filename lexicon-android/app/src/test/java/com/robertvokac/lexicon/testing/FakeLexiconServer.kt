@@ -3,6 +3,7 @@ package com.robertvokac.lexicon.testing
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.Alarm
 import com.robertvokac.lexicon.model.FieldDataType
+import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.Group
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.ItemField
@@ -382,7 +383,10 @@ class FakeLexiconServer : Dispatcher() {
                 require(bytes.isNotEmpty()) { "The upload is empty." }
                 val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
                 blobs[hash] = bytes
-                json(buildJsonObject { put("hash", hash) }, 201)
+                json(buildJsonObject {
+                    put("hash", hash)
+                    put("mediaType", ImageValues.sniff(bytes.copyOf(minOf(16, bytes.size)))?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull)
+                }, 201)
             }
             segments.size == 2 && segments[0] == "blobs" && method == "GET" -> {
                 val bytes = blobs[segments[1]] ?: return error(404, "not_found", "Blob not found.")

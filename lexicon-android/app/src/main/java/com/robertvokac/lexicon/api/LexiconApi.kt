@@ -4,7 +4,6 @@ import com.robertvokac.lexicon.model.Alarm
 import com.robertvokac.lexicon.model.AlarmEnvelope
 import com.robertvokac.lexicon.model.AlarmWrite
 import com.robertvokac.lexicon.model.AlarmsEnvelope
-import com.robertvokac.lexicon.model.BlobEnvelope
 import com.robertvokac.lexicon.model.CountEnvelope
 import com.robertvokac.lexicon.model.DefaultGroupEnvelope
 import com.robertvokac.lexicon.model.FieldEnvelope
@@ -38,6 +37,7 @@ import com.robertvokac.lexicon.model.StringsEnvelope
 import com.robertvokac.lexicon.model.TypeEnvelope
 import com.robertvokac.lexicon.model.TypeWrite
 import com.robertvokac.lexicon.model.TypesEnvelope
+import com.robertvokac.lexicon.model.UploadedBlob
 import com.robertvokac.lexicon.model.UsageEnvelope
 import com.robertvokac.lexicon.model.UsageValue
 import java.io.InputStream
@@ -164,7 +164,20 @@ class LexiconApi(private val client: ApiClient) {
 
     /** Uploads the bytes and returns the SHA-256 to store in a Blob field. */
     suspend fun uploadBlob(size: Long, open: () -> InputStream, onProgress: (Long, Long) -> Unit): String =
-        client.upload("blobs", size, open, onProgress, BlobEnvelope.serializer()).hash
+        uploadBlobDetailed(size, open, onProgress).hash
+
+    /** Uploads the bytes; the answer also says whether they are an image, and which kind. */
+    suspend fun uploadBlobDetailed(size: Long, open: () -> InputStream, onProgress: (Long, Long) -> Unit): UploadedBlob =
+        client.upload("blobs", size, open, onProgress, UploadedBlob.serializer())
+
+    /** A stored file in memory, for pictures; larger than [limit] bytes is refused. */
+    suspend fun blobBytes(hash: String, limit: Int = 48 * 1024 * 1024): ByteArray {
+        val bytes = java.io.ByteArrayOutputStream()
+        downloadBlob(hash, output = { bytes }) { received, _ ->
+            if (received > limit) throw ApiException.PayloadTooLarge("The image is too large to show.")
+        }
+        return bytes.toByteArray()
+    }
 
     suspend fun downloadBlob(hash: String, output: () -> OutputStream, onProgress: (Long, Long) -> Unit) {
         require(isBlobHash(hash)) { "A blob is addressed by its lowercase SHA-256 hash." }

@@ -3,6 +3,9 @@
 #include "ApplicationContext.h"
 
 #include <QDialog>
+#include <QHash>
+
+#include <functional>
 
 class QCheckBox;
 class QComboBox;
@@ -29,6 +32,10 @@ public:
     void setGroups(const QList<GroupRecord>& groups);
     void setItem(const ItemRecord& item);
     ItemRecord item() const;
+
+protected:
+    // A click on an image's thumbnail opens it.
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void addAlias();
@@ -108,6 +115,7 @@ private:
     QList<ItemFieldRecord> m_currentFields;
     QMap<int, QWidget*> m_fieldEditors;
     QMap<int, QLineEdit*> m_blobPathEditors;
+    QHash<QObject*, std::function<void()>> m_imageViewers;
     QMap<int, QString> m_pendingFieldValues;
     QMap<int, QString> m_pendingBlobPaths;
     QMap<int, QString> m_originalFieldValues;

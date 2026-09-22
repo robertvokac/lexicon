@@ -710,6 +710,32 @@ body.resizing { cursor: row-resize; user-select: none; }
 
 .value-table th { background: var(--surface-alt); position: sticky; top: 0; }
 
+/* --- Images ----------------------------------------------------------- */
+.image-field { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.image-side { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; }
+.image-thumbnail {
+    width: 160px; height: 120px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+}
+.image-thumbnail:disabled { cursor: default; }
+.image-thumbnail img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.item-images { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.item-image { margin: 0; display: flex; flex-direction: column; gap: 4px; max-width: 100%; }
+.item-image figcaption { font-weight: 600; font-size: 0.9em; }
+.image-preview {
+    padding: 0; max-width: 100%; line-height: 0; border: 1px solid var(--border);
+    background: var(--surface-alt); border-radius: var(--radius); overflow: hidden;
+}
+/* Fixed limits: a percentage of a shrink-to-fit button would be circular. */
+.image-preview img { display: block; max-width: 320px; max-height: 240px; width: auto; height: auto; }
+@media (max-width: 400px) { .image-preview img { max-width: 260px; } }
+img.loading { min-width: 40px; min-height: 30px; }
+img.broken { font-size: 0.85em; color: var(--text-muted); padding: 6px; }
+.image-viewer { display: flex; flex-direction: column; gap: 8px; }
+.image-frame { overflow: auto; max-height: 70vh; background: var(--surface-alt); border-radius: var(--radius); text-align: center; }
+.image-frame.fit img { max-width: 100%; max-height: 68vh; object-fit: contain; }
+.image-viewer-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
 .alarm-table tbody tr[data-id] { cursor: default; }
 .alarm-table tbody tr.past td { color: var(--text-muted); }
 .alarm-table tbody tr.selected td { background: var(--selection); color: var(--selection-text); }

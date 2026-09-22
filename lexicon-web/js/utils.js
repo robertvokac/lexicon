@@ -97,7 +97,7 @@ export const LINK_TYPES = [
 
 export const FIELD_DATA_TYPES = [
     'Integer', 'Float', 'Text', 'Date', 'Time',
-    'Timestamp', 'Boolean', 'Enum', 'Blob', 'Other',
+    'Timestamp', 'Boolean', 'Enum', 'Blob', 'Other', 'Image',
 ].map((value) => ({ value, label: value }));
 
 export function linkTypeLabel(value) {

@@ -64,7 +64,7 @@ dictionary up while the server runs; SQLite coordinates the two connections.
   alarms existed have no `alarms`; they import as before.
 - `blobs` is present when files were included. `data` is standard base64 with
   padding; `hash` is the SHA-256 of the decoded bytes, the value `Blob` fields
-  store.
+  store and the part after the colon of an `Image` value (`image/png:<hash>`).
 
 ## Importing
 

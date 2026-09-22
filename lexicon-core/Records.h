@@ -40,7 +40,9 @@ enum class FieldDataType {
   Boolean = 6,
   Enum = 7,
   Blob = 8,
-  Other = 9
+  Other = 9,
+  // A stored image file: "<media type>:<SHA-256>" (see ImageValue.h).
+  Image = 10
 };
 
 struct GroupRecord {

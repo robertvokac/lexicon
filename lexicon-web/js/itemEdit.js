@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { confirmDialog, errorDialog, field, listEditor, messageDialog, openDialog, promptDialog }
     from './dialogs.js';
 import { clearDraft, keepDraft, readDraft } from './drafts.js';
+import { imageEditor } from './images.js';
 import { bindItemLinks, findWikiLinks, renderMarkdown } from './markdown.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
@@ -209,6 +210,14 @@ function fieldEditor(fieldRecord, storedValue, onChange) {
         ], storedValue || '');
         select.addEventListener('change', () => onChange(select.value));
         return { node: select, read: () => select.value };
+    }
+    case 'Image': {
+        let current = storedValue || '';
+        const node = imageEditor(fieldRecord, current, (value) => {
+            current = value;
+            onChange(value);
+        });
+        return { node, read: () => current };
     }
     case 'Blob': {
         let current = storedValue || '';

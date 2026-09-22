@@ -2,6 +2,8 @@ package com.robertvokac.lexicon.ui.item
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -57,6 +60,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -67,6 +72,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.model.FieldDataType
+import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.LinkType
 import com.robertvokac.lexicon.ui.common.Choice
@@ -247,6 +253,7 @@ fun ValuesTab(state: EditorState, viewModel: ItemEditorViewModel) {
                     blob = state.blobs[id],
                     onChange = { viewModel.setValue(id, it) },
                     onUpload = { viewModel.uploadBlob(id, it) },
+                    onUploadImage = { viewModel.uploadImage(id, it) },
                     onDownload = { hash, uri -> viewModel.downloadBlob(id, hash, uri) },
                     onClearBlob = { viewModel.clearBlob(id) },
                 )
@@ -264,6 +271,7 @@ private fun FieldEditor(
     blob: BlobStatus?,
     onChange: (String) -> Unit,
     onUpload: (android.net.Uri) -> Unit,
+    onUploadImage: (android.net.Uri) -> Unit,
     onDownload: (String, android.net.Uri) -> Unit,
     onClearBlob: () -> Unit,
 ) {
@@ -291,6 +299,7 @@ private fun FieldEditor(
             supportingText = problem,
         )
         FieldDataType.Blob -> BlobEditor(field, value, blob, onUpload, onDownload, onClearBlob)
+        FieldDataType.Image -> ImageEditor(field, value, blob, onUploadImage, onDownload, onClearBlob)
         FieldDataType.Date -> PickerTextField(field, value, problem, "YYYY-MM-DD", Icons.Filled.CalendarMonth, "Pick a date", onChange) { done ->
             DateDialog(initial = value, onPicked = { onChange(it); done() }, onDismiss = done)
         }
@@ -452,6 +461,65 @@ private fun BlobEditor(
             TextButton(onClick = onClear, enabled = !busy && value.isNotEmpty()) { Text("Clear") }
         }
     }
+}
+
+/**
+ * An Image field: the picture, what kind of image it is, and Choose, View,
+ * Save as and Clear. Only PNG, JPEG, GIF, WebP and BMP documents are offered.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ImageEditor(
+    field: ItemField,
+    value: String,
+    blob: BlobStatus?,
+    onPick: (android.net.Uri) -> Unit,
+    onDownload: (String, android.net.Uri) -> Unit,
+    onClear: () -> Unit,
+) {
+    val image = ImageValues.parse(value)
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onPick) }
+    val create = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(image?.mediaType ?: "image/*")) { uri ->
+        val hash = ImageValues.parse(value)?.hash
+        if (uri != null && hash != null) onDownload(hash, uri)
+    }
+    var viewing by rememberSaveable { mutableStateOf(false) }
+    val busy = blob?.busy == true
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(field.name, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                Modifier
+                    .size(width = 160.dp, height = 120.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(enabled = image != null, role = Role.Button, onClickLabel = "View") { viewing = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (image != null) {
+                    StoredImage(value, contentDescription = "${field.name} image", maxEdge = 480, modifier = Modifier.fillMaxSize())
+                } else {
+                    Text("No image", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ImageValues.describe(value)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                blob?.let { Text(it.text, style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { open.launch(ImageValues.mediaTypes.toTypedArray()) }, enabled = !busy) {
+                Text(if (image == null) "Choose image…" else "Replace…")
+            }
+            OutlinedButton(onClick = { viewing = true }, enabled = image != null) { Text("View") }
+            OutlinedButton(
+                onClick = { create.launch(ImageValues.fileName(field.name, value)) },
+                enabled = !busy && image != null,
+            ) { Text("Save as…") }
+            TextButton(onClick = onClear, enabled = !busy && value.isNotEmpty()) { Text("Clear") }
+        }
+    }
+    if (viewing && image != null) ImageViewerDialog(value, field.name) { viewing = false }
 }
 
 // Metadata ---------------------------------------------------------------------

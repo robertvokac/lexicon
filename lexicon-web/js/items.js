@@ -4,6 +4,8 @@ import { api } from './api.js';
 import { confirmDialog, errorDialog, field, messageDialog, openDialog } from './dialogs.js';
 import { clearDraft, latestDraft } from './drafts.js';
 import { openGraph } from './graph.js';
+import { imageSection } from './images.js';
+import { describeImage } from './imagevalue.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
 import { bindItemLinks, renderMarkdown } from './markdown.js';
 import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
@@ -672,6 +674,7 @@ export class MainView {
     }
 
     async refreshAll() {
+        this.fieldCache = null; // Types and their fields may have changed.
         await this.refreshGroups();
         await this.refreshTypes();
         await this.refreshTagsAndFlags();
@@ -841,7 +844,11 @@ export class MainView {
         default:
             break;
         }
-        if (column.field) return (item.fieldValues || {})[String(column.field.id)] || '';
+        if (column.field) {
+            const value = (item.fieldValues || {})[String(column.field.id)] || '';
+            // An image reads as its kind, not as its hash.
+            return column.field.dataType === 'Image' ? describeImage(value) || value : value;
+        }
         return '';
     }
 
@@ -1041,10 +1048,14 @@ export class MainView {
         try {
             const loaded = await api.getItem(itemId, ['links', 'backlinks']);
             if (this.selectedItemId !== itemId) return false;
+            const fields = await this.fieldsOfType(loaded.item.itemTypeId);
+            if (this.selectedItemId !== itemId) return false;
             clear(this.contentPreview);
             if (loaded.item.content) renderMarkdown(this.contentPreview, loaded.item.content);
             else this.contentPreview.appendChild(
                 el('p', { class: 'hint', text: 'This item has no content yet.' }));
+            const images = imageSection(fields, loaded.item.fieldValues);
+            if (images) this.contentPreview.appendChild(images);
             this.renderLinksPreview(loaded.links, loaded.backlinks);
             return true;
         } catch (error) {
@@ -1054,6 +1065,23 @@ export class MainView {
                 el('p', { class: 'hint', text: `Error loading content: ${error.message}` }));
             clear(this.linksPreview);
             return false;
+        }
+    }
+
+    // The fields of a type, for the images in the preview. Only types with an
+    // Image field need them; the answer is kept until the next refresh.
+    async fieldsOfType(typeId) {
+        if (!(typeId > 0)) return [];
+        this.fieldCache = this.fieldCache || new Map();
+        if (!this.fieldCache.has(typeId)) {
+            const loading = api.fields(typeId);
+            loading.catch(() => this.fieldCache.delete(typeId));
+            this.fieldCache.set(typeId, loading);
+        }
+        try {
+            return await this.fieldCache.get(typeId);
+        } catch {
+            return [];
         }
     }
 

@@ -277,6 +277,7 @@ private fun placeholderFor(type: FieldDataType): String? = when (type) {
     FieldDataType.Time -> "HH:MM:SS"
     FieldDataType.Timestamp -> "YYYY-MM-DDTHH:MM:SS"
     FieldDataType.Blob -> "SHA-256"
+    FieldDataType.Image -> "image/png:SHA-256"
     else -> null
 }
 

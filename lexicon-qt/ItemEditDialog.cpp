@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include "ApplicationContext.h"
+#include "ImageValue.h"
+#include "ImageValueView.h"
 #include "MarkdownConverter.h"
 #include "WikiLinks.h"
 #include <QCheckBox>
@@ -289,6 +291,15 @@ void ItemEditDialog::refreshTypes() {
     refreshFields();
 }
 
+bool ItemEditDialog::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonRelease && m_imageViewers.contains(watched)) {
+        // Queued: the viewer is modal, and the click is still being delivered.
+        QMetaObject::invokeMethod(this, m_imageViewers.value(watched), Qt::QueuedConnection);
+        return true;
+    }
+    return QDialog::eventFilter(watched, event);
+}
+
 QString ItemEditDialog::editorValue(int fieldId) const {
     QWidget* editor = m_fieldEditors.value(fieldId);
     if (auto* line = qobject_cast<QLineEdit*>(editor)) {
@@ -361,6 +372,7 @@ void ItemEditDialog::refreshFields() {
     m_currentFields.clear();
     m_fieldEditors.clear();
     m_blobPathEditors.clear();
+    m_imageViewers.clear();
     m_fieldsLoadFailed = false;
     m_fieldsBox->hide();
     const int typeId = m_typeCombo->currentData().toInt();
@@ -450,6 +462,85 @@ void ItemEditDialog::refreshFields() {
             });
             editor = valueEdit;
             m_blobPathEditors.insert(field.id, pathEdit);
+            m_fieldsLayout->addRow(field.name + ":", wrapper);
+        } else if (field.dataType == FieldDataType::Image) {
+            // The value stays in a hidden line edit, like a Blob's hash; the
+            // person sees the picture and what kind of image it is.
+            auto* wrapper = new QWidget(m_fieldsBox);
+            auto* row = new QHBoxLayout(wrapper);
+            row->setContentsMargins(0, 0, 0, 0);
+            auto* picture = new QLabel(wrapper);
+            picture->setObjectName("imageThumbnail");
+            picture->setFixedSize(160, 120);
+            picture->setAlignment(Qt::AlignCenter);
+            picture->setFrameShape(QFrame::StyledPanel);
+            picture->setCursor(Qt::PointingHandCursor);
+            row->addWidget(picture, 0, Qt::AlignTop);
+            auto* side = new QVBoxLayout();
+            auto* info = new QLabel(wrapper);
+            info->setObjectName("imageInfo");
+            info->setWordWrap(true);
+            side->addWidget(info);
+            auto* buttons = new QHBoxLayout();
+            auto* chooseButton = new QPushButton("Choose image...", wrapper);
+            chooseButton->setObjectName("imageChoose");
+            auto* viewButton = new QPushButton("View...", wrapper);
+            viewButton->setObjectName("imageView");
+            auto* exportButton = new QPushButton("Save as...", wrapper);
+            auto* clearButton = new QPushButton("Clear", wrapper);
+            clearButton->setObjectName("imageClear");
+            for (auto* button : {chooseButton, viewButton, exportButton, clearButton}) buttons->addWidget(button);
+            buttons->addStretch();
+            side->addLayout(buttons);
+            side->addStretch();
+            row->addLayout(side, 1);
+            auto* valueEdit = new QLineEdit(saved, wrapper);
+            valueEdit->setObjectName("imageValue");
+            valueEdit->hide();
+            const auto showValue = [picture, info, viewButton, exportButton, clearButton, valueEdit] {
+                const QString value = valueEdit->text();
+                const bool present = !value.isEmpty();
+                QString error;
+                const QImage image = present ? imagevalues::load(value, &error) : QImage();
+                picture->setPixmap(image.isNull() ? QPixmap() : QPixmap::fromImage(
+                    image.scaled(picture->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+                picture->setText(!present ? "No image" : image.isNull() ? "Cannot show" : QString());
+                info->setText(!present ? QString() : image.isNull() ? error : imagevalues::describe(value, image));
+                viewButton->setEnabled(!image.isNull());
+                exportButton->setEnabled(present);
+                clearButton->setEnabled(present);
+            };
+            showValue();
+            connect(valueEdit, &QLineEdit::textChanged, wrapper, showValue);
+            connect(chooseButton, &QPushButton::clicked, this, [this, valueEdit] {
+                const QString path = QFileDialog::getOpenFileName(this, "Choose image", {}, imagevalues::fileFilter());
+                if (path.isEmpty()) return;
+                QString error;
+                const QString value = imagevalues::importFile(path, &error);
+                if (value.isEmpty()) QMessageBox::critical(this, "Image", error);
+                else valueEdit->setText(value);
+            });
+            const auto view = [this, valueEdit, name = field.name] {
+                const QImage image = imagevalues::load(valueEdit->text());
+                if (image.isNull()) return;
+                ImageViewDialog dialog(image, name, this);
+                dialog.exec();
+            };
+            connect(viewButton, &QPushButton::clicked, this, view);
+            picture->installEventFilter(this);
+            m_imageViewers.insert(picture, view);
+            connect(exportButton, &QPushButton::clicked, this, [this, valueEdit, name = field.name] {
+                const auto parsed = lexicon::parseImageValue(qtbridge::toCore(valueEdit->text()));
+                if (!parsed) return;
+                const QString path = QFileDialog::getSaveFileName(
+                    this, "Save image as", imagevalues::suggestedFileName(name, valueEdit->text()));
+                if (path.isEmpty()) return;
+                QString error;
+                if (!services().blobs.exportFile(qtbridge::toQt(parsed->hash), path, &error))
+                    QMessageBox::critical(this, "File error", error);
+            });
+            connect(clearButton, &QPushButton::clicked, valueEdit, &QLineEdit::clear);
+            editor = valueEdit;
             m_fieldsLayout->addRow(field.name + ":", wrapper);
         } else {
             auto* line = new QLineEdit(saved, m_fieldsBox);

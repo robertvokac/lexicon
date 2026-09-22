@@ -206,6 +206,7 @@ Everything below behaves the same way in both:
 | Overwrite, Reload or Cancel when the item was saved elsewhere in the meantime | the same choice, also for a restored draft |
 | **Inbox**: a title and plain text saved to Default without a type | the same button, in the overflow menu on a phone |
 | `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
+| Image values: thumbnail, **Choose image...**, **View...**, **Save as...**, **Clear**, pictures in the preview | the same, pictures fetched with the session and shown from `blob:` URLs (`js/images.js`, `js/imagevalue.js`) |
 | `Manage -> Alarms...`: the alarms in a table, add, edit, delete | the same table and form, the time in the browser's time zone (`js/alarms.js`, `js/alarmtime.js`) |
 | `PropertyFilterDialog` (key exact, value contains, empty value matches any) | the same semantics with Add/Edit/Remove/Clear/Apply |
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |

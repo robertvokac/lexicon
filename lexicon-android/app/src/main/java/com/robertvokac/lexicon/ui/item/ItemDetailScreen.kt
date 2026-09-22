@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.robertvokac.lexicon.model.FieldDataType
+import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.Link
@@ -109,6 +111,8 @@ fun ItemDetailScreen(
     val snackbar = remember { SnackbarHostState() }
     var menu by remember { mutableStateOf(false) }
     var pendingHash by rememberSaveable { mutableStateOf<String?>(null) }
+    var viewingImage by remember { mutableStateOf<Pair<String, String>?>(null) }
+    viewingImage?.let { (name, value) -> ImageViewerDialog(value, name) { viewingImage = null } }
     val saveAs = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val hash = pendingHash
         pendingHash = null
@@ -187,10 +191,16 @@ fun ItemDetailScreen(
                     modifier = Modifier.padding(padding).fillMaxSize(),
                 ) {
                     header(bundle.item)
-                    values(state, onSaveAs = { name, hash ->
-                        pendingHash = hash
-                        saveAs.launch(BlobTransfer.suggestedName(name, hash))
-                    })
+                    values(
+                        state,
+                        onSaveAs = { name, value ->
+                            // An image is saved under its own extension.
+                            val image = ImageValues.parse(value)
+                            pendingHash = image?.hash ?: value
+                            saveAs.launch(if (image != null) ImageValues.fileName(name, value) else BlobTransfer.suggestedName(name, value))
+                        },
+                        onViewImage = { name, value -> viewingImage = name to value },
+                    )
                     properties(bundle.item)
                     item(key = "content-title") { Heading("Content") }
                     if (state.content.isEmpty()) {
@@ -268,7 +278,11 @@ private fun ValueChips(label: String, values: List<String>) {
     }
 }
 
-private fun LazyListScope.values(state: ItemDetailState, onSaveAs: (String, String) -> Unit) {
+private fun LazyListScope.values(
+    state: ItemDetailState,
+    onSaveAs: (String, String) -> Unit,
+    onViewImage: (String, String) -> Unit,
+) {
     val item = state.bundle?.item ?: return
     if (item.itemTypeId == null || state.fields.isEmpty()) return
     item(key = "values-title") { Heading("Values") }
@@ -279,12 +293,23 @@ private fun LazyListScope.values(state: ItemDetailState, onSaveAs: (String, Stri
                 Text(field.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 when {
                     value.isEmpty() -> Muted("Not set")
+                    field.dataType == FieldDataType.Image && ImageValues.parse(value) != null -> Column {
+                        Text(ImageValues.describe(value).orEmpty(), style = MaterialTheme.typography.bodySmall)
+                        StoredImage(
+                            value,
+                            contentDescription = "${field.name} image",
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .heightIn(max = 220.dp)
+                                .clickable(role = Role.Button, onClickLabel = "View") { onViewImage(field.name, value) },
+                        )
+                    }
                     field.dataType == FieldDataType.Blob -> Text(value, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     field.dataType == FieldDataType.Boolean -> Text(if (value == "true") "True" else "False")
                     else -> Text(value)
                 }
             }
-            if (field.dataType == FieldDataType.Blob && value.isNotEmpty()) {
+            if ((field.dataType == FieldDataType.Blob || field.dataType == FieldDataType.Image) && value.isNotEmpty()) {
                 TextButton(onClick = { onSaveAs(field.name, value) }, enabled = !state.transferring) { Text("Save as…") }
             }
         }

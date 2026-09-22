@@ -4,6 +4,7 @@
 #include "ApplicationContext.h"
 #include "GraphDialog.h"
 #include "GraphLayout.h"
+#include "ImageValueView.h"
 #include "InboxDialog.h"
 #include "ItemEditDialog.h"
 #include "MarkdownConverter.h"
@@ -11,6 +12,10 @@
 #include "SqliteRepository.h"
 
 #include <QApplication>
+#include <QCheckBox>
+#include <QFile>
+#include <QImage>
+#include <QPainter>
 #include <QDateTimeEdit>
 #include <QTimeZone>
 #include <QLabel>
@@ -19,6 +24,7 @@
 #include <QPlainTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QTextBrowser>
 #include <QTimer>
@@ -27,6 +33,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 
 namespace {
 namespace fs = std::filesystem;
@@ -235,6 +242,85 @@ void checkAlarms(lexicon::LexiconApplication &application) {
         "a deleted alarm leaves the list");
   check(!application.alarms.loadAlarm(editor.alarm().id).has_value(), "and the database");
 }
+void checkImages(lexicon::LexiconApplication &application, int group, const fs::path &directory) {
+  lexicon::ItemTypeRecord type;
+  type.name = "Figure";
+  type.groupId = group;
+  check(application.types.upsertItemType(type).has_value(), "create the Figure type");
+  std::optional<int> typeId;
+  if (auto types = application.types.loadItemTypes(group))
+    for (const auto &known : *types)
+      if (known.name == "Figure") typeId = known.id;
+  if (!typeId) return;
+  lexicon::ItemFieldRecord field;
+  field.itemTypeId = *typeId;
+  field.name = "Diagram";
+  field.dataType = lexicon::FieldDataType::Image;
+  check(application.types.upsertItemField(field).has_value(), "create an Image field");
+  const auto fields = application.types.loadItemFields(*typeId);
+  if (!fields || fields->empty()) return;
+  const int fieldId = fields->front().id;
+
+  // A 400 x 300 picture: blue with a red square.
+  QImage drawn(400, 300, QImage::Format_ARGB32);
+  drawn.fill(QColor("#1a5fb4"));
+  QPainter(&drawn).fillRect(150, 100, 100, 100, QColor("#e01b24"));
+  const QString pngPath = QString::fromStdString((directory / "diagram.png").string());
+  drawn.save(pngPath, "PNG");
+  const QString textPath = QString::fromStdString((directory / "notes.png").string());
+  { QFile text(textPath); text.open(QIODevice::WriteOnly); text.write("not an image at all"); }
+
+  QString error;
+  check(imagevalues::importFile(textPath, &error).isEmpty() && error == "Choose a PNG, JPEG, GIF, WebP or BMP image.",
+        "a file that is no image is refused, whatever its name");
+  const QString value = imagevalues::importFile(pngPath, &error);
+  check(value.startsWith("image/png:") && value.size() == 10 + 64, "a PNG is stored with its type");
+  check(imagevalues::describe(value, imagevalues::load(value)) == "PNG image, 400 × 300", "and is described");
+  check(imagevalues::suggestedFileName("Diagram: v2", value) == "Diagram_ v2.png", "Save as suggests a file name");
+
+  lexicon::ItemRecord item;
+  item.groupId = group;
+  item.itemTypeId = *typeId;
+  item.title = "Pipeline";
+  item.fieldValues[fieldId] = qtbridge::toCore(value);
+  auto itemId = application.items.createItem(item);
+  check(itemId.has_value(), "an item keeps the image");
+  if (!itemId) return;
+  ItemRecord loaded;
+  services().items.loadItem(*itemId, loaded);
+
+  ItemEditDialog editor;
+  editor.setGroups(services().groups.loadGroups());
+  editor.setItem(loaded);
+  editor.show();
+  auto *thumbnail = child<QLabel>(editor, "imageThumbnail");
+  auto *info = child<QLabel>(editor, "imageInfo");
+  auto *clear = child<QPushButton>(editor, "imageClear");
+  if (!thumbnail || !info || !clear) return;
+  check(!thumbnail->pixmap().isNull() && thumbnail->pixmap().width() == 160, "the editor shows a thumbnail");
+  check(info->text() == "PNG image, 400 × 300", "and what the image is");
+  if (auto *tabs = editor.findChild<QTabWidget *>())
+    for (int index = 0; index < tabs->count(); ++index)
+      if (tabs->tabText(index) == "Values") tabs->setCurrentIndex(index);
+  shot(editor, "image-editor");
+  check(editor.item().fieldValues.value(fieldId) == value, "an untouched image is saved as it was");
+  clear->click();
+  check(thumbnail->pixmap().isNull() && thumbnail->text() == "No image", "Clear removes the picture");
+  check(!editor.item().fieldValues.contains(fieldId), "and the value");
+
+  ImageViewDialog viewer(imagevalues::load(value), "Diagram");
+  viewer.resize(300, 260);
+  viewer.show();
+  QApplication::processEvents();
+  auto *picture = child<QLabel>(viewer, "imagePicture");
+  auto *fit = child<QCheckBox>(viewer, "imageFit");
+  if (!picture || !fit) return;
+  check(picture->pixmap().width() < 400, "a large image is fitted to the window");
+  fit->setChecked(false);
+  check(picture->pixmap().size() == QSize(400, 300), "and shown at its own size on request");
+  check(!imagevalues::thumbnail(value, 24).isNull() && imagevalues::thumbnail(value, 24).width() == 24,
+        "the table gets a small picture");
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -255,6 +341,7 @@ int main(int argc, char **argv) {
   checkGraph(application, group);
   checkInbox(application);
   checkAlarms(application);
+  checkImages(application, group, directory);
 
   if (failures == 0) std::cout << "desktop_gui_smoke: all checks passed\n";
   return failures == 0 ? 0 : 1;

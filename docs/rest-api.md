@@ -19,7 +19,7 @@ survives changes to the C++ enum order:
 | `status` | `None`, `Draft`, `Completed` |
 | `understanding` | `Unknown`, `Recognized`, `Understood`, `Practiced`, `Mastered` |
 | `linkType` | `None`, `IsA`, `PartOf`, `Uses`, `DependsOn`, `Implements`, `Related`, `Contrasts`, `AlternativeTo`, `ParentOf`, `Custom` |
-| `dataType` | `Integer`, `Float`, `Text`, `Date`, `Time`, `Timestamp`, `Boolean`, `Enum`, `Blob`, `Other` |
+| `dataType` | `Integer`, `Float`, `Text`, `Date`, `Time`, `Timestamp`, `Boolean`, `Enum`, `Blob`, `Other`, `Image` |
 | `sortOrder` | `Ascending`, `Descending` |
 
 An unknown name is rejected with HTTP 400.
@@ -252,8 +252,16 @@ created with one, which is how an import carries the review history.
 `fieldValues` is keyed by field ID as a string, because JSON object keys are
 strings. Values keep the representation the database stores: `YYYY-MM-DD` for
 `Date`, `HH:MM[:SS]` for `Time`, `YYYY-MM-DDTHH:MM[:SS]` for `Timestamp`,
-`true`/`false` for `Boolean`, one of `enumOptions` for `Enum`, and a 64
-character lowercase SHA-256 for `Blob`.
+`true`/`false` for `Boolean`, one of `enumOptions` for `Enum`, a 64
+character lowercase SHA-256 for `Blob`, and `<media type>:<SHA-256>` for
+`Image`, such as `image/png:6c7dbba2...99d98ca`.
+
+An `Image` value is a stored file, like a `Blob`, that also says what kind of
+image it is: `image/png`, `image/jpeg`, `image/gif`, `image/webp` or
+`image/bmp`. SVG is not accepted, because it can carry script. Saving an item
+checks the file's first bytes against the declared type, so a value cannot
+call a text file, or a JPEG, a PNG; a mismatch is refused with 400 and names
+what the file is.
 
 ### Revisions and conflicts
 
@@ -334,7 +342,7 @@ Content-Type: application/octet-stream
 ```
 
 ```json
-{ "hash": "6c7dbba2...99d98ca" }
+{ "hash": "6c7dbba2...99d98ca", "mediaType": "image/png" }
 ```
 
 ```http
@@ -342,7 +350,11 @@ GET /api/v1/blobs/{hash}
 → application/octet-stream, Content-Disposition: attachment, X-Content-Type-Options: nosniff
 ```
 
-The hash is the value to store in a `Blob` field. Uploads over
+The hash is the value to store in a `Blob` field. `mediaType` is the image
+type the server recognises in the bytes, or `null`; an `Image` field stores
+`<mediaType>:<hash>`. Downloads stay opaque `application/octet-stream`
+attachments whatever the bytes are; a client showing an image gives the bytes
+the type from the value. Uploads over
 `--max-blob-bytes` are rejected with 413; a hash that is not 64 lowercase hex
 characters is rejected with 400; an unknown hash is 404.
 

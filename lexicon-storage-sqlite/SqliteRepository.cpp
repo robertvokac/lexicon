@@ -1,6 +1,7 @@
 #include "SqliteRepository.h"
 #include "SqliteInternal.h"
 #include "Utf8Path.h"
+#include "ImageValue.h"
 #include "Review.h"
 #include "Validation.h"
 
@@ -1046,15 +1047,19 @@ void requireSafePrefix(const fs::path &root, const std::string &hash) {
   require(noFollow(root / hash.substr(0, 2)).type() == fs::file_type::directory,
           "Blob prefix is not a directory.", lexicon::Error::Code::Storage);
 }
+// Blob (8) and Image (10) values refer to stored files.
+constexpr const char *kFileDataTypes = "(8, 10)";
 void verifySavedBlobs(const Connection &db, const std::string &databasePath, int itemId) {
-  Statement values(db, "SELECT DISTINCT iv.value FROM item_value iv "
-                       "JOIN item_field f ON f.id = iv.item_field_id "
-                       "JOIN item i ON i.id = iv.item_id AND i.item_type_id = f.item_type_id "
-                       "WHERE iv.item_id = ? AND f.data_type = 8;");
+  Statement values(db, std::string("SELECT DISTINCT f.data_type, iv.value FROM item_value iv "
+                                   "JOIN item_field f ON f.id = iv.item_field_id "
+                                   "JOIN item i ON i.id = iv.item_id AND i.item_type_id = f.item_type_id "
+                                   "WHERE iv.item_id = ? AND f.data_type IN ") + kFileDataTypes + ";");
   values.bind(itemId);
   const auto root = blobRoot(databasePath);
   while (values.step()) {
-    const auto hash = values.text(0);
+    const auto type = static_cast<lexicon::FieldDataType>(values.integer(0));
+    const auto value = values.text(1);
+    const auto hash = lexicon::storedFileHash(type, value);
     require(validHash(hash), "Item contains an invalid Blob identifier.");
     const auto prefix = root / hash.substr(0, 2);
     const auto path = blobPath(root, hash);
@@ -1076,8 +1081,20 @@ void verifySavedBlobs(const Connection &db, const std::string &databasePath, int
                     lexicon::Error::Code::NotFound);
     require(fileType == fs::file_type::regular, "Blob path is not a regular file.",
             lexicon::Error::Code::Storage);
-    require(hashFile(path) == hash, "Blob contents do not match its SHA-256 identifier: " + hash,
+    std::string head;
+    const auto keepHead = [&head](const char *bytes, std::size_t size) {
+      if (head.size() < 16) head.append(bytes, std::min<std::size_t>(size, 16 - head.size()));
+    };
+    require(hashFile(path, keepHead) == hash, "Blob contents do not match its SHA-256 identifier: " + hash,
             lexicon::Error::Code::Storage);
+    // An Image value names what the file is; the file must be that.
+    if (type == lexicon::FieldDataType::Image) {
+      const auto declared = lexicon::parseImageValue(value)->mediaType;
+      const auto actual = lexicon::sniffImageType(head);
+      require(actual == declared,
+              actual.empty() ? "The file is not a PNG, JPEG, GIF, WebP or BMP image."
+                             : "The image is " + actual + ", not " + declared + ".");
+    }
   }
 }
 struct LiveBlobs {
@@ -1087,15 +1104,16 @@ struct LiveBlobs {
 };
 LiveBlobs liveBlobs(const Connection &db) {
   LiveBlobs live;
-  Statement values(db, "SELECT iv.value FROM item_value iv "
-                       "JOIN item_field f ON f.id = iv.item_field_id "
-                       "JOIN item i ON i.id = iv.item_id AND i.item_type_id = f.item_type_id "
-                       "WHERE f.data_type = 8;");
+  Statement values(db, std::string("SELECT f.data_type, iv.value FROM item_value iv "
+                                   "JOIN item_field f ON f.id = iv.item_field_id "
+                                   "JOIN item i ON i.id = iv.item_id AND i.item_type_id = f.item_type_id "
+                                   "WHERE f.data_type IN ") + kFileDataTypes + ";");
   while (values.step()) {
-    auto hash = values.text(0);
+    auto value = values.text(1);
+    auto hash = lexicon::storedFileHash(static_cast<lexicon::FieldDataType>(values.integer(0)), value);
     ++live.references;
     if (validHash(hash)) live.hashes.insert(std::move(hash));
-    else live.invalid.insert(std::move(hash));
+    else live.invalid.insert(std::move(value));
   }
   return live;
 }

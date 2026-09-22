@@ -336,6 +336,8 @@ data class AlarmWrite(val title: String, val description: String = "", val fires
 @Serializable internal data class ItemIdEnvelope(val itemId: Int)
 @Serializable internal data class StringsEnvelope(val values: List<String>)
 @Serializable internal data class UsageEnvelope(val values: List<UsageValue>)
-@Serializable internal data class BlobEnvelope(val hash: String)
+/** An uploaded file: [mediaType] names the image type the server sees in its bytes, if any. */
+@Serializable
+data class UploadedBlob(val hash: String, val mediaType: String? = null)
 @Serializable internal data class ErrorEnvelope(val error: ErrorBody)
 @Serializable internal data class ErrorBody(val code: String = "error", val message: String = "")

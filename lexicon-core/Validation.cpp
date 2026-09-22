@@ -1,4 +1,5 @@
 #include "Validation.h"
+#include "ImageValue.h"
 
 #include <algorithm>
 #include <charconv>
@@ -113,6 +114,8 @@ bool validFieldValue(const ItemFieldRecord &field, std::string_view value) {
     static const std::regex pattern("^[0-9a-f]{64}$");
     return std::regex_match(text, pattern);
   }
+  case FieldDataType::Image:
+    return parseImageValue(value).has_value();
   case FieldDataType::Text:
   case FieldDataType::Other:
     return true;
@@ -133,7 +136,7 @@ Result<void> validateType(const ItemTypeRecord &type) {
 Result<void> validateField(const ItemFieldRecord &field) {
   const int kind = static_cast<int>(field.dataType);
   if (trim(field.name).empty() || kind < 0 ||
-      kind > static_cast<int>(FieldDataType::Other))
+      kind > static_cast<int>(FieldDataType::Image))
     return invalid("Field name or data type is invalid.");
   if (field.dataType == FieldDataType::Enum &&
       cleanedUniqueValues(field.enumOptions).empty())

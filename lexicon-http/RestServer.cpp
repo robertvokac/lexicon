@@ -1,6 +1,7 @@
 #include "RestServer.h"
 
 #include "Exchange.h"
+#include "ImageValue.h"
 #include "Utf8Path.h"
 #include "TempFile.h"
 #include "Transport.h"
@@ -1387,7 +1388,11 @@ void RestServer::Impl::registerRoutes() {
         std::size_t total = 0;
         bool tooLarge = false;
         std::optional<Error> writeError;
+        // Enough of the start to tell an image by its signature.
+        std::string head;
         readBody([&](const char *data, std::size_t length) {
+          if (head.size() < 16)
+            head.append(data, std::min<std::size_t>(length, 16 - head.size()));
           total += length;
           if (total > config.maxBlobBytes) {
             tooLarge = true;
@@ -1427,7 +1432,9 @@ void RestServer::Impl::registerRoutes() {
           respondError(response, hash.error(), "importBlob");
           return;
         }
-        respondJson(response, 201, Json{{"hash", *hash}});
+        const auto mediaType = lexicon::sniffImageType(head);
+        respondJson(response, 201,
+                    Json{{"hash", *hash}, {"mediaType", mediaType.empty() ? Json(nullptr) : Json(mediaType)}});
       });
 
   api.Get("/api/v1/blobs/:hash", [this](const Request &request,

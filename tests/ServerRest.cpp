@@ -126,7 +126,7 @@ void checkTypesAndFields(Checks &checks) {
   // Every field data type the desktop supports must survive the round trip.
   const std::vector<std::string> dataTypes = {
       "Integer", "Float",   "Text", "Date", "Time",
-      "Timestamp", "Boolean", "Enum", "Blob", "Other"};
+      "Timestamp", "Boolean", "Enum", "Blob", "Other", "Image"};
   std::vector<int> fieldIds;
   int position = 0;
   for (const auto &dataType : dataTypes) {
@@ -710,6 +710,60 @@ void checkBlobs(Checks &checks) {
   checks.expectEqual(leftovers, 0, "blob staging files are cleaned up");
 }
 
+void checkImages(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const int typeId = parse(client.post("/api/v1/types", Json{{"name", "Figure"}, {"groupId", groupId}}.dump()))
+                         .at("type").value("id", 0);
+  const auto field = client.post("/api/v1/types/" + std::to_string(typeId) + "/fields",
+                                 Json{{"name", "Picture"}, {"dataType", "Image"}}.dump());
+  checks.expectEqual(field.status, 201, "an Image field can be created");
+  checks.expectEqual(parse(field).at("field").value("dataType", std::string{}), "Image", "and says so");
+  const auto fieldKey = std::to_string(parse(field).at("field").value("id", 0));
+
+  // A 1x1 PNG.
+  std::string png;
+  for (std::string_view hex = "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c63f8dfc0f01f000680027f104c1be10000000049454e44ae426082"; hex.size() >= 2; hex.remove_prefix(2))
+    png += static_cast<char>(std::stoi(std::string(hex.substr(0, 2)), nullptr, 16));
+  const auto uploaded = client.post("/api/v1/blobs", png, "application/octet-stream");
+  checks.expectEqual(uploaded.status, 201, "an image uploads as a blob");
+  checks.expectEqual(parse(uploaded).value("mediaType", std::string{}), "image/png", "and is recognised as PNG");
+  const auto hash = parse(uploaded).value("hash", std::string{});
+  const auto text = client.post("/api/v1/blobs", std::string("just text"), "application/octet-stream");
+  checks.expect(parse(text).at("mediaType").is_null(), "other bytes are no image");
+  const auto textHash = parse(text).value("hash", std::string{});
+
+  const auto save = [&](const std::string &title, const std::string &value) {
+    return client.post("/api/v1/items", Json{{"item", Json{{"groupId", groupId},
+                                                           {"itemTypeId", typeId},
+                                                           {"title", title},
+                                                           {"fieldValues", Json{{fieldKey, value}}}}}}
+                                            .dump());
+  };
+  const auto saved = save("Logo", "image/png:" + hash);
+  checks.expectEqual(saved.status, 201, "an image can be stored in an item");
+  checks.expectEqual(parse(client.get("/api/v1/items/" + std::to_string(parse(saved).value("id", 0))))
+                         .at("item").at("fieldValues").value(fieldKey, std::string{}),
+                     "image/png:" + hash, "with its type");
+  checks.expectEqual(save("Bare hash", hash).status, 400, "an image value names its type");
+  checks.expectEqual(save("SVG", "image/svg+xml:" + hash).status, 400, "SVG is not an image type Lexicon shows");
+  const auto wrongType = save("Wrong type", "image/jpeg:" + hash);
+  checks.expectEqual(wrongType.status, 400, "the declared type must be the file's");
+  checks.expect(parse(wrongType).at("error").value("message", std::string{}).find("image/png, not image/jpeg") !=
+                    std::string::npos,
+                "and the refusal says what the file is");
+  checks.expectEqual(save("Not an image", "image/png:" + textHash).status, 400, "a file that is no image is refused");
+  checks.expectEqual(save("Missing", "image/png:" + std::string(64, 'b')).status, 404, "a missing file is refused");
+
+  // The image travels with an export that includes files.
+  const auto exported = parse(client.get("/api/v1/export?blobs=true"));
+  checks.expect(std::any_of(exported.at("blobs").begin(), exported.at("blobs").end(),
+                            [&](const Json &blob) { return blob.value("hash", std::string{}) == hash; }),
+                "an export with files carries the image");
+}
+
 void checkGraph(Checks &checks) {
   ServerHarness harness;
   Session session(harness, checks);
@@ -1029,5 +1083,6 @@ int main() {
   checkReview(checks);
   checkGraph(checks);
   checkAlarms(checks);
+  checkImages(checks);
   return checks.summarize("server_rest");
 }

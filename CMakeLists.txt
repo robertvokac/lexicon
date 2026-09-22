@@ -64,6 +64,8 @@ set(MD4QT_SRC
 add_library(lexicon-core STATIC
     lexicon-core/Records.h
     lexicon-core/Result.h
+    lexicon-core/ImageValue.h
+    lexicon-core/ImageValue.cpp
     lexicon-core/Review.h
     lexicon-core/Utf8Path.h
     lexicon-core/Utf8Path.cpp
@@ -255,6 +257,8 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/InboxDialog.cpp
         lexicon-qt/AlarmsDialog.h
         lexicon-qt/AlarmsDialog.cpp
+        lexicon-qt/ImageValueView.h
+        lexicon-qt/ImageValueView.cpp
     )
 
     target_link_libraries(Lexicon PRIVATE
@@ -299,6 +303,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/InboxDialog.cpp
             lexicon-qt/AlarmsDialog.h
             lexicon-qt/AlarmsDialog.cpp
+            lexicon-qt/ImageValueView.h
+            lexicon-qt/ImageValueView.cpp
         )
         target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
         target_link_libraries(lexicon-desktop-gui-smoke PRIVATE
@@ -319,6 +325,11 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-wiki-links PRIVATE lexicon-core)
     set_target_properties(lexicon-wiki-links PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME wiki_links COMMAND lexicon-wiki-links)
+
+    add_executable(lexicon-image-value tests/ImageValue.cpp)
+    target_link_libraries(lexicon-image-value PRIVATE lexicon-core)
+    set_target_properties(lexicon-image-value PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME image_value COMMAND lexicon-image-value)
 
     add_executable(lexicon-application-integration tests/ApplicationIntegration.cpp)
     target_link_libraries(lexicon-application-integration PRIVATE lexicon-application lexicon-storage-sqlite)

@@ -233,24 +233,30 @@ export class LexiconApi {
 
     // Blobs ----------------------------------------------------------------
     async uploadBlob(file) {
-        const result = await this.request('POST', '/blobs', {
+        return (await this.uploadBlobDetailed(file)).hash;
+    }
+
+    // { hash, mediaType }: mediaType names the image type the server sees in
+    // the bytes, or is null.
+    uploadBlobDetailed(file) {
+        return this.request('POST', '/blobs', {
             body: file,
             contentType: 'application/octet-stream',
         });
-        return result.hash;
     }
 
     downloadBlob(hash) {
         return this.request('GET', `/blobs/${hash}`, { expect: 'blob' });
     }
 
-    // Review -----------------------------------------------------------------
-    // Alarms, the soonest first. Times are UTC "YYYY-MM-DDTHH:MM:SSZ".
+    // Alarms -----------------------------------------------------------------
+    // The soonest first. Times are UTC "YYYY-MM-DDTHH:MM:SSZ".
     async alarms() { return (await this.get('/alarms')).alarms; }
     async createAlarm(alarm) { return (await this.post('/alarms', alarm)).alarm; }
     async updateAlarm(id, alarm) { return (await this.put(`/alarms/${id}`, alarm)).alarm; }
     deleteAlarm(id) { return this.delete(`/alarms/${id}`); }
 
+    // Review -----------------------------------------------------------------
     reviewQueue(groupId, limit = 20) {
         const query = new URLSearchParams({ limit: String(limit) });
         if (groupId > 0) query.set('groupId', String(groupId));

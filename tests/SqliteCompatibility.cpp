@@ -71,10 +71,44 @@ int main() {
   }
   fs::remove(dbPath);
   fs::copy_file(fixture / "qt-v20.db", dbPath);
+  // Migration 24 rebuilds item_field; its IDs, AUTOINCREMENT sequence and
+  // the values that refer to it must come through.
+  const auto rawQuery = [&dbPath](const std::string &sql) {
+    sqlite3 *raw = nullptr;
+    std::string result;
+    if (sqlite3_open(dbPath.string().c_str(), &raw) == SQLITE_OK) {
+      sqlite3_stmt *statement = nullptr;
+      if (sqlite3_prepare_v2(raw, sql.c_str(), -1, &statement, nullptr) == SQLITE_OK &&
+          sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_text(statement, 0))
+        result = reinterpret_cast<const char *>(sqlite3_column_text(statement, 0));
+      sqlite3_finalize(statement);
+    }
+    sqlite3_close(raw);
+    return result;
+  };
+  const auto fieldsBefore = rawQuery("SELECT group_concat(id || ':' || name, ',') FROM (SELECT * FROM item_field ORDER BY id);");
+  const auto valuesBefore = rawQuery("SELECT COUNT(*) FROM item_value;");
+  const auto sequenceBefore = rawQuery("SELECT seq FROM sqlite_sequence WHERE name = 'item_field';");
   {
     SqliteRepository repository;
     if (!success(repository.open(dbPath.string()), "Open Qt v20 database")) return 1;
     lexicon::LexiconApplication app(repository);
+    if (!expect(rawQuery("SELECT sql FROM sqlite_master WHERE name = 'item_field';").find("BETWEEN 0 AND 10") !=
+                    std::string::npos, "item_field does not admit Image") ||
+        !expect(!fieldsBefore.empty() && rawQuery("SELECT group_concat(id || ':' || name, ',') FROM "
+                                                  "(SELECT * FROM item_field ORDER BY id);") == fieldsBefore,
+                "The rebuilt item_field changed its fields") ||
+        !expect(valuesBefore != "0" && rawQuery("SELECT COUNT(*) FROM item_value;") == valuesBefore,
+                "Values were lost when item_field was rebuilt") ||
+        !expect(rawQuery("SELECT seq FROM sqlite_sequence WHERE name = 'item_field';") == sequenceBefore,
+                "The field ID sequence moved") ||
+        !expect(rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('item_value_scope_insert', "
+                         "'item_value_scope_update', 'item_field_type_name_unique', "
+                         "'idx_item_field_type_position');") == "4",
+                "The rebuild lost a trigger or an index") ||
+        !expect(rawQuery("SELECT COUNT(*) FROM temp.sqlite_master;") == "0" &&
+                    rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'migration_%';") == "0",
+                "The rebuild left a working table")) return 1;
     auto found = app.search.findItemId("Příliš žluťoučký kůň", "česky");
     if (!success(found, "Find Qt UTF-8 item")) return 1;
     auto item = app.items.loadItem(*found);
@@ -167,6 +201,17 @@ int main() {
                               [](const auto &field) { return field.name == "New choice"; })->enumOptions ==
                   std::vector<std::string>({"A", "quoted \"", "É", "é"}),
                 "Enum JSON round trip or case policy failed")) return 1;
+    lexicon::ItemFieldRecord imageField;
+    imageField.itemTypeId = 1;
+    imageField.name = "Picture";
+    imageField.dataType = lexicon::FieldDataType::Image;
+    if (!success(app.types.upsertItemField(imageField), "Save an Image field")) return 1;
+    // Foreign keys are enforced again: deleting a field takes its values.
+    const auto valuesOfFirstField = rawQuery("SELECT COUNT(*) FROM item_value WHERE item_field_id = 2;");
+    if (!expect(valuesOfFirstField != "0", "The fixture has values for field 2") ||
+        !success(app.types.deleteItemField(2), "Delete a migrated field") ||
+        !expect(rawQuery("SELECT COUNT(*) FROM item_value WHERE item_field_id = 2;") == "0",
+                "Deleting a rebuilt field left its values")) return 1;
     const auto source = temp.path / "blob-source.bin";
     const auto exported = temp.path / "blob-export.bin";
     { std::ofstream stream(source, std::ios::binary); stream << "abc"; }

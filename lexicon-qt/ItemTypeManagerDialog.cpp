@@ -29,6 +29,7 @@ QString dataTypeName(FieldDataType type) {
         case FieldDataType::Enum: return "Enum";
         case FieldDataType::Blob: return "Blob";
         case FieldDataType::Other: return "Other";
+        case FieldDataType::Image: return "Image";
     }
     return "Unknown";
 }
@@ -255,7 +256,7 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     auto* form = new QFormLayout();
     auto* nameEdit = new QLineEdit(field.name, &dialog);
     auto* dataTypeCombo = new QComboBox(&dialog);
-    for (int value = 0; value <= static_cast<int>(FieldDataType::Other); ++value) {
+    for (int value = 0; value <= static_cast<int>(FieldDataType::Image); ++value) {
         dataTypeCombo->addItem(dataTypeName(static_cast<FieldDataType>(value)), value);
     }
     dataTypeCombo->setCurrentIndex(dataTypeCombo->findData(static_cast<int>(field.dataType)));

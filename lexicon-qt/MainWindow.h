@@ -169,6 +169,7 @@ private slots:
     // A link in the rendered content: a wiki link opens its item, or offers
     // to create it; any other link opens in the browser.
     void onContentLinkActivated(const QUrl& link);
+    void appendImages(const ItemRecord& item);
 
 private:
     void applySavedTheme();

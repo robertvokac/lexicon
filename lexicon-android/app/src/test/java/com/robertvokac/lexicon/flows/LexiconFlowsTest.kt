@@ -44,6 +44,7 @@ import com.robertvokac.lexicon.ui.LaunchRequests
 import com.robertvokac.lexicon.ui.LexiconRoot
 import com.robertvokac.lexicon.testing.FakeLexiconServer
 import com.robertvokac.lexicon.testing.TestEnvironment
+import com.robertvokac.lexicon.testing.TestImages
 import com.robertvokac.lexicon.testing.waitFor
 import com.robertvokac.lexicon.testing.waitForCondition
 import com.robertvokac.lexicon.testing.waitForText
@@ -368,6 +369,54 @@ class LexiconFlowsTest {
         compose.waitForText("Links")
         assertEquals(1, fake.links.size)
     }
+
+    @Test
+    fun anImageIsShownOnTheItemPageAndChosenInTheEditor() {
+        val type = fake.addType("Figure")
+        val imageField = fake.addField(type.id!!, "Diagram", FieldDataType.Image)
+        val first = TestImages.png(40, 30)
+        val firstHash = sha256(first)
+        fake.blobs[firstHash] = first
+        val item = fake.addItem(Item(title = "Pipeline", itemTypeId = type.id, fieldValues = mapOf(imageField.id.toString() to "image/png:$firstHash")))
+        val resolver = ApplicationProvider.getApplicationContext<LexiconApplication>().contentResolver
+        val notes = Uri.parse("content://com.example.documents/notes.png")
+        // A fresh stream on every open, as a document provider gives: the app
+        // reads the start first, then the whole file.
+        shadowOf(resolver).registerInputStreamSupplier(notes) { ByteArrayInputStream("just some notes".toByteArray()) }
+        val second = TestImages.png(64, 48)
+        val picture = Uri.parse("content://com.example.documents/picture.png")
+        shadowOf(resolver).registerInputStreamSupplier(picture) { ByteArrayInputStream(second) }
+
+        login()
+        compose.onNodeWithText("Pipeline").performClick()
+        compose.waitForText("PNG image")
+        compose.waitFor(hasContentDescription("Diagram image"))
+        compose.onNodeWithContentDescription("Diagram image").performClick()
+        compose.waitFor(hasContentDescription("Diagram, full size"))
+        compose.onNodeWithContentDescription("Close the image").performClick()
+        compose.waitUntilGone(hasContentDescription("Diagram, full size"))
+
+        openEditor()
+        compose.onNode(hasText("Values") and hasClickAction()).performClick()
+        compose.waitFor(hasContentDescription("Diagram image"))
+        // A file that is no image is refused before anything is uploaded.
+        nextUri = notes
+        compose.onNode(hasText("Replace…") and hasClickAction()).performClick()
+        compose.waitForText("Choose a PNG, JPEG, GIF, WebP or BMP image.")
+        assertTrue(fake.requestsTo("POST", "/api/v1/blobs").isEmpty())
+        nextUri = picture
+        compose.onNode(hasText("Replace…") and hasClickAction()).performClick()
+        val secondHash = sha256(second)
+        compose.waitForCondition { fake.blobs.containsKey(secondHash) }
+        // The finished status, not "Uploading picture.png …".
+        compose.waitForText("picture.png (", substring = true)
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        compose.waitForCondition { fake.requestsTo("PUT", "/api/v1/items/${item.id}").isNotEmpty() }
+        assertEquals("image/png:$secondHash", fake.items.getValue(item.id!!).fieldValue(imageField.id!!))
+    }
+
+    private fun sha256(bytes: ByteArray) =
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     @Test
     fun aBlobIsUploadedAssignedSavedAndDownloadedAgain() {

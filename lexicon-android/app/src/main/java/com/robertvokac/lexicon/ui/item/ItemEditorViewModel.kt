@@ -14,6 +14,7 @@ import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.model.Group
+import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemStatus
@@ -348,6 +349,41 @@ class ItemEditorViewModel(
                     setBlobStatus(fieldId, BlobStatus("Uploading ${document.name}$progress", busy = true))
                 }
                 setValue(fieldId, hash)
+                setBlobStatus(fieldId, BlobStatus("${document.name} (${BlobTransfer.formatSize(document.size)})", busy = false))
+            } catch (failure: ApiException) {
+                setBlobStatus(fieldId, BlobStatus(failure.userMessage() ?: "Upload failed.", busy = false))
+            } catch (failure: java.io.IOException) {
+                setBlobStatus(fieldId, BlobStatus("The file could not be read: ${failure.message}", busy = false))
+            } catch (failure: SecurityException) {
+                setBlobStatus(fieldId, BlobStatus("The file could not be read: ${failure.message}", busy = false))
+            }
+        }
+    }
+
+    /**
+     * Checks that the picked document is an image Lexicon shows, uploads it
+     * and stores "<media type>:<hash>"; the server's view of the type wins.
+     */
+    fun uploadImage(fieldId: Int, uri: Uri) {
+        if (_state.value.blobs[fieldId]?.busy == true) return
+        setBlobStatus(fieldId, BlobStatus("Preparing upload…", busy = true))
+        viewModelScope.launch {
+            try {
+                if (ImageValues.sniff(transfer.head(uri)) == null) {
+                    setBlobStatus(fieldId, BlobStatus(ImageValues.NOT_AN_IMAGE, busy = false))
+                    return@launch
+                }
+                val document = transfer.describe(uri)
+                val uploaded = transfer.uploadDetailed(uri, document.size) { sent, total ->
+                    val progress = if (total > 0) " ${sent * 100 / total}%" else " ${BlobTransfer.formatSize(sent)}"
+                    setBlobStatus(fieldId, BlobStatus("Uploading ${document.name}$progress", busy = true))
+                }
+                val mediaType = uploaded.mediaType
+                if (mediaType == null) {
+                    setBlobStatus(fieldId, BlobStatus(ImageValues.NOT_AN_IMAGE, busy = false))
+                    return@launch
+                }
+                setValue(fieldId, ImageValues.format(mediaType, uploaded.hash))
                 setBlobStatus(fieldId, BlobStatus("${document.name} (${BlobTransfer.formatSize(document.size)})", busy = false))
             } catch (failure: ApiException) {
                 setBlobStatus(fieldId, BlobStatus(failure.userMessage() ?: "Upload failed.", busy = false))

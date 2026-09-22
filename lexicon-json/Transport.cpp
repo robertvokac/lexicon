@@ -48,7 +48,7 @@ constexpr std::array<std::pair<LinkType, const char *>, 11> kLinkTypeNames{
      {LinkType::AlternativeTo, "AlternativeTo"},
      {LinkType::ParentOf, "ParentOf"},
      {LinkType::Custom, "Custom"}}};
-constexpr std::array<std::pair<FieldDataType, const char *>, 10>
+constexpr std::array<std::pair<FieldDataType, const char *>, 11>
     kFieldDataTypeNames{{{FieldDataType::Integer, "Integer"},
                          {FieldDataType::Float, "Float"},
                          {FieldDataType::Text, "Text"},
@@ -58,7 +58,8 @@ constexpr std::array<std::pair<FieldDataType, const char *>, 10>
                          {FieldDataType::Boolean, "Boolean"},
                          {FieldDataType::Enum, "Enum"},
                          {FieldDataType::Blob, "Blob"},
-                         {FieldDataType::Other, "Other"}}};
+                         {FieldDataType::Other, "Other"},
+                         {FieldDataType::Image, "Image"}}};
 constexpr std::array<std::pair<ReviewRating, const char *>, 4> kReviewRatingNames{
     {{ReviewRating::Again, "Again"},
      {ReviewRating::Hard, "Hard"},

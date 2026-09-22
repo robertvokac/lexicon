@@ -11,6 +11,7 @@
 #include "GraphDialog.h"
 #include "InboxDialog.h"
 #include "AlarmsDialog.h"
+#include "ImageValueView.h"
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
@@ -723,7 +724,15 @@ void MainWindow::refreshItems() {
         row << new QStandardItem(item.pinned ? "Yes" : "No");
         if (typeId > 0) {
             for (const auto& field : m_selectedTypeFields) {
-                row << new QStandardItem(item.fieldValues.value(field.id));
+                const QString value = item.fieldValues.value(field.id);
+                if (field.dataType == FieldDataType::Image && !value.isEmpty()) {
+                    // The kind of image and a small picture, not the hash.
+                    auto* cell = new QStandardItem(imagevalues::describe(value));
+                    cell->setData(imagevalues::thumbnail(value, 24), Qt::DecorationRole);
+                    row << cell;
+                } else {
+                    row << new QStandardItem(value);
+                }
             }
         }
         m_model->appendRow(row);
@@ -1078,6 +1087,7 @@ void MainWindow::showItemContent(const QModelIndex& index) {
     QString error;
     if (services().items.loadItem(itemId, item, &error)) {
         m_itemContentView->setHtml(MarkdownConverter::toHtml(item.content));
+        appendImages(item);
         updateLinksDisplay(itemId);
         services().items.logItemRead(itemId);
     } else {
@@ -1224,7 +1234,41 @@ void MainWindow::onLinkActivated(const QUrl& link) {
     showItemTitled(QUrl::fromPercentEncoding(link.toString().toUtf8()));
 }
 
+// The item's Image values under its content, each a link to the full picture.
+void MainWindow::appendImages(const ItemRecord& item) {
+    if (item.itemTypeId <= 0 || item.fieldValues.isEmpty()) return;
+    QString error;
+    const auto fields = services().types.loadItemFields(item.itemTypeId, &error);
+    QString html;
+    auto* document = m_itemContentView->document();
+    for (const auto& field : fields) {
+        const QString value = item.fieldValues.value(field.id);
+        if (field.dataType != FieldDataType::Image || value.isEmpty()) continue;
+        const QPixmap picture = imagevalues::thumbnail(value, 320);
+        QUrl target;
+        target.setScheme(imagevalues::kScheme);
+        target.setPath(value);
+        if (!picture.isNull()) document->addResource(QTextDocument::ImageResource, target, picture);
+        html += QString("<p><b>%1</b><br>").arg(field.name.toHtmlEscaped());
+        html += picture.isNull()
+            ? QString("<i>The image cannot be shown.</i></p>")
+            : QString("<a href=\"%1\"><img src=\"%1\" width=\"%2\" height=\"%3\"></a></p>")
+                  .arg(target.toString().toHtmlEscaped()).arg(picture.width()).arg(picture.height());
+    }
+    if (html.isEmpty()) return;
+    QTextCursor cursor(document);
+    cursor.movePosition(QTextCursor::End);
+    cursor.insertHtml("<hr>" + html);
+}
+
 void MainWindow::onContentLinkActivated(const QUrl& link) {
+    if (link.scheme() == imagevalues::kScheme) {
+        const QImage image = imagevalues::load(link.path());
+        if (image.isNull()) return;
+        ImageViewDialog dialog(image, "Image", this);
+        dialog.exec();
+        return;
+    }
     if (link.scheme() != MarkdownConverter::kItemScheme) {
         QDesktopServices::openUrl(link);
         return;

@@ -1,4 +1,5 @@
 #include "LexiconApplication.h"
+#include "ImageValue.h"
 
 #include <algorithm>
 #include <set>
@@ -176,7 +177,7 @@ Result<ItemRecord> ReviewService::review(ItemId id, ReviewRating rating) {
 }
 
 std::string blobHashOf(const ItemFieldRecord &field, const std::string &value) {
-  return field.dataType == FieldDataType::Blob ? value : std::string{};
+  return storedFileHash(field.dataType, value);
 }
 
 namespace {

@@ -57,6 +57,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
 - A relationship graph of the items around one item, up to three links away
+- Image values: a picture stored with its type, shown as a thumbnail in the editor and under the item's content, and at full size on request
 - A Qt-free REST server and an independently deployable static web client with the same capabilities
 - A native Android client (Kotlin, Jetpack Compose) for the same server
 
@@ -87,6 +88,8 @@ Basic identity and state fields for an item: group, optional type, title, disamb
 #### Item editor — Values tab
 
 Items with a type have a Values tab containing the fields defined by that type. Blob fields accept a file path (or Browse) and import the file when you click Import or save the item. The field stores its SHA-256 hash, and the file is kept in `blobs` next to the database.
+
+Image fields hold a picture: **Choose image...** stores a PNG, JPEG, GIF, WebP or BMP file (the kind is read from the file itself, not from its name), the editor shows a thumbnail and what the image is, **View...** (or a click on the thumbnail) opens it at full size, **Save as...** writes it back to a file, and **Clear** removes it. Internally an image is a Blob that also records its type, stored as `image/png:<SHA-256>`. The item preview shows an item's images under its content, the item table shows the kind of image with a small picture, and the web client and the Android app show and edit images the same way.
 
 #### Item editor — Content tab
 
@@ -611,7 +614,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms; Image values
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 
