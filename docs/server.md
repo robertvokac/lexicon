@@ -330,6 +330,15 @@ later. Each backup is a directory of its own, complete by itself:
   with it through a hard link: it takes no space again, and removing the older
   backup leaves it in the newer one. Where hard links are impossible (another
   file system, FAT) the file is copied.
+- A shared file is checked against its SHA-256 first, like a copied one. If
+  the previous backup's copy has rotted, it is not passed on: the live file is
+  copied instead and the log says `WARNING: ... the older one is damaged`.
+  If the live file is damaged but the previous copy is sound, the sound copy
+  is shared. Every backup therefore reads every file it holds; that is the
+  price of never marking a damaged backup complete.
+- Hard-linked backups share one copy of each file on disk, so they protect
+  against mistakes and lost files, not against a failing disk. For that, copy
+  the backup directory to another disk or machine as well.
 - A backup is built under a temporary `.partial-...` name and renamed when
   complete, so an interrupted one never looks like a backup. A partial
   directory older than a day is cleared away by the next backup.

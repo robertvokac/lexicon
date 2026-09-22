@@ -1563,3 +1563,11 @@ SqliteRepository::Result<std::vector<std::string>> SqliteRepository::referencedB
     return std::vector<std::string>(live.hashes.begin(), live.hashes.end());
   });
 }
+SqliteRepository::Result<bool> SqliteRepository::fileHasHash(const std::string &path, const std::string &hash) {
+  return guarded([&] {
+    const auto file = utf8Path(path);
+    require(noFollow(file).type() == fs::file_type::regular, "Not a regular file: " + path,
+            lexicon::Error::Code::NotFound);
+    return hashFile(file) == hash;
+  });
+}

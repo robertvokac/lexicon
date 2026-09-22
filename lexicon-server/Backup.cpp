@@ -45,8 +45,10 @@ std::string randomSuffix() {
 }
 
 // Copies the files [hashes] name from the live Blob store, each checked
-// against its SHA-256 on the way. One unchanged since [previous] is shared
-// with it through a hard link where the file system allows it.
+// against its SHA-256 on the way. One already in [previous] is shared with it
+// through a hard link where the file system allows it - after that copy, too,
+// has been checked: a damaged one is not passed on, the live file is copied
+// instead and the damage is reported.
 void copyBlobs(SqliteRepository &live, const std::vector<std::string> &hashes, const fs::path &target,
                const fs::path &previous, BackupReport &report) {
   for (const auto &hash : hashes) {
@@ -57,10 +59,15 @@ void copyBlobs(SqliteRepository &live, const std::vector<std::string> &hashes, c
     std::error_code error;
     const auto earlier = previous.empty() ? fs::path() : previous / prefix / name;
     if (!earlier.empty() && fs::symlink_status(earlier, error).type() == fs::file_type::regular) {
-      fs::create_hard_link(earlier, destination, error);
-      if (!error) {
-        ++report.blobsLinked;
-        continue;
+      const auto intact = SqliteRepository::fileHasHash(pathToUtf8(earlier), hash);
+      if (intact && *intact) {
+        fs::create_hard_link(earlier, destination, error);
+        if (!error) {
+          ++report.blobsLinked;
+          continue;
+        }
+      } else {
+        report.damagedInPrevious.push_back(hash);
       }
     }
     if (auto copied = live.exportBlob(hash, pathToUtf8(destination)); !copied)
@@ -203,6 +210,10 @@ std::string describe(const BackupReport &report) {
   text += ").";
   if (!report.removed.empty())
     text += std::format(" Removed {} old backup(s).", report.removed.size());
+  if (!report.damagedInPrevious.empty())
+    text += std::format(" WARNING: {} file(s) in the previous backup no longer match their SHA-256 (first: {}); "
+                        "this backup has fresh copies, the older one is damaged.",
+                        report.damagedInPrevious.size(), report.damagedInPrevious.front());
   return text;
 }
 

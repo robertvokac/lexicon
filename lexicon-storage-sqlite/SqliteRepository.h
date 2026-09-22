@@ -31,6 +31,9 @@ public:
   static std::string blobDirectory(const std::string &databasePath);
   // The SHA-256 of every stored file that a Blob or Image value refers to.
   Result<std::vector<std::string>> referencedBlobHashes();
+  // Whether the regular file at [path] still holds the bytes [hash] names;
+  // an error when it cannot be read.
+  static Result<bool> fileHasHash(const std::string &path, const std::string &hash);
 
   Result<std::map<std::string, std::string>> loadConfiguration() override;
   Result<void>

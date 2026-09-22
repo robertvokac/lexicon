@@ -229,6 +229,51 @@ void checkChangesDuringABackup() {
         "a file whose bytes no longer match its SHA-256 fails the backup");
 }
 
+// A backup shares unchanged files with the previous one; a file that has
+// rotted there since must not be passed on.
+void checkDamageInThePreviousBackup() {
+  Dictionary data;
+  const auto hash = data.itemWithFile("Monoid", "the monoid file");
+  const auto backups = lexicon::pathToUtf8(data.temp.path / "backups");
+  lexicon::backup::BackupOptions options{lexicon::pathToUtf8(data.database), backups, 5, {}};
+  const auto rot = [](const fs::path &file, const char *bytes) {
+    fs::permissions(file, fs::perms::owner_write, fs::perm_options::add);
+    std::ofstream(file, std::ios::binary | std::ios::trunc) << bytes;
+  };
+  const auto inBackup = [&](const std::string &path) {
+    return lexicon::utf8Path(path) / "blobs" / hash.substr(0, 2) / hash.substr(2);
+  };
+
+  auto first = lexicon::backup::createBackup(options, at("2026-09-20T08:00:00Z"));
+  check(first.has_value(), "the first backup is made");
+  if (!first) return;
+  rot(inBackup(first->path), "rotten");
+
+  auto second = lexicon::backup::createBackup(options, at("2026-09-21T08:00:00Z"));
+  check(second.has_value(), "the next backup is made despite the damage");
+  if (!second) { std::cerr << second.error().message << '\n'; return; }
+  std::error_code error;
+  check(readFile(inBackup(second->path)) == "the monoid file", "with a sound copy of the file from the live store");
+  check(fs::hard_link_count(inBackup(second->path), error) == 1, "not a link to the damaged one");
+  check(second->blobsCopied == 1 && second->blobsLinked == 0, "counted as copied");
+  check(second->damagedInPrevious == std::vector<std::string>{hash}, "and the damage is reported");
+  check(lexicon::backup::describe(*second).find("WARNING") != std::string::npos, "loudly");
+
+  // The live file rots, but the last backup's copy is sound: that one is used.
+  rot(data.blobFile(hash), "rotten too");
+  auto third = lexicon::backup::createBackup(options, at("2026-09-22T08:00:00Z"));
+  check(third && third->blobsLinked == 1 && third->damagedInPrevious.empty(),
+        "a sound copy in the previous backup is shared though the live file rotted");
+  check(third && readFile(inBackup(third->path)) == "the monoid file", "and the backup holds the right bytes");
+
+  // Both damaged: no backup at all.
+  if (third) rot(inBackup(third->path), "rotten as well");
+  auto fourth = lexicon::backup::createBackup(options, at("2026-09-23T08:00:00Z"));
+  check(!fourth.has_value() && fourth.error().message.find(hash) != std::string::npos,
+        "with no sound copy anywhere the backup fails and names the file");
+  check(lexicon::backup::listBackups(backups).size() == 3, "and adds nothing that looks complete");
+}
+
 void checkScheduler() {
   TemporaryDirectory temp;
   const auto database = temp.path / "lexicon.db";
@@ -287,6 +332,7 @@ void checkCommandLine() {
 int main() {
   checkBackups();
   checkChangesDuringABackup();
+  checkDamageInThePreviousBackup();
   checkScheduler();
   checkCommandLine();
   if (failures == 0) std::cout << "backup: all checks passed\n";

@@ -34,6 +34,9 @@ struct BackupReport {
   std::size_t blobsLinked = 0;
   std::uintmax_t bytes = 0;
   std::vector<std::string> removed;
+  // Files whose copy in the previous backup no longer matched its SHA-256:
+  // this backup has a fresh copy, but that older backup is damaged.
+  std::vector<std::string> damagedInPrevious;
 };
 
 struct BackupEntry {
