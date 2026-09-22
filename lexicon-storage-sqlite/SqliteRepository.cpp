@@ -1126,63 +1126,106 @@ struct TemporaryFile {
   void keep() { path.clear(); }
 };
 } // namespace
+namespace {
+// Streams bytes from `read` into the Blob store and returns their SHA-256.
+// `read` fills the buffer and returns how many bytes it wrote, 0 at the end.
+std::string installBlob(const std::string &databasePath,
+                        const std::function<std::size_t(char *, std::size_t)> &read) {
+  fs::path root = blobRoot(databasePath);
+  fs::create_directories(root);
+  requireSafeRoot(root);
+  TemporaryFile temp(root);
+  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+  if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
+    throw Failure("Cannot initialize SHA-256.");
+  // Heap again: this frame and hashFile's below it would otherwise want two
+  // megabytes of stack between them.
+  std::vector<char> storage(1024 * 1024);
+  char *buffer = storage.data();
+  for (;;) {
+    const auto count = read(buffer, storage.size());
+    if (count == 0) break;
+    if (EVP_DigestUpdate(digest.get(), buffer, count) != 1)
+      throw Failure("Cannot hash blob.");
+    temp.write(buffer, count);
+  }
+  temp.close();
+  unsigned char bytes[EVP_MAX_MD_SIZE]; unsigned length = 0;
+  if (EVP_DigestFinal_ex(digest.get(), bytes, &length) != 1) throw Failure("Cannot finish SHA-256.");
+  auto hash = hexDigest(bytes, length);
+  // The temporary file is complete and checked before it can acquire its
+  // canonical name. The same hash may be used by any number of Item values.
+  require(hashFile(temp.path) == hash, "Imported Blob changed while being written.",
+          lexicon::Error::Code::Storage);
+  fs::path target = blobPath(root, hash);
+  fs::create_directories(target.parent_path());
+  requireSafePrefix(root, hash);
+  if (noFollow(target).type() == fs::file_type::not_found) {
+#ifdef _WIN32
+    // MoveFileEx without REPLACE_EXISTING installs the complete file once.
+    if (MoveFileExW(temp.path.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
+      temp.keep();
+    else if (noFollow(target).type() == fs::file_type::not_found)
+      throw Failure("Cannot install Blob file.");
+#else
+    try {
+      // Link creation is atomic and will never replace an existing Blob.
+      fs::create_hard_link(temp.path, target);
+    } catch (const fs::filesystem_error &) {
+      if (noFollow(target).type() == fs::file_type::not_found) throw;
+    }
+#endif
+  }
+  require(noFollow(target).type() == fs::file_type::regular && hashFile(target) == hash,
+          "Existing Blob has unexpected contents or type.", lexicon::Error::Code::Storage);
+  return hash;
+}
+} // namespace
 SqliteRepository::Result<std::string> SqliteRepository::importBlob(const std::string &sourcePath) {
   return guarded([&] {
     std::lock_guard lock(blobStorageMutex);
     impl_->db.get();
-    fs::path root = blobRoot(impl_->path);
-    fs::create_directories(root);
-    requireSafeRoot(root);
     std::ifstream source(utf8Path(sourcePath), std::ios::binary);
     if (!source) throw Failure("Cannot read file.");
-    TemporaryFile temp(root);
-    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> digest(EVP_MD_CTX_new(), EVP_MD_CTX_free);
-    if (!digest || EVP_DigestInit_ex(digest.get(), EVP_sha256(), nullptr) != 1)
-      throw Failure("Cannot initialize SHA-256.");
-    // Heap again: this frame and hashFile's below it would otherwise want two
-    // megabytes of stack between them.
-    std::vector<char> storage(1024 * 1024);
-    char *buffer = storage.data();
-    while (source) {
-      source.read(buffer, static_cast<std::streamsize>(storage.size()));
-      auto count = source.gcount();
-      if (count > 0) {
-        if (EVP_DigestUpdate(digest.get(), buffer, static_cast<std::size_t>(count)) != 1)
-          throw Failure("Cannot hash blob.");
-        temp.write(buffer, static_cast<std::size_t>(count));
-      }
-    }
+    auto hash = installBlob(impl_->path, [&](char *buffer, std::size_t size) -> std::size_t {
+      if (!source) return 0;
+      source.read(buffer, static_cast<std::streamsize>(size));
+      return static_cast<std::size_t>(source.gcount());
+    });
     if (!source.eof()) throw Failure("Cannot read file completely.");
-    temp.close();
-    unsigned char bytes[EVP_MAX_MD_SIZE]; unsigned length = 0;
-    if (EVP_DigestFinal_ex(digest.get(), bytes, &length) != 1) throw Failure("Cannot finish SHA-256.");
-    auto hash = hexDigest(bytes, length);
-    // The temporary file is complete and checked before it can acquire its
-    // canonical name. The same hash may be used by any number of Item values.
-    require(hashFile(temp.path) == hash, "Imported Blob changed while being written.",
-            lexicon::Error::Code::Storage);
-    fs::path target = blobPath(root, hash);
-    fs::create_directories(target.parent_path());
-    requireSafePrefix(root, hash);
-    if (noFollow(target).type() == fs::file_type::not_found) {
-#ifdef _WIN32
-      // MoveFileEx without REPLACE_EXISTING installs the complete file once.
-      if (MoveFileExW(temp.path.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH))
-        temp.keep();
-      else if (noFollow(target).type() == fs::file_type::not_found)
-        throw Failure("Cannot install Blob file.");
-#else
-      try {
-        // Link creation is atomic and will never replace an existing Blob.
-        fs::create_hard_link(temp.path, target);
-      } catch (const fs::filesystem_error &) {
-        if (noFollow(target).type() == fs::file_type::not_found) throw;
-      }
-#endif
-    }
-    require(noFollow(target).type() == fs::file_type::regular && hashFile(target) == hash,
-            "Existing Blob has unexpected contents or type.", lexicon::Error::Code::Storage);
     return hash;
+  });
+}
+SqliteRepository::Result<std::string> SqliteRepository::importBlobData(const std::string &data) {
+  return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
+    impl_->db.get();
+    std::size_t offset = 0;
+    return installBlob(impl_->path, [&](char *buffer, std::size_t size) {
+      const auto count = std::min(size, data.size() - offset);
+      std::copy_n(data.data() + offset, count, buffer);
+      offset += count;
+      return count;
+    });
+  });
+}
+SqliteRepository::Result<std::string> SqliteRepository::readBlobData(const std::string &hash) {
+  return guarded([&] {
+    std::lock_guard lock(blobStorageMutex);
+    impl_->db.get();
+    require(validHash(hash), "Invalid blob identifier.");
+    const auto root = blobRoot(impl_->path);
+    if (noFollow(root).type() == fs::file_type::not_found ||
+        noFollow(root / hash.substr(0, 2)).type() == fs::file_type::not_found)
+      throw Failure("Referenced Blob file is missing.", lexicon::Error::Code::NotFound);
+    requireSafePrefix(root, hash);
+    const auto path = blobPath(root, hash);
+    require(noFollow(path).type() == fs::file_type::regular,
+            "Referenced Blob file is missing.", lexicon::Error::Code::NotFound);
+    std::string data;
+    require(hashFile(path, [&](const char *bytes, std::size_t count) { data.append(bytes, count); }) == hash,
+            "Blob contents do not match its SHA-256 identifier.", lexicon::Error::Code::Storage);
+    return data;
   });
 }
 SqliteRepository::Result<void> SqliteRepository::exportBlob(const std::string &hash, const std::string &destinationPath) {

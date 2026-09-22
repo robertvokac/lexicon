@@ -212,7 +212,9 @@ accept it; install a proper certificate instead.
   the server before anything destructive happens).
 - **Overview.** All tags, all flags and all aliases with their usage counts.
 - **Settings.** Server, session, theme (system, light, dark), page size and
-  versions.
+  versions, and **Export…** and **Import…** of the whole dictionary as one
+  file through the document picker, with or without the attached files (see
+  `docs/export-format.md`).
 
 On a large screen (840 dp and wider) the item list and the selected item sit
 side by side, and the type list sits beside the selected type's fields.

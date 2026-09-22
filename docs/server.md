@@ -300,7 +300,21 @@ rsync -a ~/lexicon/blobs/ /backup/blobs/
 
 Blob files are content addressed and never rewritten, so copying them live is
 safe. `lexicon-auth.json` holds only a password hash; back it up or recreate
-it with `auth set-user`.
+it with `auth set-user`. `lexicon-sessions.json` needs no backup: without it,
+people simply sign in again.
+
+A portable copy of the dictionary, readable by any Lexicon, comes from the
+export:
+
+```bash
+LexiconServer export --database ~/lexicon/lexicon.db --with-files \
+  --output "/backup/lexicon-$(date +%F).json"
+LexiconServer import --database ~/other/lexicon.db --input lexicon-2026-09-22.json
+```
+
+Both work while the server runs. An import merges; see
+[export-format.md](export-format.md) for what it matches and what it leaves
+alone.
 
 ## Paths and text encoding
 

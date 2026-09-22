@@ -74,6 +74,8 @@ public:
   Result<void> commitUnitOfWork() override;
   Result<void> rollbackUnitOfWork() override;
   Result<std::string> importBlob(const std::string &sourcePath) override;
+  Result<std::string> importBlobData(const std::string &data) override;
+  Result<std::string> readBlobData(const std::string &hash) override;
   Result<void> exportBlob(const std::string &hash,
                           const std::string &destinationPath) override;
   Result<lexicon::BlobMaintenanceReport> scanBlobStorage(lexicon::BlobScanDepth depth) override;

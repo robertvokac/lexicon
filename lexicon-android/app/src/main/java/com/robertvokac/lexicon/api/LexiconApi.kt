@@ -11,6 +11,8 @@ import com.robertvokac.lexicon.model.GroupEnvelope
 import com.robertvokac.lexicon.model.GroupWrite
 import com.robertvokac.lexicon.model.GroupsEnvelope
 import com.robertvokac.lexicon.model.Health
+import com.robertvokac.lexicon.model.ImportEnvelope
+import com.robertvokac.lexicon.model.ImportReport
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemIdEnvelope
@@ -158,6 +160,16 @@ class LexiconApi(private val client: ApiClient) {
         require(isBlobHash(hash)) { "A blob is addressed by its lowercase SHA-256 hash." }
         client.download("blobs/$hash", output, onProgress)
     }
+
+    // Export and import -------------------------------------------------------
+
+    /** Streams the whole dictionary, as the documented export file, into [output]. */
+    suspend fun exportDictionary(includeFiles: Boolean, output: () -> OutputStream, onProgress: (Long, Long) -> Unit) =
+        client.download("export", output, onProgress, query = mapOf("blobs" to includeFiles.toString()), accept = "application/json")
+
+    /** Merges an export into the server's dictionary. The server needs its size up front. */
+    suspend fun importDictionary(size: Long, open: () -> InputStream, onProgress: (Long, Long) -> Unit): ImportReport =
+        client.upload("import", size, open, onProgress, ImportEnvelope.serializer(), json = true).report
 
     companion object {
         const val API_VERSION = 1

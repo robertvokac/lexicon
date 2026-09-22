@@ -53,6 +53,10 @@ class FakeLexiconServer : Dispatcher() {
     val links = mutableListOf<Link>()
     val reads = CopyOnWriteArrayList<Int>()
     val blobs = mutableMapOf<String, ByteArray>()
+
+    /** What GET /export answers, and the bodies POST /import received. */
+    var exportDocument = """{"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[]}"""
+    val imports = mutableListOf<ByteArray>()
     private var nextId = 100
 
     /** Queries with this search text answer only after [slowQueryMillis]. */
@@ -289,6 +293,20 @@ class FakeLexiconServer : Dispatcher() {
             path == "/usage/flags" -> usage(items.values.flatMap { it.flags })
             path == "/usage/aliases" -> usage(items.values.flatMap { it.aliases })
             path == "/search/suggestions" -> json(buildJsonObject { put("values", buildJsonArray { items.values.forEach { add(JsonPrimitive(it.title)) } }) })
+            path == "/export" && method == "GET" -> MockResponse.Builder().code(200)
+                .setHeader("Content-Type", "application/json; charset=utf-8")
+                .body(exportDocument).build()
+            path == "/import" && method == "POST" -> {
+                imports += request.body?.toByteArray() ?: ByteArray(0)
+                json(buildJsonObject {
+                    put("report", buildJsonObject {
+                        put("itemsCreated", 2)
+                        put("itemsSkipped", 1)
+                        put("linksCreated", 1)
+                        put("warnings", buildJsonArray { add(JsonPrimitive("Field 'Year' holds another kind of value here.")) })
+                    })
+                })
+            }
             path == "/blobs" && method == "POST" -> {
                 val bytes = request.body?.toByteArray() ?: ByteArray(0)
                 require(bytes.isNotEmpty()) { "The upload is empty." }

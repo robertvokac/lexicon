@@ -1,5 +1,9 @@
 package com.robertvokac.lexicon.ui.settings
 
+import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -20,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -29,7 +35,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -37,21 +46,48 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.robertvokac.lexicon.AppContainer
 import com.robertvokac.lexicon.BuildConfig
+import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.api.ServerUrl
 import com.robertvokac.lexicon.auth.SessionState
+import com.robertvokac.lexicon.model.ImportReport
 import com.robertvokac.lexicon.storage.SettingsStore
 import com.robertvokac.lexicon.storage.ThemePreference
 import com.robertvokac.lexicon.ui.common.ConfirmDialog
+import com.robertvokac.lexicon.ui.common.MessageDialog
+import com.robertvokac.lexicon.ui.common.userMessage
+import com.robertvokac.lexicon.ui.item.BlobTransfer
 import com.robertvokac.lexicon.ui.common.SectionHeader
 import com.robertvokac.lexicon.ui.common.TextInputDialog
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.time.LocalDate
+
+/** An export or import on its way, or how the last one ended. */
+data class ExchangeState(
+    val busy: Boolean = false,
+    val status: String? = null,
+    /** The last import's report, shown once. */
+    val report: ImportReport? = null,
+)
 
 /** Client preferences of this installation and the session it holds. */
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
+    private val transfer = BlobTransfer(container.api, container.contentResolver)
+    private val _exchange = MutableStateFlow(ExchangeState())
+    val exchange: StateFlow<ExchangeState> = _exchange.asStateFlow()
+
     val theme: StateFlow<ThemePreference> =
         container.settings.theme.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemePreference.System)
     val pageSize: StateFlow<Int> =
@@ -81,6 +117,81 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun logout() {
         container.sessions.logout()
     }
+
+    /** Writes the whole dictionary into the document the person created. */
+    fun exportTo(target: Uri, includeFiles: Boolean) {
+        if (_exchange.value.busy) return
+        _exchange.value = ExchangeState(busy = true, status = "Exporting…")
+        viewModelScope.launch {
+            val resolver = container.contentResolver
+            try {
+                container.api.exportDictionary(
+                    includeFiles,
+                    output = { resolver.openOutputStream(target, "wt") ?: throw FileNotFoundException("The document cannot be written.") },
+                    onProgress = { received, _ ->
+                        _exchange.value = ExchangeState(busy = true, status = "Exporting… ${BlobTransfer.formatSize(received)}")
+                    },
+                )
+                _exchange.value = ExchangeState(status = "The dictionary was exported.")
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                // A document left incomplete is deleted again.
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { DocumentsContract.deleteDocument(resolver, target) }
+                }
+                val message = (failure as? ApiException)?.userMessage() ?: failure.message
+                _exchange.value = ExchangeState(status = "Not exported: $message")
+            }
+        }
+    }
+
+    /** Merges the export the person picked into the dictionary. */
+    fun importFrom(source: Uri) {
+        if (_exchange.value.busy) return
+        _exchange.value = ExchangeState(busy = true, status = "Importing…")
+        viewModelScope.launch {
+            val resolver = container.contentResolver
+            try {
+                val size = transfer.describe(source).size
+                // The server wants the size up front; a provider that does not
+                // know it is read into memory first.
+                val buffered = if (size < 0) {
+                    withContext(Dispatchers.IO) {
+                        (resolver.openInputStream(source) ?: throw FileNotFoundException("The document cannot be read.")).use { it.readBytes() }
+                    }
+                } else {
+                    null
+                }
+                val report = container.api.importDictionary(
+                    size = buffered?.size?.toLong() ?: size,
+                    open = {
+                        buffered?.inputStream()
+                            ?: resolver.openInputStream(source)
+                            ?: throw FileNotFoundException("The document cannot be read.")
+                    },
+                    onProgress = { sent, total ->
+                        val progress = if (total > 0) " ${sent * 100 / total}%" else ""
+                        _exchange.value = ExchangeState(busy = true, status = "Importing…$progress")
+                    },
+                )
+                _exchange.value = ExchangeState(status = report.summary, report = report)
+                container.dataChanges.groupsChanged()
+                container.dataChanges.typesChanged()
+                container.dataChanges.itemChanged(null)
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: ApiException) {
+                _exchange.value = ExchangeState(status = "Nothing was imported: ${failure.userMessage() ?: "sign in again."}")
+            } catch (failure: IOException) {
+                _exchange.value = ExchangeState(status = "The file could not be read: ${failure.message}")
+            } catch (failure: SecurityException) {
+                _exchange.value = ExchangeState(status = "The file could not be read: ${failure.message}")
+            }
+        }
+    }
+
+    fun reportShown() = _exchange.update { it.copy(report = null) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,8 +202,17 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val sessionInfo by viewModel.sessionInfo.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
     val signedIn = session as? SessionState.SignedIn
+    val exchange by viewModel.exchange.collectAsStateWithLifecycle()
     var changingServer by rememberSaveable { mutableStateOf(false) }
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
+    var includeFiles by rememberSaveable { mutableStateOf(true) }
+    var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) viewModel.exportTo(uri, includeFiles)
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        pendingImport = uri
+    }
 
     Scaffold(
         topBar = {
@@ -146,6 +266,36 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
+            SectionHeader("Export and import")
+            Text(
+                "The whole dictionary as one file, for a backup or another Lexicon: groups, types, items and links.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .toggleable(value = includeFiles, onValueChange = { includeFiles = it }, role = Role.Switch),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Include attached files", modifier = Modifier.weight(1f))
+                Switch(checked = includeFiles, onCheckedChange = null)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { exportLauncher.launch("lexicon-${LocalDate.now()}.json") },
+                    enabled = signedIn != null && !exchange.busy,
+                ) { Text("Export…") }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                    enabled = signedIn != null && !exchange.busy,
+                ) { Text("Import…") }
+            }
+            exchange.status?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+
             SectionHeader("About")
             Text("Lexicon for Android ${BuildConfig.VERSION_NAME}")
             Text("Client API version ${LexiconApi.API_VERSION}" + (signedIn?.let { ", server API version ${it.serverApiVersion}" } ?: ""))
@@ -173,6 +323,26 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 viewModel.changeServer(it)
             },
             onDismiss = { changingServer = false },
+        )
+    }
+    pendingImport?.let { uri ->
+        ConfirmDialog(
+            title = "Import",
+            message = "Merge this export into the dictionary? Groups, types and fields are matched by name. " +
+                "Items that are already here, with the same group, title and disambiguation, are left as they are.",
+            confirmLabel = "Import",
+            onConfirm = {
+                pendingImport = null
+                viewModel.importFrom(uri)
+            },
+            onDismiss = { pendingImport = null },
+        )
+    }
+    exchange.report?.takeIf { it.warnings.isNotEmpty() }?.let { report ->
+        MessageDialog(
+            title = "Import",
+            message = report.summary + "\n\n" + report.warnings.joinToString("\n") { "• $it" },
+            onDismiss = viewModel::reportShown,
         )
     }
     if (confirmLogout) {

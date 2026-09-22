@@ -50,6 +50,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Pagination for large datasets
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
+- Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - A Qt-free REST server and an independently deployable static web client with the same capabilities
 - A native Android client (Kotlin, Jetpack Compose) for the same server
 
@@ -193,7 +194,8 @@ Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 | `lexicon-storage-sqlite` | Native SQLite repository, migrations, transactions, and blob files; depends on application, SQLite C API, and OpenSSL Crypto. No Qt. |
 | `lexicon-qt-bridge` | Converts UTF-8 standard C++ values to and from Qt values; depends on core and QtCore. |
 | `Lexicon` (`lexicon-qt/`) | Qt Widgets frontend and composition root; injects `SqliteRepository` into `LexiconApplication`. No SQL in Widgets. |
-| `lexicon-http` | HTTP/JSON adapter: transport conversions, authentication, sessions, CORS, TLS, routes. Depends on application, vendored cpp-httplib and nlohmann/json, and OpenSSL. No Qt. |
+| `lexicon-json` | The JSON representation of records, shared by the REST API and the [export format](docs/export-format.md); export and import. Depends on application and vendored nlohmann/json. No Qt. |
+| `lexicon-http` | HTTP adapter: authentication, sessions, CORS, TLS, routes. Depends on application, `lexicon-json`, vendored cpp-httplib, and OpenSSL. No Qt. |
 | `LexiconServer` (`lexicon-server/`) | Server composition root; injects `SqliteRepository` into `LexiconApplication` and serves `lexicon-http`. No Qt. |
 | `lexicon-web/` | Static HTML, CSS and vanilla JavaScript client. No C++, no framework, no build step. Talks only REST. |
 | `lexicon-android/` | Native Android client in Kotlin and Jetpack Compose, a separate Gradle project outside the CMake build. No database of its own, no C++. Talks only REST. |
@@ -494,6 +496,8 @@ Design notes:
 **The SQLite database and Blob directory together form the complete Lexicon data set.**
 Backing up only `lexicon.db` is insufficient when Blob Fields are used.
 
+`File -> Export...` writes the whole dictionary as one JSON file, optionally with the files Blob values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. The web client and the Android app offer the same, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
+
 ### Blob lifecycle and maintenance
 
 Blob identity is the lowercase hexadecimal SHA-256 digest of the file bytes. Identical
@@ -551,6 +555,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 

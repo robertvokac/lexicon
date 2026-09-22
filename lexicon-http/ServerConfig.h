@@ -46,11 +46,16 @@ bool isLoopbackAddress(const std::string &address);
 // plaintext HTTP, or that is internally inconsistent.
 Result<void> validate(const ServerConfig &config);
 
-enum class Command { Serve, AuthSetUser, AuthShow, Help, Version };
+enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Help, Version };
 
 struct CommandLine {
   Command command = Command::Serve;
   ServerConfig config;
+  // export: the file to write, empty for standard output; import: the file
+  // to read.
+  std::string exchangePath;
+  // export: whether the files values refer to travel in the document.
+  bool exchangeFiles = false;
 };
 
 // Parses argv. Unknown options and malformed values fail with a clear message.

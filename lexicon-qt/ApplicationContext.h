@@ -277,9 +277,11 @@ private:
 class QtApplicationFacade {
 public:
   explicit QtApplicationFacade(lexicon::LexiconApplication &core)
-      : items(core.items), types(core.types), groups(core.groups),
+      : core(core), items(core.items), types(core.types), groups(core.groups),
         links(core.links), search(core.search),
         configuration(core.configuration), blobs(core.blobs) {}
+  // For the operations that take the whole application, such as export.
+  lexicon::LexiconApplication &core;
   QtItemService items;
   QtTypeService types;
   QtGroupService groups;

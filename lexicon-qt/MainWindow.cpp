@@ -8,6 +8,7 @@
 #include "PropertyFilterDialog.h"
 #include "BlobMaintenanceDialog.h"
 
+#include "Exchange.h"
 #include "MarkdownConverter.h"
 #include <QAction>
 #include <QApplication>
@@ -23,6 +24,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QCloseEvent>
+#include <QDate>
+#include <QFile>
+#include <QFileDialog>
+#include <QSaveFile>
 #include <QSettings>
 #include <QRegularExpressionValidator>
 #include <QScrollBar>
@@ -274,6 +279,11 @@ void MainWindow::setupMenus() {
     auto* fileMenu = menuBar()->addMenu("File");
     auto* refreshAction = fileMenu->addAction("Refresh");
     connect(refreshAction, &QAction::triggered, this, &MainWindow::refreshAll);
+    fileMenu->addSeparator();
+    auto* exportAction = fileMenu->addAction("Export...");
+    auto* importAction = fileMenu->addAction("Import...");
+    connect(exportAction, &QAction::triggered, this, &MainWindow::exportDictionary);
+    connect(importAction, &QAction::triggered, this, &MainWindow::importDictionary);
     fileMenu->addSeparator();
     auto* quitAction = fileMenu->addAction("Quit");
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
@@ -840,6 +850,57 @@ void MainWindow::quickAdd() {
 
     m_searchEdit->clear();
     refreshAll();
+}
+
+void MainWindow::exportDictionary() {
+    const auto files = QMessageBox::question(this, "Export",
+        "Include the files that Blob values refer to?\n\n"
+        "The export is larger, but it restores those files too.",
+        QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel, QMessageBox::Yes);
+    if (files == QMessageBox::Cancel) return;
+    const QString path = QFileDialog::getSaveFileName(this, "Export dictionary",
+        QString("lexicon-%1.json").arg(QDate::currentDate().toString(Qt::ISODate)),
+        "Lexicon export (*.json)");
+    if (path.isEmpty()) return;
+    auto document = lexicon::exchange::exportDocument(services().core, files == QMessageBox::Yes);
+    if (!document) {
+        showError("Cannot export: " + qtbridge::toQt(document.error().message));
+        return;
+    }
+    // A failed write leaves any earlier export at the path as it was.
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)
+        || file.write(document->data(), static_cast<qint64>(document->size())) != static_cast<qint64>(document->size())
+        || !file.commit()) {
+        showError("Cannot write " + path + ": " + file.errorString());
+        return;
+    }
+    QMessageBox::information(this, "Export", "The dictionary was exported to " + path + ".");
+}
+
+void MainWindow::importDictionary() {
+    const QString path = QFileDialog::getOpenFileName(this, "Import dictionary", QString(),
+        "Lexicon export (*.json);;All files (*)");
+    if (path.isEmpty()) return;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        showError("Cannot read " + path + ": " + file.errorString());
+        return;
+    }
+    const QByteArray bytes = file.readAll();
+    const auto answer = QMessageBox::question(this, "Import",
+        "Merge this export into the dictionary?\n\n"
+        "Groups, types and fields are matched by name. Items that are already here, "
+        "with the same group, title and disambiguation, are left as they are.");
+    if (answer != QMessageBox::Yes) return;
+    auto report = lexicon::exchange::importDocument(services().core,
+        std::string_view(bytes.constData(), static_cast<std::size_t>(bytes.size())));
+    if (!report) {
+        showError("Nothing was imported: " + qtbridge::toQt(report.error().message));
+        return;
+    }
+    refreshAll();
+    QMessageBox::information(this, "Import", qtbridge::toQt(lexicon::exchange::describe(*report)));
 }
 
 void MainWindow::editSelectedItem() {

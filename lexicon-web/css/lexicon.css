@@ -569,6 +569,7 @@ body.resizing { cursor: row-resize; user-select: none; }
 .dialog-error { color: var(--danger); margin: 0; }
 .confirm { white-space: pre-wrap; }
 .confirm.danger { border-left: 3px solid var(--danger); padding-left: 10px; }
+.import-warnings { max-height: 40vh; overflow: auto; margin: 0; padding-left: 20px; }
 
 .dialog-actions {
     display: flex;

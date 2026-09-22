@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -73,8 +74,9 @@ class ApiClient(
     }
 
     /**
-     * Streams [open] to the server as `application/octet-stream`. [size] may
-     * be -1 when unknown; the body is then sent chunked.
+     * Streams [open] to the server as `application/octet-stream`, or as JSON
+     * when [json] is set. [size] may be -1 when unknown; the body is then sent
+     * chunked, which the server accepts for blobs only.
      */
     suspend fun <T> upload(
         path: String,
@@ -82,11 +84,20 @@ class ApiClient(
         open: () -> InputStream,
         onProgress: (sent: Long, total: Long) -> Unit,
         response: DeserializationStrategy<T>,
-    ): T = execute("POST", path, StreamingBody(size, open, onProgress), Auth.Session) { decode(response, it) }
+        json: Boolean = false,
+    ): T = execute("POST", path, StreamingBody(size, open, onProgress, if (json) JSON else OCTET_STREAM), Auth.Session) {
+        decode(response, it)
+    }
 
-    /** Streams a binary response into [output]. */
-    suspend fun download(path: String, output: () -> OutputStream, onProgress: (received: Long, total: Long) -> Unit) {
-        execute("GET", path, null, Auth.Session, accept = "application/octet-stream") { response ->
+    /** Streams a response into [output]. */
+    suspend fun download(
+        path: String,
+        output: () -> OutputStream,
+        onProgress: (received: Long, total: Long) -> Unit,
+        query: Map<String, String> = emptyMap(),
+        accept: String = "application/octet-stream",
+    ) {
+        execute("GET", path, null, Auth.Session, query = query, accept = accept) { response ->
             val body = response.body
             val total = body.contentLength()
             output().use { sink ->
@@ -278,8 +289,9 @@ class ApiClient(
         private val size: Long,
         private val open: () -> InputStream,
         private val onProgress: (Long, Long) -> Unit,
+        private val type: MediaType,
     ) : RequestBody() {
-        override fun contentType() = OCTET_STREAM
+        override fun contentType() = type
         override fun contentLength() = size
 
         // A document stream can be read once, so OkHttp must not replay it.

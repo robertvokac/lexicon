@@ -99,6 +99,19 @@ add_library(lexicon-nlohmann-json INTERFACE)
 target_include_directories(lexicon-nlohmann-json SYSTEM INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nlohmann-json/include)
 
+# The JSON representation of Lexicon records, shared by the REST server and the
+# export file format, which the desktop client reads and writes too. Qt-free.
+add_library(lexicon-json STATIC
+    lexicon-json/Transport.h
+    lexicon-json/Transport.cpp
+    lexicon-json/Exchange.h
+    lexicon-json/Exchange.cpp
+)
+target_include_directories(lexicon-json PUBLIC lexicon-json)
+# Transport.h exposes nlohmann::json, so consumers need its include path.
+target_link_libraries(lexicon-json PUBLIC lexicon-application lexicon-nlohmann-json)
+set_target_properties(lexicon-json PROPERTIES AUTOMOC OFF AUTORCC OFF)
+
 if (LEXICON_BUILD_SERVER)
     add_library(lexicon-cpp-httplib INTERFACE)
     target_include_directories(lexicon-cpp-httplib SYSTEM INTERFACE
@@ -116,8 +129,6 @@ if (LEXICON_BUILD_SERVER)
     add_library(lexicon-http STATIC
         lexicon-http/FilePath.h
         lexicon-http/FilePath.cpp
-        lexicon-http/Transport.h
-        lexicon-http/Transport.cpp
         lexicon-http/Security.h
         lexicon-http/Security.cpp
         lexicon-http/AuthState.h
@@ -130,9 +141,8 @@ if (LEXICON_BUILD_SERVER)
         lexicon-http/RestServer.cpp
     )
     target_include_directories(lexicon-http PUBLIC lexicon-http)
-    # Transport.h exposes nlohmann::json, so consumers need its include path.
     target_link_libraries(lexicon-http
-        PUBLIC lexicon-application lexicon-nlohmann-json
+        PUBLIC lexicon-application lexicon-json
         PRIVATE lexicon-cpp-httplib OpenSSL::Crypto)
     if (WIN32)
         # SetEntriesInAclW and SetNamedSecurityInfoW build the owner-only DACL
@@ -179,7 +189,7 @@ if (LEXICON_BUILD_SERVER)
 endif()
 
 # The backend must remain usable when Qt is not installed.
-set(LEXICON_QT_FREE_TARGETS lexicon-core lexicon-application lexicon-storage-sqlite)
+set(LEXICON_QT_FREE_TARGETS lexicon-core lexicon-application lexicon-storage-sqlite lexicon-json)
 if (LEXICON_BUILD_SERVER)
     list(APPEND LEXICON_QT_FREE_TARGETS lexicon-http LexiconServer)
 endif()
@@ -232,6 +242,7 @@ if (LEXICON_BUILD_DESKTOP)
     target_link_libraries(Lexicon PRIVATE
         lexicon-application
         lexicon-storage-sqlite
+        lexicon-json
         lexicon-qt-bridge
         Qt${QT_VERSION_MAJOR}::Widgets
     )
@@ -285,6 +296,11 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-search PRIVATE lexicon-application lexicon-storage-sqlite SQLite::SQLite3)
     set_target_properties(lexicon-search PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME search COMMAND lexicon-search)
+
+    add_executable(lexicon-exchange tests/Exchange.cpp)
+    target_link_libraries(lexicon-exchange PRIVATE lexicon-json lexicon-storage-sqlite)
+    set_target_properties(lexicon-exchange PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME exchange COMMAND lexicon-exchange)
 
     add_executable(lexicon-blob-maintenance tests/BlobMaintenance.cpp)
     target_link_libraries(lexicon-blob-maintenance PRIVATE lexicon-application lexicon-storage-sqlite)

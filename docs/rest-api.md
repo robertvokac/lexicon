@@ -323,6 +323,28 @@ The hash is the value to store in a `Blob` field. Uploads over
 `--max-blob-bytes` are rejected with 413; a hash that is not 64 lowercase hex
 characters is rejected with 400; an unknown hash is 404.
 
+## Export and import
+
+```http
+GET  /api/v1/export?blobs=true   → application/json, Content-Disposition: attachment
+POST /api/v1/import              → 200 { "report": { ... } }
+```
+
+The export is the whole dictionary in the [export format](export-format.md);
+`blobs=true` embeds the files that values refer to. The import takes such a
+document as its `application/json` body, up to `--max-blob-bytes` because it
+may carry files, merges it in one unit of work and answers with what it
+created and skipped:
+
+```json
+{ "report": { "groupsCreated": 0, "typesCreated": 0, "fieldsCreated": 0,
+  "itemsCreated": 12, "itemsSkipped": 3, "linksCreated": 9, "blobsImported": 2,
+  "warnings": ["Item 'Monoid': 1 value(s) do not fit its fields here and were left out."] } }
+```
+
+A document that is not an export, or has a format version this server does
+not read, is refused with 400 before anything is written.
+
 ## CORS
 
 The API is used from another origin, so CORS is explicit and exact:

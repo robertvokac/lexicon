@@ -122,6 +122,8 @@ Usage:
   LexiconServer [serve] [options]
   LexiconServer auth set-user [options]
   LexiconServer auth show [options]
+  LexiconServer export [--output FILE] [--with-files] [options]
+  LexiconServer import --input FILE [options]
   LexiconServer --help | --version
 
 The server exposes JSON under /api/v1 only. It never serves HTML, CSS,
@@ -162,6 +164,11 @@ Options:
   --quiet                    Do not write a request log line per request
   -h, --help                 Show this help
   --version                  Show the version
+
+Export and import (docs/export-format.md), also while the server runs:
+  --output FILE              export: write here instead of standard output
+  --with-files               export: include the files that values refer to
+  --input FILE               import: the export to merge into the database
 )";
 }
 
@@ -183,6 +190,12 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
         parsed.command = Command::AuthShow;
       else
         return invalid("Unknown auth subcommand '" + subcommand + "'.");
+    } else if (command == "export") {
+      ++index;
+      parsed.command = Command::Export;
+    } else if (command == "import") {
+      ++index;
+      parsed.command = Command::Import;
     } else {
       return invalid("Unknown command '" + command + "'.");
     }
@@ -208,6 +221,10 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.allowInsecureHttp = true;
       continue;
     }
+    if (option == "--with-files") {
+      parsed.exchangeFiles = true;
+      continue;
+    }
     if (option == "--no-session-file") {
       parsed.config.persistSessions = false;
       continue;
@@ -225,6 +242,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.authFilePath = *value;
     else if (option == "--session-file")
       parsed.config.sessionFilePath = *value;
+    else if (option == "--output" || option == "--input")
+      parsed.exchangePath = *value;
     else if (option == "--listen")
       parsed.config.listenAddress = *value;
     else if (option == "--tls-cert")
@@ -310,6 +329,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       }
     }
   }
+  if (parsed.command == Command::Import && parsed.exchangePath.empty())
+    return invalid("import needs --input FILE.");
   return parsed;
 }
 } // namespace lexicon::http

@@ -380,6 +380,35 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun theDictionaryIsExportedToADocumentAndImportedFromOne() {
+        val resolver = ApplicationProvider.getApplicationContext<LexiconApplication>().contentResolver
+        val target = Uri.parse("content://com.example.documents/lexicon.json")
+        val saved = ByteArrayOutputStream()
+        shadowOf(resolver).registerOutputStream(target, saved)
+        val source = Uri.parse("content://com.example.documents/other.json")
+        val document = """{"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[]}""".toByteArray()
+        shadowOf(resolver).registerInputStream(source, ByteArrayInputStream(document))
+
+        login()
+        openDrawer("Settings")
+        compose.waitForText("Export and import")
+        nextUri = target
+        compose.onNode(hasText("Export…") and hasClickAction()).performScrollTo().performClick()
+        compose.waitForText("The dictionary was exported.")
+        assertEquals(fake.exportDocument, saved.toString(Charsets.UTF_8))
+        assertEquals("blobs=true", fake.requestsTo("GET", "/api/v1/export").single().url.encodedQuery)
+
+        nextUri = source
+        compose.onNode(hasText("Import…") and hasClickAction()).performScrollTo().performClick()
+        compose.waitFor(hasText("Merge this export", substring = true))
+        inDialog("Import").performClick()
+        compose.waitFor(hasText("Field 'Year' holds another kind of value here.", substring = true))
+        assertArrayEquals(document, fake.imports.single())
+        assertEquals("application/json; charset=utf-8", fake.requestsTo("POST", "/api/v1/import").single().headers["Content-Type"])
+        compose.onNode(hasText("Imported 2 item(s)", substring = true) and hasAnyAncestor(isDialog())).assertIsDisplayed()
+    }
+
+    @Test
     fun saveWaitsForARunningUpload() {
         val type = fake.addType("Document")
         fake.addField(checkNotNull(type.id), "Attachment", FieldDataType.Blob)

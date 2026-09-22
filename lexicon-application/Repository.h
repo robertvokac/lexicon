@@ -56,6 +56,10 @@ public:
   virtual Result<void> commitUnitOfWork() = 0;
   virtual Result<void> rollbackUnitOfWork() = 0;
   virtual Result<std::string> importBlob(const std::string &sourcePath) = 0;
+  // The same for bytes held in memory, such as a file carried in an export.
+  virtual Result<std::string> importBlobData(const std::string &data) = 0;
+  // The verified contents of a stored Blob.
+  virtual Result<std::string> readBlobData(const std::string &hash) = 0;
   virtual Result<void> exportBlob(const std::string &hash,
                                   const std::string &destinationPath) = 0;
   virtual Result<BlobMaintenanceReport> scanBlobStorage(BlobScanDepth depth) = 0;

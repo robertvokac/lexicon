@@ -272,6 +272,32 @@ class ServerIntegrationTest {
     }
 
     @Test
+    fun theDictionaryExportsAndImportsOverRealRest() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val title = "Exported ${System.nanoTime()}"
+            val created = api.createItem(EditorRules.saveRequest(EditorFields(groupId = api.defaultGroupId(), title = title), "Content.", emptyList()))
+            val document = ByteArrayOutputStream()
+            api.exportDictionary(includeFiles = true, output = { document }, onProgress = { _, _ -> })
+            val text = document.toString(Charsets.UTF_8)
+            assertTrue(text.contains("\"format\": \"lexicon-export\""))
+            assertTrue(text.contains(title))
+            val bytes = document.toByteArray()
+            val report = api.importDictionary(bytes.size.toLong(), { ByteArrayInputStream(bytes) }) { _, _ -> }
+            assertEquals(0, report.itemsCreated)
+            assertTrue(report.itemsSkipped >= 1)
+            api.deleteItem(created.id)
+            val restored = api.importDictionary(bytes.size.toLong(), { ByteArrayInputStream(bytes) }) { _, _ -> }
+            assertEquals(1, restored.itemsCreated)
+            assertEquals(title, api.item(api.resolveItem(title, "")).item.title)
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
     fun anOversizedBlobIsRefused() = runBlocking {
         val environment = TestEnvironment()
         try {

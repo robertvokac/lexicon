@@ -1,6 +1,7 @@
 // Composition root for LexiconServer: SqliteRepository + LexiconApplication +
 // HTTP adapter. No Qt, no HTML, no static files.
 #include "AuthState.h"
+#include "Exchange.h"
 #include "FilePath.h"
 #include "LexiconApplication.h"
 #include "RestServer.h"
@@ -9,6 +10,8 @@
 
 #include <atomic>
 #include <csignal>
+#include <fstream>
+#include <sstream>
 #include <iterator>
 #include <filesystem>
 #include <iostream>
@@ -180,6 +183,58 @@ int authShow(const ServerConfig &config) {
   return 0;
 }
 
+// export and import work on the database directly, so they also run while
+// the server is up: SQLite coordinates the two connections.
+int exportDictionary(const lexicon::http::CommandLine &command) {
+  SqliteRepository repository;
+  if (auto opened = repository.open(command.config.databasePath); !opened) {
+    std::cerr << "Cannot open the database: " << opened.error().message << '\n';
+    return 1;
+  }
+  lexicon::LexiconApplication application(repository);
+  auto document = lexicon::exchange::exportDocument(application, command.exchangeFiles);
+  if (!document) {
+    std::cerr << "Cannot export: " << document.error().message << '\n';
+    return 1;
+  }
+  if (command.exchangePath.empty()) {
+    std::cout << *document << std::flush;
+    return 0;
+  }
+  std::ofstream output(lexicon::utf8Path(command.exchangePath), std::ios::binary | std::ios::trunc);
+  output << *document;
+  output.close();
+  if (!output) {
+    std::cerr << "Cannot write " << command.exchangePath << '\n';
+    return 1;
+  }
+  std::cerr << "Exported to " << command.exchangePath << ".\n";
+  return 0;
+}
+
+int importDictionary(const lexicon::http::CommandLine &command) {
+  std::ifstream input(lexicon::utf8Path(command.exchangePath), std::ios::binary);
+  if (!input) {
+    std::cerr << "Cannot read " << command.exchangePath << '\n';
+    return 1;
+  }
+  std::ostringstream text;
+  text << input.rdbuf();
+  SqliteRepository repository;
+  if (auto opened = repository.open(command.config.databasePath); !opened) {
+    std::cerr << "Cannot open the database: " << opened.error().message << '\n';
+    return 1;
+  }
+  lexicon::LexiconApplication application(repository);
+  auto report = lexicon::exchange::importDocument(application, text.str());
+  if (!report) {
+    std::cerr << "Nothing was imported: " << report.error().message << '\n';
+    return 1;
+  }
+  std::cout << lexicon::exchange::describe(*report) << '\n';
+  return 0;
+}
+
 int serve(const ServerConfig &config) {
   if (auto valid = lexicon::http::validate(config); !valid) {
     std::cerr << valid.error().message << '\n';
@@ -287,6 +342,10 @@ int main(int argc, char *argv[]) {
     return authSetUser(parsed->config);
   case Command::AuthShow:
     return authShow(parsed->config);
+  case Command::Export:
+    return exportDictionary(*parsed);
+  case Command::Import:
+    return importDictionary(*parsed);
   case Command::Serve:
     break;
   }

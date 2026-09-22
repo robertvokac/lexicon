@@ -234,7 +234,27 @@ data class FieldWrite(
     val itemTypeId: Int? = null,
 )
 
+/** What POST /import did: created, skipped and why. */
+@Serializable
+data class ImportReport(
+    val groupsCreated: Int = 0,
+    val typesCreated: Int = 0,
+    val fieldsCreated: Int = 0,
+    val itemsCreated: Int = 0,
+    val itemsSkipped: Int = 0,
+    val linksCreated: Int = 0,
+    val blobsImported: Int = 0,
+    val warnings: List<String> = emptyList(),
+) {
+    val summary: String
+        get() = "Imported $itemsCreated item(s), $linksCreated link(s) and $blobsImported file(s); " +
+            "$itemsSkipped item(s) were already here. Created $groupsCreated group(s), $typesCreated type(s) " +
+            "and $fieldsCreated field(s)."
+}
+
 // Response envelopes -------------------------------------------------------
+
+@Serializable internal data class ImportEnvelope(val report: ImportReport)
 
 @Serializable internal data class GroupsEnvelope(val groups: List<Group>)
 @Serializable internal data class GroupEnvelope(val group: Group)

@@ -3,6 +3,7 @@
 import { api, API_VERSION, ApiError } from './api.js';
 import { errorDialog, messageDialog } from './dialogs.js';
 import { clearAllDrafts, setDraftOwner } from './drafts.js';
+import { exportDictionary, importDictionary } from './exchange.js';
 import { openGroupManager } from './groups.js';
 import { MainView } from './items.js';
 import { showValueOverview } from './overviews.js';
@@ -196,6 +197,14 @@ class Application {
                 label: 'File',
                 entries: [
                     { label: 'Refresh', action: () => this.view && this.view.refreshAll() },
+                    { separator: true },
+                    { label: 'Export...', action: () => exportDictionary() },
+                    {
+                        label: 'Import...',
+                        action: async () => {
+                            if (await importDictionary()) await this.view.refreshAll();
+                        },
+                    },
                     { separator: true },
                     { label: 'Logout', action: () => this.logout() },
                 ],

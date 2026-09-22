@@ -240,6 +240,23 @@ export class LexiconApi {
     downloadBlob(hash) {
         return this.request('GET', `/blobs/${hash}`, { expect: 'blob' });
     }
+
+    // Export and import ------------------------------------------------------
+    exportDictionary(includeFiles) {
+        return this.request('GET', `/export?blobs=${includeFiles ? 'true' : 'false'}`, {
+            expect: 'blob',
+            timeoutMs: UPLOAD_TIMEOUT_MS,
+        });
+    }
+
+    async importDictionary(file) {
+        const result = await this.request('POST', '/import', {
+            body: file,
+            contentType: 'application/json',
+            timeoutMs: UPLOAD_TIMEOUT_MS,
+        });
+        return result.report;
+    }
 }
 
 export const api = new LexiconApi();

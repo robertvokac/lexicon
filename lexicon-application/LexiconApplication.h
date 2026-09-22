@@ -175,6 +175,12 @@ public:
   Result<void> exportFile(const std::string &hash, const std::string &path) {
     return repository_.exportBlob(hash, path);
   }
+  Result<std::string> importData(const std::string &data) {
+    return repository_.importBlobData(data);
+  }
+  Result<std::string> readData(const std::string &hash) {
+    return repository_.readBlobData(hash);
+  }
   Result<BlobMaintenanceReport> scanStorage(
       BlobScanDepth depth = BlobScanDepth::Structural) {
     return repository_.scanBlobStorage(depth);
@@ -191,12 +197,57 @@ private:
   Repository &repository_;
 };
 
+// A whole dictionary as it travels between databases. The IDs are those of
+// the exporting database; they only connect the records of one export.
+struct TypeExport {
+  ItemTypeRecord type;
+  std::vector<ItemFieldRecord> fields;
+};
+struct DictionaryExport {
+  std::vector<GroupRecord> groups;
+  std::vector<TypeExport> types;
+  std::vector<ItemRecord> items;
+  std::vector<LinkRecord> links;
+};
+struct ImportReport {
+  int groupsCreated = 0;
+  int typesCreated = 0;
+  int fieldsCreated = 0;
+  int itemsCreated = 0;
+  // Items already present: same group, title and disambiguation.
+  int itemsSkipped = 0;
+  int linksCreated = 0;
+  int blobsImported = 0;
+  // What could not be imported as it was, in words.
+  std::vector<std::string> warnings;
+};
+
+// The hash of the Blob a field value refers to, or empty for other values.
+std::string blobHashOf(const ItemFieldRecord &field, const std::string &value);
+
+class ExchangeService {
+public:
+  explicit ExchangeService(Repository &repository) : repository_(repository) {}
+  // One consistent snapshot of every group, type, field, item and link.
+  Result<DictionaryExport> exportDictionary();
+  // Merges an export into this database in one unit of work: groups, types
+  // and fields are matched by name, items already present are left alone,
+  // and links are added where they touch an imported item. `blobs` holds the
+  // file contents that travelled with the export, by SHA-256.
+  Result<ImportReport> importDictionary(
+      const DictionaryExport &dictionary,
+      const std::map<std::string, std::string> &blobs);
+
+private:
+  Repository &repository_;
+};
+
 class LexiconApplication {
 public:
   explicit LexiconApplication(Repository &repository)
       : items(repository), types(repository), groups(repository),
         links(repository), search(repository), configuration(repository),
-        blobs(repository) {}
+        blobs(repository), exchange(repository) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -204,5 +255,6 @@ public:
   SearchService search;
   ConfigurationService configuration;
   BlobService blobs;
+  ExchangeService exchange;
 };
 } // namespace lexicon

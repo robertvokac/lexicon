@@ -1,5 +1,6 @@
 #include "RestServer.h"
 
+#include "Exchange.h"
 #include "Utf8Path.h"
 #include "TempFile.h"
 #include "Transport.h"
@@ -10,7 +11,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -309,7 +312,10 @@ void RestServer::Impl::createServer() {
                                          Response &response) {
     const bool isBlobUpload = request.matched_route == "/api/v1/blobs" &&
                               request.method == "POST";
-    const auto limit = isBlobUpload ? config.maxBlobBytes : config.maxJsonBytes;
+    // An export file may carry files, so it gets the blob size limit.
+    const bool isImport = request.matched_route == "/api/v1/import" &&
+                          request.method == "POST";
+    const auto limit = isBlobUpload || isImport ? config.maxBlobBytes : config.maxJsonBytes;
     if (request.has_header("Content-Length") &&
         request.get_header_value_u64("Content-Length") > limit) {
       response.set_header("Connection", "close");
@@ -1147,6 +1153,43 @@ void RestServer::Impl::registerRoutes() {
                 return application.search.loadAliasUsage();
               }),
               "loadAliasUsage");
+  });
+
+  // Export and import --------------------------------------------------------
+  api.Get("/api/v1/export", [this](const Request &request, Response &response) {
+    const auto blobs = queryValue(request, "blobs");
+    if (!blobs.empty() && blobs != "true" && blobs != "false") {
+      respondFailure(response, {400, "validation", "'blobs' accepts true or false."});
+      return;
+    }
+    auto document = guarded.with([&](LexiconApplication &application) {
+      return exchange::exportDocument(application, blobs == "true");
+    });
+    if (!document) {
+      respondError(response, document.error(), "exportDocument");
+      return;
+    }
+    const auto now = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+    response.set_header("Content-Disposition",
+                        std::format("attachment; filename=\"lexicon-{:%Y-%m-%d}.json\"", now));
+    response.status = 200;
+    response.set_content(std::move(*document), kJsonContentType);
+  });
+
+  api.Post("/api/v1/import", [this](const Request &request, Response &response) {
+    if (!isContentType(request.get_header_value("Content-Type"), "application/json")) {
+      respondFailure(response, {415, "unsupported_media_type",
+                                "Content-Type must be application/json."});
+      return;
+    }
+    auto report = guarded.with([&](LexiconApplication &application) {
+      return exchange::importDocument(application, request.body);
+    });
+    if (!report) {
+      respondError(response, report.error(), "importDocument");
+      return;
+    }
+    respondJson(response, 200, Json{{"report", exchange::toJson(*report)}});
   });
 
   // Blobs -----------------------------------------------------------------

@@ -149,6 +149,8 @@ private slots:
 
     void addItem();
     void quickAdd();
+    void exportDictionary();
+    void importDictionary();
     void editSelectedItem();
     void deleteSelectedItem();
 

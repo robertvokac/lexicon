@@ -704,6 +704,53 @@ void checkBlobs(Checks &checks) {
   checks.expectEqual(leftovers, 0, "blob staging files are cleaned up");
 }
 
+void checkExportImport(Checks &checks) {
+  // The export of one server imports into another.
+  ServerHarness source;
+  Session session(source, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const int target = parse(client.post("/api/v1/items",
+                                       Json{{"item", Json{{"groupId", groupId}, {"title", "Target"}}}}.dump()))
+                         .value("id", 0);
+  client.post("/api/v1/items",
+              Json{{"item", Json{{"groupId", groupId}, {"title", "Source"}, {"content", "Links on."}}},
+                   {"links", Json::array({Json{{"toItemId", target}, {"linkType", "Uses"}}})}}
+                  .dump());
+
+  const auto exported = client.get("/api/v1/export?blobs=true");
+  checks.expectEqual(exported.status, 200, "the dictionary can be exported");
+  checks.expect(exported.header("Content-Disposition").find("attachment; filename=\"lexicon-") == 0,
+                "the export downloads as a dated file");
+  const auto document = parse(exported);
+  checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
+  checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
+  checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
+                     "blobs accepts true or false only");
+
+  const auto again = client.post("/api/v1/import", exported.body);
+  checks.expectEqual(again.status, 200, "the export imports into the same server");
+  checks.expectEqual(parse(again).at("report").value("itemsSkipped", 0), 2,
+                     "and finds both items already there");
+
+  ServerHarness destination;
+  Session other(destination, checks);
+  const auto imported = other.client().post("/api/v1/import", exported.body);
+  checks.expectEqual(imported.status, 200, "the export imports into another server");
+  const auto report = parse(imported).at("report");
+  checks.expectEqual(report.value("itemsCreated", 0), 2, "both items are created there");
+  checks.expectEqual(report.value("linksCreated", 0), 1, "with their link");
+  const auto found = parse(other.client().post("/api/v1/items/query", Json{{"searchText", "Source"}}.dump()));
+  checks.expectEqual(found.value("totalCount", 0), 1, "the imported item can be found");
+
+  checks.expectEqual(other.client().post("/api/v1/import", exported.body, "text/plain").status, 415,
+                     "an import must be JSON");
+  const auto damaged = other.client().post("/api/v1/import", R"({"format":"lexicon-export","version":9})");
+  checks.expectEqual(damaged.status, 400, "a newer export version is refused");
+  checks.expect(parse(damaged).at("error").value("message", std::string{}).find("version 9") != std::string::npos,
+                "and the refusal names the version");
+}
+
 void checkConflicts(Checks &checks) {
   // Two clients edit the same item: the second save is based on a revision
   // that no longer exists and must be refused instead of silently winning.
@@ -846,5 +893,6 @@ int main() {
   checkBlobs(checks);
   checkQuickAdd(checks);
   checkConflicts(checks);
+  checkExportImport(checks);
   return checks.summarize("server_rest");
 }
