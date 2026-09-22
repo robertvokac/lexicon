@@ -63,9 +63,10 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 
 ## Screenshots
 
-The web and Android screenshots share one small sample dictionary: C++ terms,
-a few database and algorithm notes, and a `Term` type with `Standard`,
-`Difficulty` and `Reviewed` fields.
+All three clients here show one small sample dictionary: C++ and OpenGL ES
+terms, a few books, and a `Term` type with `Standard`, `Difficulty` and
+`Diagram` fields. The website has the same tour in a
+[gallery](https://github.com/robertvokac/lexicon/tree/develop/web).
 
 - [Desktop client](#desktop-client)
 - [Web client](#web-client)
@@ -87,9 +88,15 @@ Basic identity and state fields for an item: group, optional type, title, disamb
 
 #### Item editor — Values tab
 
+![Values tab](images/Screenshot_Values.png)
+
 Items with a type have a Values tab containing the fields defined by that type. Blob fields accept a file path (or Browse) and import the file when you click Import or save the item. The field stores its SHA-256 hash, and the file is kept in `blobs` next to the database.
 
 Image fields hold a picture: **Choose image...** stores a PNG, JPEG, GIF, WebP or BMP file (the kind is read from the file itself, not from its name), the editor shows a thumbnail and what the image is, **View...** (or a click on the thumbnail) opens it at full size, **Save as...** writes it back to a file, and **Clear** removes it. Internally an image is a Blob that also records its type, stored as `image/png:<SHA-256>`. The item preview shows an item's images under its content, the item table shows the kind of image with a small picture, and the web client and the Android app show and edit images the same way.
+
+![Image viewer](images/Screenshot_Image.png)
+
+The viewer shows the whole picture when it opens; the wheel and the buttons zoom.
 
 #### Item editor — Content tab
 
@@ -115,6 +122,44 @@ Create and maintain outgoing relationships to other items.
 
 Create and maintain incoming relationships (who references this item).
 
+#### Relationship graph
+
+![Relationship graph](images/Screenshot_Graph.png)
+
+The items around one item, up to three links away, as arrows labelled with the
+link type. The buttons and the wheel zoom, **Fit** shows the whole graph again,
+and **Full screen** gives it the window.
+
+#### Review
+
+![Review](images/Screenshot_Review.png)
+
+The items due now, one card at a time: the title first, then the answer, then a
+rating that moves the understanding level and sets the next review.
+
+#### Alarms
+
+![Alarms](images/Screenshot_Alarms.png)
+
+Every alarm in one list, the soonest first; the one still ringing is in bold.
+
+<img src="images/Screenshot_Alarm_Ringing.png" alt="Desktop: an alarm going off" width="420">
+
+An alarm rings until someone deals with it, and a dismissal on one device stops
+it on the others.
+
+#### Inbox
+
+<img src="images/Screenshot_Inbox.png" alt="Desktop: the Inbox" width="480">
+
+A title and a few plain lines, saved to `Default` without a type in one step.
+
+#### Dark mode
+
+![Dark mode](images/Screenshot_Dark.png)
+
+The whole application switches from the `View` menu.
+
 ### Web client
 
 `lexicon-web/` in a desktop browser: the filtered item table with the rendered
@@ -125,6 +170,13 @@ content, links and backlinks of the selected item.
 The six-tab item editor, with the Markdown source next to its live preview.
 
 ![Web client: item editor, Content tab](images/Screenshot_Web_Editor.png)
+
+The relationship graph and the review, with the same zoom, full screen and
+ratings as the desktop:
+
+![Web client: relationship graph](images/Screenshot_Web_Graph.png)
+
+![Web client: review](images/Screenshot_Web_Review.png)
 
 On a phone-sized screen the same page turns into a card list with a filter
 panel; this one uses the dark theme.
@@ -151,6 +203,15 @@ Filters and sorting, the navigation drawer, and the dark theme:
   <img src="images/Screenshot_Android_Navigation.png" alt="Android: navigation drawer" width="200">
   <img src="images/Screenshot_Android_Dark_Items.png" alt="Android: items list, dark theme" width="200">
   <img src="images/Screenshot_Android_Dark_Item.png" alt="Android: item with code block and table, dark theme" width="200">
+</p>
+
+The relationship graph, the review, an alarm going off and the Inbox:
+
+<p>
+  <img src="images/Screenshot_Android_Graph.png" alt="Android: relationship graph" width="200">
+  <img src="images/Screenshot_Android_Review.png" alt="Android: review card" width="200">
+  <img src="images/Screenshot_Android_Alarm.png" alt="Android: an alarm notification" width="200">
+  <img src="images/Screenshot_Android_Inbox.png" alt="Android: the Inbox" width="200">
 </p>
 
 On screens at least 840 dp wide, such as tablets, the list and the selected item
@@ -390,11 +451,11 @@ Use these controls to browse large lexicons without loading everything into one 
 
 ### 5) Create a new item
 
-You have two add options in the main toolbar:
+You have three add options in the main toolbar, in this order:
 
 - `Add`: quick add path; title is prefilled from current search text
-- `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group without a type, whatever the filters show
 - `Add ...`: full add dialog path
+- `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group without a type, whatever the filters show
 
 Both actions use the selected Type filter for the new item. With `All groups` selected, a group-scoped type also determines the new item's group.
 
@@ -485,7 +546,7 @@ When you select an item in the main table:
 
 This gives quick context while browsing without opening the edit dialog every time.
 
-`View -> Relationship graph...` (`Ctrl+G`) draws the items around the selected one: the selected item in the middle, the items it links to and the items linking to it around it, as arrows labelled with the link type. **Depth** reaches one, two or three links away; at most 150 items are drawn, and the dialog says when more are in reach. Click an item to centre the graph on it, double-click it to open it in the main window; the wheel zooms and dragging moves the view. The web client offers the same from its `View` menu and from the link preview, the Android app from the item page's menu.
+`View -> Relationship graph...` (`Ctrl+G`) draws the items around the selected one: the selected item in the middle, the items it links to and the items linking to it around it, as arrows labelled with the link type. **Depth** reaches one, two or three links away; at most 150 items are drawn, and the dialog says when more are in reach. Click an item to centre the graph on it, double-click it to open it in the main window. **+**, **−** and **Fit** zoom in, out and back to the whole graph, the wheel zooms too, dragging moves the view, and **Full screen** gives the graph the whole window until `Esc`. The web client offers the same from its `View` menu and from the link preview; the Android app from the item page's menu, where a pinch zooms as well.
 
 ### 10) Global overviews and themes
 
