@@ -21,6 +21,9 @@ struct BackupOptions {
   std::string directory;
   // Complete backups kept; older ones are removed after a new one succeeds.
   int keep = 14;
+  // For tests: runs right after the database copy, to change the live data
+  // while the rest of the backup is made.
+  std::function<void()> afterDatabaseCopy;
 };
 
 struct BackupReport {
@@ -43,8 +46,12 @@ struct BackupEntry {
 std::string backupName(Clock::time_point time);
 // The complete backups in [directory], the newest first.
 std::vector<BackupEntry> listBackups(const std::string &directory);
-// Makes one backup now. It is built under a temporary name and renamed when
-// complete, so an interrupted backup never looks like one.
+// Makes one backup now: a copy of the database, then the export and the list
+// of files taken from that copy - never from the live database, which may
+// have changed meanwhile - and every file that copy refers to, each checked
+// against its SHA-256. A missing or damaged file fails the backup. It is
+// built under a temporary name and renamed when complete, so an interrupted
+// or failed backup never looks like one.
 Result<BackupReport> createBackup(const BackupOptions &options, Clock::time_point now = Clock::now());
 // "Backup ... written: 3 files copied, 12 shared, 4.2 MB; removed 1 old backup."
 std::string describe(const BackupReport &report);

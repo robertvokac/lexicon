@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <set>
 #include <sstream>
 #include <thread>
 
@@ -49,34 +51,75 @@ std::string storeFile(lexicon::LexiconApplication &application, const fs::path &
   return application.blobs.importFile(lexicon::pathToUtf8(source)).value_or("");
 }
 
-void checkBackups() {
+struct Dictionary {
   TemporaryDirectory temp;
-  const auto database = temp.path / "data" / "lexicon.db";
-  fs::create_directories(database.parent_path());
-  const auto backupDirectory = temp.path / "backups";
+  fs::path database = temp.path / "data" / "lexicon.db";
   SqliteRepository repository;
-  check(repository.open(lexicon::pathToUtf8(database)).has_value(), "open the database");
-  lexicon::LexiconApplication application(repository);
-  lexicon::ItemRecord item;
-  item.groupId = application.groups.defaultGroupId().value_or(-1);
-  item.title = "Monoid";
-  item.content = "An associative operation with an identity.";
-  check(application.items.createItem(item).has_value(), "create an item");
-  const auto first = storeFile(application, temp.path, "the first file");
-  check(first.size() == 64, "store a file");
+  std::unique_ptr<lexicon::LexiconApplication> application;
+  int group = -1;
+  int fileField = -1;
+  int typeId = -1;
+  Dictionary() {
+    fs::create_directories(database.parent_path());
+    check(repository.open(lexicon::pathToUtf8(database)).has_value(), "open the database");
+    application = std::make_unique<lexicon::LexiconApplication>(repository);
+    group = application->groups.defaultGroupId().value_or(-1);
+    lexicon::ItemTypeRecord type;
+    type.name = "Document";
+    type.groupId = group;
+    application->types.upsertItemType(type);
+    for (const auto &known : application->types.loadItemTypes(group).value_or(std::vector<lexicon::ItemTypeRecord>{}))
+      if (known.name == "Document") typeId = known.id;
+    lexicon::ItemFieldRecord field;
+    field.itemTypeId = typeId;
+    field.name = "File";
+    field.dataType = lexicon::FieldDataType::Blob;
+    application->types.upsertItemField(field);
+    fileField = application->types.loadItemFields(typeId).value_or(std::vector<lexicon::ItemFieldRecord>{}).at(0).id;
+  }
+  // An item whose File field holds [bytes]; returns the file's SHA-256.
+  std::string itemWithFile(const std::string &title, const std::string &bytes) {
+    const auto hash = storeFile(*application, temp.path, bytes);
+    lexicon::ItemRecord item;
+    item.groupId = group;
+    item.itemTypeId = typeId;
+    item.title = title;
+    item.content = title + " notes.";
+    item.fieldValues[fileField] = hash;
+    check(application->items.createItem(item).has_value(), "create " + title);
+    return hash;
+  }
+  fs::path blobFile(const std::string &hash) const {
+    return lexicon::utf8Path(SqliteRepository::blobDirectory(lexicon::pathToUtf8(database))) / hash.substr(0, 2) /
+           hash.substr(2);
+  }
+};
 
-  lexicon::backup::BackupOptions options{lexicon::pathToUtf8(database), lexicon::pathToUtf8(backupDirectory), 2};
+void checkBackups() {
+  Dictionary data;
+  auto &application = *data.application;
+  const auto first = data.itemWithFile("Monoid", "the first file");
+  const auto orphan = storeFile(application, data.temp.path, "a file no value refers to");
+  check(first.size() == 64 && orphan.size() == 64, "store the files");
+  const auto backupDirectory = data.temp.path / "backups";
+
+  lexicon::backup::BackupOptions options{lexicon::pathToUtf8(data.database), lexicon::pathToUtf8(backupDirectory), 2, {}};
   auto made = lexicon::backup::createBackup(options, at("2026-09-20T08:00:00Z"));
   check(made.has_value(), "a backup is made");
   if (!made) { std::cerr << made.error().message << '\n'; return; }
   const fs::path one = lexicon::utf8Path(made->path);
   check(one.filename() == "lexicon-backup-2026-09-20T08-00-00Z", "named by its time");
-  check(made->blobsCopied == 1 && made->blobsLinked == 0, "the file is copied");
+  check(made->blobsCopied == 1 && made->blobsLinked == 0, "the referenced file is copied");
   check(readFile(one / "blobs" / first.substr(0, 2) / first.substr(2)) == "the first file", "byte for byte");
+  check(!fs::exists(one / "blobs" / orphan.substr(0, 2) / orphan.substr(2)), "a file nothing refers to is left out");
   const auto manifest = nlohmann::json::parse(readFile(one / "backup.json"));
   check(manifest.value("format", "") == "lexicon-backup" && manifest.value("blobs", 0) == 1, "with a manifest");
   const auto document = nlohmann::json::parse(readFile(one / "lexicon-export.json"));
   check(document.value("format", "") == "lexicon-export" && document.at("items").size() == 1, "and a portable export");
+  std::set<std::string> files;
+  for (const auto &entry : fs::directory_iterator(one)) files.insert(entry.path().filename().string());
+  check(files == std::set<std::string>{"backup.json", "blobs", "lexicon-export.json", "lexicon.db"},
+        "and nothing else, no journal left beside the copy");
   {
     SqliteRepository copy;
     check(copy.open(lexicon::pathToUtf8(one / "lexicon.db")).has_value(), "the database copy opens");
@@ -85,9 +128,7 @@ void checkBackups() {
   }
 
   // The next backup shares the unchanged file instead of copying it again.
-  const auto second = storeFile(application, temp.path, "a second, longer file");
-  item.title = "Semigroup";
-  application.items.createItem(item);
+  const auto second = data.itemWithFile("Semigroup", "a second, longer file");
   made = lexicon::backup::createBackup(options, at("2026-09-21T08:00:00Z"));
   check(made && made->blobsCopied == 1 && made->blobsLinked == 1, "an unchanged file is shared");
   if (!made) return;
@@ -118,9 +159,74 @@ void checkBackups() {
         "the list holds complete backups, the newest first");
   check(fs::exists(two / "blobs" / first.substr(0, 2) / first.substr(2)),
         "removing an old backup leaves the shared file in the newer one");
-  check(!repository.snapshotTo(lexicon::pathToUtf8(two / "lexicon.db")).has_value(),
+  check(!data.repository.snapshotTo(lexicon::pathToUtf8(two / "lexicon.db")).has_value(),
         "a snapshot never overwrites a file");
   std::cout << lexicon::backup::describe(*made) << '\n';
+}
+
+// While a backup runs, the live dictionary goes on changing: in this server,
+// in the desktop client on the same file, or in the desktop's Blob cleanup.
+void checkChangesDuringABackup() {
+  Dictionary data;
+  auto &application = *data.application;
+  const auto kept = data.itemWithFile("Monoid", "the monoid file");
+  const auto backups = lexicon::pathToUtf8(data.temp.path / "backups");
+
+  // An item changed and another deleted right after the database copy: the
+  // export and the files still describe the moment of the copy.
+  const auto semigroup = data.itemWithFile("Semigroup", "the semigroup file");
+  lexicon::backup::BackupOptions options{lexicon::pathToUtf8(data.database), backups, 5, [&] {
+    SqliteRepository other;
+    other.open(lexicon::pathToUtf8(data.database));
+    lexicon::LexiconApplication elsewhere(other);
+    auto monoid = elsewhere.items.loadItem(elsewhere.search.findItemId("Monoid", "").value_or(-1));
+    if (monoid) {
+      monoid->content = "Changed after the copy.";
+      elsewhere.items.saveItem(*monoid);
+    }
+    elsewhere.items.deleteItem(elsewhere.search.findItemId("Semigroup", "").value_or(-1));
+  }};
+  auto made = lexicon::backup::createBackup(options, at("2026-09-20T08:00:00Z"));
+  check(made.has_value(), "a backup made while the data changes succeeds");
+  if (!made) { std::cerr << made.error().message << '\n'; return; }
+  const fs::path backup = lexicon::utf8Path(made->path);
+  const auto document = nlohmann::json::parse(readFile(backup / "lexicon-export.json"));
+  std::set<std::string> titles;
+  std::string monoidContent;
+  for (const auto &item : document.at("items")) {
+    titles.insert(item.value("title", ""));
+    if (item.value("title", "") == "Monoid") monoidContent = item.value("content", "");
+  }
+  check(titles == std::set<std::string>{"Monoid", "Semigroup"}, "the export is the database copy, not the live data");
+  check(monoidContent == "Monoid notes.", "with the content as it was at the copy");
+  check(fs::exists(backup / "blobs" / semigroup.substr(0, 2) / semigroup.substr(2)),
+        "a file the copy refers to is backed up though the live item is gone");
+  check(fs::exists(backup / "blobs" / kept.substr(0, 2) / kept.substr(2)), "and so is the other");
+
+  // A file the copy refers to vanishes before it is copied (the desktop's
+  // Blob cleanup, say): no backup is better than an incomplete one.
+  const auto doomed = data.itemWithFile("Group", "the group file");
+  options.afterDatabaseCopy = [&] { fs::remove(data.blobFile(doomed)); };
+  auto failed = lexicon::backup::createBackup(options, at("2026-09-21T08:00:00Z"));
+  check(!failed.has_value() && failed.error().message.find(doomed) != std::string::npos,
+        "a missing file fails the backup and is named");
+  check(lexicon::backup::listBackups(backups).size() == 1, "and leaves no backup that looks complete");
+  std::size_t partials = 0;
+  for (const auto &entry : fs::directory_iterator(lexicon::utf8Path(backups)))
+    if (entry.path().filename().string().starts_with(".partial-")) ++partials;
+  check(partials == 0, "nor its half-made directory");
+
+  // A damaged file fails it too. (The item of the vanished file goes first.)
+  application.items.deleteItem(application.search.findItemId("Group", "").value_or(-1));
+  const auto damaged = data.itemWithFile("Ring", "the ring file");
+  options.afterDatabaseCopy = [&] {
+    // Blob files are stored read-only; this one rots anyway.
+    fs::permissions(data.blobFile(damaged), fs::perms::owner_write, fs::perm_options::add);
+    std::ofstream(data.blobFile(damaged), std::ios::binary | std::ios::trunc) << "garbage";
+  };
+  failed = lexicon::backup::createBackup(options, at("2026-09-22T08:00:00Z"));
+  check(!failed.has_value() && failed.error().message.find(damaged) != std::string::npos,
+        "a file whose bytes no longer match its SHA-256 fails the backup");
 }
 
 void checkScheduler() {
@@ -131,7 +237,7 @@ void checkScheduler() {
   std::vector<std::string> log;
   std::mutex logMutex;
   {
-    lexicon::backup::BackupScheduler scheduler({lexicon::pathToUtf8(database), directory, 5}, 300ms,
+    lexicon::backup::BackupScheduler scheduler({lexicon::pathToUtf8(database), directory, 5, {}}, 300ms,
                                                [&](const std::string &line) {
                                                  std::lock_guard lock(logMutex);
                                                  log.push_back(line);
@@ -151,7 +257,7 @@ void checkScheduler() {
   // A recent backup: the next one waits for the interval.
   const auto before = lexicon::backup::listBackups(directory).size();
   {
-    lexicon::backup::BackupScheduler scheduler({lexicon::pathToUtf8(database), directory, 5}, 1h, [](const std::string &) {});
+    lexicon::backup::BackupScheduler scheduler({lexicon::pathToUtf8(database), directory, 5, {}}, 1h, [](const std::string &) {});
     scheduler.start();
     std::this_thread::sleep_for(400ms);
   }
@@ -180,6 +286,7 @@ void checkCommandLine() {
 
 int main() {
   checkBackups();
+  checkChangesDuringABackup();
   checkScheduler();
   checkCommandLine();
   if (failures == 0) std::cout << "backup: all checks passed\n";

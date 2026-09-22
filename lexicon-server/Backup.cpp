@@ -25,12 +25,6 @@ constexpr auto kStalePartial = std::chrono::hours(24);
 
 Error failure(std::string message) { return Error{Error::Code::Storage, std::move(message)}; }
 
-bool canonicalBlobName(const std::string &prefix, const std::string &rest) {
-  const auto hex = [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); };
-  return prefix.size() == 2 && rest.size() == 62 && std::all_of(prefix.begin(), prefix.end(), hex) &&
-         std::all_of(rest.begin(), rest.end(), hex);
-}
-
 std::optional<Clock::time_point> parseName(const std::string &name) {
   static const std::regex pattern(R"(^lexicon-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})Z$)");
   std::smatch match;
@@ -50,39 +44,29 @@ std::string randomSuffix() {
   return std::format("{:08x}", device());
 }
 
-// Copies the Blob store, sharing unchanged files with [previous] through hard
-// links where the file system allows it.
-void copyBlobs(const fs::path &source, const fs::path &target, const fs::path &previous, BackupReport &report) {
-  std::error_code error;
-  if (fs::symlink_status(source, error).type() != fs::file_type::directory)
-    return; // No Blob has been stored yet.
-  for (const auto &prefixEntry : fs::directory_iterator(source)) {
-    if (prefixEntry.symlink_status().type() != fs::file_type::directory)
-      continue;
-    const auto prefix = pathToUtf8(prefixEntry.path().filename());
-    for (const auto &entry : fs::directory_iterator(prefixEntry.path())) {
-      const auto name = pathToUtf8(entry.path().filename());
-      // Only canonical, regular Blob files: nothing a link could point elsewhere.
-      if (!canonicalBlobName(prefix, name) || entry.symlink_status().type() != fs::file_type::regular)
-        continue;
-      const auto size = entry.file_size();
-      fs::create_directories(target / prefix);
-      const auto destination = target / prefix / name;
-      const auto earlier = previous.empty() ? fs::path() : previous / prefix / name;
-      bool linked = false;
-      if (!earlier.empty() && fs::symlink_status(earlier, error).type() == fs::file_type::regular &&
-          fs::file_size(earlier, error) == size) {
-        fs::create_hard_link(earlier, destination, error);
-        linked = !error;
-      }
-      if (linked) {
+// Copies the files [hashes] name from the live Blob store, each checked
+// against its SHA-256 on the way. One unchanged since [previous] is shared
+// with it through a hard link where the file system allows it.
+void copyBlobs(SqliteRepository &live, const std::vector<std::string> &hashes, const fs::path &target,
+               const fs::path &previous, BackupReport &report) {
+  for (const auto &hash : hashes) {
+    const auto prefix = hash.substr(0, 2);
+    const auto name = hash.substr(2);
+    fs::create_directories(target / prefix);
+    const auto destination = target / prefix / name;
+    std::error_code error;
+    const auto earlier = previous.empty() ? fs::path() : previous / prefix / name;
+    if (!earlier.empty() && fs::symlink_status(earlier, error).type() == fs::file_type::regular) {
+      fs::create_hard_link(earlier, destination, error);
+      if (!error) {
         ++report.blobsLinked;
-      } else {
-        fs::copy_file(entry.path(), destination, fs::copy_options::none);
-        ++report.blobsCopied;
-        report.bytes += size;
+        continue;
       }
     }
+    if (auto copied = live.exportBlob(hash, pathToUtf8(destination)); !copied)
+      throw std::runtime_error("File " + hash + " cannot be backed up: " + copied.error().message);
+    ++report.blobsCopied;
+    report.bytes += fs::file_size(destination);
   }
 }
 
@@ -142,28 +126,42 @@ Result<BackupReport> createBackup(const BackupOptions &options, Clock::time_poin
     const auto earlier = listBackups(options.directory);
     fs::create_directory(partial);
 
-    // The database first: a Blob stored after this copy is merely extra.
-    SqliteRepository repository;
-    if (auto opened = repository.open(options.databasePath); !opened)
+    // The moment the backup stands for: one consistent copy of the database.
+    SqliteRepository live;
+    if (auto opened = live.open(options.databasePath); !opened)
       throw std::runtime_error("Cannot open the database: " + opened.error().message);
-    if (auto copied = repository.snapshotTo(pathToUtf8(partial / "lexicon.db")); !copied)
+    if (auto copied = live.snapshotTo(pathToUtf8(partial / "lexicon.db")); !copied)
       throw std::runtime_error("Cannot copy the database: " + copied.error().message);
-    LexiconApplication application(repository);
-    // Readable by any Lexicon, whatever the schema; the files are beside it.
-    auto document = exchange::exportDocument(application, false);
-    if (!document)
-      throw std::runtime_error("Cannot export: " + document.error().message);
+    if (options.afterDatabaseCopy)
+      options.afterDatabaseCopy();
+
+    // Everything else comes from that copy, whatever happens to the live
+    // database meanwhile.
+    std::vector<std::string> required;
     {
+      SqliteRepository copy;
+      if (auto opened = copy.open(pathToUtf8(partial / "lexicon.db")); !opened)
+        throw std::runtime_error("Cannot open the database copy: " + opened.error().message);
+      LexiconApplication application(copy);
+      // Readable by any Lexicon, whatever the schema; the files are beside it.
+      auto document = exchange::exportDocument(application, false);
+      if (!document)
+        throw std::runtime_error("Cannot export: " + document.error().message);
       std::ofstream output(partial / "lexicon-export.json", std::ios::binary | std::ios::trunc);
       output << *document;
       if (!output.flush())
         throw std::runtime_error("Cannot write the export.");
+      auto hashes = copy.referencedBlobHashes();
+      if (!hashes)
+        throw std::runtime_error("Cannot list the files: " + hashes.error().message);
+      required = std::move(*hashes);
     }
     report.bytes += fs::file_size(partial / "lexicon.db") + fs::file_size(partial / "lexicon-export.json");
 
+    // The files the copy refers to - no more (unreferenced files are not part
+    // of the dictionary) and no fewer (a missing one fails the backup).
     const fs::path previousBlobs = earlier.empty() ? fs::path() : utf8Path(earlier.front().path) / "blobs";
-    copyBlobs(utf8Path(SqliteRepository::blobDirectory(options.databasePath)), partial / "blobs", previousBlobs,
-              report);
+    copyBlobs(live, required, partial / "blobs", previousBlobs, report);
 
     const nlohmann::json manifest{
         {"format", "lexicon-backup"},

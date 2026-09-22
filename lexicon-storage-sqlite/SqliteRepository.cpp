@@ -1557,3 +1557,9 @@ SqliteRepository::Result<void> SqliteRepository::snapshotTo(const std::string &t
 std::string SqliteRepository::blobDirectory(const std::string &databasePath) {
   return lexicon::pathToUtf8(blobRoot(databasePath));
 }
+SqliteRepository::Result<std::vector<std::string>> SqliteRepository::referencedBlobHashes() {
+  return guarded([&] {
+    const auto live = liveBlobs(impl_->db);
+    return std::vector<std::string>(live.hashes.begin(), live.hashes.end());
+  });
+}

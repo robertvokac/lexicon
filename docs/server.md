@@ -308,15 +308,24 @@ later. Each backup is a directory of its own, complete by itself:
 /backup/lexicon/
   lexicon-backup-2026-09-22T08-00-00Z/
     lexicon.db             consistent copy of the database (SQLite VACUUM INTO)
-    lexicon-export.json    the same dictionary in the export format, readable by any Lexicon
-    blobs/ab/cdef...       the Blob files
+    lexicon-export.json    that copy in the export format, readable by any Lexicon
+    blobs/ab/cdef...       the files that copy refers to
     backup.json            what the backup holds; written last
   lexicon-backup-2026-09-21T08-00-00Z/
   ...
 ```
 
 - The copy is taken on a connection of its own while the server keeps
-  answering; SQLite's locks make it one consistent moment.
+  answering; SQLite's locks make it one consistent moment. Everything else is
+  taken from that copy, never from the live database: the export, and the
+  list of files it refers to. An item changed or deleted while the backup
+  runs - by this server, or by the desktop client on the same file - does
+  not make the three parts disagree.
+- Every file the copy refers to is copied and checked against its SHA-256.
+  One that is missing (removed meanwhile by the desktop's Blob cleanup, say)
+  or whose bytes no longer match fails the backup, which is then retried; a
+  backup is never marked complete without its files. Files that no value
+  refers to are not part of the dictionary and are left out.
 - Blob files never change, so a file already in the previous backup is shared
   with it through a hard link: it takes no space again, and removing the older
   backup leaves it in the newer one. Where hard links are impossible (another

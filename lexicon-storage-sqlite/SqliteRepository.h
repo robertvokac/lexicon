@@ -29,6 +29,8 @@ public:
   Result<void> snapshotTo(const std::string &targetPath);
   // Where the Blob files of the database at [databasePath] live.
   static std::string blobDirectory(const std::string &databasePath);
+  // The SHA-256 of every stored file that a Blob or Image value refers to.
+  Result<std::vector<std::string>> referencedBlobHashes();
 
   Result<std::map<std::string, std::string>> loadConfiguration() override;
   Result<void>
