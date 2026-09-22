@@ -90,7 +90,7 @@ class AlarmRingerTest {
         val tea = shown(1)!!
         assertEquals("Tea", tea.extras.getString(Notification.EXTRA_TITLE))
         assertEquals("Green, two minutes.", tea.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
-        assertEquals(listOf("Dismiss", "Snooze 10 min"), tea.actions.map { it.title.toString() })
+        assertEquals(listOf("Dismiss", "Snooze 10 min", "Snooze 1 hour"), tea.actions.map { it.title.toString() })
         assertNull("a dismissed alarm stays quiet", shown(3))
         assertTrue(alarmManager.scheduledAlarms.any { intentOf(it)?.action == AlarmRinger.ACTION_SYNC })
     }
@@ -135,6 +135,22 @@ class AlarmRingerTest {
         assertTrue(at.isAfter(Instant.now().plusSeconds(9 * 60)))
         val local = fireAlarms().first { intentOf(it)!!.getIntExtra(AlarmRinger.EXTRA_ID, -1) == 1 }
         assertEquals(at.toEpochMilli(), local.triggerAtMs)
+    }
+
+    @Test
+    fun theHourLongSnoozeFromTheNotificationMovesTheAlarmAnHour() = runBlocking {
+        ringer.sync()
+        broadcast(
+            Intent(application, AlarmReceiver::class.java)
+                .setAction(AlarmRinger.ACTION_SNOOZE_LONG)
+                .putExtra(AlarmRinger.EXTRA_ID, 1),
+        ) { fake.requestsTo("POST", "/api/v1/alarms/1/snooze").isNotEmpty() }
+        assertNull(shown(1))
+        val at = Instant.parse(fake.alarms.first { it.id == 1 }.firesAt)
+        assertTrue("an hour away, not ten minutes", at.isAfter(Instant.now().plusSeconds(59 * 60)))
+        assertTrue(at.isBefore(Instant.now().plusSeconds(61 * 60)))
+        // The two snoozes are separate intents, or the second would replace the first.
+        assertTrue(AlarmRinger.ACTION_SNOOZE != AlarmRinger.ACTION_SNOOZE_LONG)
     }
 
     @Test

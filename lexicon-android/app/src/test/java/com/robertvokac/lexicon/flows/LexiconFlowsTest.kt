@@ -594,6 +594,18 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun aRingingAlarmCanBeSnoozedForAnHour() {
+        fake.alarms += Alarm(9, "Stretch", "", "2020-01-01T10:00:00Z")
+        login()
+        openDrawer("Alarms")
+        compose.waitForText("ringing", substring = true)
+        compose.onNode(hasText("Snooze 1 hour") and hasClickAction()).performClick()
+        compose.waitForCondition { fake.requestsTo("POST", "/api/v1/alarms/9/snooze").isNotEmpty() }
+        assertEquals(60, lastBody("POST", "/api/v1/alarms/9/snooze")["minutes"]!!.jsonPrimitive.int)
+        compose.waitUntilGone(hasText("ringing", substring = true))
+    }
+
+    @Test
     fun alarmsAreListedAddedChangedAndDeleted() {
         fake.alarms += Alarm(7, "Old call", "", "2001-05-06T07:08:00Z", dismissedAt = "2001-05-06T07:09:00Z")
         fake.alarms += Alarm(8, "Tea", "", "2020-01-01T10:00:00Z")

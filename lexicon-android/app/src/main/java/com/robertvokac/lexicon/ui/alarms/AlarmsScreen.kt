@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -235,6 +237,7 @@ fun AlarmsScreen(viewModel: AlarmsViewModel, onBack: () -> Unit) {
                         onDelete = { deleting = alarm },
                         onDismiss = { viewModel.dismiss(alarm) },
                         onSnooze = { viewModel.snooze(alarm) },
+                        onSnoozeLong = { viewModel.snooze(alarm, AlarmRinger.SNOOZE_LONG_MINUTES) },
                     )
                     HorizontalDivider()
                 }
@@ -337,6 +340,7 @@ private fun PermissionNote(text: String, action: String, onAction: () -> Unit) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun AlarmRow(
     alarm: Alarm,
     busy: Boolean,
@@ -344,6 +348,7 @@ private fun AlarmRow(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
     onSnooze: () -> Unit,
+    onSnoozeLong: () -> Unit,
 ) {
     val gone = AlarmTimes.hasGoneOff(alarm.firesAt)
     val ringing = gone && alarm.dismissedAt == null
@@ -384,9 +389,10 @@ private fun AlarmRow(
                 )
             }
             if (ringing) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = onDismiss, enabled = !busy) { Text("Dismiss") }
                     OutlinedButton(onClick = onSnooze, enabled = !busy) { Text("Snooze ${AlarmRinger.SNOOZE_MINUTES} min") }
+                    OutlinedButton(onClick = onSnoozeLong, enabled = !busy) { Text(AlarmRinger.SNOOZE_LONG_LABEL) }
                 }
             }
         }

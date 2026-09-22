@@ -7,7 +7,7 @@ import com.robertvokac.lexicon.LexiconApplication
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** The app's own alarm broadcasts: an alarm going off, Dismiss, Snooze and the periodic sync. Not exported. */
+/** The app's own alarm broadcasts: an alarm going off, Dismiss, the two snoozes and the periodic sync. Not exported. */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val application = context.applicationContext as? LexiconApplication ?: return
@@ -21,6 +21,9 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             AlarmRinger.ACTION_DISMISS -> AlarmRinger.idFrom(intent)?.let { id -> later(application) { ringer.dismiss(id) } }
             AlarmRinger.ACTION_SNOOZE -> AlarmRinger.idFrom(intent)?.let { id -> later(application) { ringer.snooze(id) } }
+            AlarmRinger.ACTION_SNOOZE_LONG -> AlarmRinger.idFrom(intent)?.let { id ->
+                later(application) { ringer.snooze(id, AlarmRinger.SNOOZE_LONG_MINUTES) }
+            }
             AlarmRinger.ACTION_SYNC -> later(application) {
                 ringer.sync()
                 // Ideas caught offline go out too, even with the app closed.

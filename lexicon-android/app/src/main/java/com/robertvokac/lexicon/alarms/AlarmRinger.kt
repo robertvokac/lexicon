@@ -231,7 +231,7 @@ class AlarmRinger(private val context: Context, private val container: AppContai
             .filter { it.tag == TAG }
             .mapTo(mutableSetOf()) { it.id }
 
-    /** The alarm as a notification: Dismiss, Snooze 10 min, and a swipe dismisses it too. */
+    /** The alarm as a notification: Dismiss, both snoozes, and a swipe dismisses it too. */
     fun show(alarm: Alarm) {
         val id = alarm.id ?: return
         if (!notificationsAllowed()) return
@@ -263,6 +263,7 @@ class AlarmRinger(private val context: Context, private val container: AppContai
             .setDeleteIntent(actionIntent(ACTION_DISMISS, id))
             .addAction(0, "Dismiss", actionIntent(ACTION_DISMISS, id))
             .addAction(0, "Snooze $SNOOZE_MINUTES min", actionIntent(ACTION_SNOOZE, id))
+            .addAction(0, SNOOZE_LONG_LABEL, actionIntent(ACTION_SNOOZE_LONG, id))
             .build()
         try {
             notifications.notify(TAG, id, notification)
@@ -275,6 +276,10 @@ class AlarmRinger(private val context: Context, private val container: AppContai
         const val ACTION_FIRE = "com.robertvokac.lexicon.alarm.FIRE"
         const val ACTION_DISMISS = "com.robertvokac.lexicon.alarm.DISMISS"
         const val ACTION_SNOOZE = "com.robertvokac.lexicon.alarm.SNOOZE"
+        // Its own action, not an extra: two PendingIntents that differ only in
+        // their extras are the same intent to Android, and the second would
+        // overwrite the first.
+        const val ACTION_SNOOZE_LONG = "com.robertvokac.lexicon.alarm.SNOOZE_LONG"
         const val ACTION_SYNC = "com.robertvokac.lexicon.alarm.SYNC"
         const val EXTRA_ID = "id"
         const val EXTRA_TITLE = "title"
@@ -283,6 +288,8 @@ class AlarmRinger(private val context: Context, private val container: AppContai
         const val TAG = "lexicon-alarm"
         const val CHANNEL = "alarms"
         const val SNOOZE_MINUTES = 10
+        const val SNOOZE_LONG_MINUTES = 60
+        const val SNOOZE_LONG_LABEL = "Snooze 1 hour"
         private const val PREFERENCES = "alarms"
         private const val KEY_ALARMS = "alarms"
         private const val KEY_DISMISSED = "dismissed"
