@@ -33,6 +33,7 @@ import com.robertvokac.lexicon.model.LoginResponse
 import com.robertvokac.lexicon.model.Me
 import com.robertvokac.lexicon.model.SaveItemRequest
 import com.robertvokac.lexicon.model.SavedItem
+import com.robertvokac.lexicon.model.SnoozeRequest
 import com.robertvokac.lexicon.model.StringsEnvelope
 import com.robertvokac.lexicon.model.TypeEnvelope
 import com.robertvokac.lexicon.model.TypeWrite
@@ -40,6 +41,7 @@ import com.robertvokac.lexicon.model.TypesEnvelope
 import com.robertvokac.lexicon.model.UploadedBlob
 import com.robertvokac.lexicon.model.UsageEnvelope
 import com.robertvokac.lexicon.model.UsageValue
+import kotlinx.serialization.json.JsonObject
 import java.io.InputStream
 import java.io.OutputStream
 
@@ -199,6 +201,14 @@ class LexiconApi(private val client: ApiClient) {
         client.put("alarms/$id", alarm, AlarmWrite.serializer(), AlarmEnvelope.serializer()).alarm
 
     suspend fun deleteAlarm(id: Int) = client.send("DELETE", "alarms/$id")
+
+    /** Stops the alarm ringing, in every client. */
+    suspend fun dismissAlarm(id: Int): Alarm =
+        client.post("alarms/$id/dismiss", JsonObject(emptyMap()), JsonObject.serializer(), AlarmEnvelope.serializer()).alarm
+
+    /** Moves the alarm to [minutes] from now, by the server's clock. */
+    suspend fun snoozeAlarm(id: Int, minutes: Int): Alarm =
+        client.post("alarms/$id/snooze", SnoozeRequest(minutes), SnoozeRequest.serializer(), AlarmEnvelope.serializer()).alarm
 
     // Review ------------------------------------------------------------------
 

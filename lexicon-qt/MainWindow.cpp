@@ -11,6 +11,7 @@
 #include "GraphDialog.h"
 #include "InboxDialog.h"
 #include "AlarmsDialog.h"
+#include "AlarmNotifier.h"
 #include "ImageValueView.h"
 
 #include "Exchange.h"
@@ -74,6 +75,7 @@ MainWindow::MainWindow(QWidget* parent)
     loadColumnVisibility();
     refreshAll();
     updateActions();
+    m_alarmNotifier = new AlarmNotifier(this);
 }
 
 void MainWindow::setupUi() {
@@ -315,6 +317,8 @@ void MainWindow::setupMenus() {
     connect(alarmsAction, &QAction::triggered, this, [this] {
         AlarmsDialog dialog(this);
         dialog.exec();
+        // A new or moved alarm may already be due.
+        m_alarmNotifier->check();
     });
 
     auto* toolsMenu = menuBar()->addMenu("Tools");

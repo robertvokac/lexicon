@@ -744,6 +744,22 @@ img.broken { font-size: 0.85em; color: var(--text-muted); padding: 6px; }
 .alarm-table .alarm-description { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .alarms { display: flex; flex-direction: column; gap: 6px; }
 .alarm-summary { margin: 0; }
+.alarm-table tbody tr.ringing td { font-weight: 600; }
+.alarm-notifications { margin: 4px 0 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* The bell: alarms that have gone off, over the page until dealt with. */
+.alarm-bell {
+    position: fixed; z-index: 90; right: 12px; top: calc(52px + env(safe-area-inset-top, 0px));
+    width: min(380px, calc(100vw - 24px)); max-height: 70vh; overflow: auto;
+    display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+    background: var(--surface-raised); color: var(--text);
+    border: 2px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.alarm-bell-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.alarm-bell-list { display: flex; flex-direction: column; gap: 8px; }
+.alarm-card { display: flex; flex-direction: column; gap: 3px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.alarm-card-description { margin: 2px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.alarm-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 
 /* --- Responsive ------------------------------------------------------- */
 @media (max-width: 860px) {

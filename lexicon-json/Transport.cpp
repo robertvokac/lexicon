@@ -300,7 +300,8 @@ Json toJson(const AlarmRecord &alarm) {
   return Json{{"id", alarm.id > 0 ? Json(alarm.id) : Json(nullptr)},
               {"title", alarm.title},
               {"description", alarm.description},
-              {"firesAt", alarm.firesAt}};
+              {"firesAt", alarm.firesAt},
+              {"dismissedAt", alarm.dismissedAt.empty() ? Json(nullptr) : Json(alarm.dismissedAt)}};
 }
 
 AlarmRecord alarmFromJson(const Json &json) {
@@ -310,6 +311,9 @@ AlarmRecord alarmFromJson(const Json &json) {
   alarm.title = requiredString(json, "title");
   alarm.description = optionalString(json, "description");
   alarm.firesAt = requiredString(json, "firesAt");
+  // Read on creation only, so an imported alarm that was dismissed stays so.
+  if (json.contains("dismissedAt") && json.at("dismissedAt").is_string())
+    alarm.dismissedAt = json.at("dismissedAt").get<std::string>();
   return alarm;
 }
 

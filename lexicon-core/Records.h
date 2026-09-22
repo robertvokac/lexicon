@@ -128,6 +128,9 @@ struct AlarmRecord {
   std::string title;
   std::string description;
   std::string firesAt;
+  // When someone dismissed it after it went off, as UTC; empty while it has
+  // not gone off or is still ringing.
+  std::string dismissedAt;
 };
 struct UsageValueRecord {
   std::string value;

@@ -224,6 +224,20 @@ accept it; install a proper certificate instead.
   off in the phone's time zone; those already gone off are marked. **+** adds
   one, a tap edits it: a title, a date and a time (typed, or chosen with the
   date and time pickers) and a description. The server stores the time in UTC.
+  An alarm that has gone off shows **Dismiss** and **Snooze 10 min** until
+  someone deals with it, here or in another client.
+- **Alarm notifications.** Alarms ring even when the app is closed. The app
+  hands each alarm still to come to the system `AlarmManager` (at the minute
+  when exact alarms are allowed, otherwise within a few minutes while the phone
+  saves power) and shows a notification when it goes off, with **Dismiss** and
+  **Snooze 10 min**; a swipe dismisses it too. Tapping it opens the Alarms
+  screen. The dismissal goes to the server, so other clients stop ringing; one
+  made offline is sent at the next sync. The app looks at the server when it
+  starts, when the alarm list is opened and every half hour, schedules again
+  after a restart or an update, and takes everything off the phone on sign-out.
+  An expired session keeps the alarms it knows ringing. The Alarms screen asks
+  for the notification permission (Android 13+) and offers the exact-alarm
+  setting (Android 12+).
 - **Review.** The items due now, one card at a time: the title, **Show answer**
   for the content, then **Again**, **Hard**, **Good** or **Easy**, each saying
   when the item comes back. Items rated Again return in the same sitting.

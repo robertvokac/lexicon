@@ -13,15 +13,20 @@ sealed interface LaunchRequest {
 
     /** Text or a URL shared from another app. */
     data class Share(val prefill: SharePrefill) : LaunchRequest
+
+    /** An alarm notification: the list of alarms. */
+    data object Alarms : LaunchRequest
 }
 
 /**
- * Reads untrusted launch intents. Only the Quick Add shortcut and ACTION_SEND
- * with text/plain are understood; everything else is ignored. Shared text is
+ * Reads untrusted launch intents. Only the Quick Add shortcut, the alarm
+ * notifications and ACTION_SEND with text/plain are understood; everything
+ * else is ignored. Shared text is
  * cleaned of control characters and bounded in size.
  */
 object LaunchIntents {
     const val ACTION_QUICK_ADD = "com.robertvokac.lexicon.action.QUICK_ADD"
+    const val ACTION_ALARMS = "com.robertvokac.lexicon.action.ALARMS"
     const val MAX_CONTENT = 64_000
     const val MAX_TITLE = 200
 
@@ -29,6 +34,7 @@ object LaunchIntents {
         intent ?: return null
         return when (intent.action) {
             ACTION_QUICK_ADD -> LaunchRequest.QuickAdd
+            ACTION_ALARMS -> LaunchRequest.Alarms
             Intent.ACTION_SEND -> parseShare(
                 action = intent.action,
                 type = intent.type,

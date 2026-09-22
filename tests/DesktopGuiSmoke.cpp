@@ -1,5 +1,6 @@
 // The desktop dialogs added after the original client, driven offscreen
 // against a real database: each check clicks what a person would click.
+#include "AlarmNotifier.h"
 #include "AlarmsDialog.h"
 #include "ApplicationContext.h"
 #include "GraphDialog.h"
@@ -14,6 +15,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QFile>
+#include <QFrame>
 #include <QImage>
 #include <QPainter>
 #include <QDateTimeEdit>
@@ -321,6 +323,53 @@ void checkImages(lexicon::LexiconApplication &application, int group, const fs::
   check(!imagevalues::thumbnail(value, 24).isNull() && imagevalues::thumbnail(value, 24).width() == 24,
         "the table gets a small picture");
 }
+void checkAlarmNotifier(lexicon::LexiconApplication &application) {
+  // The earlier checks left an alarm in 2001 ringing.
+  if (auto due = application.alarms.loadDueAlarms())
+    for (const auto &alarm : *due) application.alarms.dismissAlarm(alarm.id);
+  QWidget window;
+  AlarmNotifier notifier(&window, 60 * 60 * 1000);
+  notifier.check();
+  check(!notifier.dialog() || !notifier.dialog()->isVisible(), "nothing rings while no alarm is due");
+
+  auto tea = application.alarms.saveAlarm({-1, "Tea", "Green, two minutes.", "2020-01-01T10:00:00Z", {}});
+  auto call = application.alarms.saveAlarm({-1, "Call back", "", "2020-01-01T11:00:00Z", {}});
+  auto later = application.alarms.saveAlarm({-1, "Next year", "", "2099-01-01T11:00:00Z", {}});
+  check(tea && call && later, "create alarms");
+  if (!tea || !call || !later) return;
+  notifier.check();
+  auto *ring = notifier.dialog();
+  check(ring && ring->isVisible() && ring->alarmCount() == 2, "the alarms that have gone off ring");
+  check(notifier.announcements() == 1, "announced together");
+  if (!ring) return;
+  check(ring->findChild<QFrame *>(QString("alarmCard_%1").arg(later->id)) == nullptr, "a future alarm does not");
+  shot(*ring, "alarm-ring");
+  notifier.check();
+  check(notifier.announcements() == 1, "an alarm already ringing is not announced again at once");
+
+  auto *snooze = ring->findChild<QPushButton *>(QString("alarmSnooze_%1").arg(tea->id));
+  check(snooze != nullptr, "each alarm can be snoozed");
+  if (snooze) snooze->click();
+  const auto snoozed = application.alarms.loadAlarm(tea->id);
+  check(snoozed && snoozed->firesAt > "2026" && snoozed->dismissedAt.empty(), "a snooze moves the alarm on");
+  check(ring->alarmCount() == 1, "and it stops ringing for now");
+
+  auto *dismiss = ring->findChild<QPushButton *>(QString("alarmDismiss_%1").arg(call->id));
+  check(dismiss != nullptr, "each alarm can be dismissed");
+  if (dismiss) dismiss->click();
+  const auto dismissed = application.alarms.loadAlarm(call->id);
+  check(dismissed && !dismissed->dismissedAt.empty(), "a dismissal is stored, for every client");
+  check(!ring->isVisible(), "the window goes when nothing rings");
+
+  // Dismissed elsewhere - in the web client, say - stops ringing here too.
+  application.alarms.saveAlarm({snoozed->id, "Tea", "", "2020-01-01T10:00:00Z", {}});
+  notifier.check();
+  check(ring->isVisible() && notifier.announcements() == 2, "a moved alarm rings again");
+  application.alarms.dismissAlarm(tea->id);
+  notifier.check();
+  check(!ring->isVisible(), "and stops when dismissed elsewhere");
+  for (const int id : {tea->id, call->id, later->id}) application.alarms.deleteAlarm(id);
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -341,6 +390,7 @@ int main(int argc, char **argv) {
   checkGraph(application, group);
   checkInbox(application);
   checkAlarms(application);
+  checkAlarmNotifier(application);
   checkImages(application, group, directory);
 
   if (failures == 0) std::cout << "desktop_gui_smoke: all checks passed\n";

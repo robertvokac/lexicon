@@ -228,6 +228,20 @@ public:
     return repository_.loadAlarm(*id);
   }
   Result<void> deleteAlarm(int id) { return repository_.deleteAlarm(id); }
+  // Gone off and not dismissed yet: what the clients ring.
+  Result<std::vector<AlarmRecord>> loadDueAlarms() { return repository_.loadDueAlarms(); }
+  Result<AlarmRecord> dismissAlarm(int id) {
+    if (auto dismissed = repository_.dismissAlarm(id); !dismissed)
+      return std::unexpected(dismissed.error());
+    return repository_.loadAlarm(id);
+  }
+  Result<AlarmRecord> snoozeAlarm(int id, int minutes) {
+    if (minutes < 1 || minutes > 24 * 60)
+      return std::unexpected(Error{Error::Code::Validation, "Snooze for 1 minute to 24 hours."});
+    if (auto snoozed = repository_.snoozeAlarm(id, minutes); !snoozed)
+      return std::unexpected(snoozed.error());
+    return repository_.loadAlarm(id);
+  }
 
 private:
   Repository &repository_;

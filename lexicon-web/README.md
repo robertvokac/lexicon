@@ -208,6 +208,7 @@ Everything below behaves the same way in both:
 | `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
 | Image values: thumbnail, **Choose image...**, **View...**, **Save as...**, **Clear**, pictures in the preview | the same, pictures fetched with the session and shown from `blob:` URLs (`js/images.js`, `js/imagevalue.js`) |
 | `Manage -> Alarms...`: the alarms in a table, add, edit, delete | the same table and form, the time in the browser's time zone (`js/alarms.js`, `js/alarmtime.js`) |
+| The **Alarm** window with Dismiss and Snooze, and a tray notification, while the client runs | a panel over the page and a browser notification while the page is open, asked for every 30 seconds and when the tab comes back (`js/alarmbell.js`) |
 | `PropertyFilterDialog` (key exact, value contains, empty value matches any) | the same semantics with Add/Edit/Remove/Clear/Apply |
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |
 | Light and dark themes | the same, stored per browser |

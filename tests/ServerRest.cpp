@@ -879,6 +879,39 @@ void checkAlarms(Checks &checks) {
   checks.expectEqual(client.get(path).status, 404, "and is gone");
   checks.expectEqual(client.remove(path).status, 404, "deleting it again is a not-found error");
 
+  // Ringing: an alarm whose time has come is due until someone dismisses or
+  // snoozes it, in whichever client.
+  const auto due = parse(client.get("/api/v1/alarms/due"));
+  checks.expect(due.at("alarms").empty(), "no alarm is due yet");
+  checks.expect(due.value("now", std::string{}).size() == 20, "the server says what time it is");
+  const int ringing = parse(client.post("/api/v1/alarms", R"({"title":"Tea","firesAt":"2020-01-01T10:00:00Z"})"))
+                          .at("alarm").value("id", 0);
+  const auto nowDue = parse(client.get("/api/v1/alarms/due")).at("alarms");
+  checks.expect(nowDue.size() == 1 && nowDue.at(0).value("id", 0) == ringing, "an alarm in the past is due at once");
+  checks.expect(nowDue.at(0).at("dismissedAt").is_null(), "and not dismissed");
+  const auto ringingPath = "/api/v1/alarms/" + std::to_string(ringing);
+  const auto snoozed = client.post(ringingPath + "/snooze", R"({"minutes":10})");
+  checks.expectEqual(snoozed.status, 200, "a ringing alarm can be snoozed");
+  checks.expect(parse(snoozed).at("alarm").value("firesAt", std::string{}) > due.value("now", std::string{}),
+                "to a time after now");
+  checks.expect(parse(client.get("/api/v1/alarms/due")).at("alarms").empty(), "and is no longer due");
+  checks.expectEqual(client.post(ringingPath + "/snooze", R"({"minutes":0})").status, 400, "snoozing needs minutes");
+  checks.expectEqual(client.post(ringingPath + "/snooze", R"({"minutes":"ten"})").status, 400, "as a number");
+  client.put(ringingPath, R"({"title":"Tea","firesAt":"2020-01-01T10:00:00Z"})");
+  checks.expectEqual(static_cast<long long>(parse(client.get("/api/v1/alarms/due")).at("alarms").size()), 1,
+                     "moving it back into the past makes it ring again");
+  const auto dismissed = client.post(ringingPath + "/dismiss", "{}");
+  checks.expectEqual(dismissed.status, 200, "a ringing alarm can be dismissed");
+  const auto dismissedAt = parse(dismissed).at("alarm").value("dismissedAt", std::string{});
+  checks.expect(dismissedAt.size() == 20, "and says when");
+  checks.expect(parse(client.get("/api/v1/alarms/due")).at("alarms").empty(), "a dismissed alarm is not due");
+  client.put(ringingPath, R"({"title":"Green tea","firesAt":"2020-01-01T10:00:00Z"})");
+  checks.expectEqual(parse(client.get(ringingPath)).at("alarm").value("dismissedAt", std::string{}), dismissedAt,
+                     "renaming it keeps it dismissed");
+  checks.expectEqual(client.post("/api/v1/alarms/999999/dismiss", "{}").status, 404,
+                     "dismissing a missing alarm is a not-found error");
+  client.remove(ringingPath);
+
   // Alarms travel with the export and are not doubled by importing it again.
   const auto exported = client.get("/api/v1/export");
   checks.expectEqual(static_cast<long long>(parse(exported).at("alarms").size()), 1, "the export carries alarms");

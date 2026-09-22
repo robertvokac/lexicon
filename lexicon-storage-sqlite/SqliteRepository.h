@@ -80,6 +80,9 @@ public:
   Result<lexicon::AlarmRecord> loadAlarm(int alarmId) override;
   Result<int> saveAlarm(const lexicon::AlarmRecord &alarm) override;
   Result<void> deleteAlarm(int alarmId) override;
+  Result<std::vector<lexicon::AlarmRecord>> loadDueAlarms() override;
+  Result<void> dismissAlarm(int alarmId) override;
+  Result<void> snoozeAlarm(int alarmId, int minutes) override;
   Result<std::string> importBlob(const std::string &sourcePath) override;
   Result<std::string> importBlobData(const std::string &data) override;
   Result<std::string> readBlobData(const std::string &hash) override;

@@ -62,6 +62,9 @@ class FakeLexiconServer : Dispatcher() {
     val imports = mutableListOf<ByteArray>()
     val reviews = mutableListOf<Pair<Int, ReviewRating>>()
     val alarms = mutableListOf<Alarm>()
+
+    /** Dismiss and snooze answer 503, like a server that is briefly away. */
+    @Volatile var alarmActionsFail = false
     private var nextId = 100
 
     /** Queries with this search text answer only after [slowQueryMillis]. */
@@ -202,8 +205,24 @@ class FakeLexiconServer : Dispatcher() {
                 val id = segments[1].toInt()
                 val index = alarms.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return notFound()
                 val alarm = alarmFrom(bodyObject(request), id) ?: return error(400, "validation", "An alarm needs a title and a UTC time.")
-                alarms[index] = alarm
-                json(buildJsonObject { put("alarm", encode(alarm)) })
+                // A new time rings again; a new title does not.
+                val previous = alarms[index]
+                alarms[index] = alarm.copy(dismissedAt = if (alarm.firesAt == previous.firesAt) previous.dismissedAt else null)
+                json(buildJsonObject { put("alarm", encode(alarms[index])) })
+            }
+            segments.size == 3 && segments[0] == "alarms" && alarmActionsFail -> error(503, "unavailable", "Try again later.")
+            segments.size == 3 && segments[0] == "alarms" && segments[2] == "dismiss" && method == "POST" -> {
+                val index = alarms.indexOfFirst { it.id == segments[1].toInt() }.takeIf { it >= 0 } ?: return notFound()
+                alarms[index] = alarms[index].copy(dismissedAt = alarms[index].dismissedAt ?: utcNow())
+                json(buildJsonObject { put("alarm", encode(alarms[index])) })
+            }
+            segments.size == 3 && segments[0] == "alarms" && segments[2] == "snooze" && method == "POST" -> {
+                val index = alarms.indexOfFirst { it.id == segments[1].toInt() }.takeIf { it >= 0 } ?: return notFound()
+                val minutes = bodyObject(request)["minutes"]?.jsonPrimitive?.intOrNull?.takeIf { it in 1..1440 }
+                    ?: return error(400, "validation", "Snooze for 1 minute to 24 hours.")
+                val until = java.time.Instant.now().plusSeconds(minutes * 60L).truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+                alarms[index] = alarms[index].copy(firesAt = until.toString(), dismissedAt = null)
+                json(buildJsonObject { put("alarm", encode(alarms[index])) })
             }
             segments.size == 2 && segments[0] == "alarms" && method == "DELETE" -> {
                 val id = segments[1].toInt()
@@ -496,6 +515,8 @@ class FakeLexiconServer : Dispatcher() {
             }
         })
     })
+
+    private fun utcNow(): String = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString()
 
     /** As the server stores it: a trimmed title and a UTC time with seconds. */
     private fun alarmFrom(body: JsonObject, id: Int): Alarm? {

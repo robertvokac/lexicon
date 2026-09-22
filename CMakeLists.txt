@@ -257,6 +257,8 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/InboxDialog.cpp
         lexicon-qt/AlarmsDialog.h
         lexicon-qt/AlarmsDialog.cpp
+        lexicon-qt/AlarmNotifier.h
+        lexicon-qt/AlarmNotifier.cpp
         lexicon-qt/ImageValueView.h
         lexicon-qt/ImageValueView.cpp
     )
@@ -303,6 +305,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/InboxDialog.cpp
             lexicon-qt/AlarmsDialog.h
             lexicon-qt/AlarmsDialog.cpp
+            lexicon-qt/AlarmNotifier.h
+            lexicon-qt/AlarmNotifier.cpp
             lexicon-qt/ImageValueView.h
             lexicon-qt/ImageValueView.cpp
         )

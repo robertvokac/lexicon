@@ -255,6 +255,10 @@ export class LexiconApi {
     async createAlarm(alarm) { return (await this.post('/alarms', alarm)).alarm; }
     async updateAlarm(id, alarm) { return (await this.put(`/alarms/${id}`, alarm)).alarm; }
     deleteAlarm(id) { return this.delete(`/alarms/${id}`); }
+    // { alarms, now }: those gone off and not dismissed, by the server's clock.
+    dueAlarms() { return this.get('/alarms/due'); }
+    async dismissAlarm(id) { return (await this.post(`/alarms/${id}/dismiss`, {})).alarm; }
+    async snoozeAlarm(id, minutes) { return (await this.post(`/alarms/${id}/snooze`, { minutes })).alarm; }
 
     // Review -----------------------------------------------------------------
     reviewQueue(groupId, limit = 20) {

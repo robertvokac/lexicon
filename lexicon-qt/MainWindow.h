@@ -172,6 +172,7 @@ private slots:
     void appendImages(const ItemRecord& item);
 
 private:
+    class AlarmNotifier* m_alarmNotifier = nullptr;
     void applySavedTheme();
     void applyTheme(const QString& themeName);
     void saveSettings();

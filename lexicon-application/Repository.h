@@ -67,6 +67,12 @@ public:
   // Inserts an alarm with id -1, updates any other; returns its ID.
   virtual Result<int> saveAlarm(const AlarmRecord &alarm) = 0;
   virtual Result<void> deleteAlarm(int alarmId) = 0;
+  // Alarms that have gone off and nobody has dismissed yet, by the database
+  // clock, the oldest first.
+  virtual Result<std::vector<AlarmRecord>> loadDueAlarms() = 0;
+  virtual Result<void> dismissAlarm(int alarmId) = 0;
+  // Moves the alarm to [minutes] from now and makes it ring again then.
+  virtual Result<void> snoozeAlarm(int alarmId, int minutes) = 0;
   virtual Result<std::string> importBlob(const std::string &sourcePath) = 0;
   // The same for bytes held in memory, such as a file carried in an export.
   virtual Result<std::string> importBlobData(const std::string &data) = 0;

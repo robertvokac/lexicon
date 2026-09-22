@@ -37,10 +37,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -60,6 +63,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.window.core.layout.WindowSizeClass
 import com.robertvokac.lexicon.AppContainer
+import com.robertvokac.lexicon.alarms.AlarmRinger
 import com.robertvokac.lexicon.auth.Identity
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.share.LaunchRequest
@@ -160,6 +164,24 @@ fun LexiconRoot(
         CompositionLocalProvider(LocalAppContainer provides container) {
             LaunchedEffect(Unit) { container.sessions.start() }
             val session by container.sessions.state.collectAsStateWithLifecycle()
+            val applicationContext = LocalContext.current.applicationContext
+            val ringer = remember(container) { AlarmRinger(applicationContext, container) }
+            // Alarms ring on this phone for whoever is signed in. Signing out
+            // stops them; a session that merely expired keeps them ringing.
+            var ringingFor by remember { mutableStateOf(false) }
+            LaunchedEffect(session) {
+                when (val current = session) {
+                    is SessionState.SignedIn -> {
+                        ringingFor = true
+                        ringer.sync()
+                    }
+                    is SessionState.SignedOut -> if (ringingFor && current.retained == null) {
+                        ringingFor = false
+                        ringer.clear()
+                    }
+                    else -> Unit
+                }
+            }
             val stores: IdentityStores = viewModel()
 
             // The identity whose screens stay composed: the signed-in one, or
@@ -253,6 +275,10 @@ private fun MainScaffold(
             is LaunchRequest.Share -> navController.navigate(
                 EditItemRoute(title = request.prefill.title, content = request.prefill.content, fromShare = true),
             )
+            LaunchRequest.Alarms -> navController.navigate(AlarmsRoute) {
+                popUpTo<ItemsRoute> { inclusive = false }
+                launchSingleTop = true
+            }
         }
     }
 
@@ -484,7 +510,8 @@ private fun LexiconNavHost(
             SettingsScreen(lexiconViewModel { app, _ -> SettingsViewModel(app) }, onBack = back)
         }
         composable<AlarmsRoute> {
-            AlarmsScreen(lexiconViewModel { app, _ -> AlarmsViewModel(app) }, onBack = back)
+            val context = LocalContext.current.applicationContext
+            AlarmsScreen(lexiconViewModel { app, _ -> AlarmsViewModel(app, AlarmRinger(context, app)) }, onBack = back)
         }
         composable<ReviewRoute> {
             ReviewScreen(

@@ -310,14 +310,21 @@ internal data class ReviewRequest(val rating: ReviewRating)
 
 @Serializable internal data class ImportEnvelope(val report: ImportReport)
 
-/** A reminder: [firesAt] is UTC "YYYY-MM-DDTHH:MM:SSZ". */
+/**
+ * A reminder: [firesAt] is UTC "YYYY-MM-DDTHH:MM:SSZ". [dismissedAt] is set
+ * once someone dismissed it after it went off, in any client.
+ */
 @Serializable
 data class Alarm(
     val id: Int? = null,
     val title: String,
     val description: String = "",
     val firesAt: String,
+    val dismissedAt: String? = null,
 )
+
+@Serializable
+internal data class SnoozeRequest(val minutes: Int)
 
 @Serializable
 data class AlarmWrite(val title: String, val description: String = "", val firesAt: String)

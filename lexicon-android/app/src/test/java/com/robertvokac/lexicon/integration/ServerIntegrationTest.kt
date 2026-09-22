@@ -346,6 +346,19 @@ class ServerIntegrationTest {
             } catch (failure: ApiException.Validation) {
                 assertTrue(failure.message!!.contains("UTC"))
             }
+            // Ringing: one in the past rings until dismissed or snoozed.
+            val tea = checkNotNull(api.createAlarm(AlarmWrite("Tea ${System.nanoTime()}", "", "2020-01-01T10:00:00Z")).id)
+            assertNull(api.alarms().first { it.id == tea }.dismissedAt)
+            val snoozed = api.snoozeAlarm(tea, 10)
+            assertTrue(java.time.Instant.parse(snoozed.firesAt).isAfter(java.time.Instant.now().plusSeconds(8 * 60)))
+            api.updateAlarm(tea, AlarmWrite(snoozed.title, "", "2020-01-01T10:00:00Z"))
+            assertTrue(checkNotNull(api.dismissAlarm(tea).dismissedAt).endsWith("Z"))
+            try {
+                api.snoozeAlarm(tea, 0)
+                fail("expected a refusal")
+            } catch (_: ApiException.Validation) {
+            }
+            api.deleteAlarm(tea)
             api.deleteAlarm(id)
             assertTrue(api.alarms().none { it.id == id })
         } finally {

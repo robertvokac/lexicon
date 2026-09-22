@@ -2,6 +2,7 @@
 // change and delete. Times are edited in local time and stored in UTC.
 import { api } from './api.js';
 import { confirmDialog, errorDialog, field, openDialog } from './dialogs.js';
+import { notificationPermission, requestNotifications } from './alarmbell.js';
 import { formatAlarmTime, hasGoneOff, localInputToUtc, nextFullHour, utcToLocalInput } from './alarmtime.js';
 import { button, clear, el } from './utils.js';
 
@@ -37,7 +38,30 @@ function alarmDialog(alarm) {
     });
 }
 
-export async function openAlarms() {
+// The line under the table about how alarms ring in this browser.
+function notificationLine() {
+    const line = el('p', { class: 'hint alarm-notifications' });
+    const render = () => {
+        clear(line);
+        const permission = notificationPermission();
+        if (permission === 'granted') {
+            line.textContent = 'Alarms ring on this page and as system notifications while Lexicon is open.';
+        } else if (permission === 'default') {
+            line.append('Alarms ring on this page while Lexicon is open. ', button('Allow notifications', {
+                class: 'secondary',
+                onclick: async () => { await requestNotifications(); render(); },
+            }));
+        } else {
+            line.textContent = permission === 'denied'
+                ? 'Alarms ring on this page while Lexicon is open; this browser blocks notifications from it.'
+                : 'Alarms ring on this page while Lexicon is open.';
+        }
+    };
+    render();
+    return line;
+}
+
+export async function openAlarms({ onChange } = {}) {
     let alarms = await api.alarms();
     let selectedId = null;
 
@@ -77,10 +101,11 @@ export async function openAlarms() {
         const now = new Date();
         for (const alarm of alarms) {
             const gone = hasGoneOff(alarm.firesAt, now);
+            const ringing = gone && !alarm.dismissedAt;
             const row = el('tr', {
-                class: gone ? 'past' : '',
+                class: ringing ? 'ringing' : gone ? 'past' : '',
                 tabindex: '0',
-                title: gone ? 'Already gone off' : null,
+                title: ringing ? 'Ringing' : gone ? 'Already gone off' : null,
                 dataset: { id: String(alarm.id) },
                 onclick: () => select(alarm.id),
                 onfocus: () => select(alarm.id),
@@ -109,6 +134,7 @@ export async function openAlarms() {
         alarms = await api.alarms();
         selectedId = selectId;
         render();
+        if (onChange) onChange();
     }
 
     async function add() {
@@ -142,6 +168,7 @@ export async function openAlarms() {
             el('div', { class: 'scroll-area' }, [table]),
             summary,
             el('div', { class: 'list-editor-actions' }, [buttons.add, buttons.edit, buttons.remove]),
+            notificationLine(),
         ]),
         wide: true,
         showAccept: false,

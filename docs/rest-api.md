@@ -386,10 +386,15 @@ GET    /api/v1/alarms/{id}   → { "alarm": { ... } }
 POST   /api/v1/alarms        → 201 { "alarm": { ... } }
 PUT    /api/v1/alarms/{id}   → 200 { "alarm": { ... } }
 DELETE /api/v1/alarms/{id}   → 204
+GET    /api/v1/alarms/due            → { "alarms": [ ... ], "now": "2026-10-02T08:31:07Z" }
+POST   /api/v1/alarms/{id}/dismiss   → 200 { "alarm": { ... } }
+POST   /api/v1/alarms/{id}/snooze    → 200 { "alarm": { ... } }
+{ "minutes": 10 }
 ```
 
 ```json
-{ "id": 4, "title": "Dentist", "description": "Bring the card.", "firesAt": "2026-10-02T08:30:00Z" }
+{ "id": 4, "title": "Dentist", "description": "Bring the card.",
+  "firesAt": "2026-10-02T08:30:00Z", "dismissedAt": null }
 ```
 
 An alarm is a reminder at a moment: a `title` (required, trimmed), a
@@ -398,7 +403,17 @@ as UTC `YYYY-MM-DDTHH:MM:SSZ`. A time without seconds (`2026-10-02T08:30Z`) is
 accepted and stored with `:00`; a time without the `Z`, or an impossible date,
 is refused with 400. Clients show and edit the time in the viewer's own time
 zone. The list is ordered by `firesAt`, the soonest first, and includes alarms
-that have already gone off. The server stores alarms; it does not ring them.
+that have already gone off.
+
+The clients ring alarms; the server keeps whether one still rings. An alarm
+whose `firesAt` has passed rings until someone dismisses or snoozes it, in any
+client. `GET /alarms/due` lists the ringing ones by the server's clock, the
+oldest first, and says what time the server has. `dismiss` sets `dismissedAt`
+(dismissing twice keeps the first time); `snooze` moves `firesAt` to 1 to 1440
+`minutes` from now and makes it ring again then. Changing an alarm's time with
+`PUT` makes it ring again at the new time; changing only its title or
+description does not. `dismissedAt` is ignored on `PUT`, and read on `POST`
+only so that an imported alarm keeps its state.
 
 ## Export and import
 

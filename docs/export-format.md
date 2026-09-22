@@ -60,8 +60,9 @@ dictionary up while the server runs; SQLite coordinates the two connections.
 - The `id`s are those of the exporting database. They only connect the records
   of one document: `groupId`, `itemTypeId`, the keys of `fieldValues`,
   `fromItemId` and `toItemId` refer to them.
-- `alarms` holds every alarm, with `firesAt` in UTC. Documents written before
-  alarms existed have no `alarms`; they import as before.
+- `alarms` holds every alarm, with `firesAt` and `dismissedAt` in UTC, so an
+  alarm that was dismissed does not ring again after an import. Documents
+  written before alarms existed have no `alarms`; they import as before.
 - `blobs` is present when files were included. `data` is standard base64 with
   padding; `hash` is the SHA-256 of the decoded bytes, the value `Blob` fields
   store and the part after the colon of an `Image` value (`image/png:<hash>`).

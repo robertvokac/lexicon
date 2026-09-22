@@ -845,20 +845,26 @@ SqliteRepository::Result<int> SqliteRepository::findItemId(const std::string &ti
     throw Failure("Item not found.", lexicon::Error::Code::NotFound);
   });
 }
+namespace {
+const char *kAlarmColumns = "SELECT id, title, description, fires_at, COALESCE(dismissed_at, '') FROM alarm ";
+lexicon::AlarmRecord readAlarm(Statement &stmt) {
+  return {stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3), stmt.text(4)};
+}
+} // namespace
 SqliteRepository::Result<std::vector<lexicon::AlarmRecord>> SqliteRepository::loadAlarms() {
   return guarded([&] {
-    Statement stmt(impl_->db, "SELECT id, title, description, fires_at FROM alarm ORDER BY fires_at, id;");
+    Statement stmt(impl_->db, std::string(kAlarmColumns) + "ORDER BY fires_at, id;");
     std::vector<lexicon::AlarmRecord> alarms;
-    while (stmt.step()) alarms.push_back({stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3)});
+    while (stmt.step()) alarms.push_back(readAlarm(stmt));
     return alarms;
   });
 }
 SqliteRepository::Result<lexicon::AlarmRecord> SqliteRepository::loadAlarm(int alarmId) {
   return guarded([&] {
-    Statement stmt(impl_->db, "SELECT id, title, description, fires_at FROM alarm WHERE id = ?;");
+    Statement stmt(impl_->db, std::string(kAlarmColumns) + "WHERE id = ?;");
     stmt.bind(alarmId);
     require(stmt.step(), "Alarm not found.", lexicon::Error::Code::NotFound);
-    return lexicon::AlarmRecord{stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3)};
+    return readAlarm(stmt);
   });
 }
 SqliteRepository::Result<int> SqliteRepository::saveAlarm(const lexicon::AlarmRecord &alarm) {
@@ -868,12 +874,19 @@ SqliteRepository::Result<int> SqliteRepository::saveAlarm(const lexicon::AlarmRe
     Transaction tx(impl_->db, "lexicon_write");
     int id = alarm.id;
     if (id < 0) {
-      Statement(impl_->db, "INSERT INTO alarm(title, description, fires_at) VALUES(?, ?, ?);")
-          .bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt).run();
+      // A new alarm rings when its time comes, unless it arrives already
+      // dismissed, as one from an export does.
+      const auto dismissedAt = lexicon::normalizedUtcTime(alarm.dismissedAt);
+      Statement insert(impl_->db, "INSERT INTO alarm(title, description, fires_at, dismissed_at) VALUES(?, ?, ?, ?);");
+      insert.bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt);
+      if (dismissedAt.empty()) insert.null(); else insert.bind(dismissedAt);
+      insert.run();
       id = impl_->db.lastId();
     } else {
-      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, fires_at = ? WHERE id = ?;")
-          .bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt).bind(id).run();
+      // A new time rings again; a changed title or description does not.
+      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, "
+                           "dismissed_at = CASE WHEN fires_at = ? THEN dismissed_at END, fires_at = ? WHERE id = ?;")
+          .bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt).bind(firesAt).bind(id).run();
       requireChanged(impl_->db, "Alarm");
     }
     logOperation(impl_->db, "alarm", id, alarm.id < 0 ? 1 : 2);
@@ -887,6 +900,38 @@ SqliteRepository::Result<void> SqliteRepository::deleteAlarm(int alarmId) {
     Statement(impl_->db, "DELETE FROM alarm WHERE id = ?;").bind(alarmId).run();
     requireChanged(impl_->db, "Alarm");
     logOperation(impl_->db, "alarm", alarmId, 3);
+    tx.commit();
+  });
+}
+SqliteRepository::Result<std::vector<lexicon::AlarmRecord>> SqliteRepository::loadDueAlarms() {
+  return guarded([&] {
+    Statement stmt(impl_->db, std::string(kAlarmColumns) + "WHERE dismissed_at IS NULL AND fires_at <= " + kNow +
+                                  " ORDER BY fires_at, id;");
+    std::vector<lexicon::AlarmRecord> alarms;
+    while (stmt.step()) alarms.push_back(readAlarm(stmt));
+    return alarms;
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::dismissAlarm(int alarmId) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_write");
+    // Dismissing twice keeps the first time.
+    Statement(impl_->db, std::string("UPDATE alarm SET dismissed_at = COALESCE(dismissed_at, ") + kNow +
+                             ") WHERE id = ?;").bind(alarmId).run();
+    requireChanged(impl_->db, "Alarm");
+    logOperation(impl_->db, "alarm", alarmId, 2);
+    tx.commit();
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::snoozeAlarm(int alarmId, int minutes) {
+  return guarded([&] {
+    require(minutes >= 1 && minutes <= 24 * 60, "Snooze for 1 minute to 24 hours.");
+    Transaction tx(impl_->db, "lexicon_write");
+    Statement(impl_->db, "UPDATE alarm SET dismissed_at = NULL, "
+                         "fires_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?) WHERE id = ?;")
+        .bind("+" + std::to_string(minutes) + " minutes").bind(alarmId).run();
+    requireChanged(impl_->db, "Alarm");
+    logOperation(impl_->db, "alarm", alarmId, 2);
     tx.commit();
   });
 }

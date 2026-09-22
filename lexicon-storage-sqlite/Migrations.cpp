@@ -338,7 +338,15 @@ void applyMigrations(const Connection &db) {
             "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
             "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
             "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;"
-        }, true}
+        }, true},
+        {25, {
+            // When an alarm that went off was dismissed, as UTC; NULL while it
+            // has not gone off or is still ringing. Alarms that went off before
+            // clients rang them count as dismissed then.
+            "ALTER TABLE alarm ADD COLUMN dismissed_at TEXT;",
+            "UPDATE alarm SET dismissed_at = fires_at "
+            "WHERE fires_at <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now');"
+        }}
     };
 
 

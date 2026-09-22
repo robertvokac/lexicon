@@ -511,7 +511,15 @@ An item is due again 1, 2, 5, 12 or 30 days after its last review, for `Unknown`
 
 `Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title and the first line of its description. Alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a small form - a title, the date and time it goes off, and a plain-text description; **Delete** asks first.
 
-Times are entered and shown in your own time zone and stored in UTC, so an alarm set on the desktop in Prague shows the same moment in the web client or on a phone elsewhere. The web client has the same dialog under `Manage -> Alarms...`, and the Android app lists alarms under **Alarms** in the drawer, with date and time pickers. Alarms are stored and travel with export and import; Lexicon does not yet ring them or send notifications.
+Times are entered and shown in your own time zone and stored in UTC, so an alarm set on the desktop in Prague shows the same moment in the web client or on a phone elsewhere. The web client has the same dialog under `Manage -> Alarms...`, and the Android app lists alarms under **Alarms** in the drawer, with date and time pickers. Alarms travel with export and import.
+
+When an alarm's time comes, it rings until someone deals with it, in any client:
+
+- **Desktop:** while Lexicon runs, an **Alarm** window stays on top with each alarm that has gone off, **Dismiss**, **Snooze 10 min** and **Snooze 1 hour**, and the system tray shows a notification where there is one. **Later** hides the window; alarms still ringing come back after five minutes.
+- **Web client:** while the page is open, a panel over the page shows the same buttons, with a short chime, and a system notification when the browser allows it (`Manage -> Alarms...` has **Allow notifications**).
+- **Android:** alarms ring even when the app is closed: the phone schedules them with the system and shows a notification with **Dismiss** and **Snooze 10 min**; swiping it away dismisses it too. The app checks the server every half hour for alarms added or moved elsewhere, and schedules them again after a restart. Android 13 and later ask to allow notifications, and exact alarms keep them on the minute; the Alarms screen offers both.
+
+A dismissal is kept on the server, so dismissing an alarm on the phone stops it ringing on the desktop and in the browser too. An alarm moved to a new time rings again then. Signing out of the Android app takes its alarms off the phone.
 
 ### 13) Editing and deletion safety notes
 

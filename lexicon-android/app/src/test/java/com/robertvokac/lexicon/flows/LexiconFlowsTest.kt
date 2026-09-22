@@ -587,11 +587,17 @@ class LexiconFlowsTest {
 
     @Test
     fun alarmsAreListedAddedChangedAndDeleted() {
-        fake.alarms += Alarm(7, "Old call", "", "2001-05-06T07:08:00Z")
+        fake.alarms += Alarm(7, "Old call", "", "2001-05-06T07:08:00Z", dismissedAt = "2001-05-06T07:09:00Z")
+        fake.alarms += Alarm(8, "Tea", "", "2020-01-01T10:00:00Z")
         login()
         openDrawer("Alarms")
         compose.waitForText("Old call")
         compose.waitForText("gone off", substring = true)
+        // One that went off and nobody dismissed rings until someone does.
+        compose.waitForText("ringing", substring = true)
+        compose.onNode(hasText("Dismiss") and hasClickAction()).performClick()
+        compose.waitForCondition { fake.requestsTo("POST", "/api/v1/alarms/8/dismiss").isNotEmpty() }
+        compose.waitUntilGone(hasText("ringing", substring = true))
         compose.onNodeWithContentDescription("Add alarm").performClick()
         compose.waitForText("Add alarm")
         inDialog("Save").performClick()

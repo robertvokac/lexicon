@@ -49,6 +49,12 @@ bool isContentType(const std::string &header, const char *expected) {
   return lowerAscii(base) == expected;
 }
 
+// The server's clock as UTC "YYYY-MM-DDTHH:MM:SSZ", the form alarm times take.
+std::string utcNow() {
+  return std::format("{:%Y-%m-%dT%H:%M:%SZ}",
+                     std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
+}
+
 std::string bearerToken(const Request &request) {
   const auto header = request.get_header_value("Authorization");
   constexpr std::string_view prefix = "Bearer ";
@@ -1268,6 +1274,48 @@ void RestServer::Impl::registerRoutes() {
       return;
     }
     respondJson(response, 200, Json{{"alarms", toJsonArray(*alarms)}});
+  });
+
+  // Registered before /alarms/:id, which would take "due" for an ID.
+  api.Get("/api/v1/alarms/due", [this](const Request &, Response &response) {
+    auto due = guarded.with([](LexiconApplication &application) { return application.alarms.loadDueAlarms(); });
+    if (!due) {
+      respondError(response, due.error(), "loadDueAlarms");
+      return;
+    }
+    respondJson(response, 200, Json{{"alarms", toJsonArray(*due)}, {"now", utcNow()}});
+  });
+
+  api.Post("/api/v1/alarms/:id/dismiss", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto dismissed = guarded.with([id](LexiconApplication &application) { return application.alarms.dismissAlarm(*id); });
+    if (!dismissed) {
+      respondError(response, dismissed.error(), "dismissAlarm");
+      return;
+    }
+    respondJson(response, 200, Json{{"alarm", toJson(*dismissed)}});
+  });
+
+  api.Post("/api/v1/alarms/:id/snooze", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    if (!body->is_object() || !body->contains("minutes") || !body->at("minutes").is_number_integer()) {
+      respondFailure(response, {400, "validation", "'minutes' must be a whole number."});
+      return;
+    }
+    const int minutes = body->at("minutes").get<int>();
+    auto snoozed = guarded.with([&](LexiconApplication &application) { return application.alarms.snoozeAlarm(*id, minutes); });
+    if (!snoozed) {
+      respondError(response, snoozed.error(), "snoozeAlarm");
+      return;
+    }
+    respondJson(response, 200, Json{{"alarm", toJson(*snoozed)}});
   });
 
   api.Get("/api/v1/alarms/:id", [this](const Request &request, Response &response) {

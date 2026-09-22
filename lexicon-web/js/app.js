@@ -9,6 +9,7 @@ import { MainView } from './items.js';
 import { showValueOverview } from './overviews.js';
 import { openReview } from './review.js';
 import { openTypeManager } from './types.js';
+import { AlarmBell } from './alarmbell.js';
 import { openAlarms } from './alarms.js';
 import { button, clear, el, readLocal, readSession, writeLocal, writeSession } from './utils.js';
 
@@ -144,6 +145,7 @@ class Application {
         // the login screen, and never retry in a loop.
         writeSession(STORAGE.token, null);
         api.setToken(null);
+        this.stopBell();
         this.showLogin('Your session has expired. Sign in again.');
     }
 
@@ -166,6 +168,9 @@ class Application {
         this.sessionLabel.textContent = `${this.username} @ ${api.baseUrl}`;
         setDraftOwner(api.baseUrl, this.username);
         this.view = new MainView(this.mainView);
+        this.stopBell();
+        this.bell = new AlarmBell();
+        this.bell.start();
         try {
             await this.view.refreshAll();
             await this.view.resumeDraft();
@@ -183,6 +188,7 @@ class Application {
             // A server that is already gone still ends the local session.
         }
         writeSession(STORAGE.token, null);
+        this.stopBell();
         // Signing out leaves no item text behind in this browser.
         clearAllDrafts();
         setDraftOwner('', '');
@@ -190,6 +196,11 @@ class Application {
         clear(this.mainView);
         this.view = null;
         this.showLogin('You are signed out.');
+    }
+
+    stopBell() {
+        if (this.bell) this.bell.destroy();
+        this.bell = null;
     }
 
     // --- Menus -----------------------------------------------------------
@@ -227,7 +238,11 @@ class Application {
                         },
                     },
                     { separator: true },
-                    { label: 'Alarms...', action: () => openAlarms() },
+                    {
+                        label: 'Alarms...',
+                        // A new or moved alarm may already be due.
+                        action: () => openAlarms({ onChange: () => this.bell && this.bell.poll() }),
+                    },
                 ],
             },
             {
