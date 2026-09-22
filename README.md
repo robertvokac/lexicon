@@ -2,6 +2,7 @@
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)
+[![CI](https://github.com/robertvokac/lexicon/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/robertvokac/lexicon/actions/workflows/ci.yml)
 
 Lexicon is a knowledge dictionary for structured learning and technical note-taking, with groups, items, metadata, and typed links between concepts.
 It has three clients over one long-lived core: a Qt Widgets desktop application, and a static web client and a native Android app, both talking to a Qt-free REST server. All of them work on the same SQLite database, which only the desktop client and the server open.
@@ -187,6 +188,26 @@ cmake --build build --target LexiconServer -j
 
 Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 `-DLEXICON_BUILD_SERVER=OFF`.
+
+### Tests and continuous integration
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build -j
+QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+node --test lexicon-web/tests/
+```
+
+The Android app has its own Gradle build; see
+[lexicon-android/README.md](lexicon-android/README.md#tests).
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs all of this on
+every push and pull request, on Ubuntu 24.04: it builds the backend, the
+server and the desktop client, runs every CTest suite - the desktop dialogs
+offscreen - and the web client's tests, then runs the Android unit, Compose
+and lint checks and the Android tests against the `LexiconServer` the first
+job built, and builds the debug and release APKs. Started by hand with
+**device-tests**, it also runs the instrumented tests on an emulator.
 
 ## Architecture
 

@@ -1,0 +1,155 @@
+# Builds and tests everything on every push and pull request: the Qt-free
+# backend and LexiconServer, the Qt desktop client and its offscreen GUI
+# tests, the web client, and the Android app - including its tests against a
+# real LexiconServer from the first job. The emulator tests run on request.
+name: CI
+
+on:
+  push:
+    branches: [develop, init, main, master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      device-tests:
+        description: Also run the Android instrumented tests on an emulator
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Server, desktop and web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++-14 qt6-base-dev libgl-dev libsqlite3-dev libssl-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER=g++-14
+          -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --parallel 4
+
+      - name: Web client tests
+        run: node --test lexicon-web/tests/
+
+      - name: Web client modules parse
+        run: |
+          for module in lexicon-web/js/*.js; do
+            node --input-type=module --check < "$module" || { echo "::error file=$module::does not parse"; exit 1; }
+          done
+
+      - name: Keep the server for the Android jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: LexiconServer
+          path: build/LexiconServer
+          retention-days: 7
+
+  android:
+    name: Android
+    needs: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: lexicon-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install the Android SDK packages the build targets
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;36.1.0" > /dev/null
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: LexiconServer
+          path: server
+
+      - name: Unit, Compose and real-server tests, lint, debug and release builds
+        env:
+          LEXICON_SERVER_BINARY: ${{ github.workspace }}/server/LexiconServer
+        run: |
+          chmod +x "$LEXICON_SERVER_BINARY"
+          ./gradlew test lint assembleDebug assembleRelease
+
+      - name: Keep the reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: lexicon-android/app/build/reports
+          retention-days: 7
+
+      - name: Keep the debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lexicon-debug-apk
+          path: lexicon-android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+  android-device:
+    name: Android on an emulator
+    if: github.event_name == 'workflow_dispatch' && inputs.device-tests
+    needs: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install the Android SDK packages the build targets
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;36.1.0" > /dev/null
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: LexiconServer
+          path: server
+
+      - name: Let the emulator use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Instrumented tests against a real LexiconServer
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            chmod +x server/LexiconServer
+            lexicon-android/scripts/run-device-tests.sh "$GITHUB_WORKSPACE/server/LexiconServer"

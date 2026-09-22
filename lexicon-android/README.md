@@ -381,6 +381,12 @@ Deliberate differences:
 No test contacts the Internet; Robolectric runs offline with the framework jar
 Gradle resolved. Kotlin compiler warnings, like lint warnings, fail the build.
 
+The repository's GitHub Actions workflow (`.github/workflows/ci.yml`) runs
+`./gradlew test lint assembleDebug assembleRelease` with
+`LEXICON_SERVER_BINARY` pointing at the server its first job built, and, when
+started by hand with **device-tests**, `scripts/run-device-tests.sh` on an
+emulator.
+
 ## Release signing
 
 No key is in the repository. To sign release builds, keep a keystore outside the
