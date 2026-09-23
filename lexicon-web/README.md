@@ -195,7 +195,7 @@ it. It needs only Python and the browser, and CI runs both on every push.
 | `lexicon.web.apiBaseUrl` | `localStorage` | Last server URL used |
 | `lexicon.web.theme` | `localStorage` | Light or dark mode |
 | `lexicon.web.pageSize` | `localStorage` | Rows per page |
-| `lexicon.web.columns` | `localStorage` | Which optional columns are visible |
+| `lexicon.web.columns` | `localStorage` | Whether the attribute and value columns are visible |
 | `lexicon.web.lastItemId` | `localStorage` | Reselects the last item you looked at |
 | `lexicon.web.viewMode` | `localStorage` | Table, list, or automatic |
 | `lexicon.web.tableHeight` | `localStorage` | Where you put the splitter |
@@ -225,7 +225,7 @@ Everything below behaves the same way in both:
 
 | Qt | Web |
 | --- | --- |
-| `MainWindow` search, Add, Add..., Edit, Delete, Columns..., Filter Properties... | the same action row |
+| `MainWindow` search, Add, Add..., Edit, Delete, Hide attributes, Hide values, Filter Properties... | the same action row |
 | `FilterHeaderView` filter row, including dynamic type field filters | a second header row with the same widgets |
 | Column sorting, pagination (10/20/50/100), page label | the same, sorted and paged by the server |
 | Markdown content preview and the link/backlink line with clickable targets | the same, links reset the filters and search for the target |

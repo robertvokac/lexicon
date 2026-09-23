@@ -160,7 +160,8 @@ private slots:
     void showTagsOverview();
     void showFlagsOverview();
     void showAliasesOverview();
-    void openColumnVisibilityDialog();
+    void toggleAttributeColumns();
+    void toggleValueColumns();
     void openPropertyFilterDialog();
 
     void updateActions();
@@ -179,6 +180,7 @@ private:
     void loadSettings();
     void loadColumnVisibility();
     void applyColumnVisibility();
+    void updateColumnButtons();
 
     void updateMarkdownStyles();
     void updateLinksDisplay(int itemId);
@@ -218,7 +220,10 @@ private:
     QLineEdit* m_searchEdit = nullptr;
     QTableView* m_tableView = nullptr;
     QStandardItemModel* m_model = nullptr;
-    QMap<QString, bool> m_columnVisibility;
+    bool m_attributeColumnsVisible = true;
+    bool m_valueColumnsVisible = true;
+    QPushButton* m_attributeColumnsButton = nullptr;
+    QPushButton* m_valueColumnsButton = nullptr;
     QList<ItemPropertyFilter> m_propertyFilters;
     QPushButton* m_propertyFilterButton = nullptr;
     QCompleter* m_completer = nullptr;

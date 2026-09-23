@@ -597,8 +597,6 @@ body.resizing { cursor: row-resize; user-select: none; }
 .form-row > textarea { width: 100%; }
 .form-row > input[type="checkbox"] { width: 18px; }
 .form-grid { display: grid; grid-template-columns: 1fr; gap: 2px; }
-.checkbox-row { display: flex; align-items: center; gap: 8px; min-height: var(--touch); }
-.column-list { display: flex; flex-direction: column; }
 
 /* --- Tabs ------------------------------------------------------------- */
 .tabs { display: flex; flex-direction: column; min-height: 0; }

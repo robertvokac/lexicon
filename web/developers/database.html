@@ -266,7 +266,7 @@ CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);</code></pre>
   "key" TEXT PRIMARY KEY NOT NULL CHECK(TRIM("key") &lt;&gt; ''),
   value TEXT NOT NULL
 );</code></pre>
-    <p>The main table stores optional column visibility as <code>main.columns.*</code> keys with <code>1</code> or <code>0</code> values. Missing keys mean visible.</p>
+    <p>The main table stores optional column visibility as <code>main.columns.attributes</code> (Disambiguation, Tags, Flags, Aliases, Status, Understanding, Pinned) and <code>main.columns.values</code> (the value columns of the selected type), with <code>1</code> or <code>0</code> values. Missing keys mean visible.</p>
 
     <h2 id="integrity">Integrity rules</h2>
     <ul>

@@ -21,11 +21,9 @@
 #include <QApplication>
 #include <QPainter>
 #include <QStyledItemDelegate>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
 #include <QDialog>
-#include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -116,14 +114,15 @@ public:
     }
 };
 
-const QStringList kConfigurableColumns = {
-    "Disambiguation", "Tags", "Flags", "Aliases", "Status", "Understanding", "Pinned"
-};
-constexpr int kFirstConfigurableColumn = 4;
+// The item's own attributes: Disambiguation, Tags, Flags, Aliases, Status,
+// Understanding and Pinned. They are shown or hidden as one block, as are the
+// value columns of the selected type, which follow them.
+constexpr int kFirstAttributeColumn = 4;
+constexpr int kAttributeColumnCount = 7;
+constexpr int kFirstValueColumn = kFirstAttributeColumn + kAttributeColumnCount;
 
-QString columnVisibilityKey(const QString& name) {
-    return "main.columns." + name.toLower();
-}
+const char kAttributeColumnsKey[] = "main.columns.attributes";
+const char kValueColumnsKey[] = "main.columns.values";
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -199,8 +198,14 @@ void MainWindow::setupUi() {
     auto* addButton = new QPushButton("Add ...", centralWidget);
     auto* editButton = new QPushButton("Edit", centralWidget);
     auto* deleteButton = new QPushButton("Delete", centralWidget);
-    auto* columnsButton = new QPushButton("Columns...", centralWidget);
-    columnsButton->setObjectName("columnsButton");
+    m_attributeColumnsButton = new QPushButton(centralWidget);
+    m_attributeColumnsButton->setObjectName("attributeColumnsButton");
+    m_attributeColumnsButton->setToolTip(
+        "Show or hide the Disambiguation, Tags, Flags, Aliases, Status, Understanding and Pinned columns");
+    m_valueColumnsButton = new QPushButton(centralWidget);
+    m_valueColumnsButton->setObjectName("valueColumnsButton");
+    m_valueColumnsButton->setToolTip("Show or hide the value columns of the selected type");
+    updateColumnButtons();
     m_propertyFilterButton = new QPushButton("Filter Properties...", centralWidget);
     m_propertyFilterButton->setObjectName("propertyFiltersButton");
     editButton->setObjectName("editButton");
@@ -215,7 +220,8 @@ void MainWindow::setupUi() {
     searchRowLayout->addWidget(inboxButton);
     searchRowLayout->addWidget(editButton);
     searchRowLayout->addWidget(deleteButton);
-    searchRowLayout->addWidget(columnsButton);
+    searchRowLayout->addWidget(m_attributeColumnsButton);
+    searchRowLayout->addWidget(m_valueColumnsButton);
     searchRowLayout->addWidget(m_propertyFilterButton);
     searchRowLayout->addStretch(1);
 
@@ -337,7 +343,8 @@ void MainWindow::setupUi() {
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addItem);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedItem);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedItem);
-    connect(columnsButton, &QPushButton::clicked, this, &MainWindow::openColumnVisibilityDialog);
+    connect(m_attributeColumnsButton, &QPushButton::clicked, this, &MainWindow::toggleAttributeColumns);
+    connect(m_valueColumnsButton, &QPushButton::clicked, this, &MainWindow::toggleValueColumns);
     connect(m_propertyFilterButton, &QPushButton::clicked, this, &MainWindow::openPropertyFilterDialog);
     connect(m_tableView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this](const QItemSelection&, const QItemSelection&) {
         updateActions();
@@ -434,77 +441,90 @@ void MainWindow::loadColumnVisibility() {
         showError(error);
         return;
     }
-    for (const QString& name : kConfigurableColumns) {
-        m_columnVisibility.insert(name, configuration.value(columnVisibilityKey(name), "1") != "0");
-    }
+    m_attributeColumnsVisible = configuration.value(kAttributeColumnsKey, "1") != "0";
+    m_valueColumnsVisible = configuration.value(kValueColumnsKey, "1") != "0";
+    updateColumnButtons();
 }
 
 void MainWindow::applyColumnVisibility() {
-    for (int i = 0; i < kConfigurableColumns.size(); ++i) {
-        const QString& name = kConfigurableColumns.at(i);
-        m_tableView->setColumnHidden(kFirstConfigurableColumn + i,
-                                     !m_columnVisibility.value(name, true));
+    for (int i = 0; i < kAttributeColumnCount; ++i) {
+        m_tableView->setColumnHidden(kFirstAttributeColumn + i, !m_attributeColumnsVisible);
+    }
+    for (int column = kFirstValueColumn; column < m_model->columnCount(); ++column) {
+        m_tableView->setColumnHidden(column, !m_valueColumnsVisible);
     }
     m_filterHeader->updateFilterPositions();
 }
 
-void MainWindow::openColumnVisibilityDialog() {
-    QDialog dialog(this);
-    dialog.setWindowTitle("Visible columns");
-    auto* layout = new QVBoxLayout(&dialog);
-    QMap<QString, QCheckBox*> checkboxes;
-    for (const QString& name : kConfigurableColumns) {
-        auto* checkbox = new QCheckBox(name, &dialog);
-        checkbox->setChecked(m_columnVisibility.value(name, true));
-        layout->addWidget(checkbox);
-        checkboxes.insert(name, checkbox);
-    }
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    if (dialog.exec() != QDialog::Accepted) return;
+// Each button names what the click does, so the label is the opposite of the
+// current state.
+void MainWindow::updateColumnButtons() {
+    m_attributeColumnsButton->setText(m_attributeColumnsVisible ? "Hide attributes" : "Show attributes");
+    m_valueColumnsButton->setText(m_valueColumnsVisible ? "Hide values" : "Show values");
+}
 
-    QMap<QString, bool> visibility;
-    QMap<QString, QString> configuration;
-    for (const QString& name : kConfigurableColumns) {
-        const bool visible = checkboxes.value(name)->isChecked();
-        visibility.insert(name, visible);
-        configuration.insert(columnVisibilityKey(name), visible ? "1" : "0");
-    }
+void MainWindow::toggleAttributeColumns() {
+    const bool visible = !m_attributeColumnsVisible;
     QString error;
-    if (!services().configuration.saveConfiguration(configuration, &error)) {
+    if (!services().configuration.saveConfiguration({{kAttributeColumnsKey, visible ? "1" : "0"}}, &error)) {
         showError(error);
         return;
     }
-    m_columnVisibility = visibility;
-    if (!visibility.value("Disambiguation")) {
-        const QSignalBlocker blocker(m_disambiguationFilter);
-        m_disambiguationFilter->clear();
+    m_attributeColumnsVisible = visible;
+    updateColumnButtons();
+    // A hidden column must not keep filtering the result set.
+    if (!visible) {
+        {
+            const QSignalBlocker blocker(m_disambiguationFilter);
+            m_disambiguationFilter->clear();
+        }
+        {
+            const QSignalBlocker blocker(m_tagFilter);
+            m_tagFilter->setCurrentIndex(0);
+        }
+        {
+            const QSignalBlocker blocker(m_flagFilter);
+            m_flagFilter->setCurrentIndex(0);
+        }
+        {
+            const QSignalBlocker blocker(m_aliasFilter);
+            m_aliasFilter->clear();
+        }
+        {
+            const QSignalBlocker blocker(m_statusFilter);
+            m_statusFilter->setCurrentIndex(0);
+        }
+        {
+            const QSignalBlocker blocker(m_understandingFilter);
+            m_understandingFilter->setCurrentIndex(0);
+        }
+        {
+            const QSignalBlocker blocker(m_pinnedFilter);
+            m_pinnedFilter->setCurrentIndex(0);
+        }
     }
-    if (!visibility.value("Tags")) {
-        const QSignalBlocker blocker(m_tagFilter);
-        m_tagFilter->setCurrentIndex(0);
+    resetPaginationAndRefresh();
+}
+
+void MainWindow::toggleValueColumns() {
+    const bool visible = !m_valueColumnsVisible;
+    QString error;
+    if (!services().configuration.saveConfiguration({{kValueColumnsKey, visible ? "1" : "0"}}, &error)) {
+        showError(error);
+        return;
     }
-    if (!visibility.value("Flags")) {
-        const QSignalBlocker blocker(m_flagFilter);
-        m_flagFilter->setCurrentIndex(0);
-    }
-    if (!visibility.value("Aliases")) {
-        const QSignalBlocker blocker(m_aliasFilter);
-        m_aliasFilter->clear();
-    }
-    if (!visibility.value("Status")) {
-        const QSignalBlocker blocker(m_statusFilter);
-        m_statusFilter->setCurrentIndex(0);
-    }
-    if (!visibility.value("Understanding")) {
-        const QSignalBlocker blocker(m_understandingFilter);
-        m_understandingFilter->setCurrentIndex(0);
-    }
-    if (!visibility.value("Pinned")) {
-        const QSignalBlocker blocker(m_pinnedFilter);
-        m_pinnedFilter->setCurrentIndex(0);
+    m_valueColumnsVisible = visible;
+    updateColumnButtons();
+    if (!visible) {
+        for (auto it = m_valueFilterEditors.cbegin(); it != m_valueFilterEditors.cend(); ++it) {
+            if (auto* line = qobject_cast<QLineEdit*>(it.value())) {
+                const QSignalBlocker blocker(line);
+                line->clear();
+            } else if (auto* combo = qobject_cast<QComboBox*>(it.value())) {
+                const QSignalBlocker blocker(combo);
+                combo->setCurrentIndex(0);
+            }
+        }
     }
     resetPaginationAndRefresh();
 }

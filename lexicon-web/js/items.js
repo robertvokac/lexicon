@@ -8,7 +8,7 @@ import { imageSection } from './images.js';
 import { describeImage } from './imagevalue.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
 import { bindItemLinks, renderMarkdown } from './markdown.js';
-import { openColumnDialog, openPropertyFilterDialog } from './overviews.js';
+import { openPropertyFilterDialog } from './overviews.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
     joinValues, linkDescription, LITERAL_TEXT, readLocal, statusLabel, typeDisplayName,
@@ -40,8 +40,10 @@ const BASE_COLUMNS = [
       filterKey: 'understanding', configurable: true },
     { key: 'pinned', label: 'Pinned', filter: 'pinned', filterKey: 'pinned', configurable: true },
 ];
-const CONFIGURABLE_COLUMNS = BASE_COLUMNS.filter((column) => column.configurable)
-    .map((column) => column.label);
+// The item's own attributes are shown or hidden as one block, as are the value
+// columns of the selected type.
+const ATTRIBUTE_FILTERS = BASE_COLUMNS.filter((column) => column.configurable)
+    .map((column) => column.filterKey);
 const PAGE_SIZES = [10, 20, 50, 100];
 const STORAGE = {
     pageSize: 'lexicon.web.pageSize',
@@ -91,23 +93,34 @@ export class MainView {
         // 'auto' follows the screen width; 'table' and 'list' are explicit.
         this.viewPreference = readLocal(STORAGE.viewMode, 'auto');
         this.compactQuery = window.matchMedia(COMPACT_QUERY);
-        this.columnVisibility = this.loadColumnVisibility();
+        const columns = this.loadColumnVisibility();
+        this.showAttributeColumns = columns.attributes;
+        this.showValueColumns = columns.values;
         this.pendingRestoreItemId = Number.parseInt(readLocal(STORAGE.lastItem, '-1'), 10);
         this.build();
     }
 
     loadColumnVisibility() {
+        const visibility = { attributes: true, values: true };
         const stored = readLocal(STORAGE.columns, '');
-        const visibility = {};
-        for (const name of CONFIGURABLE_COLUMNS) visibility[name] = true;
         if (stored) {
             try {
-                Object.assign(visibility, JSON.parse(stored));
+                const parsed = JSON.parse(stored);
+                visibility.attributes = parsed.attributes !== false;
+                visibility.values = parsed.values !== false;
             } catch (error) {
                 // A corrupted preference simply falls back to everything visible.
             }
         }
         return visibility;
+    }
+
+    saveColumnVisibility() {
+        // A web preference, stored per browser. The desktop keeps its own.
+        writeLocal(STORAGE.columns, JSON.stringify({
+            attributes: this.showAttributeColumns,
+            values: this.showValueColumns,
+        }));
     }
 
     // --- Layout ----------------------------------------------------------
@@ -145,7 +158,16 @@ export class MainView {
             title: 'Delete the selected item',
             disabled: true,
         });
-        this.columnsButton = button('Columns...', { class: 'secondary' });
+        this.attributeColumnsButton = button('Hide attributes', {
+            class: 'secondary',
+            title: 'Show or hide the Disambiguation, Tags, Flags, Aliases, Status, '
+                + 'Understanding and Pinned columns',
+        });
+        this.valueColumnsButton = button('Hide values', {
+            class: 'secondary',
+            title: 'Show or hide the value columns of the selected type',
+        });
+        this.updateColumnButtons();
         this.propertyFilterButton = button('Filter Properties...', { class: 'secondary' });
 
         // On a phone the secondary actions move into this menu, so the row
@@ -162,7 +184,8 @@ export class MainView {
             [this.overflowTrigger, this.overflowPopup]);
         this.inlineActions = el('div', { class: 'action-buttons' }, [
             this.quickAddButton, this.addButton, this.inboxButton, this.editButton,
-            this.deleteButton, this.columnsButton, this.propertyFilterButton,
+            this.deleteButton, this.attributeColumnsButton, this.valueColumnsButton,
+            this.propertyFilterButton,
         ]);
 
         const actionBar = el('section', { class: 'action-bar' }, [
@@ -540,7 +563,7 @@ export class MainView {
         // On a phone the secondary actions live behind the overflow menu.
         const host = this.compact ? this.overflowPopup : this.inlineActions;
         for (const action of [this.addButton, this.inboxButton, this.editButton, this.deleteButton,
-            this.columnsButton, this.propertyFilterButton]) {
+            this.attributeColumnsButton, this.valueColumnsButton, this.propertyFilterButton]) {
             action.classList.toggle('menu-item', this.compact);
             if (action.parentElement !== host) host.appendChild(action);
         }
@@ -620,7 +643,8 @@ export class MainView {
         this.addButton.addEventListener('click', () => this.addItem());
         this.editButton.addEventListener('click', () => this.editSelectedItem());
         this.deleteButton.addEventListener('click', () => this.deleteSelectedItem());
-        this.columnsButton.addEventListener('click', () => this.chooseColumns());
+        this.attributeColumnsButton.addEventListener('click', () => this.toggleAttributeColumns());
+        this.valueColumnsButton.addEventListener('click', () => this.toggleValueColumns());
         this.propertyFilterButton.addEventListener('click', () => this.choosePropertyFilters());
         this.pageSizeSelect.addEventListener('change', () => {
             this.pageSize = Number.parseInt(this.pageSizeSelect.value, 10) || 20;
@@ -825,7 +849,9 @@ export class MainView {
     }
 
     isHidden(column) {
-        return Boolean(column.configurable) && this.columnVisibility[column.label] === false;
+        if (column.configurable) return !this.showAttributeColumns;
+        if (column.field) return !this.showValueColumns;
+        return false;
     }
 
     cellText(item, column) {
@@ -901,7 +927,7 @@ export class MainView {
                 }));
             }
             for (const column of this.columns) {
-                if (!column.field) continue;
+                if (!column.field || this.isHidden(column)) continue;
                 const value = this.cellText(item, column);
                 if (value) {
                     badges.appendChild(el('span', {
@@ -1431,26 +1457,42 @@ export class MainView {
         }
     }
 
-    async chooseColumns() {
-        const visibility = await openColumnDialog(CONFIGURABLE_COLUMNS, this.columnVisibility);
-        if (!visibility) return;
-        this.columnVisibility = visibility;
-        // A web preference, stored per browser. The desktop keeps its own.
-        writeLocal(STORAGE.columns, JSON.stringify(visibility));
+    // Each button names what the click does, so the label is the opposite of
+    // the current state.
+    updateColumnButtons() {
+        this.attributeColumnsButton.textContent =
+            this.showAttributeColumns ? 'Hide attributes' : 'Show attributes';
+        this.valueColumnsButton.textContent =
+            this.showValueColumns ? 'Hide values' : 'Show values';
+    }
+
+    async toggleAttributeColumns() {
+        this.showAttributeColumns = !this.showAttributeColumns;
+        this.saveColumnVisibility();
+        this.updateColumnButtons();
         // A hidden column must not keep filtering the result set.
-        const clearFilter = (label, key) => {
-            if (visibility[label]) return;
-            this.filters[key] = '';
-            const control = this.filterControls.get(key);
-            if (control) control.value = '';
-        };
-        clearFilter('Disambiguation', 'disambiguation');
-        clearFilter('Tags', 'tag');
-        clearFilter('Flags', 'flag');
-        clearFilter('Aliases', 'alias');
-        clearFilter('Status', 'status');
-        clearFilter('Understanding', 'understanding');
-        clearFilter('Pinned', 'pinned');
+        if (!this.showAttributeColumns) {
+            for (const key of ATTRIBUTE_FILTERS) {
+                this.filters[key] = '';
+                const control = this.filterControls.get(key);
+                if (control) control.value = '';
+            }
+        }
+        await this.refreshAfterColumnChange();
+    }
+
+    async toggleValueColumns() {
+        this.showValueColumns = !this.showValueColumns;
+        this.saveColumnVisibility();
+        this.updateColumnButtons();
+        if (!this.showValueColumns) {
+            this.filters.values = {};
+            for (const { node } of this.valueFilterControls.values()) node.value = '';
+        }
+        await this.refreshAfterColumnChange();
+    }
+
+    async refreshAfterColumnChange() {
         this.applyColumnVisibility();
         this.placeFilterWidgets();
         await this.resetPaginationAndRefresh();

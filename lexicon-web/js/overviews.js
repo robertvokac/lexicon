@@ -1,5 +1,4 @@
-// ValueListDialog (all tags/flags/aliases), PropertyFilterDialog and the
-// column visibility dialog.
+// ValueListDialog (all tags/flags/aliases) and PropertyFilterDialog.
 import { api } from './api.js';
 import { field, listEditor, openDialog } from './dialogs.js';
 import { el } from './utils.js';
@@ -94,26 +93,5 @@ export async function openPropertyFilterDialog(currentFilters) {
             onClick: () => { filters = []; editor.render(filters); },
         }],
         onAccept: () => filters,
-    });
-}
-
-export async function openColumnDialog(configurableColumns, visibility) {
-    const checkboxes = new Map();
-    const body = el('div', { class: 'column-list' });
-    for (const name of configurableColumns) {
-        const checkbox = el('input', { type: 'checkbox' });
-        checkbox.checked = visibility[name] !== false;
-        checkboxes.set(name, checkbox);
-        body.appendChild(el('label', { class: 'checkbox-row' }, [checkbox, el('span', { text: name })]));
-    }
-    return openDialog({
-        title: 'Visible columns',
-        body,
-        acceptLabel: 'Save',
-        onAccept: () => {
-            const result = {};
-            for (const [name, checkbox] of checkboxes) result[name] = checkbox.checked;
-            return result;
-        },
     });
 }
