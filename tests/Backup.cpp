@@ -142,13 +142,16 @@ void checkBackups() {
         "two backups in one second are refused");
 
   // A backup interrupted long ago is cleared away; one in progress is not.
+  // Their ages count from the backup's time, not from today.
+  const auto third = at("2026-09-22T08:00:00Z");
   const auto stale = backupDirectory / ".partial-lexicon-backup-2026-09-01T08-00-00Z-dead";
   const auto running = backupDirectory / ".partial-lexicon-backup-2026-09-22T07-59-59Z-busy";
   fs::create_directories(stale);
   fs::create_directories(running);
   fs::create_directories(backupDirectory / "lexicon-backup-2026-09-19T08-00-00Z"); // No manifest: incomplete.
-  fs::last_write_time(stale, fs::file_time_type::clock::now() - 48h);
-  made = lexicon::backup::createBackup(options, at("2026-09-22T08:00:00Z"));
+  fs::last_write_time(stale, std::chrono::clock_cast<fs::file_time_type::clock>(third - 48h));
+  fs::last_write_time(running, std::chrono::clock_cast<fs::file_time_type::clock>(third - 1s));
+  made = lexicon::backup::createBackup(options, third);
   check(made.has_value(), "a third backup is made");
   check(!fs::exists(stale) && fs::exists(running), "a stale partial backup is removed, a recent one kept");
   check(made && made->removed == std::vector<std::string>{"lexicon-backup-2026-09-20T08-00-00Z"},
