@@ -278,6 +278,54 @@ std::string itemKey(int groupId, const std::string &title,
 
 } // namespace
 
+Result<ItemRecord> InboxService::capture(const std::string &title, const std::string &content) {
+  UnitOfWork unit(repository_);
+  if (auto begun = unit.begin(); !begun)
+    return std::unexpected(begun.error());
+  auto group = repository_.defaultGroupId();
+  if (!group)
+    return std::unexpected(group.error());
+  const auto inboxType = [&]() -> Result<int> {
+    const auto find = [&](const std::vector<ItemTypeRecord> &types, int scope) {
+      const auto found = std::find_if(types.begin(), types.end(), [&](const auto &type) {
+        return type.groupId == scope && asciiFold(trim(type.name)) == asciiFold(kTypeName);
+      });
+      return found == types.end() ? -1 : found->id;
+    };
+    auto types = repository_.loadItemTypes(-1);
+    if (!types)
+      return std::unexpected(types.error());
+    for (const int scope : {-1, *group})
+      if (const int id = find(*types, scope); id > 0)
+        return id;
+    if (auto created = repository_.upsertItemType({-1, -1, {}, kTypeName, "Ideas caught in the Inbox, to sort out later."});
+        !created)
+      return std::unexpected(created.error());
+    types = repository_.loadItemTypes(-1);
+    if (!types)
+      return std::unexpected(types.error());
+    if (const int id = find(*types, -1); id > 0)
+      return id;
+    return std::unexpected(Error{Error::Code::Storage, "The Inbox type was not stored."});
+  };
+  auto type = inboxType();
+  if (!type)
+    return std::unexpected(type.error());
+  ItemRecord item;
+  item.groupId = *group;
+  item.itemTypeId = *type;
+  item.title = title;
+  item.content = content;
+  // A refused idea - no title, a title already in Default - leaves nothing
+  // behind, not even a new Inbox type.
+  auto id = repository_.saveItemReturningId(item);
+  if (!id)
+    return std::unexpected(id.error());
+  if (auto committed = unit.commit(); !committed)
+    return std::unexpected(committed.error());
+  return repository_.loadItem(*id);
+}
+
 Result<DictionaryExport> ExchangeService::exportDictionary() {
   // The write lock keeps another program from changing the dictionary half
   // way through; nothing is written, and the unit is rolled back.

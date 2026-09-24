@@ -1274,6 +1274,41 @@ void checkQuickAdd(Checks &checks) {
   checks.expect(twin.body.find("already exists in this group") != std::string::npos,
                 "and the answer says the item already exists");
 }
+void checkInbox(Checks &checks) {
+  // Every client's Inbox: one request, to Default with the type Inbox.
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const auto captured = client.post(
+      "/api/v1/inbox", Json{{"title", "Lock-free queue"}, {"content", "Try a ring buffer.\nPříliš žluťoučký kůň."}}.dump());
+  checks.expectEqual(captured.status, 201, "an idea is saved");
+  const auto item = parse(captured).at("item");
+  checks.expect(parse(captured).value("id", 0) > 0, "and reports its ID");
+  checks.expectEqual(item.value("groupName", std::string{}), "Default", "in Default");
+  checks.expectEqual(item.value("itemTypeName", std::string{}), "Inbox", "with the type Inbox");
+  checks.expectEqual(item.value("content", std::string{}), "Try a ring buffer.\nPříliš žluťoučký kůň.",
+                     "and its text as typed");
+  int inboxTypes = 0;
+  const auto types = parse(client.get("/api/v1/types"));
+  for (const auto &type : types.at("types"))
+    if (type.value("name", std::string{}) == "Inbox") {
+      ++inboxTypes;
+      checks.expect(type.at("groupId").is_null(), "the Inbox type is available in all groups");
+    }
+  checks.expectEqual(inboxTypes, 1, "the first idea created the Inbox type");
+  const auto second = parse(client.post("/api/v1/inbox", Json{{"title", "Arena allocator"}}.dump())).at("item");
+  checks.expectEqual(second.value("itemTypeId", 0), item.value("itemTypeId", -1), "the next idea reuses it");
+  checks.expectEqual(client.post("/api/v1/inbox", Json{{"title", " "}}.dump()).status, 400, "an idea needs a title");
+  checks.expectEqual(client.post("/api/v1/inbox", Json{{"content", "No title."}}.dump()).status, 400,
+                     "a title is required");
+  const auto twin = client.post("/api/v1/inbox", Json{{"title", "Lock-free queue"}}.dump());
+  checks.expectEqual(twin.status, 400, "a title already in Default is refused");
+  checks.expect(twin.body.find("already exists") != std::string::npos, "and the answer says why");
+  HttpTestClient anonymous("127.0.0.1", harness.port());
+  checks.expectEqual(anonymous.post("/api/v1/inbox", Json{{"title", "Sneaky"}}.dump()).status, 401,
+                     "the Inbox needs a session");
+}
+
 // The static client the server can serve itself: --web-dir in the config.
 void checkWebClient(Checks &checks) {
   namespace fs = std::filesystem;
@@ -1375,6 +1410,7 @@ int main() {
   checkSearchAndUsage(checks);
   checkBlobs(checks);
   checkQuickAdd(checks);
+  checkInbox(checks);
   checkConflicts(checks);
   checkExportImport(checks);
   checkReview(checks);

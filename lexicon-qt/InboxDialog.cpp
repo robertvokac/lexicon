@@ -12,7 +12,7 @@ InboxDialog::InboxDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("Inbox");
     resize(560, 380);
     auto* root = new QVBoxLayout(this);
-    auto* hint = new QLabel("Saved to Default, without a type. Sort it out later.", this);
+    auto* hint = new QLabel("Saved to Default, with the type Inbox. Sort it out later.", this);
     hint->setEnabled(false);
     root->addWidget(hint);
     auto* form = new QFormLayout();
@@ -51,22 +51,13 @@ void InboxDialog::save() {
         m_title->setFocus();
         return;
     }
-    QString error;
-    const int groupId = services().groups.defaultGroupId(&error);
-    if (groupId <= 0) {
-        fail(error.isEmpty() ? "Cannot find the Default group." : error);
-        return;
-    }
-    ItemRecord item;
-    item.groupId = groupId;
-    item.title = title;
-    item.content = m_content->toPlainText();
+    // Default, and the Inbox type - made the first time - in one step.
+    auto saved = services().core.inbox.capture(qtbridge::toCore(title), qtbridge::toCore(m_content->toPlainText()));
     // Everything typed stays when the save is refused, with the reason.
-    const int id = services().items.createItem(item, &error);
-    if (id <= 0) {
-        fail(error);
+    if (!saved) {
+        fail(qtbridge::toQt(saved.error().message));
         return;
     }
-    m_savedItemId = id;
+    m_savedItemId = saved->id;
     accept();
 }

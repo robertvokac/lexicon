@@ -52,7 +52,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Column sorting in the item table
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
-- An Inbox for ideas: a title and plain text, saved to `Default` without a type in one step; on Android also without a connection, sent when the server is back
+- An Inbox for ideas: a title and plain text, saved to `Default` with the type `Inbox` in one step; on Android also without a connection, sent when the server is back
 - Alarms: reminders with a title, a description and the date and time they go off, listed and edited in every client
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - Cards: questions and answers about an item, and a quiz over one item or its relationship neighbourhood - the question, the answer on request, then Yes or No - that counts how often each card was known, apart from Review
@@ -153,7 +153,7 @@ it on the others.
 
 <img src="images/Screenshot_Inbox.png" alt="Desktop: the Inbox" width="480">
 
-A title and a few plain lines, saved to `Default` without a type in one step.
+A title and a few plain lines, saved to `Default` with the type `Inbox` in one step.
 
 #### Dark mode
 
@@ -475,7 +475,7 @@ You have three add options in the main toolbar, in this order:
 
 - `Add`: quick add path; title is prefilled from current search text
 - `Add ...`: full add dialog path
-- `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group without a type, whatever the filters show
+- `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group with the type `Inbox`, whatever the filters show. The first idea creates the `Inbox` type, available in all groups, so an idea keeps it when you move it to its proper group; a type called `Inbox` that is already there - in all groups or in `Default` - is used instead
 
 Both actions use the selected Type filter for the new item. With `All groups` selected, a group-scoped type also determines the new item's group.
 

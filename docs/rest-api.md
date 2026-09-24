@@ -214,6 +214,20 @@ nodes are list rows plus their `depth`, the centre first; the edges are the
 links among the nodes, in the shape of the link endpoints. `truncated` says
 that more items were in reach than `limit` allowed.
 
+```http
+POST /api/v1/inbox                               → 201 { "id": 9, "item": { ... } }
+{ "title": "Lock-free queue", "content": "Try a ring buffer." }
+```
+
+The Inbox of every client: an idea in one request, saved to the `Default`
+group with the type `Inbox` whatever the client shows. The type is the one
+called `Inbox` (ignoring ASCII case) available in all groups, or else the one
+of `Default`; without either, the first idea creates it, available in all
+groups, so an idea keeps its type when it moves to another group. `content` is
+optional plain text. A missing or blank title, or one already in `Default`, is
+refused with 400, and a refused idea leaves nothing behind, not even a new
+type.
+
 `resolve` is what a `[[Title]]` link in item content uses. The first of these
 that finds an item wins: the exact title (preferring an item without a
 disambiguation when none is given), the title ignoring ASCII case, an exact

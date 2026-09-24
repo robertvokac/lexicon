@@ -5,8 +5,6 @@ import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.ColumnFilters
 import com.robertvokac.lexicon.model.ItemQuery
-import com.robertvokac.lexicon.model.ItemWrite
-import com.robertvokac.lexicon.model.SaveItemRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -127,7 +125,7 @@ class IdeaOutbox(private val file: File, private val api: () -> LexiconApi) {
         if (sameTitle.isNotEmpty()) {
             return idea.copy(problem = "An item titled '${idea.title}' is already in Default. Change the title to send this idea.")
         }
-        api().createItem(SaveItemRequest(ItemWrite(groupId = groupId, title = idea.title, content = idea.content)))
+        api().captureIdea(idea.title, idea.content)
         return null
     }
 

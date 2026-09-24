@@ -9,7 +9,7 @@ class QLineEdit;
 class QPlainTextEdit;
 
 // The Inbox: an idea caught quickly - a title and plain text - saved to the
-// Default group without a type, whatever the main window's filters show.
+// Default group with the type Inbox, whatever the main window's filters show.
 class InboxDialog : public QDialog {
     Q_OBJECT
 

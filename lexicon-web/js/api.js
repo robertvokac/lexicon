@@ -209,6 +209,9 @@ export class LexiconApi {
         return this.get(`/items/${id}${query}`);
     }
     createItem(payload) { return this.post('/items', payload); }
+    // An Inbox idea: to Default with the type Inbox, which the server makes
+    // the first time. { id, item }.
+    captureIdea(title, content) { return this.post('/inbox', { title, content }); }
     updateItem(id, payload) { return this.put(`/items/${id}`, payload); }
     deleteItem(id) { return this.delete(`/items/${id}`); }
     logItemRead(id) { return this.request('POST', `/items/${id}/read`, { expect: 'none' }); }

@@ -6,6 +6,7 @@ import com.robertvokac.lexicon.AppContainer
 import com.robertvokac.lexicon.LexiconApplication
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.testing.FakeLexiconServer
+import com.robertvokac.lexicon.testing.INBOX_TYPE
 import com.robertvokac.lexicon.testing.TestEnvironment
 import com.robertvokac.lexicon.testing.signInDirectly
 import kotlinx.coroutines.runBlocking
@@ -57,7 +58,8 @@ class IdeaOutboxTest {
         assertTrue(outbox.ideas.value.isEmpty())
         val queue = inDefault("Lock-free queue").single()
         assertEquals("Try a ring buffer.\nMeasure it first.", queue.content)
-        assertNull(queue.itemTypeId)
+        assertEquals(INBOX_TYPE, queue.itemTypeName)
+        assertEquals("one Inbox type for both ideas", 1, fake.types.count { it.name == INBOX_TYPE })
         assertTrue(queue.id!! < inDefault("Arena allocator").single().id!!)
     }
 

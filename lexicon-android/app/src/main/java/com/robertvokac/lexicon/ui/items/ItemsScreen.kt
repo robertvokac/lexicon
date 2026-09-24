@@ -685,7 +685,7 @@ private fun WaitingIdeasDialog(
     }
 }
 
-/** An idea, caught quickly: a title and plain text, saved to Default without a type. */
+/** An idea, caught quickly: a title and plain text, saved to Default with the type Inbox. */
 @Composable
 internal fun InboxDialog(
     state: InboxState,
@@ -701,7 +701,7 @@ internal fun InboxDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Saved to Default, without a type. Sort it out later.",
+                    "Saved to Default, with the type Inbox. Sort it out later.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

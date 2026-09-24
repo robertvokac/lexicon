@@ -143,7 +143,7 @@ export class MainView {
         });
         this.inboxButton = button('Inbox', {
             class: 'secondary',
-            title: 'Save an idea quickly: a title and plain text, in Default without a type',
+            title: 'Save an idea quickly: a title and plain text, in Default with the type Inbox',
         });
         this.addButton = button('Add ...', {
             class: 'secondary',
@@ -1350,15 +1350,15 @@ export class MainView {
         }
     }
 
-    // An idea, caught quickly: a title and plain text, saved to Default without
-    // a type whatever the filters show.
+    // An idea, caught quickly: a title and plain text, saved to Default with
+    // the type Inbox whatever the filters show.
     async openInbox() {
         const title = el('input', { type: 'text', maxlength: '2000', autocomplete: 'off' });
         const content = el('textarea', { rows: '8', class: 'inbox-content', placeholder: 'Plain text' });
         const saved = await openDialog({
             title: 'Inbox',
             body: el('div', {}, [
-                el('p', { class: 'hint', text: 'Saved to Default, without a type. Sort it out later.' }),
+                el('p', { class: 'hint', text: 'Saved to Default, with the type Inbox. Sort it out later.' }),
                 field('Title:', title),
                 field('Idea:', content),
             ]),
@@ -1376,10 +1376,8 @@ export class MainView {
                     return undefined;
                 }
                 try {
-                    const groupId = await api.defaultGroupId();
-                    const result = await api.createItem({
-                        item: { groupId, itemTypeId: null, title: text, content: content.value },
-                    });
+                    // Default and the Inbox type, made the first time, in one request.
+                    const result = await api.captureIdea(text, content.value);
                     return result.id;
                 } catch (error) {
                     fail(error.message);
@@ -1389,6 +1387,8 @@ export class MainView {
         });
         if (!saved) return;
         await this.refreshGroups();
+        // The first idea makes the Inbox type, which the type filter offers.
+        await this.refreshTypes();
         await this.refreshItems();
     }
 

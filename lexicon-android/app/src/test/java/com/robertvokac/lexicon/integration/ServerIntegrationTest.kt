@@ -379,6 +379,31 @@ class ServerIntegrationTest {
     }
 
     @Test
+    fun theInboxSavesToDefaultWithTheInboxTypeOverRealRest() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val stamp = System.nanoTime()
+            val first = api.captureIdea("Lock-free queue $stamp", "Try a ring buffer.\nPříliš žluťoučký kůň.")
+            assertEquals(api.defaultGroupId(), first.item.groupId)
+            assertEquals("Inbox", first.item.itemTypeName)
+            assertEquals("Try a ring buffer.\nPříliš žluťoučký kůň.", first.item.content)
+            val second = api.captureIdea("Arena allocator $stamp", "")
+            assertEquals("the Inbox type is made once and reused", first.item.itemTypeId, second.item.itemTypeId)
+            assertEquals(1, api.types().count { it.name == "Inbox" && it.groupId == null })
+            try {
+                api.captureIdea("Lock-free queue $stamp", "Again.")
+                fail("A title already in Default is refused")
+            } catch (_: ApiException.Validation) {
+            }
+            sessions.logout().join()
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
     fun cardsAndTheirQuizOverRealRest() = runBlocking {
         val environment = TestEnvironment()
         try {

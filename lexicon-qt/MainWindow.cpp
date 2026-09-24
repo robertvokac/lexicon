@@ -196,7 +196,7 @@ void MainWindow::setupUi() {
 
     auto* quickAddButton = new QPushButton("Add", centralWidget);
     auto* inboxButton = new QPushButton("Inbox", centralWidget);
-    inboxButton->setToolTip("Save an idea quickly: a title and plain text, in Default without a type (Ctrl+I)");
+    inboxButton->setToolTip("Save an idea quickly: a title and plain text, in Default with the type Inbox (Ctrl+I)");
     auto* addButton = new QPushButton("Add ...", centralWidget);
     auto* editButton = new QPushButton("Edit", centralWidget);
     auto* deleteButton = new QPushButton("Delete", centralWidget);

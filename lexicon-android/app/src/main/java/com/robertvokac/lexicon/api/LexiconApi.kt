@@ -28,6 +28,7 @@ import com.robertvokac.lexicon.model.ReviewQueue
 import com.robertvokac.lexicon.model.ReviewRating
 import com.robertvokac.lexicon.model.ReviewRequest
 import com.robertvokac.lexicon.model.ImportReport
+import com.robertvokac.lexicon.model.InboxIdea
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemIdEnvelope
@@ -142,6 +143,13 @@ class LexiconApi(private val client: ApiClient) {
         client.put("items/$id", request, SaveItemRequest.serializer(), SavedItem.serializer())
 
     suspend fun deleteItem(id: Int) = client.send("DELETE", "items/$id")
+
+    /**
+     * An Inbox idea: saved to Default with the type Inbox, which the server
+     * makes the first time, in one request.
+     */
+    suspend fun captureIdea(title: String, content: String): SavedItem =
+        client.post("inbox", InboxIdea(title, content), InboxIdea.serializer(), SavedItem.serializer())
 
     /** Records a read in the server's log. */
     suspend fun logItemRead(id: Int) = client.send("POST", "items/$id/read")

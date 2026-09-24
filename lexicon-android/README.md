@@ -196,7 +196,8 @@ accept it; install a proper certificate instead.
   are shown first, and nothing is added until you choose **Add anyway**.
   **More…** opens the full editor instead, the desktop's Add ….
 - **Inbox.** The tray button above the list catches an idea: a title and plain
-  text, saved to `Default` without a type, whatever the filters show.
+  text, saved to `Default` with the type `Inbox` - which the server creates the
+  first time - whatever the filters show.
 - **Offline Inbox.** An idea never waits for the network. When the server
   cannot be reached - no signal, the server or a proxy down, the session
   expired - the idea is kept on the phone and a banner above the list says how

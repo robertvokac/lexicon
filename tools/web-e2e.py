@@ -287,7 +287,7 @@ def run(browser, web, server):
         b.wait("[...document.querySelectorAll('tbody tr')].some(r => r.textContent.includes('Pointer provenance'))",
                "the idea in the list")
         item = api["client"].item("Pointer provenance")
-        if not item or item["groupName"] != "Default" or item.get("itemTypeId") is not None:
+        if not item or item["groupName"] != "Default" or item.get("itemTypeName") != "Inbox":
             raise Failure(f"The server holds {item!r}.")
 
     @step("edit and save an item")

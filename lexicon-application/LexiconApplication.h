@@ -263,6 +263,24 @@ private:
   Repository &repository_;
 };
 
+// The Inbox: an idea caught in one step - a title and plain text - saved to
+// the Default group with the type Inbox, whatever a client's filters show.
+class InboxService {
+public:
+  // The type every Inbox idea gets.
+  static constexpr const char *kTypeName = "Inbox";
+
+  explicit InboxService(Repository &repository) : repository_(repository) {}
+  // Saves the idea in one unit of work and returns it as stored. The Inbox
+  // type is one available in all groups, or else one of Default, matched by
+  // name ignoring ASCII case; without one, it is created available in all
+  // groups, so an idea keeps its type when it moves to another group.
+  Result<ItemRecord> capture(const std::string &title, const std::string &content);
+
+private:
+  Repository &repository_;
+};
+
 // A card on its way through a quiz, with the item it asks about.
 struct QuizCard {
   CardRecord card;
@@ -368,7 +386,7 @@ public:
       : items(repository), types(repository), groups(repository),
         links(repository), search(repository), configuration(repository),
         blobs(repository), exchange(repository), review(repository),
-        alarms(repository), cards(repository, links) {}
+        alarms(repository), cards(repository, links), inbox(repository) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -381,5 +399,6 @@ public:
   AlarmService alarms;
   // After links, whose neighbourhood it quizzes.
   CardService cards;
+  InboxService inbox;
 };
 } // namespace lexicon

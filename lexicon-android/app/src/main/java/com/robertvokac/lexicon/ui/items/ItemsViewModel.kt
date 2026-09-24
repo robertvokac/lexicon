@@ -51,7 +51,7 @@ data class QuickAddState(
     val duplicates: DuplicateCheck? = null,
 )
 
-/** The Inbox: an idea caught quickly, as plain text, in Default and without a type. */
+/** The Inbox: an idea caught quickly, as plain text, in Default with the type Inbox. */
 data class InboxState(
     val title: String = "",
     val content: String = "",
@@ -491,7 +491,7 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun dismissInbox() = _state.update { it.copy(inbox = null) }
 
-    /** Saves the idea to Default, without a type, whatever the filters show. */
+    /** Saves the idea to Default with the type Inbox, whatever the filters show. */
     fun submitInbox() {
         val inbox = _state.value.inbox ?: return
         if (inbox.busy) return
@@ -503,11 +503,12 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(inbox = inbox.copy(busy = true, error = null)) }
         viewModelScope.launch {
             try {
-                val groupId = api.defaultGroupId()
-                val saved = api.createItem(SaveItemRequest(ItemWrite(groupId = groupId, title = title, content = inbox.content)))
+                val saved = api.captureIdea(title, inbox.content)
                 inbox.waitingId?.let { container.outbox.remove(it) }
                 _state.update { it.copy(inbox = null, message = UserMessage("Saved “$title” to the Inbox.", openItemId = saved.id)) }
                 container.dataChanges.itemChanged(saved.id)
+                // The first idea makes the Inbox type, which the filters offer.
+                if (_state.value.types.none { it.id == saved.item.itemTypeId }) container.dataChanges.typesChanged()
             } catch (failure: ApiException) {
                 val me = identity()
                 if (me != null && IdeaOutbox.keepsForLater(failure)) {

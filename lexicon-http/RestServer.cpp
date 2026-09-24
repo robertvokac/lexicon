@@ -1048,6 +1048,24 @@ void RestServer::Impl::registerRoutes() {
     saveItem(*body, -1, response);
   });
 
+  // The Inbox: an idea in one step, to Default with the type Inbox, which is
+  // created the first time.
+  api.Post("/api/v1/inbox", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto title = requiredString(*body, "title");
+    const auto content = optionalString(*body, "content");
+    auto item = guarded.with([&](LexiconApplication &application) {
+      return application.inbox.capture(title, content);
+    });
+    if (!item) {
+      respondError(response, item.error(), "captureIdea");
+      return;
+    }
+    respondJson(response, 201, Json{{"id", item->id}, {"item", toJson(*item)}});
+  });
+
   api.Put("/api/v1/items/:id", [this, saveItem](const Request &request,
                                                 Response &response) {
     auto id = pathId(request, response, "id");

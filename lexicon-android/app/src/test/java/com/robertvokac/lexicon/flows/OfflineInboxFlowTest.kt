@@ -15,6 +15,7 @@ import com.robertvokac.lexicon.AppContainer
 import com.robertvokac.lexicon.LexiconApplication
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.testing.FakeLexiconServer
+import com.robertvokac.lexicon.testing.INBOX_TYPE
 import com.robertvokac.lexicon.testing.TestEnvironment
 import com.robertvokac.lexicon.testing.signInDirectly
 import com.robertvokac.lexicon.testing.waitForCondition
@@ -85,7 +86,7 @@ class OfflineInboxFlowTest {
 
         fake.unavailable = true
         compose.onNodeWithContentDescription("Inbox: save an idea").performClick()
-        compose.waitForText("Saved to Default, without a type. Sort it out later.")
+        compose.waitForText("Saved to Default, with the type Inbox. Sort it out later.")
         field("Title").performTextInput("Lock-free queue")
         field("Idea").performTextInput("Try a ring buffer.")
         inDialog("Save").performClick()
@@ -100,6 +101,7 @@ class OfflineInboxFlowTest {
         compose.waitForCondition { fake.items.values.any { it.title == "Lock-free queue" } }
         compose.waitUntilGone(hasText("1 idea waits on this phone", substring = true))
         assertEquals("Try a ring buffer.", fake.items.values.single { it.title == "Lock-free queue" }.content)
+        assertEquals(INBOX_TYPE, fake.items.values.single { it.title == "Lock-free queue" }.itemTypeName)
         assertTrue(container.outbox.ideas.value.isEmpty())
     }
 
@@ -112,7 +114,7 @@ class OfflineInboxFlowTest {
         show(container)
         compose.waitForText("Cannot reach the server")
         inDialog("Save an idea for later").performClick()
-        compose.waitForText("Saved to Default, without a type. Sort it out later.")
+        compose.waitForText("Saved to Default, with the type Inbox. Sort it out later.")
         inDialog("Save").performClick()
         compose.waitForText("Enter a title.")
         field("Title").performTextInput("Arena allocator")
@@ -124,6 +126,7 @@ class OfflineInboxFlowTest {
         inDialog("Retry").performClick()
         compose.waitForCondition { fake.items.values.any { it.title == "Arena allocator" } }
         assertEquals("Bump pointer.", fake.items.values.single { it.title == "Arena allocator" }.content)
+        assertEquals(INBOX_TYPE, fake.items.values.single { it.title == "Arena allocator" }.itemTypeName)
         // The list shows it, and the phone keeps nothing back.
         compose.waitForText("Arena allocator", substring = true)
         assertTrue(container.outbox.ideas.value.isEmpty())

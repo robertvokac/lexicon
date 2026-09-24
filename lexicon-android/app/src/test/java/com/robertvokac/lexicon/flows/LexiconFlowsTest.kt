@@ -43,6 +43,7 @@ import com.robertvokac.lexicon.model.ReviewRating
 import com.robertvokac.lexicon.ui.LaunchRequests
 import com.robertvokac.lexicon.ui.LexiconRoot
 import com.robertvokac.lexicon.testing.FakeLexiconServer
+import com.robertvokac.lexicon.testing.INBOX_TYPE
 import com.robertvokac.lexicon.testing.TestEnvironment
 import com.robertvokac.lexicon.testing.TestImages
 import com.robertvokac.lexicon.testing.waitFor
@@ -227,22 +228,25 @@ class LexiconFlowsTest {
     }
 
     @Test
-    fun theInboxSavesAnIdeaToDefaultWithoutAType() {
+    fun theInboxSavesAnIdeaToDefaultWithTheInboxType() {
         login()
         compose.onNodeWithContentDescription("Inbox: save an idea").performClick()
-        compose.waitForText("Saved to Default, without a type. Sort it out later.")
+        compose.waitForText("Saved to Default, with the type Inbox. Sort it out later.")
         inDialog("Save").performClick()
         compose.waitForText("Enter a title.")
-        assertTrue(fake.requestsTo("POST", "/api/v1/items").isEmpty())
+        assertTrue(fake.requestsTo("POST", "/api/v1/inbox").isEmpty())
         field("Title").performTextInput("Lock-free queue")
         field("Idea").performTextInput("Try a ring buffer.\nMeasure it first.")
         inDialog("Save").performClick()
-        compose.waitForCondition { fake.requestsTo("POST", "/api/v1/items").isNotEmpty() }
-        val item = lastBody("POST", "/api/v1/items")["item"]!!.jsonObject
-        assertEquals("Lock-free queue", item["title"]!!.jsonPrimitive.content)
-        assertEquals("Try a ring buffer.\nMeasure it first.", item["content"]!!.jsonPrimitive.content)
-        assertEquals(1, item["groupId"]!!.jsonPrimitive.int)
-        assertEquals("null", item["itemTypeId"].toString())
+        compose.waitForCondition { fake.requestsTo("POST", "/api/v1/inbox").isNotEmpty() }
+        val idea = lastBody("POST", "/api/v1/inbox")
+        assertEquals("Lock-free queue", idea["title"]!!.jsonPrimitive.content)
+        assertEquals("Try a ring buffer.\nMeasure it first.", idea["content"]!!.jsonPrimitive.content)
+        // The server puts it in Default and gives it the Inbox type, made the first time.
+        assertTrue(fake.requestsTo("POST", "/api/v1/items").isEmpty())
+        val saved = fake.items.values.single { it.title == "Lock-free queue" }
+        assertEquals(1, saved.groupId)
+        assertEquals(INBOX_TYPE, saved.itemTypeName)
         compose.waitForText("Lock-free queue")
     }
 

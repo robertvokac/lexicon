@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <vector>
 
 namespace {
 template <class T>
@@ -139,6 +140,69 @@ int main() {
   if (!check(found, "Find UTF-8 item") ||
       !condition(*found == *localizedId, "UTF-8 lookup failed"))
     return 1;
+
+  // The Inbox: an idea goes to Default with the type Inbox, which the first
+  // idea creates, available in all groups, and every later one reuses.
+  const auto inboxTypes = [&] {
+    std::vector<lexicon::ItemTypeRecord> matches;
+    for (const auto &candidate : application.types.loadItemTypes(-1).value_or(std::vector<lexicon::ItemTypeRecord>{}))
+      if (candidate.name == "Inbox") matches.push_back(candidate);
+    return matches;
+  };
+  if (!condition(inboxTypes().empty(), "A fresh database already has an Inbox type"))
+    return 1;
+  auto blank = application.inbox.capture("  ", "No title.");
+  if (!condition(!blank && blank.error().code == lexicon::Error::Code::Validation,
+                 "An idea without a title was accepted") ||
+      !condition(inboxTypes().empty(), "A refused idea left an Inbox type behind"))
+    return 1;
+  auto idea = application.inbox.capture("Lock-free queue", "Try a ring buffer.\nMeasure it first.");
+  if (!check(idea, "Capture an idea") ||
+      !condition(idea->groupId == *groupId && idea->groupName == "Default", "An idea did not go to Default") ||
+      !condition(idea->itemTypeName == "Inbox" && idea->content == "Try a ring buffer.\nMeasure it first.",
+                 "An idea did not get the Inbox type or its text"))
+    return 1;
+  const auto inbox = inboxTypes();
+  if (!condition(inbox.size() == 1 && inbox[0].groupId <= 0 && inbox[0].id == idea->itemTypeId,
+                 "The Inbox type was not created once, available in all groups"))
+    return 1;
+  auto nextIdea = application.inbox.capture("Arena allocator", "");
+  if (!check(nextIdea, "Capture a second idea") ||
+      !condition(nextIdea->itemTypeId == idea->itemTypeId && inboxTypes().size() == 1,
+                 "A second idea did not reuse the Inbox type"))
+    return 1;
+  auto twin = application.inbox.capture("Lock-free queue", "Again.");
+  if (!condition(!twin && twin.error().code == lexicon::Error::Code::Validation,
+                 "An idea with a title already in Default was accepted"))
+    return 1;
+  // The idea moves on to another group and keeps its type.
+  if (!check(application.groups.upsertGroup({-1, "C++", "", 5}), "Create C++"))
+    return 1;
+  int cpp = -1;
+  for (const auto &group : application.groups.loadGroups().value_or(std::vector<lexicon::GroupRecord>{}))
+    if (group.name == "C++") cpp = group.id;
+  auto moved = *application.items.loadItem(idea->id);
+  moved.groupId = cpp;
+  if (!check(application.items.saveItem(moved), "Move an idea to another group") ||
+      !condition(application.items.loadItem(idea->id)->itemTypeName == "Inbox", "A moved idea lost its type"))
+    return 1;
+
+  // An Inbox type someone made already - any case, in Default - is the one used.
+  {
+    const auto otherPath = (directory / "inbox.db").string();
+    SqliteRepository otherRepository;
+    if (!check(otherRepository.open(otherPath), "Open a second database"))
+      return 1;
+    lexicon::LexiconApplication other(otherRepository);
+    const int otherDefault = other.groups.defaultGroupId().value_or(-1);
+    if (!check(other.types.upsertItemType({-1, otherDefault, {}, "inbox", "Mine."}), "Create a Default inbox type"))
+      return 1;
+    auto mine = other.inbox.capture("Kept in my type", "");
+    const auto all = other.types.loadItemTypes(-1).value_or(std::vector<lexicon::ItemTypeRecord>{});
+    if (!check(mine, "Capture into an existing type") ||
+        !condition(mine->itemTypeName == "inbox" && all.size() == 1, "An existing inbox type was not reused"))
+      return 1;
+  }
 
   const std::map<std::string, std::string> settings{{"view.theme", "tmavý"}};
   if (!check(application.configuration.saveConfiguration(settings),

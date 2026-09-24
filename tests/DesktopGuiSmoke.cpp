@@ -394,9 +394,9 @@ void checkInbox(lexicon::LexiconApplication &application) {
   save->click();
   check(dialog.result() == QDialog::Accepted && dialog.savedItemId() > 0, "the idea is saved");
   const auto item = application.items.loadItem(dialog.savedItemId());
-  check(item && item->groupName == "Default" && item->itemTypeId <= 0 &&
+  check(item && item->groupName == "Default" && item->itemTypeName == "Inbox" &&
             item->content == "Try a ring buffer.\nMeasure it first.",
-        "in Default, without a type, with the text as typed");
+        "in Default, with the type Inbox, with the text as typed");
   InboxDialog twin;
   child<QLineEdit>(twin, "inboxTitle")->setText("Lock-free queue");
   child<QPushButton>(twin, "inboxSave")->click();

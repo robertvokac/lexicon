@@ -162,6 +162,10 @@ data class ItemBundle(
 @Serializable
 data class SavedItem(val id: Int, val item: Item)
 
+/** The body of POST /inbox: an idea, saved to Default with the type Inbox. */
+@Serializable
+internal data class InboxIdea(val title: String, val content: String)
+
 /** An outgoing link in a save request. fromItemId is filled in by the server. */
 @Serializable
 data class OutgoingLinkWrite(

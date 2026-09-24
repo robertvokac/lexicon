@@ -36,6 +36,9 @@ import mockwebserver3.RecordedRequest
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 
+/** The type every Inbox idea gets, as on the real server. */
+const val INBOX_TYPE = "Inbox"
+
 /**
  * An in-memory stand-in for LexiconServer, for tests only. It speaks the
  * /api/v1 JSON shapes of docs/rest-api.md closely enough to drive the app's
@@ -349,6 +352,7 @@ class FakeLexiconServer : Dispatcher() {
                 json(buildJsonObject { put("itemId", found.id!!) })
             }
             path == "/items" && method == "POST" -> saveItem(request, null)
+            path == "/inbox" && method == "POST" -> captureIdea(request)
             segments.size == 2 && segments[0] == "items" && method == "GET" -> {
                 val id = segments[1].toIntOrNull() ?: return notFound()
                 val item = items[id] ?: return error(404, "not_found", "Item not found.")
@@ -565,6 +569,34 @@ class FakeLexiconServer : Dispatcher() {
         val end = minOf(content.length, start + 120)
         val middle = content.substring(start, end).replace('\n', ' ').replace('\r', ' ').trim()
         return (if (start > 0) "…" else "") + middle + (if (end < content.length) "…" else "")
+    }
+
+    /** The Inbox: to Default with the type Inbox - one of all groups, or else of Default - made when there is none. */
+    private fun captureIdea(request: RecordedRequest): MockResponse {
+        val body = bodyObject(request)
+        val title = body["title"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
+        require(title.isNotEmpty()) { "Item title cannot be empty." }
+        require(items.values.none { it.groupId == 1 && it.title == title && it.disambiguation.isEmpty() }) {
+            "An item titled '$title' already exists in this group."
+        }
+        val named = { type: ItemType, scope: Int? -> type.groupId == scope && type.name.equals(INBOX_TYPE, ignoreCase = true) }
+        val type = types.firstOrNull { named(it, null) } ?: types.firstOrNull { named(it, 1) }
+            ?: ItemType(nextId++, null, "", INBOX_TYPE, "Ideas caught in the Inbox, to sort out later.").also { types += it }
+        val itemId = nextId++
+        items[itemId] = Item(
+            id = itemId,
+            groupId = 1,
+            groupName = groups.first { it.id == 1 }.name,
+            itemTypeId = type.id,
+            itemTypeName = type.name,
+            title = title,
+            content = body["content"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            revision = 1,
+        )
+        return json(buildJsonObject {
+            put("id", itemId)
+            put("item", encode(items.getValue(itemId)))
+        }, 201)
     }
 
     private fun saveItem(request: RecordedRequest, id: Int?): MockResponse {
