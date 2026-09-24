@@ -37,7 +37,9 @@ struct Database {
   lexicon::LexiconApplication app{repository};
 
   int groupNamed(const std::string &name) {
-    for (const auto &group : *app.groups.loadGroups())
+    // Held here: a range-for over *loadGroups() would walk a destroyed list.
+    const auto groups = app.groups.loadGroups();
+    for (const auto &group : *groups)
       if (group.name == name) return group.id;
     return -1;
   }

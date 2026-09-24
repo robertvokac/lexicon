@@ -104,7 +104,9 @@ int main() {
 
   const int other = [&] {
     app.groups.upsertGroup({-1, "Elsewhere", "", 1});
-    for (const auto &g : *app.groups.loadGroups()) if (g.name == "Elsewhere") return g.id;
+    // Held here: a range-for over *loadGroups() would walk a destroyed list.
+    const auto groups = app.groups.loadGroups();
+    for (const auto &g : *groups) if (g.name == "Elsewhere") return g.id;
     return -1;
   }();
   lexicon::ItemRecord elsewhere;
