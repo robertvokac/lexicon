@@ -2,6 +2,7 @@
 
 #include "Result.h"
 #include <sqlite3.h>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -67,6 +68,7 @@ public:
   Statement(const Statement&) = delete;
   Statement& operator=(const Statement&) = delete;
   Statement &bind(int value) { check(sqlite3_bind_int(stmt_, index_++, value)); return *this; }
+  Statement &bindInt64(std::int64_t value) { check(sqlite3_bind_int64(stmt_, index_++, value)); return *this; }
   Statement &bind(const std::string &value) {
     check(sqlite3_bind_text(stmt_, index_++, value.data(), static_cast<int>(value.size()), SQLITE_TRANSIENT)); return *this;
   }
@@ -83,6 +85,7 @@ public:
   }
   void run() { if (step()) throw Failure("Unexpected row in write statement."); }
   int integer(int column) const { return sqlite3_column_int(stmt_, column); }
+  std::int64_t integer64(int column) const { return sqlite3_column_int64(stmt_, column); }
   std::string text(int column) const {
     const auto *data = sqlite3_column_text(stmt_, column);
     if (!data) return {};

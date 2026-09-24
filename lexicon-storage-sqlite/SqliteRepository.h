@@ -94,6 +94,13 @@ public:
   Result<std::vector<lexicon::AlarmRecord>> loadDueAlarms() override;
   Result<void> dismissAlarm(int alarmId) override;
   Result<void> snoozeAlarm(int alarmId, int minutes) override;
+  Result<std::vector<lexicon::CardRecord>> loadCards(lexicon::ItemId itemId) override;
+  Result<std::vector<lexicon::CardRecord>> loadCardsForItems(const std::vector<lexicon::ItemId> &itemIds) override;
+  Result<lexicon::CardRecord> loadCard(int cardId) override;
+  Result<int> createCard(const lexicon::CardRecord &card) override;
+  Result<void> updateCard(const lexicon::CardRecord &card) override;
+  Result<void> deleteCard(int cardId) override;
+  Result<void> recordCardAttempt(int cardId, bool success) override;
   Result<std::string> importBlob(const std::string &sourcePath) override;
   Result<std::string> importBlobData(const std::string &data) override;
   Result<std::string> readBlobData(const std::string &hash) override;

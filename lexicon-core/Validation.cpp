@@ -184,6 +184,24 @@ Result<void> validateAlarm(const AlarmRecord &alarm) {
     return invalid("An alarm needs a time as UTC YYYY-MM-DDTHH:MM:SSZ.");
   return {};
 }
+Result<void> validateCardText(std::string_view question, std::string_view answer) {
+  if (trim(question).empty())
+    return invalid("A card needs a question.");
+  if (trim(answer).empty())
+    return invalid("A card needs an answer.");
+  return {};
+}
+Result<void> validateCard(const CardRecord &card) {
+  if (card.itemId <= 0)
+    return invalid("A card belongs to an item.");
+  if (auto text = validateCardText(card.question, card.answer); !text)
+    return text;
+  if (card.successCount < 0 || card.failureCount < 0)
+    return invalid("A card cannot count fewer than zero answers.");
+  if (!card.lastAttempt.empty() && normalizedUtcTime(card.lastAttempt).empty())
+    return invalid("A card's last attempt is a UTC time YYYY-MM-DDTHH:MM:SSZ.");
+  return {};
+}
 Result<void> validateLink(const LinkRecord &link) {
   if (link.fromItemId <= 0 || link.toItemId <= 0)
     return invalid("Both link endpoints are required.");

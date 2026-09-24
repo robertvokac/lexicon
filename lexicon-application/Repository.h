@@ -73,6 +73,24 @@ public:
   virtual Result<void> dismissAlarm(int alarmId) = 0;
   // Moves the alarm to [minutes] from now and makes it ring again then.
   virtual Result<void> snoozeAlarm(int alarmId, int minutes) = 0;
+  // The cards of one item, in the order they were added; NotFound for an
+  // item that does not exist.
+  virtual Result<std::vector<CardRecord>> loadCards(ItemId itemId) = 0;
+  // The cards of these items: item by item in the given order, each item's
+  // in the order they were added. An ID given twice counts once; an item
+  // that does not exist has none.
+  virtual Result<std::vector<CardRecord>> loadCardsForItems(const std::vector<ItemId> &itemIds) = 0;
+  virtual Result<CardRecord> loadCard(int cardId) = 0;
+  // Inserts the card as given, statistics included - an imported card keeps
+  // them; returns its ID. NotFound when its item does not exist.
+  virtual Result<int> createCard(const CardRecord &card) = 0;
+  // Changes the question and the answer of the card with card.id. Its item
+  // and its statistics stay as they are.
+  virtual Result<void> updateCard(const CardRecord &card) = 0;
+  virtual Result<void> deleteCard(int cardId) = 0;
+  // Counts one answer in a single UPDATE, so that no concurrent attempt is
+  // lost, and stamps it with the database clock.
+  virtual Result<void> recordCardAttempt(int cardId, bool success) = 0;
   virtual Result<std::string> importBlob(const std::string &sourcePath) = 0;
   // The same for bytes held in memory, such as a file carried in an export.
   virtual Result<std::string> importBlobData(const std::string &data) = 0;

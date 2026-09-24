@@ -1193,6 +1193,146 @@ void RestServer::Impl::registerRoutes() {
     respondJson(response, 200, Json{{"items", toJsonArray(queue->items)}, {"dueCount", queue->dueCount}});
   });
 
+  // Cards -----------------------------------------------------------------
+  // Questions and answers about an item, and a quiz over them. Not Review: an
+  // answer counts on the card and never touches the item's review schedule.
+  api.Get("/api/v1/items/:id/cards", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto cards = guarded.with([id](LexiconApplication &application) { return application.cards.loadCards(*id); });
+    if (!cards) {
+      respondError(response, cards.error(), "loadCards");
+      return;
+    }
+    respondJson(response, 200, Json{{"cards", toJsonArray(*cards)}});
+  });
+
+  api.Post("/api/v1/items/:id/cards", [this](const Request &request, Response &response) {
+    auto itemId = pathId(request, response, "id");
+    if (!itemId)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto card = cardFromJson(*body);
+    if (card.id > 0) {
+      respondFailure(response, {400, "validation", "A new card must not carry an ID."});
+      return;
+    }
+    // A new card starts unanswered, whatever statistics the body carries.
+    auto created = guarded.with([&](LexiconApplication &application) {
+      return application.cards.createCard(*itemId, card.question, card.answer);
+    });
+    if (!created) {
+      respondError(response, created.error(), "createCard");
+      return;
+    }
+    respondJson(response, 201, Json{{"card", toJson(*created)}});
+  });
+
+  // The cards of the item alone at depth 0, or of its relationship
+  // neighbourhood at 1 to 3, as the graph finds it.
+  api.Get("/api/v1/items/:id/quiz-cards", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    int depth = 0;
+    if (const auto raw = queryValue(request, "depth"); !raw.empty()) {
+      if (raw.size() != 1 || raw[0] < '0' || raw[0] - '0' > CardService::kMaxDepth) {
+        respondFailure(response, {400, "validation", "'depth' must be between 0 and 3."});
+        return;
+      }
+      depth = raw[0] - '0';
+    }
+    int limit = 150;
+    if (const auto raw = queryValue(request, "limit"); !raw.empty()) {
+      const auto parsed = parseId(raw);
+      if (!parsed || *parsed > 300) {
+        respondFailure(response, {400, "validation", "'limit' must be between 1 and 300."});
+        return;
+      }
+      limit = *parsed;
+    }
+    auto quiz = guarded.with([&](LexiconApplication &application) {
+      return application.cards.quizCards(*id, depth, limit);
+    });
+    if (!quiz) {
+      respondError(response, quiz.error(), "quizCards");
+      return;
+    }
+    respondJson(response, 200, toJson(*quiz));
+  });
+
+  api.Get("/api/v1/cards/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto card = guarded.with([id](LexiconApplication &application) { return application.cards.loadCard(*id); });
+    if (!card) {
+      respondError(response, card.error(), "loadCard");
+      return;
+    }
+    respondJson(response, 200, Json{{"card", toJson(*card)}});
+  });
+
+  // Changes the question and the answer only. The item and the statistics in
+  // the body, if any, are ignored: only a quiz answer moves the counts.
+  api.Put("/api/v1/cards/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto card = cardFromJson(*body);
+    auto updated = guarded.with([&](LexiconApplication &application) {
+      return application.cards.updateCard(*id, card.question, card.answer);
+    });
+    if (!updated) {
+      respondError(response, updated.error(), "updateCard");
+      return;
+    }
+    respondJson(response, 200, Json{{"card", toJson(*updated)}});
+  });
+
+  api.Delete("/api/v1/cards/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto deleted = guarded.with([id](LexiconApplication &application) { return application.cards.deleteCard(*id); });
+    if (!deleted) {
+      respondError(response, deleted.error(), "deleteCard");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  // A quiz answer: { "success": true } for Yes, false for No. The time is
+  // the server's, never the client's.
+  api.Post("/api/v1/cards/:id/attempt", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto success = body->find("success");
+    if (success == body->end() || !success->is_boolean()) {
+      respondFailure(response, {400, "validation", "'success' must be true or false."});
+      return;
+    }
+    const bool knew = success->get<bool>();
+    auto card = guarded.with([&](LexiconApplication &application) {
+      return application.cards.recordAttempt(*id, knew);
+    });
+    if (!card) {
+      respondError(response, card.error(), "recordCardAttempt");
+      return;
+    }
+    respondJson(response, 200, Json{{"card", toJson(*card)}});
+  });
+
   const auto sendLinks = [this](int itemId, bool incoming, Response &response) {
     auto links = guarded.with([itemId, incoming](LexiconApplication &application) {
       return incoming ? application.links.loadBacklinks(itemId)

@@ -110,7 +110,8 @@ Result<std::string> exportDocument(LexiconApplication &application, bool include
                 {"types", std::move(types)},
                 {"items", http::toJsonArray(dictionary->items)},
                 {"links", std::move(links)},
-                {"alarms", http::toJsonArray(dictionary->alarms)}};
+                {"alarms", http::toJsonArray(dictionary->alarms)},
+                {"cards", http::toJsonArray(dictionary->cards)}};
   if (includeFiles) {
     std::set<std::string> hashes;
     for (const auto &item : dictionary->items)
@@ -167,6 +168,10 @@ Result<ImportReport> importDocument(LexiconApplication &application, std::string
     if (document.contains("alarms"))
       for (const auto &alarm : requiredArray(document, "alarms"))
         dictionary.alarms.push_back(http::alarmFromJson(alarm));
+    // Documents written before cards existed have none.
+    if (document.contains("cards"))
+      for (const auto &card : requiredArray(document, "cards"))
+        dictionary.cards.push_back(http::exportedCardFromJson(card));
     if (document.contains("blobs")) {
       for (const auto &blob : requiredArray(document, "blobs")) {
         const auto hash = http::requiredString(blob, "hash");
@@ -191,14 +196,15 @@ Json toJson(const ImportReport &report) {
               {"linksCreated", report.linksCreated},
               {"blobsImported", report.blobsImported},
               {"alarmsCreated", report.alarmsCreated},
+              {"cardsCreated", report.cardsCreated},
               {"warnings", report.warnings}};
 }
 
 std::string describe(const ImportReport &report) {
   std::string text = std::format(
-      "Imported {} item(s), {} link(s), {} file(s) and {} alarm(s); {} item(s) were already here. "
+      "Imported {} item(s), {} link(s), {} card(s), {} file(s) and {} alarm(s); {} item(s) were already here. "
       "Created {} group(s), {} type(s) and {} field(s).",
-      report.itemsCreated, report.linksCreated, report.blobsImported, report.alarmsCreated,
+      report.itemsCreated, report.linksCreated, report.cardsCreated, report.blobsImported, report.alarmsCreated,
       report.itemsSkipped, report.groupsCreated, report.typesCreated, report.fieldsCreated);
   for (const auto &warning : report.warnings)
     text += "\n- " + warning;

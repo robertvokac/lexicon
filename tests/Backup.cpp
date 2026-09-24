@@ -100,6 +100,11 @@ void checkBackups() {
   auto &application = *data.application;
   const auto first = data.itemWithFile("Monoid", "the first file");
   const auto orphan = storeFile(application, data.temp.path, "a file no value refers to");
+  // A card is a row of the database, so the copy holds it and so does the
+  // export taken from the copy.
+  const int monoid = application.search.findItemId("Monoid", "").value_or(-1);
+  const auto card = application.cards.createCard(monoid, "Co je monoid?", "Pologrupa s jednotkou.");
+  check(card.has_value() && application.cards.recordAttempt(card->id, true).has_value(), "a card, answered once");
   check(first.size() == 64 && orphan.size() == 64, "store the files");
   const auto backupDirectory = data.temp.path / "backups";
 
@@ -116,6 +121,10 @@ void checkBackups() {
   check(manifest.value("format", "") == "lexicon-backup" && manifest.value("blobs", 0) == 1, "with a manifest");
   const auto document = nlohmann::json::parse(readFile(one / "lexicon-export.json"));
   check(document.value("format", "") == "lexicon-export" && document.at("items").size() == 1, "and a portable export");
+  check(document.contains("cards") && document.at("cards").size() == 1 &&
+            document.at("cards").at(0).value("question", "") == "Co je monoid?" &&
+            document.at("cards").at(0).value("successCount", 0) == 1,
+        "whose cards come with their statistics");
   std::set<std::string> files;
   for (const auto &entry : fs::directory_iterator(one)) files.insert(entry.path().filename().string());
   check(files == std::set<std::string>{"backup.json", "blobs", "lexicon-export.json", "lexicon.db"},
@@ -125,6 +134,9 @@ void checkBackups() {
     check(copy.open(lexicon::pathToUtf8(one / "lexicon.db")).has_value(), "the database copy opens");
     lexicon::LexiconApplication restored(copy);
     check(restored.search.findItemId("Monoid", "").has_value(), "and holds the item");
+    const auto cards = restored.cards.loadCards(restored.search.findItemId("Monoid", "").value_or(-1));
+    check(cards && cards->size() == 1 && cards->front().successCount == 1 && !cards->front().lastAttempt.empty(),
+          "and its card");
   }
 
   // The next backup shares the unchanged file instead of copying it again.

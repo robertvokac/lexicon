@@ -346,6 +346,23 @@ void applyMigrations(const Connection &db) {
             "ALTER TABLE alarm ADD COLUMN dismissed_at TEXT;",
             "UPDATE alarm SET dismissed_at = fires_at "
             "WHERE fires_at <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now');"
+        }},
+        {26, {
+            // A question and its answer about one item, for a quiz, with how
+            // often the person knew it. The blank check trims the characters
+            // lexicon::trim does.
+            "CREATE TABLE card ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " item_id INTEGER NOT NULL,"
+            " question TEXT NOT NULL CHECK(TRIM(question, ' ' || char(9, 10, 11, 12, 13)) <> ''),"
+            " answer TEXT NOT NULL CHECK(TRIM(answer, ' ' || char(9, 10, 11, 12, 13)) <> ''),"
+            " success_count INTEGER NOT NULL DEFAULT 0 CHECK(success_count >= 0),"
+            " failure_count INTEGER NOT NULL DEFAULT 0 CHECK(failure_count >= 0),"
+            // UTC "YYYY-MM-DDTHH:MM:SSZ"; NULL for a card never attempted.
+            " last_attempt TEXT,"
+            " FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE"
+            ");",
+            "CREATE INDEX idx_card_item_id ON card(item_id, id);"
         }}
     };
 

@@ -109,6 +109,9 @@ int main() {
         !expect(rawQuery("SELECT COUNT(*) FROM temp.sqlite_master;") == "0" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'migration_%';") == "0",
                 "The rebuild left a working table")) return 1;
+    if (!expect(rawQuery("SELECT version FROM db_version;") == "26" &&
+                    rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'card';") == "1",
+                "The Qt v20 database did not reach version 26 with its card table")) return 1;
     auto found = app.search.findItemId("Příliš žluťoučký kůň", "česky");
     if (!success(found, "Find Qt UTF-8 item")) return 1;
     auto item = app.items.loadItem(*found);
@@ -238,6 +241,64 @@ int main() {
     auto rolledBack = app.search.findItemId("Must roll back", "");
     if (!expect(!rolledBack && rolledBack.error().code == lexicon::Error::Code::NotFound,
                 "Item survived failed link insert")) return 1;
+  }
+  // Migration 26 on a database at version 25, the last one without cards:
+  // the table is added and what was there stays as it was.
+  {
+    const auto v25 = temp.path / "v25.db";
+    int kept = -1;
+    {
+      SqliteRepository repository;
+      if (!success(repository.open(v25.string()), "Create a database")) return 1;
+      lexicon::LexiconApplication app(repository);
+      lexicon::ItemRecord item;
+      item.groupId = app.groups.defaultGroupId().value_or(-1);
+      item.title = "Před kartami";
+      item.content = "Written at version 25.";
+      auto created = app.items.createItem(item);
+      if (!success(created, "Create an item at version 25")) return 1;
+      kept = *created;
+    }
+    const auto run = [&v25](const std::string &sql) {
+      sqlite3 *raw = nullptr;
+      const bool done = sqlite3_open(v25.string().c_str(), &raw) == SQLITE_OK &&
+                        sqlite3_exec(raw, sql.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK;
+      sqlite3_close(raw);
+      return done;
+    };
+    const auto query = [&v25](const std::string &sql) {
+      sqlite3 *raw = nullptr;
+      std::string result;
+      if (sqlite3_open(v25.string().c_str(), &raw) == SQLITE_OK) {
+        sqlite3_stmt *statement = nullptr;
+        if (sqlite3_prepare_v2(raw, sql.c_str(), -1, &statement, nullptr) == SQLITE_OK &&
+            sqlite3_step(statement) == SQLITE_ROW && sqlite3_column_text(statement, 0))
+          result = reinterpret_cast<const char *>(sqlite3_column_text(statement, 0));
+        sqlite3_finalize(statement);
+      }
+      sqlite3_close(raw);
+      return result;
+    };
+    // Migration 26 only adds the table and its index, so without them the
+    // file is exactly what version 25 wrote.
+    if (!expect(run("DROP TABLE card; UPDATE db_version SET version = 25;") &&
+                    query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "0",
+                "Could not take the database back to version 25")) return 1;
+    SqliteRepository repository;
+    if (!success(repository.open(v25.string()), "Migrate a version 25 database")) return 1;
+    lexicon::LexiconApplication app(repository);
+    if (!expect(query("SELECT version FROM db_version;") == "26", "Migration 26 did not run") ||
+        !expect(query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "2",
+                "Migration 26 did not add the card table and its index")) return 1;
+    auto item = app.items.loadItem(kept);
+    if (!success(item, "Load the item written at version 25") ||
+        !expect(item->title == "Před kartami" && item->content == "Written at version 25.",
+                "Migration 26 changed an item")) return 1;
+    auto card = app.cards.createCard(kept, "Co bylo dřív?", "Verze 25.");
+    if (!success(card, "Add a card after the upgrade") ||
+        !success(app.cards.recordAttempt(card->id, false), "Answer it")) return 1;
+    if (!success(app.items.deleteItem(kept), "Delete the upgraded item") ||
+        !expect(query("SELECT COUNT(*) FROM card;") == "0", "The upgraded card table does not cascade")) return 1;
   }
   if (!expect(lexicon::asciiFold("ABCéÉ") == "abcéÉ", "Core case policy changed")) return 1;
   return 0;

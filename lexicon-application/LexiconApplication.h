@@ -263,6 +263,54 @@ private:
   Repository &repository_;
 };
 
+// A card on its way through a quiz, with the item it asks about.
+struct QuizCard {
+  CardRecord card;
+  ItemId itemId = -1;
+  std::string itemTitle;
+};
+// The cards one quiz goes through.
+struct CardQuizSet {
+  std::vector<QuizCard> cards; // the centre's first, then item by item by distance
+  int itemCount = 0;           // the items in the quiz's scope, with or without cards
+  bool truncated = false;      // more items were in reach than allowed
+};
+
+// Cards: questions and answers about an item, and a quiz over them. This is
+// not Review - a quiz answer counts on the card and never moves the item's
+// understanding, its review dates or its revision.
+class CardService {
+public:
+  // How many links away a neighbourhood quiz reaches at most.
+  static constexpr int kMaxDepth = 3;
+
+  CardService(Repository &repository, LinkService &links)
+      : repository_(repository), links_(links) {}
+  // The item's cards, in the order they were added.
+  Result<std::vector<CardRecord>> loadCards(ItemId itemId) {
+    return repository_.loadCards(itemId);
+  }
+  Result<CardRecord> loadCard(int id) { return repository_.loadCard(id); }
+  // A new card that has never been answered; returns it as stored.
+  Result<CardRecord> createCard(ItemId itemId, const std::string &question,
+                                const std::string &answer);
+  // Changes what the card asks and answers. Its item and its statistics are
+  // not a person's to edit, so they stay as they are.
+  Result<CardRecord> updateCard(int id, const std::string &question,
+                                const std::string &answer);
+  Result<void> deleteCard(int id) { return repository_.deleteCard(id); }
+  // Counts a Yes (success) or a No and returns the card as it is now.
+  Result<CardRecord> recordAttempt(int id, bool success);
+  // The cards to quiz from: at depth 0 those of the item itself, at 1 to 3
+  // those of its relationship neighbourhood exactly as
+  // LinkService::neighborhood finds it, with at most `maxNodes` items.
+  Result<CardQuizSet> quizCards(ItemId itemId, int depth, int maxNodes);
+
+private:
+  Repository &repository_;
+  LinkService &links_;
+};
+
 // A whole dictionary as it travels between databases. The IDs are those of
 // the exporting database; they only connect the records of one export.
 struct TypeExport {
@@ -275,6 +323,8 @@ struct DictionaryExport {
   std::vector<ItemRecord> items;
   std::vector<LinkRecord> links;
   std::vector<AlarmRecord> alarms;
+  // With their statistics.
+  std::vector<CardRecord> cards;
 };
 struct ImportReport {
   int groupsCreated = 0;
@@ -286,6 +336,7 @@ struct ImportReport {
   int linksCreated = 0;
   int blobsImported = 0;
   int alarmsCreated = 0;
+  int cardsCreated = 0;
   // What could not be imported as it was, in words.
   std::vector<std::string> warnings;
 };
@@ -300,8 +351,9 @@ public:
   Result<DictionaryExport> exportDictionary();
   // Merges an export into this database in one unit of work: groups, types
   // and fields are matched by name, items already present are left alone,
-  // and links are added where they touch an imported item. `blobs` holds the
-  // file contents that travelled with the export, by SHA-256.
+  // links are added where they touch an imported item, and cards come with
+  // the items this import creates. `blobs` holds the file contents that
+  // travelled with the export, by SHA-256.
   Result<ImportReport> importDictionary(
       const DictionaryExport &dictionary,
       const std::map<std::string, std::string> &blobs);
@@ -316,7 +368,7 @@ public:
       : items(repository), types(repository), groups(repository),
         links(repository), search(repository), configuration(repository),
         blobs(repository), exchange(repository), review(repository),
-        alarms(repository) {}
+        alarms(repository), cards(repository, links) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -327,5 +379,7 @@ public:
   ExchangeService exchange;
   ReviewService review;
   AlarmService alarms;
+  // After links, whose neighbourhood it quizzes.
+  CardService cards;
 };
 } // namespace lexicon

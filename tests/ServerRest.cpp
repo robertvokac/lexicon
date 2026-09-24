@@ -865,6 +865,152 @@ void checkReview(Checks &checks) {
   checks.expectEqual(client.get("/api/v1/review?limit=0").status, 400, "the limit must be positive");
 }
 
+void checkCards(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const auto create = [&](const std::string &title) {
+    return parse(client.post("/api/v1/items", Json{{"item", Json{{"groupId", groupId}, {"title", title}}}}.dump()))
+        .value("id", 0);
+  };
+  const int provenance = create("pointer provenance");
+  const auto itemBefore = parse(client.get("/api/v1/items/" + std::to_string(provenance))).at("item");
+  const auto cards = "/api/v1/items/" + std::to_string(provenance) + "/cards";
+  const auto quiz = "/api/v1/items/" + std::to_string(provenance) + "/quiz-cards";
+
+  // Every card route needs a session.
+  HttpTestClient anonymous("127.0.0.1", harness.port());
+  const std::string body = Json{{"question", "Q"}, {"answer", "A"}}.dump();
+  checks.expectEqual(anonymous.get(cards).status, 401, "listing cards needs a session");
+  checks.expectEqual(anonymous.post(cards, body).status, 401, "adding a card needs a session");
+  checks.expectEqual(anonymous.get("/api/v1/cards/1").status, 401, "reading a card needs a session");
+  checks.expectEqual(anonymous.put("/api/v1/cards/1", body).status, 401, "editing a card needs a session");
+  checks.expectEqual(anonymous.remove("/api/v1/cards/1").status, 401, "deleting a card needs a session");
+  checks.expectEqual(anonymous.post("/api/v1/cards/1/attempt", R"({"success":true})").status, 401,
+                     "answering a card needs a session");
+  checks.expectEqual(anonymous.get(quiz).status, 401, "a quiz needs a session");
+
+  // UTF-8 over several lines, and statistics a client cannot set.
+  const std::string question = "Co znamená řetězec?\nstd::uint64_t";
+  const std::string answer = "Příliš žluťoučký kůň\n指针";
+  const auto created = client.post(cards, Json{{"question", question}, {"answer", answer}, {"successCount", 50},
+                                               {"failureCount", 7}, {"lastAttempt", "2020-01-01T00:00:00Z"},
+                                               {"itemId", 999}}
+                                              .dump());
+  checks.expectEqual(created.status, 201, "a card can be added");
+  const auto card = parse(created).at("card");
+  const int cardId = card.value("id", 0);
+  checks.expect(cardId > 0, "a new card reports its ID");
+  checks.expectEqual(card.value("itemId", 0), provenance, "the path names the card's item, not the body");
+  checks.expectEqual(card.value("question", std::string{}), question, "the question keeps its UTF-8 and lines");
+  checks.expectEqual(card.value("answer", std::string{}), answer, "so does the answer");
+  checks.expectEqual(card.value("successCount", -1LL), 0, "a new card starts with no successes");
+  checks.expectEqual(card.value("failureCount", -1LL), 0, "and no failures");
+  checks.expect(card.at("lastAttempt").is_null(), "and was never attempted");
+  const auto loaded = client.get("/api/v1/cards/" + std::to_string(cardId));
+  checks.expectEqual(loaded.status, 200, "a card can be read");
+  checks.expectEqual(parse(loaded).at("card").value("answer", std::string{}), answer, "as it was stored");
+  const auto listed = parse(client.get(cards));
+  checks.expectEqual(static_cast<long long>(listed.at("cards").size()), 1, "the item lists its card");
+
+  // What is refused, and why.
+  checks.expectEqual(client.post(cards, Json{{"question", " \n "}, {"answer", "A"}}.dump()).status, 400,
+                     "a blank question is refused");
+  checks.expectEqual(client.post(cards, Json{{"question", "Q"}}.dump()).status, 400, "an answer is required");
+  checks.expectEqual(client.post(cards, Json{{"id", 5}, {"question", "Q"}, {"answer", "A"}}.dump()).status, 400,
+                     "a new card may not carry an ID");
+  checks.expectEqual(client.post("/api/v1/items/999999/cards", body).status, 404,
+                     "a card for a missing item is a not-found error");
+  checks.expectEqual(client.get("/api/v1/items/999999/cards").status, 404, "a missing item has no card list");
+  checks.expectEqual(client.post("/api/v1/items/abc/cards", body).status, 400, "the item ID must be a number");
+  checks.expectEqual(client.get("/api/v1/cards/999999").status, 404, "a missing card is a not-found error");
+  const auto invalid = parse(client.post(cards, Json{{"question", "Q"}, {"answer", ""}}.dump()));
+  checks.expectEqual(invalid.at("error").value("code", std::string{}), "validation", "in the usual envelope");
+
+  // An edit changes the text and never the statistics.
+  const auto edited = client.put("/api/v1/cards/" + std::to_string(cardId),
+                                 Json{{"question", "Co je ukazatel?"}, {"answer", "Adresa.\nNic víc."},
+                                      {"successCount", 9}, {"failureCount", 9}}
+                                     .dump());
+  checks.expectEqual(edited.status, 200, "a card can be edited");
+  checks.expectEqual(parse(edited).at("card").value("question", std::string{}), "Co je ukazatel?", "the new question");
+  checks.expectEqual(parse(edited).at("card").value("successCount", -1LL), 0, "a PUT cannot set the statistics");
+  checks.expectEqual(client.put("/api/v1/cards/" + std::to_string(cardId), Json{{"question", "Q"}, {"answer", " "}}.dump())
+                         .status,
+                     400, "an edit keeps an answer");
+  checks.expectEqual(client.put("/api/v1/cards/999999", body).status, 404, "editing a missing card is not found");
+
+  // Yes and No.
+  const auto attempt = "/api/v1/cards/" + std::to_string(cardId) + "/attempt";
+  const auto yes = client.post(attempt, R"({"success":true})");
+  checks.expectEqual(yes.status, 200, "Yes is recorded");
+  const auto afterYes = parse(yes).at("card");
+  checks.expectEqual(afterYes.value("successCount", -1LL), 1, "Yes counts a success");
+  checks.expectEqual(afterYes.value("failureCount", -1LL), 0, "and no failure");
+  const auto lastAttempt = afterYes.value("lastAttempt", std::string{});
+  checks.expect(lastAttempt.size() == 20 && lastAttempt[10] == 'T' && lastAttempt.back() == 'Z',
+                "the attempt time is UTC, got " + lastAttempt);
+  const auto no = parse(client.post(attempt, R"({"success":false})")).at("card");
+  checks.expectEqual(no.value("successCount", -1LL), 1, "No leaves the successes");
+  checks.expectEqual(no.value("failureCount", -1LL), 1, "and counts a failure");
+  checks.expect(no.at("lastAttempt").is_string() && no.value("lastAttempt", std::string{}) >= lastAttempt,
+                "No stamps the time too");
+  checks.expectEqual(client.post(attempt, "{}").status, 400, "an answer says whether it was known");
+  checks.expectEqual(client.post(attempt, R"({"success":1})").status, 400, "as true or false");
+  checks.expectEqual(client.post(attempt, R"({"success":"yes"})").status, 400, "not as text");
+  checks.expectEqual(client.post("/api/v1/cards/999999/attempt", R"({"success":true})").status, 404,
+                     "answering a missing card is not found");
+
+  // The item's review is another matter: none of this touched it.
+  const auto itemAfter = parse(client.get("/api/v1/items/" + std::to_string(provenance))).at("item");
+  checks.expect(itemAfter.at("reviewedAt").is_null() && itemAfter.at("reviewDueAt").is_null(),
+                "a card answer is not a review");
+  checks.expectEqual(itemAfter.value("understanding", std::string{}), itemBefore.value("understanding", std::string{}),
+                     "and leaves the understanding alone");
+  checks.expectEqual(itemAfter.value("revision", 0), itemBefore.value("revision", 0),
+                     "and the revision, so an open editor sees no conflict");
+
+  // The quiz: the item alone, then its neighbourhood.
+  const int compiler = create("compiler optimization");
+  client.post("/api/v1/links", Json{{"fromItemId", provenance}, {"toItemId", compiler}, {"linkType", "Uses"}}.dump());
+  client.post("/api/v1/items/" + std::to_string(compiler) + "/cards",
+              Json{{"question", "What may an optimizer assume?"}, {"answer", "What provenance allows."}}.dump());
+  const auto alone = client.get(quiz + "?depth=0&limit=150");
+  checks.expectEqual(alone.status, 200, "a quiz of one item");
+  const auto aloneSet = parse(alone);
+  checks.expectEqual(static_cast<long long>(aloneSet.at("cards").size()), 1, "holds that item's cards");
+  checks.expectEqual(aloneSet.value("itemCount", 0), 1, "from one item");
+  checks.expectEqual(aloneSet.at("cards").at(0).value("itemTitle", std::string{}), "pointer provenance",
+                     "and says which item each card asks about");
+  checks.expectEqual(static_cast<long long>(parse(client.get(quiz)).at("cards").size()), 1, "depth 0 is the default");
+  const auto around = parse(client.get(quiz + "?depth=1"));
+  checks.expectEqual(static_cast<long long>(around.at("cards").size()), 2, "a neighbourhood quiz adds the neighbours");
+  checks.expectEqual(around.value("itemCount", 0), 2, "over both items");
+  checks.expectEqual(around.at("cards").at(1).value("itemTitle", std::string{}), "compiler optimization",
+                     "the centre's cards first, then the neighbour's");
+  checks.expect(!around.value("truncated", true), "nothing was left out");
+  const auto capped = parse(client.get(quiz + "?depth=1&limit=1"));
+  checks.expect(capped.value("truncated", false) && capped.at("cards").size() == 1,
+                "a quiz larger than the limit says it was cut");
+  checks.expectEqual(client.get(quiz + "?depth=4").status, 400, "the depth is at most 3");
+  checks.expectEqual(client.get(quiz + "?depth=-1").status, 400, "and not negative");
+  checks.expectEqual(client.get(quiz + "?limit=0").status, 400, "the limit is at least 1");
+  checks.expectEqual(client.get(quiz + "?limit=301").status, 400, "and at most 300");
+  checks.expectEqual(client.get("/api/v1/items/999999/quiz-cards").status, 404, "a missing item has no quiz");
+
+  // Deleting.
+  checks.expectEqual(client.remove("/api/v1/cards/" + std::to_string(cardId)).status, 204, "a card can be deleted");
+  checks.expectEqual(client.remove("/api/v1/cards/" + std::to_string(cardId)).status, 404,
+                     "deleting it twice is a not-found error");
+  checks.expectEqual(client.get("/api/v1/cards/" + std::to_string(cardId)).status, 404, "a deleted card is gone");
+  const int compilerCard =
+      parse(client.get("/api/v1/items/" + std::to_string(compiler) + "/cards")).at("cards").at(0).value("id", 0);
+  checks.expectEqual(client.remove("/api/v1/items/" + std::to_string(compiler)).status, 204, "delete the item");
+  checks.expectEqual(client.get("/api/v1/cards/" + std::to_string(compilerCard)).status, 404,
+                     "its cards went with it");
+}
+
 void checkAlarms(Checks &checks) {
   ServerHarness harness;
   Session session(harness, checks);
@@ -1232,6 +1378,7 @@ int main() {
   checkExportImport(checks);
   checkReview(checks);
   checkGraph(checks);
+  checkCards(checks);
   checkAlarms(checks);
   checkImages(checks);
   checkWebClient(checks);

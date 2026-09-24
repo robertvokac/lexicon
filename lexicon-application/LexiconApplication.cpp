@@ -176,6 +176,68 @@ Result<ItemRecord> ReviewService::review(ItemId id, ReviewRating rating) {
   return repository_.loadItem(id);
 }
 
+Result<CardRecord> CardService::createCard(ItemId itemId, const std::string &question,
+                                           const std::string &answer) {
+  CardRecord card;
+  card.itemId = itemId;
+  card.question = question;
+  card.answer = answer;
+  if (auto valid = validateCard(card); !valid)
+    return std::unexpected(valid.error());
+  auto id = repository_.createCard(card);
+  if (!id)
+    return std::unexpected(id.error());
+  return repository_.loadCard(*id);
+}
+
+Result<CardRecord> CardService::updateCard(int id, const std::string &question,
+                                           const std::string &answer) {
+  if (auto valid = validateCardText(question, answer); !valid)
+    return std::unexpected(valid.error());
+  CardRecord card;
+  card.id = id;
+  card.question = question;
+  card.answer = answer;
+  if (auto updated = repository_.updateCard(card); !updated)
+    return std::unexpected(updated.error());
+  return repository_.loadCard(id);
+}
+
+Result<CardRecord> CardService::recordAttempt(int id, bool success) {
+  if (auto recorded = repository_.recordCardAttempt(id, success); !recorded)
+    return std::unexpected(recorded.error());
+  return repository_.loadCard(id);
+}
+
+Result<CardQuizSet> CardService::quizCards(ItemId itemId, int depth, int maxNodes) {
+  if (depth < 0 || depth > kMaxDepth)
+    return std::unexpected(Error{Error::Code::Validation, "A quiz reaches 0 to 3 links away."});
+  if (maxNodes < 1)
+    return std::unexpected(Error{Error::Code::Validation, "A quiz needs room for at least one item."});
+  // At depth 0 the neighbourhood is the item alone; one definition serves
+  // every depth, the graph's.
+  auto graph = links_.neighborhood(itemId, depth, maxNodes);
+  if (!graph)
+    return std::unexpected(graph.error());
+  std::vector<ItemId> ids;
+  std::map<ItemId, std::string> titles;
+  for (const auto &node : graph->nodes) {
+    ids.push_back(node.item.id);
+    titles[node.item.id] = node.item.title;
+  }
+  auto cards = repository_.loadCardsForItems(ids);
+  if (!cards)
+    return std::unexpected(cards.error());
+  CardQuizSet quiz;
+  quiz.itemCount = static_cast<int>(graph->nodes.size());
+  quiz.truncated = graph->truncated;
+  for (auto &card : *cards) {
+    const ItemId owner = card.itemId;
+    quiz.cards.push_back({std::move(card), owner, titles[owner]});
+  }
+  return quiz;
+}
+
 std::string blobHashOf(const ItemFieldRecord &field, const std::string &value) {
   return storedFileHash(field.dataType, value);
 }
@@ -250,6 +312,11 @@ Result<DictionaryExport> ExchangeService::exportDictionary() {
       return std::unexpected(links.error());
     for (auto &link : *links)
       dictionary.links.push_back(std::move(link));
+    auto cards = repository_.loadCards(row.id);
+    if (!cards)
+      return std::unexpected(cards.error());
+    for (auto &card : *cards)
+      dictionary.cards.push_back(std::move(card));
   }
   auto alarms = repository_.loadAlarms();
   if (!alarms)
@@ -514,6 +581,30 @@ Result<ImportReport> ExchangeService::importDictionary(
     if (auto stored = repository_.saveLink(link); !stored)
       return std::unexpected(stored.error());
     ++report.linksCreated;
+  }
+
+  // Cards of the items this import created, with their statistics. An item
+  // that was already here keeps the cards it has, so a second import adds
+  // none. Two cards asking the same are two cards: none is merged.
+  for (const auto &source : dictionary.cards) {
+    const auto item = itemIds.find(source.itemId);
+    if (item == itemIds.end()) {
+      warn("A card of an item missing from the file was left out.");
+      continue;
+    }
+    if (!created.contains(item->second))
+      continue;
+    CardRecord card = source;
+    card.id = -1;
+    card.itemId = item->second;
+    if (auto stored = repository_.createCard(card); !stored) {
+      const auto owner = std::find_if(dictionary.items.begin(), dictionary.items.end(),
+                                      [&](const auto &candidate) { return candidate.id == source.itemId; });
+      const std::string title = owner != dictionary.items.end() ? owner->title : std::string{};
+      return std::unexpected(Error{stored.error().code, "A card of item '" + title + "': " +
+                                                            stored.error().message});
+    }
+    ++report.cardsCreated;
   }
 
   // Alarms, unless one with the same title already goes off at that moment.

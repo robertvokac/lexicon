@@ -361,6 +361,8 @@ later. Each backup is a directory of its own, complete by itself:
   list of files it refers to. An item changed or deleted while the backup
   runs - by this server, or by the desktop client on the same file - does
   not make the three parts disagree.
+- Cards and their quiz statistics are rows of the database, so the copy
+  holds them and the export carries them; they have no files of their own.
 - Every file the copy refers to is copied and checked against its SHA-256.
   One that is missing (removed meanwhile by the desktop's Blob cleanup, say)
   or whose bytes no longer match fails the backup, which is then retried; a

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
@@ -136,6 +137,22 @@ struct AlarmRecord {
   // When someone dismissed it after it went off, as UTC; empty while it has
   // not gone off or is still ringing.
   std::string dismissedAt;
+};
+// A question about an item and its answer, for active recall. It belongs to
+// exactly one item and goes when the item goes. The counts and the last
+// attempt are kept by the system: a quiz answer moves them, an edit does not.
+struct CardRecord {
+  int id = -1;
+  ItemId itemId = -1;
+  // Plain UTF-8 text, possibly several lines.
+  std::string question;
+  std::string answer;
+  // How often the person knew the answer, and how often not.
+  std::int64_t successCount = 0;
+  std::int64_t failureCount = 0;
+  // When it was last answered, as UTC "YYYY-MM-DDTHH:MM:SSZ"; empty for a
+  // card never attempted.
+  std::string lastAttempt;
 };
 struct UsageValueRecord {
   std::string value;

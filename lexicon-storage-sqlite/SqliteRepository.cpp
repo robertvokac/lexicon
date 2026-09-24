@@ -961,6 +961,123 @@ SqliteRepository::Result<void> SqliteRepository::snoozeAlarm(int alarmId, int mi
     tx.commit();
   });
 }
+namespace {
+const char *kCardColumns =
+    "SELECT id, item_id, question, answer, success_count, failure_count, COALESCE(last_attempt, '') FROM card ";
+lexicon::CardRecord readCard(const Statement &stmt) {
+  lexicon::CardRecord card;
+  card.id = stmt.integer(0); card.itemId = stmt.integer(1);
+  card.question = stmt.text(2); card.answer = stmt.text(3);
+  card.successCount = stmt.integer64(4); card.failureCount = stmt.integer64(5);
+  card.lastAttempt = stmt.text(6);
+  return card;
+}
+void requireItem(const Connection &db, lexicon::ItemId itemId) {
+  Statement item(db, "SELECT 1 FROM item WHERE id = ?;");
+  item.bind(itemId);
+  require(item.step(), "Item not found.", lexicon::Error::Code::NotFound);
+}
+} // namespace
+SqliteRepository::Result<std::vector<lexicon::CardRecord>> SqliteRepository::loadCards(lexicon::ItemId itemId) {
+  return guarded([&] {
+    requireItem(impl_->db, itemId);
+    Statement stmt(impl_->db, std::string(kCardColumns) + "WHERE item_id = ? ORDER BY id;");
+    stmt.bind(itemId);
+    std::vector<lexicon::CardRecord> cards;
+    while (stmt.step()) cards.push_back(readCard(stmt));
+    return cards;
+  });
+}
+SqliteRepository::Result<std::vector<lexicon::CardRecord>> SqliteRepository::loadCardsForItems(
+    const std::vector<lexicon::ItemId> &itemIds) {
+  return guarded([&] {
+    std::vector<lexicon::ItemId> unique;
+    std::set<lexicon::ItemId> seen;
+    for (const auto id : itemIds)
+      if (seen.insert(id).second) unique.push_back(id);
+    // In slices, so that no statement needs more parameters than SQLite
+    // allows. A neighbourhood is far smaller than one slice.
+    constexpr std::size_t kSlice = 500;
+    std::map<lexicon::ItemId, std::vector<lexicon::CardRecord>> byItem;
+    for (std::size_t start = 0; start < unique.size(); start += kSlice) {
+      const auto end = std::min(unique.size(), start + kSlice);
+      std::string sql = std::string(kCardColumns) + "WHERE item_id IN (";
+      for (std::size_t i = start; i < end; ++i) sql += i > start ? ",?" : "?";
+      Statement stmt(impl_->db, sql + ") ORDER BY item_id, id;");
+      for (std::size_t i = start; i < end; ++i) stmt.bind(unique[i]);
+      while (stmt.step()) {
+        auto card = readCard(stmt);
+        byItem[card.itemId].push_back(std::move(card));
+      }
+    }
+    std::vector<lexicon::CardRecord> cards;
+    for (const auto id : unique)
+      if (auto found = byItem.find(id); found != byItem.end())
+        for (auto &card : found->second) cards.push_back(std::move(card));
+    return cards;
+  });
+}
+SqliteRepository::Result<lexicon::CardRecord> SqliteRepository::loadCard(int cardId) {
+  return guarded([&] {
+    Statement stmt(impl_->db, std::string(kCardColumns) + "WHERE id = ?;");
+    stmt.bind(cardId);
+    require(stmt.step(), "Card not found.", lexicon::Error::Code::NotFound);
+    return readCard(stmt);
+  });
+}
+SqliteRepository::Result<int> SqliteRepository::createCard(const lexicon::CardRecord &card) {
+  return guarded([&] {
+    valid(lexicon::validateCard(card));
+    const auto lastAttempt = lexicon::normalizedUtcTime(card.lastAttempt);
+    Transaction tx(impl_->db, "lexicon_write");
+    // Under the write lock, so the item cannot go between this and the insert.
+    requireItem(impl_->db, card.itemId);
+    Statement insert(impl_->db, "INSERT INTO card(item_id, question, answer, success_count, failure_count, last_attempt) "
+                                "VALUES(?, ?, ?, ?, ?, ?);");
+    insert.bind(card.itemId).bind(card.question).bind(card.answer)
+        .bindInt64(card.successCount).bindInt64(card.failureCount);
+    if (lastAttempt.empty()) insert.null(); else insert.bind(lastAttempt);
+    insert.run();
+    const int id = impl_->db.lastId();
+    logOperation(impl_->db, "card", id, 1);
+    tx.commit();
+    return id;
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::updateCard(const lexicon::CardRecord &card) {
+  return guarded([&] {
+    valid(lexicon::validateCardText(card.question, card.answer));
+    Transaction tx(impl_->db, "lexicon_write");
+    Statement(impl_->db, "UPDATE card SET question = ?, answer = ? WHERE id = ?;")
+        .bind(card.question).bind(card.answer).bind(card.id).run();
+    requireChanged(impl_->db, "Card");
+    logOperation(impl_->db, "card", card.id, 2);
+    tx.commit();
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::deleteCard(int cardId) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_write");
+    Statement(impl_->db, "DELETE FROM card WHERE id = ?;").bind(cardId).run();
+    requireChanged(impl_->db, "Card");
+    logOperation(impl_->db, "card", cardId, 3);
+    tx.commit();
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::recordCardAttempt(int cardId, bool success) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_write");
+    // The count is read and written by one statement: two answers given at
+    // once both count, whichever connection gives them.
+    Statement(impl_->db, std::string(success ? "UPDATE card SET success_count = success_count + 1"
+                                             : "UPDATE card SET failure_count = failure_count + 1") +
+                             ", last_attempt = " + kNow + " WHERE id = ?;")
+        .bind(cardId).run();
+    requireChanged(impl_->db, "Card");
+    logOperation(impl_->db, "card", cardId, 2);
+    tx.commit();
+  });
+}
 SqliteRepository::Result<void> SqliteRepository::beginUnitOfWork() {
   return guarded([&] {
     require(impl_->unitState == Impl::UnitState::Idle,

@@ -1,8 +1,8 @@
 # Lexicon export format
 
 A Lexicon export is the whole dictionary - groups, types with their fields,
-items, links and, optionally, the files that values refer to - as one UTF-8
-JSON document. Every client writes and reads the same format:
+items, links, alarms, cards and, optionally, the files that values refer to -
+as one UTF-8 JSON document. Every client writes and reads the same format:
 
 | Where | Export | Import |
 | --- | --- | --- |
@@ -53,6 +53,10 @@ and keep the files as files, shared between backups.
   "alarms": [
     { "id": 4, "title": "Dentist", "description": "Bring the card.", "firesAt": "2026-10-02T08:30:00Z" }
   ],
+  "cards": [
+    { "id": 12, "itemId": 7, "question": "What is a monoid?", "answer": "A semigroup with a unit.",
+      "successCount": 4, "failureCount": 2, "lastAttempt": "2026-09-24T14:00:00Z" }
+  ],
   "blobs": [
     { "hash": "6c7dbba2...99d98ca", "data": "iVBORw0KGgo..." }
   ]
@@ -72,6 +76,11 @@ and keep the files as files, shared between backups.
 - `alarms` holds every alarm, with `firesAt` and `dismissedAt` in UTC, so an
   alarm that was dismissed does not ring again after an import. Documents
   written before alarms existed have no `alarms`; they import as before.
+- `cards` holds every card with its `itemId`, `question`, `answer` and
+  statistics - `successCount`, `failureCount` and `lastAttempt` (UTC, or
+  `null` for a card never answered) - so a quiz history survives the move.
+  The counts are whole numbers and never negative. Documents written before
+  cards existed have no `cards`; they import as before, with none.
 - `blobs` is present when files were included. `data` is standard base64 with
   padding; `hash` is the SHA-256 of the decoded bytes, the value `Blob` fields
   store and the part after the colon of an `Image` value (`image/png:<hash>`).
@@ -99,6 +108,13 @@ part fails, nothing is written.
   match its hash is left out.
 - **Alarms** are created unless an alarm with the same title already goes off
   at the same moment.
+- **Cards** are created for the items this import created, attached to them
+  by their new IDs and with their statistics as exported. An item that was
+  already present keeps the cards it has and gets none from the file. Cards
+  are never merged: two cards asking the same question are two cards. A card
+  of an item missing from the file is left out with a warning; a card with a
+  blank question or answer, a negative count or a `lastAttempt` that is not a
+  UTC time fails the import.
 
 Importing the same document twice therefore changes nothing the second time.
 The import answers with a report:
@@ -106,7 +122,7 @@ The import answers with a report:
 ```json
 { "groupsCreated": 1, "typesCreated": 2, "fieldsCreated": 3, "itemsCreated": 3,
   "itemsSkipped": 0, "linksCreated": 2, "blobsImported": 1, "alarmsCreated": 0,
-  "warnings": [] }
+  "cardsCreated": 4, "warnings": [] }
 ```
 
 An import is a merge, not a restore: it never deletes, renames or edits what

@@ -378,6 +378,14 @@ if (BUILD_TESTING)
     set_target_properties(lexicon-review PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME review COMMAND lexicon-review)
 
+    add_executable(lexicon-cards tests/Cards.cpp)
+    # SQLite directly as well, to see what the database itself refuses; and
+    # threads, for answers given on several connections at once.
+    find_package(Threads REQUIRED)
+    target_link_libraries(lexicon-cards PRIVATE lexicon-application lexicon-storage-sqlite SQLite::SQLite3 Threads::Threads)
+    set_target_properties(lexicon-cards PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME cards COMMAND lexicon-cards)
+
     add_executable(lexicon-exchange tests/Exchange.cpp)
     target_link_libraries(lexicon-exchange PRIVATE lexicon-json lexicon-storage-sqlite)
     set_target_properties(lexicon-exchange PROPERTIES AUTOMOC OFF AUTORCC OFF)

@@ -386,6 +386,68 @@ review. The item is due again after 1, 2, 5, 12 or 30 days for `Unknown`,
 `Recognized`, `Understood`, `Practiced` and `Mastered`; raising the
 understanding in the editor moves the next review out the same way.
 
+## Cards
+
+A card is a question about an item and its answer, for active recall. Every
+item has zero or more cards; a card belongs to exactly one item, and deleting
+the item deletes its cards.
+
+```http
+GET    /api/v1/items/{id}/cards        → { "cards": [ ... ] }
+POST   /api/v1/items/{id}/cards        → 201 { "card": { ... } }
+{ "question": "What does pointer provenance describe?", "answer": "Where a pointer came from." }
+GET    /api/v1/cards/{id}              → { "card": { ... } }
+PUT    /api/v1/cards/{id}              → 200 { "card": { ... } }
+{ "question": "...", "answer": "..." }
+DELETE /api/v1/cards/{id}              → 204
+POST   /api/v1/cards/{id}/attempt      → 200 { "card": { ... } }
+{ "success": true }
+GET    /api/v1/items/{id}/quiz-cards?depth=0&limit=150
+→ { "cards": [ { ...card..., "itemTitle": "pointer provenance" } ], "itemCount": 8, "truncated": false }
+```
+
+```json
+{ "id": 12, "itemId": 42,
+  "question": "What does pointer provenance describe?",
+  "answer": "Where a pointer came from:\nthe object it may reach.",
+  "successCount": 4, "failureCount": 2, "lastAttempt": "2026-09-24T14:00:00Z" }
+```
+
+`question` and `answer` are plain UTF-8 text and may run over several lines;
+neither may be blank. The list comes in the order the cards were added.
+`successCount` and `failureCount` count the quiz answers, and `lastAttempt` is
+the UTC time of the last one, `null` for a card never answered. The three are
+the system's: `POST` and `PUT` read the question and the answer and nothing
+else, so a new card always starts at `0`, `0`, `null`, and an edit never
+resets or sets a count. The item of a new card is the one in the path, and a
+card never moves to another item. A card for an item that does not exist is
+404, as is every route of a missing card.
+
+`attempt` records one quiz answer. `"success": true` is a Yes - the person
+knew the answer - and adds one to `successCount`; `false` is a No and adds one
+to `failureCount`. Either sets `lastAttempt` to the server's clock, never the
+client's. The count is incremented by the database in one statement, so
+answers sent at the same moment from several clients are all counted. The
+answer is the card as it is now. `success` must be `true` or `false`;
+anything else is 400.
+
+`quiz-cards` gives the cards to go through: with `depth=0` (the default) the
+item's own cards, and with `depth` 1 to 3 the cards of its relationship
+neighbourhood - exactly the items `GET /items/{id}/graph` shows at that depth,
+following links in both directions, the item itself included. `limit` (1 to
+300, default 150) caps the number of items, and `truncated` says that more
+were in reach. `itemCount` is how many items the quiz covered, with or without
+cards; an item without cards simply adds none. The item's own cards come
+first, then those of the other items in the graph's breadth-first order, each
+item's in the order they were added, and no card twice even where links form
+a cycle. Every card carries `itemTitle`, the title of the item it asks about.
+
+**Cards are not Review.** A card answer never changes the item's
+`understanding`, `reviewedAt`, `reviewDueAt` or `revision`, and the review
+queue ignores cards; a review never changes a card. There is no card schedule
+or due date: a quiz goes through the cards in scope, and the clients count the
+Yes and No of one sitting only for their summary.
+
 ## Alarms
 
 ```http
@@ -439,7 +501,8 @@ created and skipped:
 ```json
 { "report": { "groupsCreated": 0, "typesCreated": 0, "fieldsCreated": 0,
   "itemsCreated": 12, "itemsSkipped": 3, "linksCreated": 9, "blobsImported": 2,
-  "alarmsCreated": 1, "warnings": ["Item 'Monoid': 1 value(s) do not fit its fields here and were left out."] } }
+  "alarmsCreated": 1, "cardsCreated": 20,
+  "warnings": ["Item 'Monoid': 1 value(s) do not fit its fields here and were left out."] } }
 ```
 
 A document that is not an export, or has a format version this server does

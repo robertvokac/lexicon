@@ -11,6 +11,11 @@
 #include <string>
 #include <vector>
 
+namespace lexicon {
+struct QuizCard;
+struct CardQuizSet;
+} // namespace lexicon
+
 namespace lexicon::http {
 using Json = nlohmann::json;
 
@@ -55,6 +60,10 @@ Json toJson(const LinkRecord &link);
 Json toJson(const ItemRecord &item);
 Json toJson(const UsageValueRecord &usage);
 Json toJson(const AlarmRecord &alarm);
+Json toJson(const CardRecord &card);
+// A card with the title of the item it asks about.
+Json toJson(const QuizCard &card);
+Json toJson(const CardQuizSet &quiz);
 template <class T> Json toJsonArray(const std::vector<T> &values) {
   Json array = Json::array();
   for (const auto &value : values)
@@ -70,6 +79,12 @@ LinkRecord linkFromJson(const Json &json);
 AlarmRecord alarmFromJson(const Json &json);
 ItemRecord itemFromJson(const Json &json);
 std::vector<LinkRecord> linksFromJson(const Json &json);
+// What a client sends to create or change a card: its question and answer.
+// The statistics are the system's, so a request never sets them.
+CardRecord cardFromJson(const Json &json);
+// A card as an export carries it: also its item and its statistics, which
+// must not be negative.
+CardRecord exportedCardFromJson(const Json &json);
 
 // The structured item query body.
 struct ItemQuery {

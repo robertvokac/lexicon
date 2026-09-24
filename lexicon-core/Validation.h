@@ -21,4 +21,10 @@ Result<void> validateLink(const LinkRecord &link);
 // is not such a UTC time.
 std::string normalizedUtcTime(std::string_view text);
 Result<void> validateAlarm(const AlarmRecord &alarm);
+// The part of a card a person edits: a question and an answer, neither blank.
+Result<void> validateCardText(std::string_view question, std::string_view answer);
+// Whether the card could be stored: it names an item, has a question and an
+// answer, counts no fewer than zero answers, and was last attempted at a UTC
+// time or never. Whether the item exists is for the repository to say.
+Result<void> validateCard(const CardRecord &card);
 } // namespace lexicon

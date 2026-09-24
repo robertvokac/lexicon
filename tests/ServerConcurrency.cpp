@@ -132,5 +132,46 @@ int main() {
   checks.expect(uniqueTokens.find(std::string{}) == uniqueTokens.end(),
                 "no concurrent login failed");
 
+  // Quiz answers to one card from many clients at once: every Yes and every
+  // No is counted.
+  const int cardItem =
+      Json::parse(bootstrap.post("/api/v1/items",
+                                 Json{{"item", Json{{"groupId", groupId}, {"title", "Quizzed at once"}}}}.dump())
+                      .body,
+                  nullptr, false)
+          .value("id", 0);
+  const int cardId =
+      Json::parse(bootstrap.post("/api/v1/items/" + std::to_string(cardItem) + "/cards",
+                                 Json{{"question", "Counted?"}, {"answer", "Every time."}}.dump())
+                      .body,
+                  nullptr, false)
+          .at("card")
+          .value("id", 0);
+  checks.expect(cardId > 0, "a card to answer at once");
+  constexpr int kAttemptsPerThread = 10;
+  std::atomic<int> attemptFailures{0};
+  std::vector<std::thread> answerWorkers;
+  for (int worker = 0; worker < kThreads; ++worker) {
+    answerWorkers.emplace_back([&, worker] {
+      HttpTestClient client("127.0.0.1", harness.port());
+      client.setBearerToken(token);
+      for (int attempt = 0; attempt < kAttemptsPerThread; ++attempt) {
+        const bool knew = (worker + attempt) % 2 == 0;
+        if (client.post("/api/v1/cards/" + std::to_string(cardId) + "/attempt",
+                        Json{{"success", knew}}.dump())
+                .status != 200)
+          ++attemptFailures;
+      }
+    });
+  }
+  for (auto &worker : answerWorkers)
+    worker.join();
+  const auto answered = Json::parse(bootstrap.get("/api/v1/cards/" + std::to_string(cardId)).body, nullptr, false);
+  checks.expectEqual(attemptFailures.load(), 0, "every concurrent answer was accepted");
+  checks.expectEqual(answered.at("card").value("successCount", 0LL) + answered.at("card").value("failureCount", 0LL),
+                     kThreads * kAttemptsPerThread, "no concurrent answer was lost");
+  checks.expectEqual(answered.at("card").value("successCount", 0LL), kThreads * kAttemptsPerThread / 2,
+                     "each Yes counts once");
+
   return checks.summarize("server_concurrency");
 }

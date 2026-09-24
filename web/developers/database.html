@@ -58,7 +58,7 @@
     <p class="lead">Lexicon stores structured data in <code>lexicon.db</code> and blob bytes in an adjacent <code>blobs</code> directory. The database is initialized at startup; the blob directory is created when a file is imported. This page documents the schema defined by <code>lexicon-storage-sqlite/Migrations.cpp</code>.</p>
 
     <h2 id="overview">Overview</h2>
-    <p>Eleven domain tables, an optional full-text index, an operation log, one configuration table, and one bookkeeping table:</p>
+    <p>Twelve domain tables, an optional full-text index, an operation log, one configuration table, and one bookkeeping table:</p>
     <table>
       <tr><th>Table</th><th>Purpose</th></tr>
       <tr><td><code>item_group</code></td><td>Top-level buckets for items</td></tr>
@@ -72,6 +72,7 @@
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
       <tr><td><code>link</code></td><td>Typed, directed relationships between items</td></tr>
       <tr><td><code>alarm</code></td><td>Reminders at a moment, and whether they were dismissed</td></tr>
+      <tr><td><code>card</code></td><td>Questions and answers about an item for a quiz, with how often they were known</td></tr>
       <tr><td><code>item_search</code></td><td>FTS5 full-text index of items, where SQLite has FTS5; rebuilt from the other tables</td></tr>
       <tr><td><code>log</code></td><td>Operation log (create/update/delete/read events)</td></tr>
       <tr><td><code>configuration</code></td><td>Persistent application settings</td></tr>
@@ -82,14 +83,15 @@
         │             ├───── n alias / tag / flag / property
         └── n item_type (optional scope)
                       item ──── n item_value ──── 1 item_field
-                      item ──── n link n ── item (typed, directed)</code></pre>
+                      item ──── n link n ── item (typed, directed)
+                      item ──── n card</code></pre>
 
     <h2 id="migrations">Migration system</h2>
     <p>On startup, <code>SqliteRepository::open()</code>:</p>
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–25</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–26</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
       <li>A migration that rebuilds a table — SQLite cannot change a <code>CHECK</code> constraint in place — runs with foreign keys switched off around its transaction, so dropping the old table cannot cascade into the rows that refer to it, and must pass <code>PRAGMA foreign_key_check</code> before it commits.</li>
     </ol>
     <table>
@@ -119,6 +121,7 @@
       <tr><td>23</td><td>Creates the <code>alarm</code> table</td></tr>
       <tr><td>24</td><td>Rebuilds <code>item_field</code> so <code>data_type</code> admits 10, <code>Image</code>, keeping IDs, the ID sequence, indexes and triggers</td></tr>
       <tr><td>25</td><td>Adds <code>alarm.dismissed_at</code>; alarms already past count as dismissed</td></tr>
+      <tr><td>26</td><td>Creates the <code>card</code> table and its <code>(item_id, id)</code> index</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -245,6 +248,20 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
 CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);</code></pre>
     <p>Times are UTC text of one fixed shape, so text order is time order. An alarm whose <code>fires_at</code> has passed rings in every client until <code>dismissed_at</code> is set; snoozing moves <code>fires_at</code> and clears it.</p>
 
+    <h3><code>card</code></h3>
+    <pre><code>CREATE TABLE card (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id       INTEGER NOT NULL,
+  question      TEXT NOT NULL CHECK(TRIM(question, ' ' || char(9, 10, 11, 12, 13)) &lt;&gt; ''),
+  answer        TEXT NOT NULL CHECK(TRIM(answer, ' ' || char(9, 10, 11, 12, 13)) &lt;&gt; ''),
+  success_count INTEGER NOT NULL DEFAULT 0 CHECK(success_count &gt;= 0),
+  failure_count INTEGER NOT NULL DEFAULT 0 CHECK(failure_count &gt;= 0),
+  last_attempt  TEXT,  -- UTC "YYYY-MM-DDTHH:MM:SSZ"; NULL when never attempted
+  FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_card_item_id ON card(item_id, id);  -- migration 26</code></pre>
+    <p>A card belongs to one item and goes when the item goes. The question and the answer are plain UTF-8 text; the counts and <code>last_attempt</code> are moved by a quiz answer only, each in one <code>UPDATE ... SET success_count = success_count + 1, last_attempt = strftime(...)</code>, so answers given at once on several connections are all counted and the time is the database's. Cards are not Review: they have no due date, and nothing here touches <code>item.understanding</code>, <code>item.reviewed_at</code> or <code>item.revision</code>. Card text is not in <code>item_search</code>.</p>
+
     <h3><code>item_search</code></h3>
     <pre><code>CREATE VIRTUAL TABLE item_search USING fts5(
   title, disambiguation, aliases, tags, flags, content, revision UNINDEXED,
@@ -271,7 +288,7 @@ CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);</code></pre>
     <h2 id="integrity">Integrity rules</h2>
     <ul>
       <li><strong>Foreign keys are enforced</strong> — <code>PRAGMA foreign_keys = ON</code> runs on every connection.</li>
-      <li><strong>Cascade deletes</strong> — deleting a group deletes its items and group-specific types; deleting an item deletes its aliases, tags, flags, properties, field values, and links. Deleting a type sets affected <code>item_type_id</code> values to null and removes their field values.</li>
+      <li><strong>Cascade deletes</strong> — deleting a group deletes its items and group-specific types; deleting an item deletes its aliases, tags, flags, properties, field values, links, and cards. Deleting a type sets affected <code>item_type_id</code> values to null and removes their field values.</li>
       <li><strong>Uniqueness</strong> — group names are globally unique; <code>(group_id, title, disambiguation)</code> is unique per item; alias/tag/flag values and property keys are unique per item; type names are unique within their scope.</li>
       <li><strong>Enum stability</strong> — <code>status</code>, <code>understanding</code>, <code>link_type</code>, and <code>data_type</code> store raw enum integers; enum values must only ever be appended, never renumbered.</li>
     </ul>

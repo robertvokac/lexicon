@@ -3,6 +3,8 @@
 #include "Exchange.h"
 #include "SqliteRepository.h"
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -103,10 +105,33 @@ int main() {
   check(app.links.saveLink({-1, monoidId, semigroupId, lexicon::LinkType::IsA, 1, "", "", ""}).has_value(), "IsA link");
   check(app.links.saveLink({-1, readingId, monoidId, lexicon::LinkType::Custom, 0, "cites", "", ""}).has_value(), "Custom link");
 
+  // Cards travel with their item and keep their statistics. Two cards may
+  // ask the same thing; neither is dropped.
+  const auto recall = value(app.cards.createCard(monoidId, "Co je monoid?\nstd::uint64_t",
+                                                 "Pologrupa s jednotkou.\n指针"), "a card for Monoid");
+  value(app.cards.recordAttempt(recall.id, true), "answer it");
+  value(app.cards.recordAttempt(recall.id, true), "answer it again");
+  const auto answered = value(app.cards.recordAttempt(recall.id, false), "and once without knowing");
+  value(app.cards.createCard(monoidId, "Unit?", "Yes."), "a second card");
+  value(app.cards.createCard(monoidId, "Unit?", "Yes."), "the same card again");
+  value(app.cards.createCard(semigroupId, "Associative?", "Always."), "a card for Semigroup");
+
   const auto withFiles = value(lexicon::exchange::exportDocument(app, true), "export with files");
   const auto withoutFiles = value(lexicon::exchange::exportDocument(app, false), "export without files");
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
+  const auto exported = nlohmann::json::parse(withFiles);
+  check(exported.contains("cards") && exported.at("cards").size() == 4, "the export holds every card");
+  if (exported.contains("cards") && exported.at("cards").size() == 4) {
+    const auto &card = exported.at("cards").at(0);
+    check(card.value("itemId", 0) == monoidId && card.value("question", std::string{}) == recall.question &&
+              card.value("answer", std::string{}) == recall.answer,
+          "a card is exported with its item and its text");
+    check(card.value("successCount", 0) == 2 && card.value("failureCount", 0) == 1 &&
+              card.value("lastAttempt", std::string{}) == answered.lastAttempt,
+          "and with its statistics");
+    check(exported.at("cards").at(1).at("lastAttempt").is_null(), "a card never answered has no last attempt");
+  }
 
   // Into an empty database: everything arrives.
   Database copy(directory.path / "copy");
@@ -137,6 +162,18 @@ int main() {
         "the outgoing link survives");
   const auto backlinks = value(copy.app.links.loadBacklinks(copied), "copied backlinks");
   check(backlinks.size() == 1 && backlinks[0].customValue == "cites", "the custom backlink survives");
+  check(report.cardsCreated == 4, "every card arrives");
+  const auto copiedCards = value(copy.app.cards.loadCards(copied), "the imported cards of Monoid");
+  check(copiedCards.size() == 3 && copiedCards[0].question == recall.question && copiedCards[0].answer == recall.answer,
+        "a card keeps its item and its UTF-8 lines");
+  check(copiedCards.size() == 3 && copiedCards[0].successCount == 2 && copiedCards[0].failureCount == 1 &&
+            copiedCards[0].lastAttempt == answered.lastAttempt,
+        "and its statistics");
+  check(copiedCards.size() == 3 && copiedCards[1].question == "Unit?" && copiedCards[2].question == "Unit?" &&
+            copiedCards[1].lastAttempt.empty(),
+        "two cards asking the same are both kept");
+  check(value(copy.app.cards.loadCards(copy.itemNamed("Semigroup")), "the imported cards of Semigroup").size() == 1,
+        "each card goes to its own item");
 
   // Again: nothing is duplicated.
   const auto again = value(lexicon::exchange::importDocument(copy.app, withFiles), "import a second time");
@@ -144,6 +181,8 @@ int main() {
             again.groupsCreated == 0 && again.typesCreated == 0 && again.fieldsCreated == 0,
         "a second import changes nothing");
   check(copy.itemCount() == 3, "still three items");
+  check(again.cardsCreated == 0 && value(copy.app.cards.loadCards(copied), "cards after a second import").size() == 3,
+        "and no card twice");
 
   // Into a database whose Concept is shaped differently.
   Database other(directory.path / "other");
@@ -175,6 +214,27 @@ int main() {
   const auto mergedLinks = value(other.app.links.loadLinks(other.itemNamed("Monoid")), "merged links");
   check(mergedLinks.size() == 1 && mergedLinks[0].toItemTitle == "Semigroup",
         "an imported item links to the item that was already there");
+  // Monoid has another ID here; its cards follow it, and the Semigroup that
+  // was already here keeps the cards it had - none.
+  check(other.itemNamed("Monoid") != monoidId, "the imported Monoid has another ID here");
+  check(merged.cardsCreated == 3 &&
+            value(other.app.cards.loadCards(other.itemNamed("Monoid")), "merged cards").size() == 3,
+        "the cards follow their item to its new ID");
+  check(value(other.app.cards.loadCards(other.itemNamed("Semigroup")), "kept Semigroup's cards").empty(),
+        "an item that was already here gets no cards");
+
+  // An export written before cards existed has none and imports as before.
+  auto legacy = nlohmann::json::parse(withoutFiles);
+  legacy.erase("cards");
+  Database old(directory.path / "legacy");
+  const auto fromLegacy = value(lexicon::exchange::importDocument(old.app, legacy.dump()),
+                                "import an export without cards");
+  check(fromLegacy.itemsCreated == 3 && fromLegacy.cardsCreated == 0 &&
+            std::none_of(fromLegacy.warnings.begin(), fromLegacy.warnings.end(),
+                         [](const auto &warning) { return warning.find("card") != std::string::npos; }),
+        "an export without cards imports its items, no card and no complaint");
+  check(value(old.app.cards.loadCards(old.itemNamed("Monoid")), "cards after a legacy import").empty(),
+        "and the items have no cards");
 
   // Damage is refused before anything is written.
   Database empty(directory.path / "empty");
@@ -190,6 +250,18 @@ int main() {
           "an item without a title");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[],
              "blobs":[{"hash":"00","data":"%%%"}]})", "a file that is not base64");
+  const auto withCard = [](const std::string &card) {
+    return std::string(R"({"format":"lexicon-export","version":1,"groups":[{"id":1,"name":"G"}],"types":[],)") +
+           R"("items":[{"id":1,"groupId":1,"title":"T"}],"links":[],"cards":[)" + card + "]}";
+  };
+  refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","successCount":-1})"), "a negative success count");
+  refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","failureCount":-2})"), "a negative failure count");
+  refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","successCount":"3"})"), "a count that is not a number");
+  refused(withCard(R"({"itemId":1,"question":" ","answer":"A"})"), "a card without a question");
+  refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","lastAttempt":"soon"})"),
+          "a last attempt that is not a UTC time");
+  refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[],"cards":{}})",
+          "cards that are not a list");
   // A failure half way rolls everything back.
   auto broken = lexicon::exchange::importDocument(empty.app,
       std::string(R"({"format":"lexicon-export","version":1,"groups":[{"id":1,"name":"G"}],"types":[],)") +

@@ -1,5 +1,7 @@
 #include "Transport.h"
 
+#include "LexiconApplication.h"
+
 #include <algorithm>
 #include <array>
 #include <charconv>
@@ -317,6 +319,63 @@ AlarmRecord alarmFromJson(const Json &json) {
   if (json.contains("dismissedAt") && json.at("dismissedAt").is_string())
     alarm.dismissedAt = json.at("dismissedAt").get<std::string>();
   return alarm;
+}
+
+Json toJson(const CardRecord &card) {
+  return Json{{"id", card.id > 0 ? Json(card.id) : Json(nullptr)},
+              {"itemId", card.itemId > 0 ? Json(card.itemId) : Json(nullptr)},
+              {"question", card.question},
+              {"answer", card.answer},
+              {"successCount", card.successCount},
+              {"failureCount", card.failureCount},
+              {"lastAttempt", card.lastAttempt.empty() ? Json(nullptr) : Json(card.lastAttempt)}};
+}
+
+Json toJson(const QuizCard &card) {
+  Json json = toJson(card.card);
+  json["itemTitle"] = card.itemTitle;
+  return json;
+}
+
+Json toJson(const CardQuizSet &quiz) {
+  return Json{{"cards", toJsonArray(quiz.cards)},
+              {"itemCount", quiz.itemCount},
+              {"truncated", quiz.truncated}};
+}
+
+CardRecord cardFromJson(const Json &json) {
+  requireObject(json, "Card");
+  CardRecord card;
+  card.id = optionalId(json, "id");
+  card.question = requiredString(json, "question");
+  card.answer = requiredString(json, "answer");
+  return card;
+}
+
+CardRecord exportedCardFromJson(const Json &json) {
+  CardRecord card = cardFromJson(json);
+  card.itemId = optionalId(json, "itemId");
+  const auto count = [&json](const char *key) -> std::int64_t {
+    const Json *value = member(json, key);
+    if (!value)
+      return 0;
+    if (!value->is_number_integer())
+      badRequest(std::string("Field '") + key + "' must be a whole number.");
+    if (value->is_number_unsigned()) {
+      const auto number = value->get<std::uint64_t>();
+      if (number > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+        badRequest(std::string("Field '") + key + "' is out of range.");
+      return static_cast<std::int64_t>(number);
+    }
+    const auto number = value->get<std::int64_t>();
+    if (number < 0)
+      badRequest(std::string("Field '") + key + "' must not be negative.");
+    return number;
+  };
+  card.successCount = count("successCount");
+  card.failureCount = count("failureCount");
+  card.lastAttempt = optionalString(json, "lastAttempt");
+  return card;
 }
 
 Json toJson(const UsageValueRecord &usage) {
