@@ -271,6 +271,26 @@ export class LexiconApi {
         return (await this.post(`/items/${id}/review`, { rating })).item;
     }
 
+    // Cards ------------------------------------------------------------------
+    // Questions and answers about an item. The counts are the server's: a
+    // card is created and edited with its question and answer only.
+    async itemCards(itemId) { return (await this.get(`/items/${itemId}/cards`)).cards; }
+    async createCard(itemId, card) { return (await this.post(`/items/${itemId}/cards`, card)).card; }
+    async updateCard(id, card) { return (await this.put(`/cards/${id}`, card)).card; }
+    deleteCard(id) { return this.delete(`/cards/${id}`); }
+
+    // A quiz answer, Yes (true) or No (false); the answer is the card as it
+    // is now, its counts and last attempt by the server's clock.
+    async attemptCard(id, success) {
+        return (await this.post(`/cards/${id}/attempt`, { success: Boolean(success) })).card;
+    }
+
+    // { cards, itemCount, truncated }: depth 0 is the item alone, 1 to 3 its
+    // relationship neighbourhood as the graph finds it.
+    quizCards(itemId, depth = 0, limit = 150) {
+        return this.get(`/items/${itemId}/quiz-cards?depth=${depth}&limit=${limit}`);
+    }
+
     // Export and import ------------------------------------------------------
     exportDictionary(includeFiles) {
         return this.request('GET', `/export?blobs=${includeFiles ? 'true' : 'false'}`, {

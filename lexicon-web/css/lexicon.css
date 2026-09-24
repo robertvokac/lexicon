@@ -942,3 +942,49 @@ svg.graph { flex: none; margin: auto; }
 
 /* Inbox */
 .inbox-content { width: 100%; font-family: var(--font-ui); resize: vertical; }
+
+/* Cards: plain text with its line breaks, never markup */
+.cards { display: flex; flex-direction: column; gap: 6px; }
+.cards-item-title { margin: 0; font-size: 1.2em; overflow-wrap: anywhere; }
+.card-table .card-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 360px; vertical-align: top; }
+.card-table .card-count { text-align: right; font-variant-numeric: tabular-nums; vertical-align: top; }
+.card-table .card-when { white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: top; }
+.card-table tbody tr[data-id] { cursor: default; }
+.card-table tbody tr.selected td { background: var(--selection); color: var(--selection-text); }
+.card-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.card-edit .card-field { width: 100%; resize: vertical; font-family: var(--font-ui); }
+.card-statistics { margin-top: 8px; }
+
+/* Card quiz */
+.quiz { display: flex; flex-direction: column; gap: 8px; }
+.quiz-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.quiz-scope label { display: inline-flex; align-items: center; gap: 4px; }
+.quiz-truncated { margin: 0; }
+.quiz-card { display: flex; flex-direction: column; gap: 6px; }
+.quiz-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.quiz-source { margin: 0; overflow-wrap: anywhere; color: var(--text-muted); }
+.quiz-progress { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.quiz-heading { margin: 6px 0 0; font-size: 1em; padding-bottom: 2px; border-bottom: 1px solid var(--border); }
+.quiz-text { margin: 0; font-size: 1.2em; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 30vh; overflow: auto; }
+.quiz-text:focus { outline: none; }
+.quiz-answer-box { display: flex; flex-direction: column; gap: 6px; }
+.quiz-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.quiz-verdict button { min-width: 80px; }
+.quiz-end { text-align: center; }
+.quiz-done { margin: 24px 0 12px; white-space: pre-wrap; font-size: 1.15em; }
+
+@media (max-width: 720px) {
+    /* A card per block: the text over the whole width, the counts under it. */
+    .card-table thead { display: none; }
+    .card-table tbody tr[data-id] { display: grid; grid-template-columns: repeat(3, auto);
+        padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .card-table tbody tr[data-id] td { border: 0; padding: 1px 6px; }
+    .card-table td.card-text { grid-column: 1 / -1; max-width: none; }
+    /* Without the column heads, the question stands out from its answer. */
+    .card-table td.card-text:first-child { font-weight: 600; }
+    .card-table td[data-label] { text-align: left; font-size: 0.85em; color: var(--text-muted); }
+    .card-table tbody tr.selected td[data-label] { color: var(--selection-text); }
+    .card-table td[data-label]::before { content: attr(data-label) ": "; }
+    .quiz-verdict button { flex: 1 1 0; min-height: var(--touch); }
+    .quiz-show { min-height: var(--touch); }
+}

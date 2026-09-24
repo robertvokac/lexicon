@@ -1,6 +1,7 @@
 // The web counterpart of ItemEditDialog: General, Content, Values, Metadata,
 // Links and Backlinks, saved in one atomic item+links request.
 import { api } from './api.js';
+import { openCards } from './cards.js';
 import { confirmDialog, errorDialog, field, listEditor, messageDialog, openDialog, promptDialog }
     from './dialogs.js';
 import { clearDraft, keepDraft, readDraft } from './drafts.js';
@@ -915,6 +916,18 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
         // A stray tap beside the editor must not throw away what was typed.
         closeOnBackdrop: false,
         initialFocus: titleInput,
+        // Cards are saved in their own dialog, whatever this editor's Save or
+        // Cancel does, so they need an item that is already stored.
+        extraActions: [{
+            label: 'Cards...',
+            onClick: ({ fail }) => {
+                if (!itemId) {
+                    fail('Save the Item before adding Cards.');
+                    return;
+                }
+                openCards(itemId).catch((error) => { if (!error.isUnauthorized) fail(error.message); });
+            },
+        }],
         onAccept: async ({ fail }) => {
             if (!titleInput.value.trim()) {
                 tabStrip.select('general');

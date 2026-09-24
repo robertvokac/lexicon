@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { confirmDialog, errorDialog, field, messageDialog, openDialog } from './dialogs.js';
 import { clearDraft, latestDraft } from './drafts.js';
+import { openCardQuiz, openCards } from './cards.js';
 import { openGraph } from './graph.js';
 import { imageSection } from './images.js';
 import { describeImage } from './imagevalue.js';
@@ -1148,17 +1149,41 @@ export class MainView {
         };
         this.linksPreview.appendChild(line('Links', links, (link) => link.toItemTitle));
         this.linksPreview.appendChild(line('Backlinks', backlinks, (link) => link.fromItemTitle));
+        const action = (text, run) => el('a', {
+            href: '#',
+            class: 'item-link',
+            text,
+            onclick: (event) => {
+                event.preventDefault();
+                run().catch((error) => { if (!error.isUnauthorized) errorDialog(error.message); });
+            },
+        });
+        const actions = el('p', { class: 'links-line preview-actions' }, [
+            action('Cards', () => this.showCards()),
+            document.createTextNode(' · '),
+            action('Card quiz', () => this.showCardQuiz()),
+        ]);
         if (links.length || backlinks.length) {
-            this.linksPreview.appendChild(el('p', { class: 'links-line' }, [el('a', {
-                href: '#',
-                class: 'item-link',
-                text: 'Relationship graph',
-                onclick: (event) => {
-                    event.preventDefault();
-                    this.showGraph().catch((error) => errorDialog(error.message));
-                },
-            })]));
+            actions.append(document.createTextNode(' · '), action('Relationship graph', () => this.showGraph()));
         }
+        this.linksPreview.appendChild(actions);
+    }
+
+    // The selected item's cards, and a quiz over them.
+    async showCards() {
+        if (this.selectedItemId === null) {
+            await messageDialog('Cards', 'Select an item first.');
+            return;
+        }
+        await openCards(this.selectedItemId);
+    }
+
+    async showCardQuiz() {
+        if (this.selectedItemId === null) {
+            await messageDialog('Card quiz', 'Select an item first.');
+            return;
+        }
+        await openCardQuiz({ itemId: this.selectedItemId, depth: 0 });
     }
 
     // The items around the selected one; the one chosen there is shown here.

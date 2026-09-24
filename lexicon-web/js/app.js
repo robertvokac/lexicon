@@ -243,6 +243,11 @@ class Application {
                         // A new or moved alarm may already be due.
                         action: () => openAlarms({ onChange: () => this.bell && this.bell.poll() }),
                     },
+                    { separator: true },
+                    {
+                        label: 'Cards of selected item...',
+                        action: () => this.view && this.view.showCards(),
+                    },
                 ],
             },
             {
@@ -257,6 +262,10 @@ class Application {
                     {
                         label: 'Relationship graph...',
                         action: () => this.view && this.view.showGraph(),
+                    },
+                    {
+                        label: 'Card quiz...',
+                        action: () => this.view && this.view.showCardQuiz(),
                     },
                     { separator: true },
                     { label: 'All tags...', action: () => showValueOverview('tags') },

@@ -2,7 +2,9 @@
 // type. A click centres the graph on another item; a double click opens it.
 // The graph fits the canvas; it zooms in and out (buttons, + and -, Ctrl and
 // the wheel), a drag of the background pans it, and it can fill the window.
+// Quiz cards goes through the cards of the items drawn.
 import { api } from './api.js';
+import { openCardQuiz } from './cards.js';
 import { openDialog } from './dialogs.js';
 import { layoutGraph } from './graphlayout.js';
 import { clear, el, fillSelect, formatItemTitle, linkDescription } from './utils.js';
@@ -254,7 +256,14 @@ export function openGraph(itemId) {
         wide: true,
         showAccept: false,
         cancelLabel: 'Close',
-        extraActions: [{ label: 'Open centre', onClick: () => openItem(centre) }],
+        extraActions: [
+            { label: 'Open centre', onClick: () => openItem(centre) },
+            // The same centre and depth: the quiz covers the items drawn here.
+            {
+                label: 'Quiz cards',
+                onClick: () => openCardQuiz({ itemId: centre, depth: Number.parseInt(depthSelect.value, 10) || 2 }),
+            },
+        ],
     });
     // Escape leaves full screen first, the next one closes the graph. The
     // key itself, as the browser may not let a page cancel the cancel event.

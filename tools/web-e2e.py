@@ -3,8 +3,9 @@
 
 Starts a LexiconServer on a fresh database, serves lexicon-web, and drives
 Chrome or Chromium through what a person does: sign in, catch an idea in the
-Inbox, edit and save it, search, add a group and a type, review, set an alarm
-and dismiss it when it rings, and sign out. Every step is also checked on the
+Inbox, edit and save it, search, add a group and a type, review, add cards
+and quiz them - one item and its neighbourhood - set an alarm and dismiss it
+when it rings, and sign out. Every step is also checked on the
 server through the REST API, and any uncaught JavaScript error fails the run.
 
 Usage:
@@ -410,6 +411,147 @@ def run(browser, web, server):
             time.sleep(0.2)
         b.wait(dialog_open("Object lifetime"), "the next card")
         click("dialog[open] button", "Close")
+
+    top = "dialog[open]:last-of-type"
+
+    def press(key, code, virtual):
+        for kind in ("keyDown", "keyUp"):
+            b.call("Input.dispatchKeyEvent", session=b.session, type=kind, key=key, code=code,
+                   windowsVirtualKeyCode=virtual, text=key if kind == "keyDown" else "")
+
+    def cards_of(title):
+        return api["client"].call("GET", f"/items/{api['client'].item(title)['id']}/cards")["cards"]
+
+    def select_item(title):
+        b.js(f"""[...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes({q(title)})).click(); true""")
+        b.wait("!!document.querySelector('tbody tr.selected')", "the selection")
+
+    @step("add and edit an item's cards")
+    def _():
+        select_item("Pointer provenance")
+        b.wait("[...document.querySelectorAll('.preview-actions a')].some(a => a.textContent === 'Cards')",
+               "the item's Cards link")
+        click(".preview-actions a", "Cards")
+        b.wait(dialog_open("Questions to ask yourself"), "the card manager")
+        b.wait(f"document.querySelector({q(top + ' .cards-item-title')}).textContent === 'Pointer provenance'",
+               "the manager naming its item")
+        click(f"{top} button", "Add...")
+        b.wait("!!document.getElementById('card-question')", "the card editor")
+        click(f"{top} button", "Save")
+        b.wait(dialog_open("Enter a question."), "a blank card refused")
+        type_into("#card-question", "Co znamená řetězec?\nstd::uint64_t")
+        type_into("#card-answer", "Příliš žluťoučký kůň\n指针")
+        click(f"{top} button", "Save")
+        b.wait("!document.getElementById('card-question')", "the editor to close")
+        b.wait(f"document.querySelectorAll({q(top + ' .card-table tr[data-id]')}).length === 1", "the card in the list")
+        stored = cards_of("Pointer provenance")
+        if len(stored) != 1 or stored[0]["question"] != "Co znamená řetězec?\nstd::uint64_t" \
+                or stored[0]["answer"] != "Příliš žluťoučký kůň\n指针":
+            raise Failure(f"The server holds {stored!r}.")
+        if stored[0]["successCount"] != 0 or stored[0]["failureCount"] != 0 or stored[0]["lastAttempt"] is not None:
+            raise Failure("A new card was not unanswered.")
+        # The text is shown as text, lines and all.
+        shown = b.js(f"document.querySelector({q(top + ' .card-table td.card-text')}).textContent")
+        if shown != "Co znamená řetězec?\nstd::uint64_t":
+            raise Failure(f"The list shows {shown!r}.")
+        b.js(f"document.querySelector({q(top + ' .card-table tr[data-id]')}).click(); true")
+        click(f"{top} button", "Edit...")
+        b.wait("!!document.getElementById('card-question') && !!document.querySelector('.card-statistics')",
+               "the editor with the statistics")
+        type_into("#card-question", "Co je řetězec?")
+        click(f"{top} button", "Save")
+        b.wait("!document.getElementById('card-question')", "the editor to close")
+        if cards_of("Pointer provenance")[0]["question"] != "Co je řetězec?":
+            raise Failure("The server did not keep the edit.")
+        click(f"{top} button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the manager to close")
+
+    @step("quiz: Show answer, Yes, then No by the keyboard")
+    def _():
+        client = api["client"]
+        before = client.item("Pointer provenance")
+        client.call("POST", f"/items/{before['id']}/cards",
+                    {"question": "What does pointer provenance describe?", "answer": "Where a pointer came from."})
+        select_item("Pointer provenance")
+        menu("View", "Card quiz...")
+        b.wait(f"document.querySelector({q(top + ' .quiz-progress')})?.textContent === '1 / 2'", "the first card")
+        b.wait(f"document.querySelector({q(top + ' .quiz-question')}).textContent === 'Co je řetězec?'"
+               f" && document.querySelector({q(top + ' .quiz-answer-box')}).hidden", "the question, its answer hidden")
+        click(f"{top} button", "Show answer")
+        b.wait(f"document.querySelector({q(top + ' .quiz-answer')}).textContent === 'Příliš žluťoučký kůň\\n指针'",
+               "the answer")
+        if cards_of("Pointer provenance")[0]["lastAttempt"] is not None:
+            raise Failure("Showing the answer recorded an attempt.")
+        click(f"{top} button", "Yes")
+        b.wait(f"document.querySelector({q(top + ' .quiz-progress')}).textContent === '2 / 2'", "the second card")
+        first = cards_of("Pointer provenance")[0]
+        if first["successCount"] != 1 or first["failureCount"] != 0:
+            raise Failure(f"Yes left {first!r}.")
+        press(" ", "Space", 32)
+        b.wait(f"!document.querySelector({q(top + ' .quiz-answer-box')}).hidden", "Space to show the answer")
+        press("n", "KeyN", 78)
+        b.wait(f"(document.querySelector({q(top + ' .quiz-done')})?.textContent || '') === 'Cards: 2\\nYes: 1\\nNo: 1'",
+               "the summary")
+        second = cards_of("Pointer provenance")[1]
+        if second["failureCount"] != 1 or second["successCount"] != 0:
+            raise Failure(f"No left {second!r}.")
+        stamp = __import__("re").compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        if not all(stamp.match(card["lastAttempt"] or "") for card in (first, second)):
+            raise Failure(f"The attempts carry no UTC time: {first['lastAttempt']!r}, {second['lastAttempt']!r}.")
+        after = client.item("Pointer provenance")
+        if (after["understanding"], after.get("reviewedAt"), after["revision"]) != \
+                (before["understanding"], before.get("reviewedAt"), before["revision"]):
+            raise Failure("A card answer changed the item's review.")
+        click(f"{top} button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the quiz to close")
+
+    @step("quiz the neighbourhood from the relationship graph")
+    def _():
+        client = api["client"]
+        client.call("POST", f"/items/{client.item('Object lifetime')['id']}/cards",
+                    {"question": "When does an object's lifetime end?", "answer": "When its storage is released."})
+        select_item("Pointer provenance")
+        menu("View", "Relationship graph...")
+        b.wait("document.querySelectorAll('dialog[open] .graph-node').length === 2", "the graph")
+        click("dialog[open] button", "Quiz cards")
+        b.wait(f"document.querySelector({q(top + ' .quiz-scope-summary')})?.textContent === '3 card(s) from 2 item(s)'",
+               "a quiz over both items")
+        checked = b.js(f"""(() => {{ const radios = document.querySelectorAll({q(top + ' .quiz-scope input')});
+            return [radios[1].checked, document.querySelector({q(top + ' .quiz-depth')}).value]; }})()""")
+        if checked != [True, "2"]:
+            raise Failure(f"The quiz is not the graph's neighbourhood at depth 2: {checked!r}.")
+        titles = set()
+        for _ in range(3):
+            b.wait(f"!!document.querySelector({q(top + ' .quiz-source')})", "a card")
+            titles.add(b.js(f"document.querySelector({q(top + ' .quiz-source')}).textContent"))
+            click(f"{top} button", "Show answer")
+            click(f"{top} button", "Yes")
+            b.wait(f"document.querySelector({q(top + ' .quiz-answer-box')}).hidden"
+                   f" || !document.querySelector({q(top + ' .quiz-end')}).hidden", "the next card")
+        if titles != {"Item: Pointer provenance", "Item: Object lifetime"}:
+            raise Failure(f"The cards came from {titles!r}.")
+        if cards_of("Object lifetime")[0]["successCount"] != 1:
+            raise Failure("The neighbour's card was not answered.")
+        click(f"{top} button", "Close")
+        b.wait("document.querySelectorAll('dialog[open]').length === 1", "back to the graph")
+        click("dialog[open] button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the graph to close")
+
+    @step("delete a card")
+    def _():
+        select_item("Pointer provenance")
+        menu("Manage", "Cards of selected item...")
+        b.wait(f"document.querySelectorAll({q(top + ' .card-table tr[data-id]')}).length === 2", "the card manager")
+        b.js(f"document.querySelector({q(top + ' .card-table tr[data-id]')}).click(); true")
+        click(f"{top} button", "Delete")
+        b.wait(dialog_open("Delete the card"), "the confirmation")
+        click(f"{top} button", "Yes")
+        b.wait(f"document.querySelectorAll({q(top + ' .card-table tr[data-id]')}).length === 1", "one card left")
+        left = cards_of("Pointer provenance")
+        if len(left) != 1 or left[0]["question"] != "What does pointer provenance describe?":
+            raise Failure(f"The server holds {left!r}.")
+        click(f"{top} button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the manager to close")
 
     @step("set an alarm and dismiss it when it rings")
     def _():

@@ -114,7 +114,7 @@ jobs:
           name: LexiconServer
           path: server
 
-      - name: Sign in, Inbox, edit, search, groups, types, review, alarms, sign out
+      - name: Sign in, Inbox, edit, search, groups, types, review, cards, alarms, sign out
         run: |
           chmod +x server/LexiconServer
           mkdir -p artifacts
