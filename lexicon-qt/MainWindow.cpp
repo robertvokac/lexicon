@@ -9,6 +9,8 @@
 #include "BlobMaintenanceDialog.h"
 #include "ReviewDialog.h"
 #include "GraphDialog.h"
+#include "CardsDialog.h"
+#include "CardQuizDialog.h"
 #include "InboxDialog.h"
 #include "AlarmsDialog.h"
 #include "AlarmNotifier.h"
@@ -356,6 +358,19 @@ void MainWindow::setupUi() {
         }
     });
     connect(m_tableView, &QTableView::doubleClicked, this, [this](const QModelIndex&) { editSelectedItem(); });
+    // What can be done with one item, where it is.
+    m_tableView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tableView, &QTableView::customContextMenuRequested, this, [this](const QPoint& position) {
+        const QModelIndex index = m_tableView->indexAt(position);
+        if (!index.isValid()) return;
+        m_tableView->selectRow(index.row());
+        QMenu menu(this);
+        connect(menu.addAction("Edit..."), &QAction::triggered, this, &MainWindow::editSelectedItem);
+        connect(menu.addAction("Cards..."), &QAction::triggered, this, &MainWindow::openCards);
+        connect(menu.addAction("Card quiz..."), &QAction::triggered, this, &MainWindow::openCardQuiz);
+        connect(menu.addAction("Relationship graph..."), &QAction::triggered, this, &MainWindow::showGraph);
+        menu.exec(m_tableView->viewport()->mapToGlobal(position));
+    });
 
 }
 
@@ -389,6 +404,10 @@ void MainWindow::setupMenus() {
         // A new or moved alarm may already be due.
         m_alarmNotifier->check();
     });
+    manageMenu->addSeparator();
+    auto* cardsAction = manageMenu->addAction("Cards of selected item...");
+    cardsAction->setShortcut(QKeySequence("Ctrl+K"));
+    connect(cardsAction, &QAction::triggered, this, &MainWindow::openCards);
 
     auto* toolsMenu = menuBar()->addMenu("Tools");
     auto* maintenanceAction = toolsMenu->addAction("Blob maintenance...");
@@ -407,19 +426,10 @@ void MainWindow::setupMenus() {
     });
     auto* graphAction = viewMenu->addAction("Relationship graph...");
     graphAction->setShortcut(QKeySequence("Ctrl+G"));
-    connect(graphAction, &QAction::triggered, this, [this] {
-        const int itemId = selectedItemId();
-        if (itemId < 0) {
-            QMessageBox::information(this, "Relationship graph", "Select an item first.");
-            return;
-        }
-        GraphDialog dialog(itemId, this);
-        if (dialog.exec() != QDialog::Accepted || dialog.openedItemId() < 0) return;
-        ItemRecord item;
-        QString error;
-        if (services().items.loadItem(dialog.openedItemId(), item, &error)) showItemTitled(item.title, item.id);
-        else showError(error);
-    });
+    connect(graphAction, &QAction::triggered, this, &MainWindow::showGraph);
+    auto* quizAction = viewMenu->addAction("Card quiz...");
+    quizAction->setShortcut(QKeySequence("Ctrl+Shift+K"));
+    connect(quizAction, &QAction::triggered, this, &MainWindow::openCardQuiz);
     viewMenu->addSeparator();
     auto* tagsAction = viewMenu->addAction("All tags...");
     auto* flagsAction = viewMenu->addAction("All flags...");
@@ -1084,6 +1094,40 @@ void MainWindow::editSelectedItem() {
     }
 
     refreshAll();
+}
+
+void MainWindow::showGraph() {
+    const int itemId = selectedItemId();
+    if (itemId < 0) {
+        QMessageBox::information(this, "Relationship graph", "Select an item first.");
+        return;
+    }
+    GraphDialog dialog(itemId, this);
+    if (dialog.exec() != QDialog::Accepted || dialog.openedItemId() < 0) return;
+    ItemRecord item;
+    QString error;
+    if (services().items.loadItem(dialog.openedItemId(), item, &error)) showItemTitled(item.title, item.id);
+    else showError(error);
+}
+
+void MainWindow::openCards() {
+    const int itemId = selectedItemId();
+    if (itemId < 0) {
+        QMessageBox::information(this, "Cards", "Select an item first.");
+        return;
+    }
+    CardsDialog dialog(itemId, this);
+    dialog.exec();
+}
+
+void MainWindow::openCardQuiz() {
+    const int itemId = selectedItemId();
+    if (itemId < 0) {
+        QMessageBox::information(this, "Card quiz", "Select an item first.");
+        return;
+    }
+    CardQuizDialog dialog(itemId, 0, this);
+    dialog.exec();
 }
 
 void MainWindow::deleteSelectedItem() {

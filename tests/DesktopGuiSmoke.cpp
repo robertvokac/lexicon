@@ -3,6 +3,8 @@
 #include "AlarmNotifier.h"
 #include "AlarmsDialog.h"
 #include "ApplicationContext.h"
+#include "CardQuizDialog.h"
+#include "CardsDialog.h"
 #include "GraphDialog.h"
 #include "GraphLayout.h"
 #include "ImageValueView.h"
@@ -39,6 +41,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <optional>
 
@@ -216,6 +219,163 @@ void checkGraph(lexicon::LexiconApplication &application, int group) {
       closest = std::min(closest, std::hypot(points[i].x - points[j].x, points[i].y - points[j].y));
   check(closest > 60, "no two items overlap, closest " + std::to_string(closest));
   check(graphlayout::layout(depths, edges)[5].x == points[5].x, "the layout is the same every time");
+}
+
+// Answers the modal dialog the next exec() opens, with [what] run on it.
+template <class Dialog> void whenOpened(std::function<void(Dialog &)> what) {
+  QTimer::singleShot(0, [what] {
+    if (auto *dialog = qobject_cast<Dialog *>(QApplication::activeModalWidget())) what(*dialog);
+    else check(false, "the expected dialog opened");
+  });
+}
+
+void checkCards(lexicon::LexiconApplication &application, int group) {
+  const auto create = [&](const std::string &title) {
+    lexicon::ItemRecord item;
+    item.groupId = group;
+    item.title = title;
+    return application.items.createItem(item).value_or(-1);
+  };
+  const int provenance = create("pointer provenance");
+  const int compiler = create("compiler optimization");
+  const int empty = create("Without cards");
+  check(application.links.saveLink({-1, provenance, compiler, lexicon::LinkType::Uses, 0, "", "", ""}).has_value(),
+        "link the two items");
+  check(application.cards.createCard(compiler, "What may an optimizer assume?", "What provenance allows.").has_value(),
+        "a card on the neighbour");
+  const auto before = application.items.loadItem(provenance);
+
+  // The manager: add, with a refusal first, then edit.
+  CardsDialog cards(provenance);
+  cards.show();
+  auto *title = child<QLabel>(cards, "cardsItemTitle");
+  auto *table = child<QTableWidget>(cards, "cardsTable");
+  if (!title || !table) return;
+  check(title->text() == "pointer provenance" && cards.cardCount() == 0, "the manager names its item and starts empty");
+  bool refused = false;
+  whenOpened<CardEditDialog>([&](CardEditDialog &editor) {
+    auto *question = child<QPlainTextEdit>(editor, "cardQuestion");
+    auto *answer = child<QPlainTextEdit>(editor, "cardAnswer");
+    auto *save = child<QPushButton>(editor, "cardSave");
+    auto *error = child<QLabel>(editor, "cardError");
+    if (!question || !answer || !save || !error) return editor.reject();
+    check(!editor.findChild<QLabel *>("cardStatistics"), "a new card has no statistics to show");
+    save->click();
+    refused = editor.isVisible() && error->text() == "Enter a question.";
+    question->setPlainText("Co znamená řetězec?\nstd::uint64_t");
+    answer->setPlainText("Příliš žluťoučký kůň\n指针");
+    shot(editor, "card-edit");
+    save->click();
+  });
+  cards.addCard();
+  check(refused, "a card needs a question");
+  check(cards.cardCount() == 1 && table->rowCount() == 1, "the card is added");
+  const auto stored = application.cards.loadCards(provenance);
+  check(stored && stored->size() == 1 && stored->front().answer == "Příliš žluťoučký kůň\n指针",
+        "and stored with its lines and UTF-8");
+  check(table->item(0, 2)->text() == "0" && table->item(0, 4)->text() == "Never", "with no answers yet");
+  application.cards.createCard(provenance, "What does pointer provenance describe?", "Where a pointer came from.");
+  whenOpened<CardEditDialog>([&](CardEditDialog &editor) {
+    auto *question = child<QPlainTextEdit>(editor, "cardQuestion");
+    check(question && question->toPlainText() == "Co znamená řetězec?\nstd::uint64_t", "the editor shows the card");
+    check(editor.findChild<QLabel *>("cardStatistics") != nullptr, "and its statistics, read only");
+    if (question) question->setPlainText("Co je řetězec?");
+    child<QPushButton>(editor, "cardSave")->click();
+  });
+  table->selectRow(0);
+  cards.editCard();
+  check(application.cards.loadCards(provenance)->front().question == "Co je řetězec?", "the card is edited");
+  shot(cards, "cards");
+
+  // The quiz over this item: the answer on request, then Yes or No.
+  CardQuizDialog quiz(provenance, 0);
+  quiz.show();
+  quiz.activateWindow();
+  const bool active = QTest::qWaitForWindowActive(&quiz);
+  auto *progress = child<QLabel>(quiz, "quizProgress");
+  auto *source = child<QLabel>(quiz, "quizSource");
+  auto *question = child<QLabel>(quiz, "quizQuestion");
+  auto *answer = child<QLabel>(quiz, "quizAnswer");
+  auto *show = child<QPushButton>(quiz, "quizShow");
+  auto *yes = child<QPushButton>(quiz, "quizYes");
+  auto *no = child<QPushButton>(quiz, "quizNo");
+  auto *message = child<QLabel>(quiz, "quizMessage");
+  if (!progress || !source || !question || !answer || !show || !yes || !no || !message) return;
+  check(quiz.cardCount() == 2 && progress->text() == "1 / 2", "the quiz counts its cards, got " +
+                                                                  progress->text().toStdString());
+  check(source->text() == "Item: pointer provenance" && question->text() == "Co je řetězec?",
+        "the first card's question and item are shown");
+  check(!answer->isVisible() && !yes->isVisible(), "the answer is hidden at first");
+  show->click();
+  check(answer->isVisible() && answer->text() == "Příliš žluťoučký kůň\n指针" && yes->isEnabled(),
+        "Show answer shows it, with Yes and No");
+  shot(quiz, "card-quiz");
+  check(application.cards.loadCards(provenance)->front().lastAttempt.empty(), "seeing the answer records nothing");
+  yes->click();
+  const auto first = application.cards.loadCards(provenance)->front();
+  check(first.successCount == 1 && first.failureCount == 0 && !first.lastAttempt.empty(), "Yes records a success");
+  check(progress->text() == "2 / 2" && !answer->isVisible(), "the next card follows, its answer hidden");
+  if (active) {
+    // The keys: Space shows the answer, N answers No.
+    QTest::keyClick(&quiz, Qt::Key_Space);
+    check(answer->isVisible(), "Space shows the answer");
+    QTest::keyClick(&quiz, Qt::Key_N);
+  } else {
+    check(false, "the quiz window became active for the keyboard");
+    show->click();
+    no->click();
+  }
+  const auto second = application.cards.loadCards(provenance)->at(1);
+  check(second.failureCount == 1 && second.successCount == 0 && !second.lastAttempt.empty(), "No records a failure");
+  check(message->isVisible() && message->text() == "Cards: 2\nYes: 1\nNo: 1",
+        "the sitting ends with a summary, got " + message->text().toStdString());
+  if (active) {
+    QTest::keyClick(&quiz, Qt::Key_Y);
+    check(application.cards.loadCards(provenance)->front().successCount == 1, "a key after the end answers nothing");
+  }
+  const auto after = application.items.loadItem(provenance);
+  check(before && after && after->understanding == before->understanding && after->reviewedAt.empty() &&
+            after->revision == before->revision,
+        "the quiz leaves the item's review alone");
+
+  // A neighbourhood, and an item without cards.
+  CardQuizDialog around(provenance, 1);
+  check(around.cardCount() == 3 && around.depth() == 1, "a neighbourhood quiz adds the neighbour's card");
+  CardQuizDialog none(empty, 0);
+  none.show();
+  check(none.cardCount() == 0 && child<QLabel>(none, "quizMessage")->text() == "No cards are available for this quiz.",
+        "an item without cards says so");
+
+  // The graph quizzes around its centre, as deep as it reaches.
+  GraphDialog graph(provenance);
+  int quizDepth = -1, quizCards = -1;
+  whenOpened<CardQuizDialog>([&](CardQuizDialog &opened) {
+    quizDepth = opened.depth();
+    quizCards = opened.cardCount();
+    opened.reject();
+  });
+  child<QPushButton>(graph, "graphQuizCards")->click();
+  check(quizDepth == graph.depth() && quizDepth == 2 && quizCards == 3,
+        "Quiz cards uses the graph's centre and depth");
+
+  // Delete, after a confirmation.
+  whenOpened<QMessageBox>([](QMessageBox &box) { box.button(QMessageBox::Yes)->click(); });
+  table->selectRow(0);
+  cards.deleteCard();
+  check(cards.cardCount() == 1 && application.cards.loadCards(provenance)->size() == 1, "a card can be deleted");
+
+  // The item editor offers the cards of a stored item only.
+  ItemEditDialog newItem;
+  newItem.setGroups(services().groups.loadGroups());
+  auto *newCards = child<QPushButton>(newItem, "itemCards");
+  check(newCards && !newCards->isEnabled() && newCards->toolTip() == "Save the Item before adding Cards.",
+        "a new item has no cards yet");
+  ItemRecord loaded;
+  services().items.loadItem(provenance, loaded);
+  ItemEditDialog existing;
+  existing.setGroups(services().groups.loadGroups());
+  existing.setItem(loaded);
+  check(child<QPushButton>(existing, "itemCards")->isEnabled(), "a stored item's cards are one click away");
 }
 
 void checkInbox(lexicon::LexiconApplication &application) {
@@ -477,6 +637,7 @@ int main(int argc, char **argv) {
   checkReview(application, group);
   checkWikiLinks(application, group);
   checkGraph(application, group);
+  checkCards(application, group);
   checkInbox(application);
   checkAlarms(application);
   checkAlarmNotifier(application);

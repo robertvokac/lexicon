@@ -13,7 +13,8 @@ class QPushButton;
 // The items around one item as a graph: links are arrows labelled with their
 // type. A click centres the graph on another item; a double click opens it.
 // The wheel or the zoom buttons zoom, Fit shows it all, and Full screen (F11)
-// gives it the whole screen.
+// gives it the whole screen. Quiz cards goes through the cards of the items
+// shown.
 class GraphDialog : public QDialog {
     Q_OBJECT
 
@@ -23,6 +24,8 @@ public:
     int openedItemId() const { return m_openedItemId; }
     int centreItemId() const { return m_centreId; }
     int nodeCount() const { return m_nodeCount; }
+    // How many links away the graph reaches.
+    int depth() const;
 
     void centreOn(int itemId);
     void openItem(int itemId);
@@ -32,6 +35,9 @@ public:
     void fit();
     void setFullScreen(bool fullScreen);
     double zoom() const;
+    // A quiz over the cards of the items around the centre, as deep as the
+    // graph reaches.
+    void quizCards();
 
 protected:
     void showEvent(QShowEvent* event) override;

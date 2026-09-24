@@ -1,5 +1,6 @@
 #include "GraphDialog.h"
 
+#include "CardQuizDialog.h"
 #include "GraphLayout.h"
 
 #include <QComboBox>
@@ -125,6 +126,8 @@ GraphDialog::GraphDialog(int itemId, QWidget* parent) : QDialog(parent), m_centr
     auto* fitButton = tool("Fit", "graphFit", "Show the whole graph (Ctrl+0)");
     m_fullScreenButton = tool("Full screen", "graphFullScreen", "Use the whole screen (F11)");
     m_fullScreenButton->setCheckable(true);
+    auto* quizButton = tool("Quiz cards", "graphQuizCards", "A quiz over the cards of the items shown");
+    connect(quizButton, &QPushButton::clicked, this, &GraphDialog::quizCards);
     connect(zoomIn, &QPushButton::clicked, this, [this] { zoomBy(1.25); });
     connect(zoomOut, &QPushButton::clicked, this, [this] { zoomBy(1 / 1.25); });
     connect(fitButton, &QPushButton::clicked, this, &GraphDialog::fit);
@@ -196,6 +199,14 @@ void GraphDialog::fit() {
 void GraphDialog::centreOn(int itemId) {
     m_centreId = itemId;
     reload();
+}
+
+int GraphDialog::depth() const { return m_depthCombo->currentData().toInt(); }
+
+void GraphDialog::quizCards() {
+    // The same centre and depth, so the quiz covers the items drawn here.
+    CardQuizDialog quiz(m_centreId, depth(), this);
+    quiz.exec();
 }
 
 void GraphDialog::openItem(int itemId) {

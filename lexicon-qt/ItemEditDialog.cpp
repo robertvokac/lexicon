@@ -4,6 +4,7 @@
 
 #include "ApplicationContext.h"
 #include "ImageValue.h"
+#include "CardsDialog.h"
 #include "ImageValueView.h"
 #include "MarkdownConverter.h"
 #include "WikiLinks.h"
@@ -234,6 +235,18 @@ void ItemEditDialog::setupUi() {
     m_saveButton = buttonBox->button(QDialogButtonBox::Save);
     QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &ItemEditDialog::validateAndAccept);
     QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &ItemEditDialog::reject);
+    // Cards are saved in their own dialog, whatever this editor's Save or
+    // Cancel does, so they need an item that is already stored.
+    m_cardsButton = buttonBox->addButton("Cards...", QDialogButtonBox::ActionRole);
+    m_cardsButton->setObjectName("itemCards");
+    m_cardsButton->setAutoDefault(false);
+    m_cardsButton->setEnabled(false);
+    m_cardsButton->setToolTip("Save the Item before adding Cards.");
+    QObject::connect(m_cardsButton, &QPushButton::clicked, this, [this] {
+        if (m_itemId < 0) return;
+        CardsDialog cards(m_itemId, this);
+        cards.exec();
+    });
 
     rootLayout->addWidget(buttonBox);
 }
@@ -619,6 +632,9 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
         m_currentBacklinks = services().links.loadBacklinks(m_itemId);
         updateLinksList();
     }
+    m_cardsButton->setEnabled(m_itemId > 0);
+    m_cardsButton->setToolTip(m_itemId > 0 ? "Add, edit and delete this item's cards; they are saved at once"
+                                           : "Save the Item before adding Cards.");
 }
 
 ItemRecord ItemEditDialog::item() const {

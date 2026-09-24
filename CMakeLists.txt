@@ -274,6 +274,10 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/AlarmNotifier.cpp
         lexicon-qt/ImageValueView.h
         lexicon-qt/ImageValueView.cpp
+        lexicon-qt/CardsDialog.h
+        lexicon-qt/CardsDialog.cpp
+        lexicon-qt/CardQuizDialog.h
+        lexicon-qt/CardQuizDialog.cpp
     )
 
     target_link_libraries(Lexicon PRIVATE
@@ -322,6 +326,10 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/AlarmNotifier.cpp
             lexicon-qt/ImageValueView.h
             lexicon-qt/ImageValueView.cpp
+            lexicon-qt/CardsDialog.h
+            lexicon-qt/CardsDialog.cpp
+            lexicon-qt/CardQuizDialog.h
+            lexicon-qt/CardQuizDialog.cpp
         )
         target_include_directories(lexicon-desktop-gui-smoke PRIVATE lexicon-qt)
         find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)

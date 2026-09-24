@@ -149,4 +149,5 @@ private:
     QList<LinkRecord> m_currentBacklinks;
 
     QPushButton* m_saveButton = nullptr;
+    QPushButton* m_cardsButton = nullptr;
 };
