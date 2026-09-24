@@ -55,6 +55,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - An Inbox for ideas: a title and plain text, saved to `Default` without a type in one step; on Android also without a connection, sent when the server is back
 - Alarms: reminders with a title, a description and the date and time they go off, listed and edited in every client
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
+- Cards: questions and answers about an item, and a quiz over one item or its relationship neighbourhood - the question, the answer on request, then Yes or No - that counts how often each card was known, apart from Review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
 - A relationship graph of the items around one item, up to three links away
 - Image values: a picture stored with its type, shown as a thumbnail in the editor and under the item's content, and at full size on request
@@ -267,8 +268,8 @@ python3 tools/web-e2e.py --server build/LexiconServer
 
 `tools/web-e2e.py` drives the web client in headless Chrome or Chromium
 against a fresh `LexiconServer`: sign in, the Inbox, editing and saving,
-search, groups, types, review, alarms and sign out, each step also checked
-through the REST API. It needs only Python and the browser.
+search, groups, types, review, cards and their quiz, alarms and sign out,
+each step also checked through the REST API. It needs only Python and the browser.
 
 The Android app has its own Gradle build; see
 [lexicon-android/README.md](lexicon-android/README.md#tests).
@@ -597,7 +598,23 @@ Theme preference is persisted between sessions.
 
 An item is due again 1, 2, 5, 12 or 30 days after its last review, for `Unknown`, `Recognized`, `Understood`, `Practiced` and `Mastered`. Items never reviewed are due at once and come after the overdue ones. The group box limits the review to one group; **Skip** leaves an item for later. The web client (`View -> Review...`) and the Android app (**Review** in the drawer) show the same queue.
 
-### 12) Alarms
+### 12) Cards and the card quiz
+
+A card is a question about an item and its answer - plain text, over as many lines as you like - for testing yourself: *What does pointer provenance describe?* An item can have any number of cards; they belong to it and go when it is deleted.
+
+**Cards...** in the item table's context menu, `Manage -> Cards of selected item...` (`Ctrl+K`) or the item editor's **Cards...** button opens the item's cards: the question, the answer, how often you knew it (**Success**), how often not (**Failure**) and when you last answered it. **Add...** and **Edit...** open two text fields, Question and Answer; the three statistics are shown but never edited - only the quiz moves them. **Delete** asks first. Every change is saved at once, whatever the item editor's Save or Cancel does afterwards, which is also why an item needs to be saved before it can have cards.
+
+`View -> Card quiz...` (`Ctrl+Shift+K`, or **Card quiz...** in the context menu) goes through the cards one at a time:
+
+1. the item the card belongs to, the progress (`3 / 17`) and the **Question**;
+2. **Show answer** (`Space`) - which records nothing;
+3. the **Answer** and *Do you know?* - **Yes** (`Y`) adds one to the card's successes, **No** (`N`) to its failures, and either one stamps the time, by the database's clock. A key held down answers once.
+
+At the end the sitting says how many cards there were and how many you knew and did not; those totals are not kept. Closing the quiz leaves an unanswered card as it was. **Cards of** chooses **This item** or its **Neighborhood** one, two or three links away - exactly the items the relationship graph shows at that depth, so a card comes up once however the links run; the relationship graph's **Quiz cards** starts the quiz around its centre at its depth. An item without cards adds none, and a quiz with none says *No cards are available for this quiz.*
+
+**Cards are not Review.** Review moves an item's understanding and schedules its next review; a card answer only counts on the card. It never changes the item's understanding, its review dates or anything the item editor saves, and the quiz has no schedule of its own: it asks every card in scope. The web client has the same manager and quiz in its `Manage` and `View` menus, the item preview and the graph; the Android app on the item page and in the graph.
+
+### 13) Alarms
 
 `Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title and the first line of its description. Alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a small form - a title, the date and time it goes off, and a plain-text description; **Delete** asks first.
 
@@ -611,9 +628,9 @@ When an alarm's time comes, it rings until someone deals with it, in any client:
 
 A dismissal is kept on the server, so dismissing an alarm on the phone stops it ringing on the desktop and in the browser too. An alarm moved to a new time rings again then. Signing out of the Android app takes its alarms off the phone.
 
-### 13) Editing and deletion safety notes
+### 14) Editing and deletion safety notes
 
-- Deleting an item removes its aliases/tags/flags and related links due to cascade rules.
+- Deleting an item removes its aliases/tags/flags, related links and cards due to cascade rules.
 - Deleting a group removes all contained items.
 - Every item has a revision that moves on with each change to it, its values or its links. If another client (the desktop, the web client or the Android app) saved an item after you opened it, your save is not written. Lexicon lists what differs and lets you **Overwrite** the newer version, **Reload** it and drop your changes, or go back to editing.
 - Keep regular backups if your lexicon is mission-critical.
@@ -635,6 +652,7 @@ Core tables:
 - `flag`
 - `link`
 - `alarm`
+- `card`
 - `log`
 - `configuration`
 
@@ -714,7 +732,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
-- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups; an offline Inbox on Android
+- saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups; an offline Inbox on Android; cards on items with a Yes/No quiz over an item or its neighbourhood
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
 
