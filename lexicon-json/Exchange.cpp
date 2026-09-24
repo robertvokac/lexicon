@@ -146,9 +146,10 @@ Result<ImportReport> importDocument(LexiconApplication &application, std::string
   const auto version = document.find("version");
   if (version == document.end() || !version->is_number_integer())
     return invalid("The Lexicon export has no format version.");
-  if (version->get<long long>() != kVersion)
+  if (version->get<long long>() < kOldestVersion || version->get<long long>() > kVersion)
     return invalid("The Lexicon export has format version " + std::to_string(version->get<long long>()) +
-                   "; this Lexicon reads version " + std::to_string(kVersion) + ".");
+                   "; this Lexicon reads versions " + std::to_string(kOldestVersion) + " to " +
+                   std::to_string(kVersion) + ".");
   DictionaryExport dictionary;
   std::map<std::string, std::string> blobs;
   try {
@@ -168,7 +169,8 @@ Result<ImportReport> importDocument(LexiconApplication &application, std::string
     if (document.contains("alarms"))
       for (const auto &alarm : requiredArray(document, "alarms"))
         dictionary.alarms.push_back(http::alarmFromJson(alarm));
-    // Documents written before cards existed have none.
+    // Version 1 documents were written before cards and have none - except
+    // those of development builds, whose cards are read all the same.
     if (document.contains("cards"))
       for (const auto &card : requiredArray(document, "cards"))
         dictionary.cards.push_back(http::exportedCardFromJson(card));

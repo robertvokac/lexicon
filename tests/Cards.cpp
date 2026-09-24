@@ -154,8 +154,13 @@ int main() {
         "a negative success count is refused");
   check(refused(repository.createCard({-1, provenance, "Q", "A", 0, -3, ""}), Error::Code::Validation),
         "a negative failure count is refused");
-  check(refused(repository.createCard({-1, provenance, "Q", "A", 0, 0, "yesterday"}), Error::Code::Validation),
+  check(refused(repository.createCard({-1, provenance, "Q", "A", 1, 0, "yesterday"}), Error::Code::Validation),
         "a last attempt that is not a UTC time is refused");
+  check(refused(repository.createCard({-1, provenance, "Q", "A", 10, 5, ""}), Error::Code::Validation),
+        "answers without a last attempt are refused");
+  check(refused(repository.createCard({-1, provenance, "Q", "A", 0, 0, "2026-09-24T14:00:00Z"}),
+                Error::Code::Validation),
+        "a last attempt of a card never answered is refused");
   check(count() == stored, "nothing refused was stored");
   const int imported = value(repository.createCard({-1, provenance, "Imported?", "Yes.", 7, 3, "2026-09-24T14:00:00Z"}),
                              "store a card with its statistics, as an import does");

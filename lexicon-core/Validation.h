@@ -25,6 +25,7 @@ Result<void> validateAlarm(const AlarmRecord &alarm);
 Result<void> validateCardText(std::string_view question, std::string_view answer);
 // Whether the card could be stored: it names an item, has a question and an
 // answer, counts no fewer than zero answers, and was last attempted at a UTC
-// time or never. Whether the item exists is for the repository to say.
+// time exactly when it has been answered at all. Whether the item exists is
+// for the repository to say.
 Result<void> validateCard(const CardRecord &card);
 } // namespace lexicon

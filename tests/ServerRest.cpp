@@ -1116,6 +1116,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
+  checks.expectEqual(document.value("version", 0), 2, "of format version 2");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");

@@ -123,6 +123,9 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
+  // Version 2: a reader of version 1 would drop the cards without a word, so
+  // it refuses the document instead.
+  check(exported.value("version", 0) == 2, "the export is format version 2");
   check(exported.contains("cards") && exported.at("cards").size() == 4, "the export holds every card");
   if (exported.contains("cards") && exported.at("cards").size() == 4) {
     const auto &card = exported.at("cards").at(0);
@@ -225,8 +228,10 @@ int main() {
   check(value(other.app.cards.loadCards(other.itemNamed("Semigroup")), "kept Semigroup's cards").empty(),
         "an item that was already here gets no cards");
 
-  // An export written before cards existed has none and imports as before.
+  // An export written before cards existed - version 1 - has none and imports
+  // as before.
   auto legacy = nlohmann::json::parse(withoutFiles);
+  legacy["version"] = 1;
   legacy.erase("cards");
   Database old(directory.path / "legacy");
   const auto fromLegacy = value(lexicon::exchange::importDocument(old.app, legacy.dump()),
@@ -237,6 +242,13 @@ int main() {
         "an export without cards imports its items, no card and no complaint");
   check(value(old.app.cards.loadCards(old.itemNamed("Monoid")), "cards after a legacy import").empty(),
         "and the items have no cards");
+  // A development build wrote version 1 with cards; they are read all the same.
+  auto early = nlohmann::json::parse(withoutFiles);
+  early["version"] = 1;
+  Database earlyCopy(directory.path / "early");
+  const auto fromEarly = value(lexicon::exchange::importDocument(earlyCopy.app, early.dump()),
+                               "import a version 1 export with cards");
+  check(fromEarly.cardsCreated == 4, "a version 1 export's cards are not dropped");
 
   // Damage is refused before anything is written.
   Database empty(directory.path / "empty");
@@ -247,7 +259,8 @@ int main() {
   };
   refused("not json", "text that is not JSON");
   refused(R"({"format":"something-else","version":1})", "another format");
-  refused(R"({"format":"lexicon-export","version":2,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":3,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":0,"groups":[],"types":[],"items":[],"links":[]})", "version 0");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[{"id":1}],"links":[]})",
           "an item without a title");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[],
@@ -262,6 +275,10 @@ int main() {
   refused(withCard(R"({"itemId":1,"question":" ","answer":"A"})"), "a card without a question");
   refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","lastAttempt":"soon"})"),
           "a last attempt that is not a UTC time");
+  refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","successCount":10,"failureCount":5})"),
+          "answers without a last attempt");
+  refused(withCard(R"({"itemId":1,"question":"Q","answer":"A","lastAttempt":"2026-09-24T14:00:00Z"})"),
+          "a last attempt of a card never answered");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[],"cards":{}})",
           "cards that are not a list");
   // A failure half way rolls everything back.

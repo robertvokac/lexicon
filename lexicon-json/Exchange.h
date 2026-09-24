@@ -12,14 +12,20 @@ namespace lexicon::exchange {
 using Json = http::Json;
 
 inline constexpr const char *kFormat = "lexicon-export";
-inline constexpr int kVersion = 1;
+// The version written. It goes up whenever a reader of the previous one would
+// import a new document by leaving part of it out: version 2 carries cards,
+// which a version 1 reader would drop without a word. Every version from 1 up
+// is read.
+inline constexpr int kVersion = 2;
+inline constexpr int kOldestVersion = 1;
 
 // With `includeFiles`, the contents of every file a value refers to travel in
 // the document, so it restores a dictionary on its own.
 Result<std::string> exportDocument(LexiconApplication &application, bool includeFiles);
 // Merges the document into the application's database; see
 // ExchangeService::importDictionary. A document that is not an export, or
-// comes from a newer format version, is refused before anything is written.
+// comes from a format version this reader does not know, is refused before
+// anything is written.
 Result<ImportReport> importDocument(LexiconApplication &application, std::string_view text);
 
 Json toJson(const ImportReport &report);

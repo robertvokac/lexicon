@@ -200,6 +200,10 @@ Result<void> validateCard(const CardRecord &card) {
     return invalid("A card cannot count fewer than zero answers.");
   if (!card.lastAttempt.empty() && normalizedUtcTime(card.lastAttempt).empty())
     return invalid("A card's last attempt is a UTC time YYYY-MM-DDTHH:MM:SSZ.");
+  // Never answered and no last attempt go together; only an import could
+  // bring one without the other.
+  if ((card.successCount > 0 || card.failureCount > 0) == card.lastAttempt.empty())
+    return invalid("A card has a last attempt exactly when it has been answered.");
   return {};
 }
 Result<void> validateLink(const LinkRecord &link) {

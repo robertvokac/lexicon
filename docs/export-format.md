@@ -29,7 +29,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 1,
+  "version": 2,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -65,7 +65,20 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 1.
+  before anything is written. This document describes version 2.
+- **Versions.** The version goes up whenever a reader of the previous one
+  would import a new document by leaving part of it out - silently losing
+  data - rather than refusing it:
+
+  | Version | Written by | Adds |
+  | --- | --- | --- |
+  | 1 | Lexicon before cards | groups, types, fields, items, links, alarms, files |
+  | 2 | Lexicon with cards | `cards` |
+
+  A reader takes every version up to its own and refuses a newer one: an
+  older Lexicon says it does not know version 2 instead of importing it
+  without the cards. A version 1 document has no cards; the few that
+  development builds wrote with cards have them read all the same.
 - Groups, types, fields, items and links have the shapes of the
   [REST API](rest-api.md), with the same symbolic enum names. Read-only parts
   such as `groupName`, `itemTypeName` and `revision` are written but ignored
@@ -79,7 +92,8 @@ and keep the files as files, shared between backups.
 - `cards` holds every card with its `itemId`, `question`, `answer` and
   statistics - `successCount`, `failureCount` and `lastAttempt` (UTC, or
   `null` for a card never answered) - so a quiz history survives the move.
-  The counts are whole numbers and never negative. Documents written before
+  The counts are whole numbers and never negative, and `lastAttempt` is
+  given exactly when one of them is above zero. Documents written before
   cards existed have no `cards`; they import as before, with none.
 - `blobs` is present when files were included. `data` is standard base64 with
   padding; `hash` is the SHA-256 of the decoded bytes, the value `Blob` fields
@@ -113,8 +127,9 @@ part fails, nothing is written.
   already present keeps the cards it has and gets none from the file. Cards
   are never merged: two cards asking the same question are two cards. A card
   of an item missing from the file is left out with a warning; a card with a
-  blank question or answer, a negative count or a `lastAttempt` that is not a
-  UTC time fails the import.
+  blank question or answer, a negative count, a `lastAttempt` that is not a
+  UTC time, or answers without a `lastAttempt` (or the other way round) fails
+  the import.
 
 Importing the same document twice therefore changes nothing the second time.
 The import answers with a report:
