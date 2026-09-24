@@ -4,6 +4,12 @@ import com.robertvokac.lexicon.model.Alarm
 import com.robertvokac.lexicon.model.AlarmEnvelope
 import com.robertvokac.lexicon.model.AlarmWrite
 import com.robertvokac.lexicon.model.AlarmsEnvelope
+import com.robertvokac.lexicon.model.Card
+import com.robertvokac.lexicon.model.CardAttempt
+import com.robertvokac.lexicon.model.CardEnvelope
+import com.robertvokac.lexicon.model.CardQuizSet
+import com.robertvokac.lexicon.model.CardWrite
+import com.robertvokac.lexicon.model.CardsEnvelope
 import com.robertvokac.lexicon.model.CountEnvelope
 import com.robertvokac.lexicon.model.DefaultGroupEnvelope
 import com.robertvokac.lexicon.model.FieldEnvelope
@@ -226,6 +232,38 @@ class LexiconApi(private val client: ApiClient) {
     suspend fun reviewItem(id: Int, rating: ReviewRating): Item =
         client.post("items/$id/review", ReviewRequest(rating), ReviewRequest.serializer(), ItemEnvelope.serializer()).item
 
+    // Cards -------------------------------------------------------------------
+
+    /** The item's cards, in the order they were added. */
+    suspend fun cards(itemId: Int): List<Card> = client.get("items/$itemId/cards", CardsEnvelope.serializer()).cards
+
+    suspend fun card(id: Int): Card = client.get("cards/$id", CardEnvelope.serializer()).card
+
+    suspend fun createCard(itemId: Int, card: CardWrite): Card =
+        client.post("items/$itemId/cards", card, CardWrite.serializer(), CardEnvelope.serializer()).card
+
+    /** Changes the question and the answer; the statistics stay as they are. */
+    suspend fun updateCard(id: Int, card: CardWrite): Card =
+        client.put("cards/$id", card, CardWrite.serializer(), CardEnvelope.serializer()).card
+
+    suspend fun deleteCard(id: Int) = client.send("DELETE", "cards/$id")
+
+    /** Records one answer to "Do you know?"; the server counts it and stamps its own time. */
+    suspend fun attemptCard(id: Int, success: Boolean): Card =
+        client.post("cards/$id/attempt", CardAttempt(success), CardAttempt.serializer(), CardEnvelope.serializer()).card
+
+    /**
+     * The cards to quiz: the item's own at [depth] 0, otherwise those of the
+     * items up to [depth] links around it, as the relationship graph finds
+     * them. [limit] caps the items, not the cards.
+     */
+    suspend fun quizCards(itemId: Int, depth: Int = 0, limit: Int = QUIZ_ITEM_LIMIT): CardQuizSet =
+        client.get(
+            "items/$itemId/quiz-cards",
+            CardQuizSet.serializer(),
+            query = mapOf("depth" to depth.toString(), "limit" to limit.toString()),
+        )
+
     // Export and import -------------------------------------------------------
 
     /** Streams the whole dictionary, as the documented export file, into [output]. */
@@ -238,6 +276,9 @@ class LexiconApi(private val client: ApiClient) {
 
     companion object {
         const val API_VERSION = 1
+
+        /** The items a card quiz covers at most; the desktop and web clients use the same. */
+        const val QUIZ_ITEM_LIMIT = 150
 
         private val blobHash = Regex("^[0-9a-f]{64}$")
 

@@ -73,6 +73,10 @@ import com.robertvokac.lexicon.share.LaunchRequest
 import com.robertvokac.lexicon.storage.ThemePreference
 import com.robertvokac.lexicon.ui.alarms.AlarmsScreen
 import com.robertvokac.lexicon.ui.alarms.AlarmsViewModel
+import com.robertvokac.lexicon.ui.cards.CardQuizScreen
+import com.robertvokac.lexicon.ui.cards.CardQuizViewModel
+import com.robertvokac.lexicon.ui.cards.CardsScreen
+import com.robertvokac.lexicon.ui.cards.CardsViewModel
 import com.robertvokac.lexicon.ui.common.LocalAppContainer
 import com.robertvokac.lexicon.ui.common.lexiconViewModel
 import com.robertvokac.lexicon.ui.graph.GraphScreen
@@ -94,6 +98,8 @@ import com.robertvokac.lexicon.ui.login.LoginViewModel
 import com.robertvokac.lexicon.ui.login.StartingScreen
 import com.robertvokac.lexicon.ui.login.UnreachableScreen
 import com.robertvokac.lexicon.ui.navigation.AlarmsRoute
+import com.robertvokac.lexicon.ui.navigation.CardQuizRoute
+import com.robertvokac.lexicon.ui.navigation.CardsRoute
 import com.robertvokac.lexicon.ui.navigation.EditItemRoute
 import com.robertvokac.lexicon.ui.navigation.GraphRoute
 import com.robertvokac.lexicon.ui.navigation.GroupsRoute
@@ -474,6 +480,8 @@ private fun LexiconNavHost(
                                     navController.navigate(EditItemRoute(title = title, disambiguation = disambiguation))
                                 },
                                 onShowGraph = { navController.navigate(GraphRoute(it)) },
+                                onShowCards = { navController.navigate(CardsRoute(it)) },
+                                onCardQuiz = { navController.navigate(CardQuizRoute(it)) },
                             )
                         }
                     }
@@ -501,6 +509,8 @@ private fun LexiconNavHost(
                     navController.navigate(EditItemRoute(title = title, disambiguation = disambiguation))
                 },
                 onShowGraph = { navController.navigate(GraphRoute(it)) },
+                onShowCards = { navController.navigate(CardsRoute(it)) },
+                onCardQuiz = { navController.navigate(CardQuizRoute(it)) },
             )
         }
         composable<GraphRoute> { entry ->
@@ -509,7 +519,20 @@ private fun LexiconNavHost(
                 lexiconViewModel { app, _ -> GraphViewModel(app, route.itemId) },
                 onBack = back,
                 onOpenItem = { navController.navigate(ItemRoute(it)) },
+                onQuizCards = { itemId, depth -> navController.navigate(CardQuizRoute(itemId, depth)) },
             )
+        }
+        composable<CardsRoute> { entry ->
+            val route = entry.toRoute<CardsRoute>()
+            CardsScreen(
+                lexiconViewModel { app, _ -> CardsViewModel(app, route.itemId) },
+                onBack = back,
+                onQuiz = { navController.navigate(CardQuizRoute(route.itemId)) },
+            )
+        }
+        composable<CardQuizRoute> { entry ->
+            val route = entry.toRoute<CardQuizRoute>()
+            CardQuizScreen(lexiconViewModel { app, _ -> CardQuizViewModel(app, route.itemId, route.depth) }, onBack = back)
         }
         composable<EditItemRoute> { entry ->
             val route = entry.toRoute<EditItemRoute>()

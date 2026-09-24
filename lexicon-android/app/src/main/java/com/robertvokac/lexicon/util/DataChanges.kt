@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  * listeners reload from the server.
  */
 class DataChanges {
-    enum class Kind { Items, Groups, Types }
+    enum class Kind { Items, Groups, Types, Cards }
 
     data class Change(val kind: Kind, val itemId: Int? = null)
 
@@ -28,5 +28,10 @@ class DataChanges {
 
     fun typesChanged() {
         changes.tryEmit(Change(Kind.Types))
+    }
+
+    /** A card of [itemId] changed, such as its counts after a quiz answer; the item itself did not. */
+    fun cardsChanged(itemId: Int) {
+        changes.tryEmit(Change(Kind.Cards, itemId))
     }
 }

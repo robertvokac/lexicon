@@ -9,6 +9,7 @@ import com.robertvokac.lexicon.api.SessionAccess
 import com.robertvokac.lexicon.auth.SessionManager
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.model.AlarmWrite
+import com.robertvokac.lexicon.model.CardWrite
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.FieldWrite
 import com.robertvokac.lexicon.model.GroupWrite
@@ -283,6 +284,8 @@ class ServerIntegrationTest {
             assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
             val title = "Exported ${System.nanoTime()}"
             val created = api.createItem(EditorRules.saveRequest(EditorFields(groupId = api.defaultGroupId(), title = title), "Content.", emptyList()))
+            val card = api.createCard(created.id, CardWrite("Co znamená řetězec?", "Příliš žluťoučký kůň\n指针"))
+            val answered = api.attemptCard(card.id, success = true)
             val document = ByteArrayOutputStream()
             api.exportDictionary(includeFiles = true, output = { document }, onProgress = { _, _ -> })
             val text = document.toString(Charsets.UTF_8)
@@ -292,10 +295,19 @@ class ServerIntegrationTest {
             val report = api.importDictionary(bytes.size.toLong(), { ByteArrayInputStream(bytes) }) { _, _ -> }
             assertEquals(0, report.itemsCreated)
             assertTrue(report.itemsSkipped >= 1)
+            // An item already here keeps its cards and gets none from the file.
+            assertEquals(0, report.cardsCreated)
+            assertEquals(listOf(card.id), api.cards(created.id).map { it.id })
             api.deleteItem(created.id)
             val restored = api.importDictionary(bytes.size.toLong(), { ByteArrayInputStream(bytes) }) { _, _ -> }
             assertEquals(1, restored.itemsCreated)
-            assertEquals(title, api.item(api.resolveItem(title, "")).item.title)
+            assertEquals(1, restored.cardsCreated)
+            val restoredId = api.resolveItem(title, "")
+            assertEquals(title, api.item(restoredId).item.title)
+            // The card comes back with its statistics.
+            val back = api.cards(restoredId).single()
+            assertEquals(answered.copy(id = back.id, itemId = restoredId), back)
+            api.deleteItem(restoredId)
         } finally {
             environment.close()
         }
@@ -361,6 +373,157 @@ class ServerIntegrationTest {
             api.deleteAlarm(tea)
             api.deleteAlarm(id)
             assertTrue(api.alarms().none { it.id == id })
+        } finally {
+            environment.close()
+        }
+    }
+
+    @Test
+    fun cardsAndTheirQuizOverRealRest() = runBlocking {
+        val environment = TestEnvironment()
+        try {
+            val (sessions, api) = newSessionManager(environment)
+            assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
+            val groupId = api.defaultGroupId()
+            val stamp = System.nanoTime()
+            suspend fun item(title: String, linkedTo: Int? = null) = api.createItem(
+                EditorRules.saveRequest(
+                    EditorFields(
+                        groupId = groupId,
+                        title = "$title $stamp",
+                        links = listOfNotNull(linkedTo?.let { LinkEntry(1, null, it, "", LinkType.Related, "", 0) }),
+                    ),
+                    "",
+                    emptyList(),
+                ),
+            )
+            // Pointer provenance -> Object lifetime <- RAII <- Scope: one, two and three links from provenance.
+            val lifetime = item("Object lifetime")
+            val provenance = item("Pointer provenance", linkedTo = lifetime.id)
+            val raii = item("RAII", linkedTo = lifetime.id)
+            val scope = item("Scope", linkedTo = raii.id)
+
+            // UTF-8 and several lines come back exactly as sent.
+            val text = "Co znamená řetězec?\nPříliš žluťoučký kůň\n指针 a std::uint64_t"
+            val first = api.createCard(provenance.id, CardWrite(text, "Odkud ukazatel pochází.\nNejen jeho adresa."))
+            assertEquals(provenance.id, first.itemId)
+            assertEquals(text, first.question)
+            assertEquals("Odkud ukazatel pochází.\nNejen jeho adresa.", first.answer)
+            assertEquals(0L, first.successCount)
+            assertEquals(0L, first.failureCount)
+            assertNull(first.lastAttempt)
+            assertEquals(first, api.card(first.id))
+            val second = api.createCard(provenance.id, CardWrite("What is std::uint64_t?", "An unsigned 64-bit integer."))
+            val lifetimeCard = api.createCard(lifetime.id, CardWrite("When does a lifetime begin?", "When storage is obtained and initialized."))
+            val raiiCard = api.createCard(raii.id, CardWrite("What does RAII release?", "Resources."))
+            val scopeCard = api.createCard(scope.id, CardWrite("What ends a scope?", "Its closing brace."))
+            assertEquals(listOf(first.id, second.id), api.cards(provenance.id).map { it.id })
+            assertEquals(listOf(raiiCard.id), api.cards(raii.id).map { it.id })
+
+            // Yes and No count on the server, at the server's time.
+            val revision = api.item(provenance.id).item.revision
+            val before = java.time.Instant.now().minusSeconds(120)
+            val yes = api.attemptCard(first.id, success = true)
+            assertEquals(1L, yes.successCount)
+            assertEquals(0L, yes.failureCount)
+            val stamped = checkNotNull(yes.lastAttempt)
+            assertTrue(stamped, Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z").matches(stamped))
+            val at = java.time.Instant.parse(stamped)
+            assertTrue(at.isAfter(before) && at.isBefore(java.time.Instant.now().plusSeconds(120)))
+            val no = api.attemptCard(first.id, success = false)
+            assertEquals(1L, no.successCount)
+            assertEquals(1L, no.failureCount)
+            api.attemptCard(first.id, success = true)
+            val counted = api.card(first.id)
+            assertEquals(2L, counted.successCount)
+            assertEquals(1L, counted.failureCount)
+            assertNull(api.card(second.id).lastAttempt)
+
+            // A card is not a review: the item's understanding, dates and revision stay.
+            val reviewed = api.item(provenance.id).item
+            assertEquals(UnderstandingLevel.Unknown, reviewed.understanding)
+            assertNull(reviewed.reviewedAt)
+            assertNull(reviewed.reviewDueAt)
+            assertEquals(revision, reviewed.revision)
+
+            // Editing changes the text, never the counts.
+            val edited = api.updateCard(first.id, CardWrite("Co je provenance ukazatele?", "Odkud pochází."))
+            assertEquals("Co je provenance ukazatele?", edited.question)
+            assertEquals(2L, edited.successCount)
+            assertEquals(1L, edited.failureCount)
+            assertEquals(counted.lastAttempt, edited.lastAttempt)
+            assertEquals(edited, api.card(first.id))
+
+            // The quiz: this item, then one to three links around it, the centre first.
+            val own = api.quizCards(provenance.id, depth = 0)
+            assertEquals(listOf(first.id, second.id), own.cards.map { it.id })
+            assertEquals(setOf(provenance.item.title), own.cards.map { it.itemTitle }.toSet())
+            assertEquals(1, own.itemCount)
+            assertEquals(false, own.truncated)
+            assertEquals(listOf(first.id, second.id, lifetimeCard.id), api.quizCards(provenance.id, depth = 1).cards.map { it.id })
+            val two = api.quizCards(provenance.id, depth = 2)
+            assertEquals(listOf(first.id, second.id, lifetimeCard.id, raiiCard.id), two.cards.map { it.id })
+            assertEquals(3, two.itemCount)
+            val three = api.quizCards(provenance.id, depth = 3)
+            assertEquals(listOf(first.id, second.id, lifetimeCard.id, raiiCard.id, scopeCard.id), three.cards.map { it.id })
+            assertEquals(listOf(provenance, provenance, lifetime, raii, scope).map { it.item.title }, three.cards.map { it.itemTitle })
+            assertEquals(4, three.itemCount)
+            assertEquals(false, three.truncated)
+            assertEquals(2L, three.cards.first().successCount)
+            val capped = api.quizCards(provenance.id, depth = 3, limit = 2)
+            assertEquals(2, capped.itemCount)
+            assertTrue(capped.truncated)
+            assertEquals(listOf(first.id, second.id, lifetimeCard.id), capped.cards.map { it.id })
+            // A neighbourhood without cards is an empty quiz, not an error.
+            val bare = item("Bare")
+            assertTrue(api.quizCards(bare.id, depth = 2).cards.isEmpty())
+
+            // The server refuses blank text and unknown records.
+            for (write in listOf(CardWrite("", "A"), CardWrite("Q", ""), CardWrite("  \n\t", "A"), CardWrite("Q", " \n "))) {
+                try {
+                    api.createCard(provenance.id, write)
+                    fail("expected a refusal of $write")
+                } catch (_: ApiException.Validation) {
+                }
+            }
+            try {
+                api.updateCard(first.id, CardWrite(" ", "A"))
+                fail("expected a refusal")
+            } catch (_: ApiException.Validation) {
+            }
+            assertEquals(edited, api.card(first.id))
+            val missing = Int.MAX_VALUE
+            for (call in listOf<suspend () -> Unit>(
+                { api.cards(missing) },
+                { api.createCard(missing, CardWrite("Q", "A")) },
+                { api.card(missing) },
+                { api.updateCard(missing, CardWrite("Q", "A")) },
+                { api.deleteCard(missing) },
+                { api.attemptCard(missing, true) },
+                { api.quizCards(missing, 1) },
+            )) {
+                try {
+                    call()
+                    fail("expected NotFound")
+                } catch (_: ApiException.NotFound) {
+                }
+            }
+
+            // Deleting a card, and an item with its cards.
+            api.deleteCard(second.id)
+            assertEquals(listOf(first.id), api.cards(provenance.id).map { it.id })
+            try {
+                api.card(second.id)
+                fail("expected NotFound")
+            } catch (_: ApiException.NotFound) {
+            }
+            api.deleteItem(lifetime.id)
+            try {
+                api.card(lifetimeCard.id)
+                fail("expected NotFound")
+            } catch (_: ApiException.NotFound) {
+            }
+            listOf(provenance, raii, scope, bare).forEach { api.deleteItem(it.id) }
         } finally {
             environment.close()
         }

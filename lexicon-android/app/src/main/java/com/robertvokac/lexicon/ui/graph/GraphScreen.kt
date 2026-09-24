@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -154,9 +155,15 @@ private class GraphView {
     }
 }
 
+/** [onQuizCards] starts a card quiz over the items the graph shows: its centre, as deep as it goes. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GraphScreen(viewModel: GraphViewModel, onBack: () -> Unit, onOpenItem: (Int) -> Unit) {
+fun GraphScreen(
+    viewModel: GraphViewModel,
+    onBack: () -> Unit,
+    onOpenItem: (Int) -> Unit,
+    onQuizCards: ((itemId: Int, depth: Int) -> Unit)? = null,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Full screen leaves the graph alone on the screen: no depth choice, no list.
     var fullScreen by rememberSaveable { mutableStateOf(false) }
@@ -168,6 +175,11 @@ fun GraphScreen(viewModel: GraphViewModel, onBack: () -> Unit, onOpenItem: (Int)
                 title = { Text("Relationship graph") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
                 actions = {
+                    if (onQuizCards != null) {
+                        IconButton(onClick = { onQuizCards(state.centre, state.depth) }) {
+                            Icon(Icons.Filled.Quiz, contentDescription = "Quiz cards")
+                        }
+                    }
                     IconButton(onClick = { fullScreen = !fullScreen }) {
                         Icon(
                             if (fullScreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,

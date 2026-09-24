@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Quiz
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,6 +78,7 @@ fun linkDescription(type: LinkType, customValue: String): String =
 /**
  * An item as it reads: content, values, metadata, links and backlinks.
  * [showBack] is false in the two-pane layout, where the list stays visible.
+ * The menu leads to the item's relationship graph, its cards and a card quiz.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,6 +91,8 @@ fun ItemDetailScreen(
     modifier: Modifier = Modifier,
     onCreateItem: (title: String, disambiguation: String) -> Unit = { _, _ -> },
     onShowGraph: ((Int) -> Unit)? = null,
+    onShowCards: ((Int) -> Unit)? = null,
+    onCardQuiz: ((Int) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     state.openItem?.let { id ->
@@ -154,6 +159,26 @@ fun ItemDetailScreen(
                                     onClick = {
                                         menu = false
                                         state.bundle?.item?.id?.let(onShowGraph)
+                                    },
+                                )
+                            }
+                            if (onShowCards != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Cards") },
+                                    leadingIcon = { Icon(Icons.Filled.Style, contentDescription = null) },
+                                    onClick = {
+                                        menu = false
+                                        state.bundle?.item?.id?.let(onShowCards)
+                                    },
+                                )
+                            }
+                            if (onCardQuiz != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Card quiz") },
+                                    leadingIcon = { Icon(Icons.Filled.Quiz, contentDescription = null) },
+                                    onClick = {
+                                        menu = false
+                                        state.bundle?.item?.id?.let(onCardQuiz)
                                     },
                                 )
                             }

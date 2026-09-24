@@ -62,6 +62,8 @@ class ItemDetailViewModel(private val container: AppContainer, initialItemId: In
         load()
         viewModelScope.launch {
             container.dataChanges.events
+                // The page shows no card, so card changes leave it alone.
+                .filter { it.kind != DataChanges.Kind.Cards }
                 .filter { it.kind != DataChanges.Kind.Items || it.itemId == null || it.itemId == itemId || isLinked(it.itemId) }
                 .collect { if (!_state.value.deleted) load(quiet = true) }
         }

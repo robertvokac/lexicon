@@ -43,3 +43,10 @@ data object AlarmsRoute
 
 @Serializable
 data class GraphRoute(val itemId: Int)
+
+@Serializable
+data class CardsRoute(val itemId: Int)
+
+/** depth 0 quizzes the item's own cards; 1 to 3, the items that many links around it. */
+@Serializable
+data class CardQuizRoute(val itemId: Int, val depth: Int = 0)

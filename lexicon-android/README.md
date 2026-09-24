@@ -6,10 +6,10 @@ else.
 
 **The Android client contains no Lexicon database. LexiconServer is the source
 of truth.** Groups, types, fields, items, values, metadata, links, backlinks,
-blobs, validation, filtering and transactions all live on the server; the app
-shows them and sends back what the person changes. There is no local replica,
-no offline queue and no synchronization. Lists and pages are loaded on demand
-and held in memory only while a screen shows them.
+blobs, cards and their counts, validation, filtering and transactions all live
+on the server; the app shows them and sends back what the person changes.
+There is no local replica, no offline queue and no synchronization. Lists and
+pages are loaded on demand and held in memory only while a screen shows them.
 
 ```text
                     LexiconApplication
@@ -216,7 +216,9 @@ accept it; install a proper certificate instead.
   Its menu has **Relationship graph**: the items around it, drawn with the
   same layout as the other clients, one, two or three links deep. Pinch to
   zoom; tap an item, or pick it from the list under the graph, to centre on it
-  or open it.
+  or open it. The graph's **Quiz cards** button starts a card quiz over the
+  items it shows: its current centre, as deep as it currently goes. The menu
+  also has **Cards** and **Card quiz**.
 - **Editor.** General, Content, Values, Metadata, Links and Backlinks, as tabs of
   one screen. Everything, including both link directions, is saved in one
   request, which the server commits as one unit of work. Changing the type
@@ -252,6 +254,29 @@ accept it; install a proper certificate instead.
 - **Review.** The items due now, one card at a time: the title, **Show answer**
   for the content, then **Again**, **Hard**, **Good** or **Easy**, each saying
   when the item comes back. Items rated Again return in the same sitting.
+- **Cards.** An item's questions and answers for active recall, from **Cards**
+  in the item page's menu: each card's question, answer, **Success** and
+  **Failure** counts and **Last attempt** (in the phone's time zone, or
+  *Never*). **+** adds a card and a tap edits one, both with a question and an
+  answer of several lines; the trash button deletes one after asking. The
+  counts are the server's and read-only: only a quiz answer moves them, and
+  editing a card keeps them. The server refuses a blank question or answer,
+  and the dialog says so.
+- **Card quiz.** From **Card quiz** in the item page's menu or the Cards
+  screen, or **Quiz cards** in the relationship graph. **This item** asks the
+  item's own cards; **Neighborhood** also asks those of the items one, two or
+  three links around it (two by default, as the graph starts), the item's own
+  first and each card naming its item. A card shows its question and
+  **Show answer**; the answer then comes with **Do you know?** and **Yes** or
+  **No**. Showing the answer records nothing; Yes or No goes to the server,
+  which counts it and stamps the time, and the next card follows once it has.
+  Yes and No wait while an answer is on its way, so a double tap counts once;
+  a failed answer stays on its card with the reason, and a card deleted
+  elsewhere meanwhile is skipped. A neighbourhood larger
+  than the 150 items a quiz covers says so. At the end: the cards, Yes and No
+  of this sitting, which are not kept. A card quiz is not Review: it never
+  changes an item's understanding or when it is due. Leaving the quiz leaves
+  the unanswered cards as they are; rotating the phone keeps the place.
 - **Overview.** All tags, all flags and all aliases with their usage counts.
 - **Settings.** Server, session, theme (system, light, dark), page size and
   versions, and **Export…** and **Import…** of the whole dictionary as one
@@ -392,6 +417,8 @@ the Qt and web clients, with an Android interaction model.
 | Links and backlinks, including Custom | Yes, with a server-side item search |
 | Blob upload and download | Yes, through the system document picker |
 | Groups, types and fields management | Yes, with the desktop's warnings and counts |
+| Cards: list, add, edit, delete | Yes; the counts and last attempt are shown, never edited |
+| Card quiz: this item, or its neighbourhood one to three links deep | Yes, from the item page, its card list and the relationship graph |
 | All tags / flags / aliases | Yes |
 | Light, dark, system theme | Yes, stored on the device only |
 | Share to Lexicon, Quick Add shortcut | Android only |
@@ -413,9 +440,9 @@ Deliberate differences:
 
 | Command | What runs |
 | --- | --- |
-| `./gradlew test` | JVM tests: JSON models and symbolic enums, error envelopes, URL validation, API version check, the HTTP client against MockWebServer (Bearer header, 401 handling without retry, redirects, TLS failure, cancellation, blob streaming), token encryption, the session state machine, query building, editor rules, field formats, Markdown safety, C++ highlighting, share parsing; Robolectric ViewModel paging tests; Compose UI flows against an in-memory server (login, search, Quick Add, duplicates, reading, editing, failed saves, filters, links, blob round trip, groups, types and fields, overviews, logout, session expiry, share and shortcut intents, tablet layout, theme) |
-| `LEXICON_SERVER_BINARY=/path/to/LexiconServer ./gradlew test` | Also `ServerIntegrationTest`: a temporary real LexiconServer with a throwaway user, driven through the app's REST layer (login, groups, types, fields, item with values, links and backlinks, blob upload and download, update, validation errors, filtered and paged queries, counts, delete, 413 for an oversized blob, logout) |
-| `scripts/run-device-tests.sh /path/to/LexiconServer [Gradle arguments]` | The instrumented tests on a connected emulator or device, against a temporary real server: Keystore encryption, the full UI flow including a blob round trip through document URIs, Share to Lexicon, and the Accessibility Test Framework over every main screen (labels, touch target sizes, contrast) |
+| `./gradlew test` | JVM tests: JSON models and symbolic enums (cards and quiz sets included, with UTF-8 and several lines), error envelopes, URL validation, API version check, the HTTP client against MockWebServer (Bearer header, 401 handling without retry, redirects, TLS failure, cancellation, blob streaming, every card route with its body and typed failures), token encryption, the session state machine, query building, editor rules, field formats, Markdown safety, C++ highlighting, share parsing; Robolectric ViewModel paging tests; Compose UI flows against an in-memory server (login, search, Quick Add, duplicates, reading, editing, failed saves, filters, links, blob round trip, groups, types and fields, overviews, logout, session expiry, share and shortcut intents, tablet layout, theme; cards listed, added, edited and deleted, and the card quiz: the answer only on request, Yes and No counted by the server, one attempt per double tap, a failed answer, the empty quiz, the neighbourhood and its limit, the quiz from the graph, and its place kept when the screen is recreated) |
+| `LEXICON_SERVER_BINARY=/path/to/LexiconServer ./gradlew test` | Also `ServerIntegrationTest`: a temporary real LexiconServer with a throwaway user, driven through the app's REST layer (login, groups, types, fields, item with values, links and backlinks, blob upload and download, update, validation errors, filtered and paged queries, counts, delete, 413 for an oversized blob, logout; cards with Yes and No counted and stamped by the server, edits that keep the counts, the quiz at every depth and its item limit, deletes, and cards through export and import) |
+| `scripts/run-device-tests.sh /path/to/LexiconServer [Gradle arguments]` | The instrumented tests on a connected emulator or device, against a temporary real server: Keystore encryption, the full UI flow including a blob round trip through document URIs, cards added, quizzed with one Yes and one No, the neighbourhood quiz and a delete, Share to Lexicon, and the Accessibility Test Framework over every main screen, the card list and the quiz included (labels, touch target sizes, contrast) |
 
 No test contacts the Internet; Robolectric runs offline with the framework jar
 Gradle resolved. Kotlin compiler warnings, like lint warnings, fail the build.
@@ -459,6 +486,9 @@ with R8.
 - Unsaved editor changes survive rotation, the session expiring and, for notes
   up to about 200,000 characters, the system ending the app in the background.
   Longer notes reload from the server after process death.
+- A card quiz keeps its place through rotation. If the system ends the app in
+  the background, the quiz starts again from its first card; the answers
+  already given stay counted on the server.
 - Neither client pushes changes to the other; the app shows another client's
   edit on its next load or refresh.
 - One user, as the server has one user.
@@ -477,6 +507,7 @@ app/src/main/java/com/robertvokac/lexicon/
   ui/         LexiconRoot (session gating, navigation, drawer)
     items/    list, filter sheet, Quick Add
     item/     item page, editor and its tabs, blob transfer, item picker
+    cards/    an item's cards, and the card quiz
     markdown/ parsing, rendering, formatting, C++ highlighting, safe links
     groups/, types/, overview/, settings/, login/, theme/, common/
 app/src/test/          JVM, Robolectric and Compose UI tests, fake server

@@ -493,6 +493,7 @@ class LexiconFlowsTest {
         assertArrayEquals(document, fake.imports.single())
         assertEquals("application/json; charset=utf-8", fake.requestsTo("POST", "/api/v1/import").single().headers["Content-Type"])
         compose.onNode(hasText("Imported 2 item(s)", substring = true) and hasAnyAncestor(isDialog())).assertIsDisplayed()
+        compose.onNode(hasText("and 3 card(s)", substring = true) and hasAnyAncestor(isDialog())).assertIsDisplayed()
     }
 
     @Test

@@ -124,7 +124,8 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
-            container.dataChanges.events.collect { change ->
+            // The list shows no card, so card changes leave it alone.
+            container.dataChanges.events.filter { it.kind != DataChanges.Kind.Cards }.collect { change ->
                 if (change.kind != DataChanges.Kind.Items) loadReferenceData()
                 else refreshUsage()
                 reload(keepLoaded = true)

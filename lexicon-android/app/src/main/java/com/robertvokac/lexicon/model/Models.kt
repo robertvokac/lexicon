@@ -250,12 +250,13 @@ data class ImportReport(
     val linksCreated: Int = 0,
     val blobsImported: Int = 0,
     val alarmsCreated: Int = 0,
+    val cardsCreated: Int = 0,
     val warnings: List<String> = emptyList(),
 ) {
     val summary: String
-        get() = "Imported $itemsCreated item(s), $linksCreated link(s), $blobsImported file(s) and $alarmsCreated alarm(s); " +
-            "$itemsSkipped item(s) were already here. Created $groupsCreated group(s), $typesCreated type(s) " +
-            "and $fieldsCreated field(s)."
+        get() = "Imported $itemsCreated item(s), $linksCreated link(s), $blobsImported file(s), $alarmsCreated alarm(s) " +
+            "and $cardsCreated card(s); $itemsSkipped item(s) were already here. Created $groupsCreated group(s), " +
+            "$typesCreated type(s) and $fieldsCreated field(s)."
 }
 
 /** How well an item was remembered in a review (POST /items/{id}/review). */
@@ -333,6 +334,56 @@ data class AlarmWrite(val title: String, val description: String = "", val fires
 
 @Serializable internal data class AlarmsEnvelope(val alarms: List<Alarm>)
 @Serializable internal data class AlarmEnvelope(val alarm: Alarm)
+
+/**
+ * A question and its answer, for active recall; it belongs to one item and
+ * goes when the item goes. The counts and [lastAttempt] are the server's:
+ * only an attempt moves them, never an edit. Cards are not the item's Review
+ * and never change its understanding or review dates.
+ */
+@Serializable
+data class Card(
+    val id: Int,
+    val itemId: Int,
+    val question: String,
+    val answer: String,
+    val successCount: Long = 0,
+    val failureCount: Long = 0,
+    /** UTC "YYYY-MM-DDTHH:MM:SSZ" by the server's clock; null when never attempted. */
+    val lastAttempt: String? = null,
+)
+
+/** A card in a quiz, with the title of the item it belongs to. */
+@Serializable
+data class QuizCard(
+    val id: Int,
+    val itemId: Int,
+    val itemTitle: String = "",
+    val question: String,
+    val answer: String,
+    val successCount: Long = 0,
+    val failureCount: Long = 0,
+    val lastAttempt: String? = null,
+)
+
+/**
+ * GET /items/{id}/quiz-cards: the cards of an item, or of the items around it,
+ * the centre's first. [itemCount] is how many items the quiz covered, with
+ * cards or without; [truncated] says more were in reach than the limit allowed.
+ */
+@Serializable
+data class CardQuizSet(val cards: List<QuizCard>, val itemCount: Int = 0, val truncated: Boolean = false)
+
+/** The body of POST /items/{id}/cards and PUT /cards/{id}: the only editable parts. */
+@Serializable
+data class CardWrite(val question: String, val answer: String)
+
+/** The body of POST /cards/{id}/attempt: the answer to "Do you know?". */
+@Serializable
+internal data class CardAttempt(val success: Boolean)
+
+@Serializable internal data class CardsEnvelope(val cards: List<Card>)
+@Serializable internal data class CardEnvelope(val card: Card)
 
 @Serializable internal data class GroupsEnvelope(val groups: List<Group>)
 @Serializable internal data class GroupEnvelope(val group: Group)

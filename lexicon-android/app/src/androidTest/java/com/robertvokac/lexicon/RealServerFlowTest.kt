@@ -13,17 +13,24 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.core.app.ActivityOptionsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.robertvokac.lexicon.model.CardWrite
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.FieldWrite
 import com.robertvokac.lexicon.model.ItemQuery
+import com.robertvokac.lexicon.model.ItemWrite
+import com.robertvokac.lexicon.model.LinkType
+import com.robertvokac.lexicon.model.OutgoingLinkWrite
+import com.robertvokac.lexicon.model.SaveItemRequest
 import com.robertvokac.lexicon.model.TypeWrite
 import com.robertvokac.lexicon.ui.LaunchRequests
 import com.robertvokac.lexicon.ui.LexiconRoot
@@ -41,7 +48,8 @@ import java.io.File
 /**
  * The app on a device against a real LexiconServer: login, Quick Add, open,
  * edit and save, search, a Blob round trip through document URIs, delete and
- * logout. Runs only when scripts/run-device-tests.sh supplies a server.
+ * logout; and cards with their quiz. Runs only when
+ * scripts/run-device-tests.sh supplies a server.
  */
 @RunWith(AndroidJUnit4::class)
 class RealServerFlowTest {
@@ -87,6 +95,35 @@ class RealServerFlowTest {
     }
 
     private fun field(label: String) = compose.onNode(hasSetTextAction() and hasText(label))
+
+    private fun button(text: String) = compose.onNode(hasText(text) and hasClickAction())
+
+    private fun logIn() {
+        compose.waitForText("Log in")
+        field("Server URL").performTextReplacement(DeviceServer.url)
+        field("User name").performTextReplacement(DeviceServer.user)
+        field("Password").performTextInput(DeviceServer.password)
+        button("Log in").performClick()
+        compose.waitFor(hasContentDescription("Quick add item"))
+    }
+
+    /** Show answer, then Yes or No. */
+    private fun answer(yes: Boolean) {
+        compose.waitFor(hasText("Show answer") and hasClickAction())
+        button("Show answer").performScrollTo().performClick()
+        val label = if (yes) "Yes" else "No"
+        compose.waitFor(hasText(label) and hasClickAction())
+        button(label).performScrollTo().performClick()
+    }
+
+    private fun addCard(question: String, answer: String) {
+        compose.onNodeWithContentDescription("Add card").performClick()
+        compose.waitForText("Add card")
+        field("Question").performTextInput(question)
+        field("Answer").performTextInput(answer)
+        compose.onNode(hasText("Save") and hasClickAction() and hasAnyAncestor(isDialog())).performClick()
+        compose.waitUntilGone(hasText("Add card"))
+    }
 
     @Test
     fun loginAddEditSearchBlobDeleteLogout() {
@@ -164,5 +201,70 @@ class RealServerFlowTest {
         compose.onNodeWithContentDescription("Open navigation").performClick()
         compose.onNode(hasText("Log out") and hasClickAction()).performClick()
         compose.waitForText("Log in")
+    }
+
+    @Test
+    fun cardsAreAddedQuizzedAndDeleted() {
+        logIn()
+        // The item and a linked neighbour with a card of its own, through the API.
+        val (itemId, neighbourId) = runBlocking {
+            val groupId = container.api.defaultGroupId()
+            val item = container.api.createItem(SaveItemRequest(ItemWrite(groupId = groupId, title = title))).id
+            val neighbour = container.api.createItem(
+                SaveItemRequest(
+                    ItemWrite(groupId = groupId, title = "$title neighbour"),
+                    links = listOf(OutgoingLinkWrite(id = null, toItemId = item, linkType = LinkType.Related)),
+                ),
+            ).id
+            container.api.createCard(neighbour, CardWrite("Neighbour question", "Neighbour answer"))
+            item to neighbour
+        }
+
+        compose.onNode(hasSetTextAction() and hasContentDescription("Search items")).performTextReplacement(title)
+        compose.onNode(hasSetTextAction() and hasContentDescription("Search items")).performImeAction()
+        compose.waitFor(hasText(title) and hasClickAction() and !hasSetTextAction())
+        compose.onNode(hasText(title) and hasClickAction() and !hasSetTextAction()).performClick()
+        compose.waitForText("This item has no content yet.")
+        compose.onNodeWithContentDescription("More actions").performClick()
+        compose.waitFor(hasText("Cards") and hasClickAction())
+        button("Cards").performClick()
+        compose.waitForText("No cards yet. Add one with the + button.")
+
+        addCard("Co znamená řetězec?", "Příliš žluťoučký kůň\n指针")
+        compose.waitFor(hasContentDescription("Delete card Co znamená řetězec?"))
+        addCard("What is std::uint64_t?", "An unsigned 64-bit integer.")
+        compose.waitFor(hasContentDescription("Delete card What is std::uint64_t?"))
+        val (first, second) = runBlocking { container.api.cards(itemId) }
+        assertEquals("Příliš žluťoučký kůň\n指针", first.answer)
+
+        // One Yes and one No; the server counts them.
+        compose.onNodeWithContentDescription("Card quiz").performClick()
+        compose.waitForText("1 / 2")
+        answer(yes = true)
+        compose.waitForText("2 / 2")
+        answer(yes = false)
+        compose.waitForText("Quiz finished")
+        compose.waitForText("Yes: 1")
+        compose.waitForText("No: 1")
+        val counted = runBlocking { container.api.cards(itemId) }
+        assertEquals(listOf(1L to 0L, 0L to 1L), counted.map { it.successCount to it.failureCount })
+        assertTrue(counted.all { it.lastAttempt?.endsWith("Z") == true })
+        assertEquals(listOf(first.id, second.id), counted.map { it.id })
+
+        // The neighbourhood brings the linked item's card.
+        button("Neighborhood").performClick()
+        compose.waitForText("1 / 3")
+        compose.waitFor(hasText("2 links") and isSelected())
+        compose.waitForText("3 card(s) from 2 item(s)", substring = true)
+
+        // Back in the list: the new counts, and a delete that asks first.
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.waitForText("Success: 1 · Failure: 0", substring = true)
+        compose.onNodeWithContentDescription("Delete card What is std::uint64_t?").performClick()
+        compose.waitForText("Delete the card 'What is std::uint64_t?' and its counts?")
+        compose.onNode(hasText("Delete") and hasClickAction() and hasAnyAncestor(isDialog())).performClick()
+        compose.waitUntilGone(hasContentDescription("Delete card What is std::uint64_t?"))
+        assertEquals(listOf(first.id), runBlocking { container.api.cards(itemId) }.map { it.id })
+        assertEquals(1, runBlocking { container.api.cards(neighbourId) }.size)
     }
 }

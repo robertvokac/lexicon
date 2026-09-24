@@ -2,6 +2,7 @@ package com.robertvokac.lexicon.testing
 
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.Alarm
+import com.robertvokac.lexicon.model.Card
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.Group
@@ -20,6 +21,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -62,6 +64,18 @@ class FakeLexiconServer : Dispatcher() {
     val imports = mutableListOf<ByteArray>()
     val reviews = mutableListOf<Pair<Int, ReviewRating>>()
     val alarms = mutableListOf<Alarm>()
+
+    /** Every item's cards, in the order they were added. */
+    val cards = mutableListOf<Card>()
+
+    /** What the server's clock says when a card is attempted. */
+    var attemptTime = "2026-09-24T14:00:00Z"
+
+    /** Card attempts answer only after this long. */
+    @Volatile var attemptDelayMillis = 0L
+
+    /** Card attempts answer 503, like a server that is briefly away. */
+    @Volatile var attemptsFail = false
 
     /** Dismiss and snooze answer 503, like a server that is briefly away. */
     @Volatile var alarmActionsFail = false
@@ -110,6 +124,13 @@ class FakeLexiconServer : Dispatcher() {
         return field
     }
 
+    fun addCard(itemId: Int, question: String, answer: String, successCount: Long = 0, failureCount: Long = 0, lastAttempt: String? = null): Card =
+        synchronized(this) {
+            Card(nextId++, itemId, question, answer, successCount, failureCount, lastAttempt).also { cards += it }
+        }
+
+    fun card(id: Int): Card = synchronized(this) { cards.single { it.id == id } }
+
     fun requestsTo(method: String, path: String): List<RecordedRequest> =
         requests.filter { it.method == method && it.url.encodedPath == path }
 
@@ -122,6 +143,7 @@ class FakeLexiconServer : Dispatcher() {
             return error(503, "unavailable", "The server is not available.")
         }
         if (request.url.encodedPath.endsWith("/blobs") && blobDelayMillis > 0) Thread.sleep(blobDelayMillis)
+        if (request.url.encodedPath.endsWith("/attempt") && attemptDelayMillis > 0) Thread.sleep(attemptDelayMillis)
         val slow = slowQuery
         if (slow != null && request.url.encodedPath.endsWith("/items/query") && request.body?.utf8()?.contains("\"searchText\":\"$slow\"") == true) {
             Thread.sleep(slowQueryMillis)
@@ -200,6 +222,7 @@ class FakeLexiconServer : Dispatcher() {
                 val id = segments[1].toInt()
                 if (!groups.removeIf { it.id == id }) return notFound()
                 items.values.removeIf { it.groupId == id }
+                cards.removeIf { it.itemId !in items }
                 noContent()
             }
             path == "/alarms" && method == "GET" -> json(buildJsonObject { put("alarms", encode(alarms.sortedWith(compareBy({ it.firesAt }, { it.id })))) })
@@ -341,6 +364,7 @@ class FakeLexiconServer : Dispatcher() {
                 val id = segments[1].toInt()
                 items.remove(id) ?: return notFound()
                 links.removeIf { it.fromItemId == id || it.toItemId == id }
+                cards.removeIf { it.itemId == id }
                 noContent()
             }
             segments.size == 3 && segments[0] == "items" && segments[2] == "read" -> {
@@ -366,6 +390,72 @@ class FakeLexiconServer : Dispatcher() {
                     put("edges", encode(around.map(::withTitles)))
                     put("truncated", false)
                 })
+            }
+            segments.size == 3 && segments[0] == "items" && segments[2] == "cards" && method == "GET" -> {
+                val id = segments[1].toInt()
+                if (id !in items) return error(404, "not_found", "Item not found.")
+                json(buildJsonObject { put("cards", encode(cards.filter { it.itemId == id })) })
+            }
+            segments.size == 3 && segments[0] == "items" && segments[2] == "cards" && method == "POST" -> {
+                val id = segments[1].toInt()
+                if (id !in items) return error(404, "not_found", "Item not found.")
+                val (question, answer) = cardText(bodyObject(request))
+                val card = Card(nextId++, id, question, answer)
+                cards += card
+                json(buildJsonObject { put("card", encode(card)) }, 201)
+            }
+            segments.size == 3 && segments[0] == "items" && segments[2] == "quiz-cards" && method == "GET" -> {
+                val id = segments[1].toInt()
+                if (id !in items) return error(404, "not_found", "Item not found.")
+                val depth = request.url.queryParameter("depth")?.toIntOrNull() ?: 0
+                val limit = request.url.queryParameter("limit")?.toIntOrNull() ?: 150
+                require(depth in 0..3) { "depth must be 0 to 3." }
+                require(limit in 1..300) { "limit must be 1 to 300." }
+                val (reached, truncated) = neighbourhood(id, depth, limit)
+                json(buildJsonObject {
+                    put("cards", buildJsonArray {
+                        reached.forEach { itemId ->
+                            cards.filter { it.itemId == itemId }.forEach { card ->
+                                add(buildJsonObject {
+                                    encode(card).jsonObject.forEach { (key, value) -> put(key, value) }
+                                    put("itemTitle", items.getValue(itemId).title)
+                                })
+                            }
+                        }
+                    })
+                    put("itemCount", reached.size)
+                    put("truncated", truncated)
+                })
+            }
+            segments.size == 2 && segments[0] == "cards" && method == "GET" -> {
+                val card = cards.firstOrNull { it.id == segments[1].toIntOrNull() } ?: return error(404, "not_found", "Card not found.")
+                json(buildJsonObject { put("card", encode(card)) })
+            }
+            segments.size == 2 && segments[0] == "cards" && method == "PUT" -> {
+                val index = cards.indexOfFirst { it.id == segments[1].toIntOrNull() }.takeIf { it >= 0 }
+                    ?: return error(404, "not_found", "Card not found.")
+                val (question, answer) = cardText(bodyObject(request))
+                // Only the text changes; the counts are the server's.
+                cards[index] = cards[index].copy(question = question, answer = answer)
+                json(buildJsonObject { put("card", encode(cards[index])) })
+            }
+            segments.size == 2 && segments[0] == "cards" && method == "DELETE" -> {
+                if (!cards.removeIf { it.id == segments[1].toIntOrNull() }) return error(404, "not_found", "Card not found.")
+                noContent()
+            }
+            segments.size == 3 && segments[0] == "cards" && segments[2] == "attempt" && method == "POST" -> {
+                if (attemptsFail) return error(503, "unavailable", "Try again later.")
+                val index = cards.indexOfFirst { it.id == segments[1].toIntOrNull() }.takeIf { it >= 0 }
+                    ?: return error(404, "not_found", "Card not found.")
+                val success = (bodyObject(request)["success"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+                    ?: return error(400, "validation", "An attempt needs \"success\": true or false.")
+                val card = cards[index]
+                cards[index] = card.copy(
+                    successCount = card.successCount + if (success) 1 else 0,
+                    failureCount = card.failureCount + if (success) 0 else 1,
+                    lastAttempt = attemptTime,
+                )
+                json(buildJsonObject { put("card", encode(cards[index])) })
             }
             path == "/review" && method == "GET" -> {
                 val due = items.values.filter { it.reviewedAt == null }.sortedBy { it.id }
@@ -400,6 +490,7 @@ class FakeLexiconServer : Dispatcher() {
                         put("itemsCreated", 2)
                         put("itemsSkipped", 1)
                         put("linksCreated", 1)
+                        put("cardsCreated", 3)
                         put("warnings", buildJsonArray { add(JsonPrimitive("Field 'Year' holds another kind of value here.")) })
                     })
                 })
@@ -523,6 +614,45 @@ class FakeLexiconServer : Dispatcher() {
         position = json["position"]?.jsonPrimitive?.intOrNull ?: 0,
         customValue = json["customValue"]?.jsonPrimitive?.contentOrNull.orEmpty(),
     )
+
+    /** A card's question and answer, which neither may be missing or blank. */
+    private fun cardText(body: JsonObject): Pair<String, String> {
+        val question = body["question"]?.jsonPrimitive?.contentOrNull
+        val answer = body["answer"]?.jsonPrimitive?.contentOrNull
+        require(!question.isNullOrBlank()) { "Question cannot be empty." }
+        require(!answer.isNullOrBlank()) { "Answer cannot be empty." }
+        return question to answer
+    }
+
+    /**
+     * The items [depth] links around [centre], either way, breadth first and
+     * the centre first, as the graph finds them; at most [limit]. The flag says
+     * more were in reach.
+     */
+    private fun neighbourhood(centre: Int, depth: Int, limit: Int): Pair<List<Int>, Boolean> {
+        val reached = mutableListOf(centre)
+        var frontier = listOf(centre)
+        var truncated = false
+        repeat(depth) {
+            val next = mutableListOf<Int>()
+            for (id in frontier) {
+                val around = links.mapNotNull { link ->
+                    when (id) {
+                        link.fromItemId -> link.toItemId
+                        link.toItemId -> link.fromItemId
+                        else -> null
+                    }
+                }
+                for (other in around.distinct()) {
+                    if (other !in items || other in reached || other in next) continue
+                    if (reached.size + next.size < limit) next += other else truncated = true
+                }
+            }
+            reached += next
+            frontier = next
+        }
+        return reached to truncated
+    }
 
     private fun usage(values: List<String>): MockResponse = json(buildJsonObject {
         put("values", buildJsonArray {

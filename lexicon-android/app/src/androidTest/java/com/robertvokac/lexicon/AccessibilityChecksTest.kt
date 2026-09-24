@@ -16,6 +16,7 @@ import androidx.compose.ui.test.tryPerformAccessibilityChecks
 import android.view.KeyEvent
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.robertvokac.lexicon.model.CardWrite
 import com.robertvokac.lexicon.model.ItemWrite
 import com.robertvokac.lexicon.model.SaveItemRequest
 import com.robertvokac.lexicon.ui.LaunchRequests
@@ -52,6 +53,7 @@ class AccessibilityChecksTest {
             itemId = container.api.createItem(
                 SaveItemRequest(ItemWrite(groupId = container.api.defaultGroupId(), title = title, tags = listOf("a11y"), content = "# Heading\n\nText with a [link](https://example.com)."))
             ).id
+            container.api.createCard(checkNotNull(itemId), CardWrite("What does the check look at?", "Labels, touch targets\nand contrast."))
             container.sessions.logout().join()
         }
         val requests = LaunchRequests()
@@ -104,6 +106,23 @@ class AccessibilityChecksTest {
         compose.onNode(hasText(title) and hasClickAction()).performClick()
         compose.waitForText("Text with a link.")
         check()
+
+        // The item's cards, and a quiz over them before and after the answer shows.
+        compose.onNodeWithContentDescription("More actions").performClick()
+        compose.waitFor(hasText("Cards") and hasClickAction())
+        compose.onNode(hasText("Cards") and hasClickAction()).performClick()
+        compose.waitForText("What does the check look at?")
+        check()
+        compose.onNodeWithContentDescription("Card quiz").performClick()
+        compose.waitFor(hasText("Show answer") and hasClickAction())
+        check()
+        compose.onNode(hasText("Show answer") and hasClickAction()).performClick()
+        compose.waitForText("Do you know?")
+        check()
+        back()
+        compose.waitForText("What does the check look at?")
+        back()
+        compose.waitForText("Text with a link.")
         compose.onNodeWithContentDescription("Edit item").performClick()
         compose.waitFor(hasSetTextAction() and hasText("Title"))
         check()
