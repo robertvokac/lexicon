@@ -67,6 +67,14 @@ int main(int argc, char **argv) {
   item.fieldValues.clear();
   if (!application.items.saveItem(item)) return 1;
   full->click();
+  if (!summary->text().contains("Unused: 0") || remove->isEnabled()) {
+    std::cerr << summary->text().toStdString() << '\n'; return 1;
+  }
+  const auto orphanSource = directory / "orphan-source";
+  { std::ofstream out(orphanSource); out << "gui orphan"; }
+  auto orphan = application.blobs.importFile(orphanSource.string());
+  if (!orphan) return 1;
+  full->click();
   if (!summary->text().contains("Unused: 1") || !remove->isEnabled() ||
       issues->rowCount() != 1 || issues->item(0, 0)->text() != "Unused") {
     std::cerr << summary->text().toStdString() << '\n'; return 1;
@@ -80,7 +88,7 @@ int main(int argc, char **argv) {
     }
   });
   remove->click();
-  const auto canonical = directory / "blobs" / hash->substr(0, 2) / hash->substr(2);
+  const auto canonical = directory / "blobs" / orphan->substr(0, 2) / orphan->substr(2);
   if (!sawConfirmation || !fs::exists(canonical)) return 1;
   return 0;
 }

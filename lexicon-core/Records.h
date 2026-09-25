@@ -128,6 +128,13 @@ struct ItemRecord {
   // explanation. Never stored; it belongs to one search, not to the item.
   std::string matchSnippet;
 };
+struct ItemHistoryEntry {
+  int id = -1;
+  int itemId = -1;
+  std::string operation;
+  std::string happenedAt;
+  ItemRecord item;
+};
 // A reminder at a moment: when it goes off, as UTC "YYYY-MM-DDTHH:MM:SSZ".
 struct AlarmRecord {
   int id = -1;
@@ -137,6 +144,10 @@ struct AlarmRecord {
   // When someone dismissed it after it went off, as UTC; empty while it has
   // not gone off or is still ringing.
   std::string dismissedAt;
+  // Zero is one-time. A recurring alarm fires every N days from its original
+  // local/UTC instant; snoozing does not shift that schedule.
+  int repeatDays = 0;
+  ItemId itemId = -1;
 };
 // A question about an item and its answer, for active recall. It belongs to
 // exactly one item and goes when the item goes. The counts and the last

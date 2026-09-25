@@ -9,6 +9,7 @@ import com.robertvokac.lexicon.model.CardAttempt
 import com.robertvokac.lexicon.model.CardEnvelope
 import com.robertvokac.lexicon.model.CardQuizSet
 import com.robertvokac.lexicon.model.CardWrite
+import com.robertvokac.lexicon.model.ChangePasswordRequest
 import com.robertvokac.lexicon.model.CardsEnvelope
 import com.robertvokac.lexicon.model.CountEnvelope
 import com.robertvokac.lexicon.model.DefaultGroupEnvelope
@@ -32,6 +33,8 @@ import com.robertvokac.lexicon.model.InboxIdea
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
 import com.robertvokac.lexicon.model.ItemIdEnvelope
+import com.robertvokac.lexicon.model.ItemHistoryEntry
+import com.robertvokac.lexicon.model.ItemHistoryEnvelope
 import com.robertvokac.lexicon.model.ItemPage
 import com.robertvokac.lexicon.model.ItemQuery
 import com.robertvokac.lexicon.model.ItemType
@@ -40,6 +43,8 @@ import com.robertvokac.lexicon.model.LoginResponse
 import com.robertvokac.lexicon.model.Me
 import com.robertvokac.lexicon.model.SaveItemRequest
 import com.robertvokac.lexicon.model.SavedItem
+import com.robertvokac.lexicon.model.ServerSession
+import com.robertvokac.lexicon.model.ServerSessionsEnvelope
 import com.robertvokac.lexicon.model.SnoozeRequest
 import com.robertvokac.lexicon.model.StringsEnvelope
 import com.robertvokac.lexicon.model.TypeEnvelope
@@ -49,11 +54,13 @@ import com.robertvokac.lexicon.model.UploadedBlob
 import com.robertvokac.lexicon.model.UsageEnvelope
 import com.robertvokac.lexicon.model.UsageValue
 import kotlinx.serialization.json.JsonObject
+import kotlinx.coroutines.flow.StateFlow
 import java.io.InputStream
 import java.io.OutputStream
 
 /** Typed access to every /api/v1 endpoint the app uses. */
 class LexiconApi(private val client: ApiClient) {
+    val offlineRead: StateFlow<Boolean> get() = client.offlineRead
 
     // Health and session ------------------------------------------------------
 
@@ -73,6 +80,15 @@ class LexiconApi(private val client: ApiClient) {
 
     suspend fun me(session: Session): Me =
         client.get("auth/me", Me.serializer(), ApiClient.Auth.Explicit(session))
+
+    suspend fun changePassword(currentPassword: String, newPassword: String) =
+        client.postNoResponse("auth/change-password", ChangePasswordRequest(currentPassword, newPassword),
+            ChangePasswordRequest.serializer())
+
+    suspend fun sessions(): List<ServerSession> =
+        client.get("auth/sessions", ServerSessionsEnvelope.serializer()).sessions
+
+    suspend fun revokeSession(id: String) = client.send("DELETE", "auth/sessions/$id")
 
     // Groups ------------------------------------------------------------------
 
@@ -133,6 +149,16 @@ class LexiconApi(private val client: ApiClient) {
             ItemBundle.serializer(),
             query = if (withLinks) mapOf("include" to "links,backlinks") else emptyMap(),
         )
+
+    suspend fun itemHistory(id: Int): List<ItemHistoryEntry> =
+        client.get("items/$id/history", ItemHistoryEnvelope.serializer()).entries
+
+    suspend fun trash(): List<ItemHistoryEntry> =
+        client.get("items/trash", ItemHistoryEnvelope.serializer()).entries
+
+    suspend fun restoreItemHistory(id: Int): Int =
+        client.post("items/history/$id/restore", JsonObject(emptyMap()),
+            JsonObject.serializer(), ItemIdEnvelope.serializer()).itemId
 
     /** Creates the item and its links in one unit of work. */
     suspend fun createItem(request: SaveItemRequest): SavedItem =

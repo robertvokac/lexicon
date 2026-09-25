@@ -230,8 +230,14 @@ fun UnreachableScreen(
     modifier: Modifier = Modifier,
     waitingIdeas: Int = 0,
     onSaveIdea: (() -> Unit)? = null,
+    onBrowseSaved: (() -> Unit)? = null,
 ) {
     StatusScreen("Cannot reach the server", server, message, onRetry, "Sign in again", onSignIn, modifier) {
+        if (onBrowseSaved != null) {
+            OutlinedButton(onClick = onBrowseSaved) { Text("Browse saved copy") }
+            Text("Saved items are read-only until the server is reachable.",
+                style = MaterialTheme.typography.bodySmall)
+        }
         // An idea should not wait for the network: it waits on the phone.
         if (onSaveIdea != null) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))

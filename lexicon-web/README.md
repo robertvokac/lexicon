@@ -21,12 +21,15 @@ lexicon-web/
 │   └── lexicon.css       both themes, layout and responsive rules
 ├── js/
 │   ├── api.js            the only module that speaks HTTP
+│   ├── account.js        password and session management
 │   ├── app.js            shell, login, menus, themes
+│   ├── alarms.js         recurring reminders and linked items
 │   ├── cardquiz.js       one sitting of a card quiz, without the page
 │   ├── cards.js          an item's cards and the card quiz
 │   ├── dialogs.js        modal dialogs and list editors
 │   ├── drafts.js         unsaved item edits kept in the browser
 │   ├── groups.js         group manager
+│   ├── history.js        item versions and Trash
 │   ├── highlight.js      C++ highlighting for code blocks
 │   ├── itemEdit.js       item editor with its six tabs
 │   ├── items.js          main window: table, filters, pagination, preview
@@ -95,8 +98,8 @@ second web server. The headers below are sent for you. See
 
 5. Open the page and sign in.
 
-`LexiconServer` never serves these files. The API and the frontend are
-deployed independently and may live on completely different hosts.
+For a separate static host, the API and frontend are deployed independently
+and may live on different hosts.
 
 ### Headers for the static host
 

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.robertvokac.lexicon.api.ApiClient
 import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconApi
+import com.robertvokac.lexicon.api.OfflineReadCache
 import com.robertvokac.lexicon.auth.AesGcmSecretCipher
 import com.robertvokac.lexicon.auth.KeystoreKeys
 import com.robertvokac.lexicon.auth.SecretCipher
@@ -46,15 +47,18 @@ class AppContainer(
     val defaultServerUrl: String,
     /** Where Inbox ideas wait while the server cannot be reached. */
     outboxFile: File,
+    offlineCacheDirectory: File? = null,
 ) {
+    val offlineCache = offlineCacheDirectory?.let { OfflineReadCache(it, keystoreCipher()) }
     val sessions: SessionManager = SessionManager(
         api = { api },
         tokenStore = tokenStore,
         settings = settings,
         scope = applicationScope,
         allowCleartextDevelopmentHosts = allowCleartextDevelopmentHosts,
+        canBrowseOffline = { server, username -> offlineCache?.hasIdentity(server, username) == true },
     )
-    val api: LexiconApi = LexiconApi(ApiClient(httpClient, sessions))
+    val api: LexiconApi = LexiconApi(ApiClient(httpClient, sessions, offlineCache = offlineCache))
     val dataChanges = DataChanges()
     val outbox = IdeaOutbox(outboxFile) { api }
 
@@ -87,6 +91,7 @@ class AppContainer(
                 defaultServerUrl = BuildConfig.DEFAULT_SERVER_URL,
                 // noBackupFilesDir: private notes stay off cloud backups.
                 outboxFile = File(application.noBackupFilesDir, "inbox-outbox.json"),
+                offlineCacheDirectory = File(application.noBackupFilesDir, "read-cache"),
             )
         }
 

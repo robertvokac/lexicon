@@ -8,11 +8,13 @@
 #include <vector>
 
 class QDateTimeEdit;
+class QComboBox;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
 class QTableWidget;
+class QSpinBox;
 
 namespace alarmtime {
 // An alarm's UTC "YYYY-MM-DDTHH:MM:SSZ" as a local date and time, and back.
@@ -37,6 +39,8 @@ private:
     QLineEdit* m_title = nullptr;
     QPlainTextEdit* m_description = nullptr;
     QDateTimeEdit* m_firesAt = nullptr;
+    QSpinBox* m_repeatDays = nullptr;
+    QComboBox* m_item = nullptr;
     QLabel* m_error = nullptr;
 };
 

@@ -310,4 +310,27 @@ class ApiClientTest {
         assertEquals("/api/v1/items/7/read", request.url.encodedPath)
         assertEquals(0L, request.bodySize)
     }
+
+    @Test
+    fun accountAndHistoryRoutesUseTheAuthenticatedApi() = runBlocking {
+        server.enqueue(json("""{"sessions":[{"id":"abc","createdAtSeconds":1,"lastSeenSeconds":2,"current":true}]}"""))
+        assertEquals("abc", api.sessions().single().id)
+        assertEquals("/api/v1/auth/sessions", server.takeRequest().url.encodedPath)
+
+        server.enqueue(MockResponse.Builder().code(204).build())
+        api.changePassword("old password", "new strong password")
+        val change = server.takeRequest()
+        assertEquals("/api/v1/auth/change-password", change.url.encodedPath)
+        assertTrue(change.body!!.utf8().contains("new strong password"))
+        assertEquals("Bearer the-token", change.headers["Authorization"])
+
+        server.enqueue(json("""{"entries":[]}"""))
+        assertTrue(api.trash().isEmpty())
+        assertEquals("/api/v1/items/trash", server.takeRequest().url.encodedPath)
+        server.enqueue(json("""{"itemId":19}"""))
+        assertEquals(19, api.restoreItemHistory(7))
+        val restore = server.takeRequest()
+        assertEquals("POST", restore.method)
+        assertEquals("/api/v1/items/history/7/restore", restore.url.encodedPath)
+    }
 }

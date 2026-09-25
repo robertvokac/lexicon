@@ -40,6 +40,9 @@ public:
   virtual Result<void> saveItem(const ItemRecord &item) = 0;
   virtual Result<int> saveItemReturningId(const ItemRecord &item) = 0;
   virtual Result<void> deleteItem(int itemId) = 0;
+  virtual Result<std::vector<ItemHistoryEntry>> loadItemHistory(int itemId) = 0;
+  virtual Result<std::vector<ItemHistoryEntry>> loadTrash() = 0;
+  virtual Result<int> restoreItemHistory(int historyId) = 0;
   virtual Result<std::vector<LinkRecord>> loadLinks(int itemId) = 0;
   virtual Result<std::vector<LinkRecord>> loadBacklinks(int itemId) = 0;
   virtual Result<void> saveLink(const LinkRecord &link) = 0;

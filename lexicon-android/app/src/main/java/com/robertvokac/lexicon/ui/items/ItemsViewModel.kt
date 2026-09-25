@@ -104,6 +104,7 @@ data class ItemsUiState(
 
 class ItemsViewModel(private val container: AppContainer) : ViewModel() {
     private val api = container.api
+    val offlineRead = api.offlineRead
     private val _state = MutableStateFlow(
         ItemsUiState(message = container.outbox.storageError?.let(::UserMessage)),
     )

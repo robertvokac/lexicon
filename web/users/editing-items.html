@@ -180,6 +180,7 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
 
     <h2 id="saving">Saving, and what happens if someone else was faster</h2>
     <p>Every item carries a <strong>revision</strong> that moves on with each change to it, its values or its links. If another client — the desktop, the browser or the phone — saved the item after you opened it, your save is not written silently over theirs. Lexicon lists what differs and offers to <strong>Overwrite</strong> the newer version, <strong>Reload</strong> it and drop your changes, or go back to editing.</p>
+    <p>The desktop editor's <strong>Undo</strong> and <strong>Redo</strong> buttons (Ctrl+Z and Ctrl+Y/Ctrl+Shift+Z) can reverse unsaved changes across fields, metadata and links. After saving, open the selected item's <strong>History</strong> to restore an earlier version. <strong>Trash</strong> lists deleted items and can recreate one with its cards and links; the restored item receives a new ID. These actions are also available in the web and Android clients. Keep full backups for group and type changes, which item history does not cover.</p>
 
     <div class="page-nav">
       <a class="prev" href="getting-started.html"><span class="dir">← Previous</span>Getting started</a>

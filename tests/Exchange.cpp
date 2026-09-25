@@ -106,6 +106,10 @@ int main() {
   const int readingId = value(app.items.createItem(reading), "create Reading list");
   check(app.links.saveLink({-1, monoidId, semigroupId, lexicon::LinkType::IsA, 1, "", "", ""}).has_value(), "IsA link");
   check(app.links.saveLink({-1, readingId, monoidId, lexicon::LinkType::Custom, 0, "cites", "", ""}).has_value(), "Custom link");
+  lexicon::AlarmRecord reminder{-1, "Review Monoid", "", "2030-01-01T09:00:00Z", ""};
+  reminder.repeatDays = 7;
+  reminder.itemId = monoidId;
+  check(app.alarms.saveAlarm(reminder).has_value(), "a recurring item-linked alarm");
 
   // Cards travel with their item and keep their statistics. Two cards may
   // ask the same thing; neither is dropped.
@@ -123,9 +127,12 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
-  // Version 2: a reader of version 1 would drop the cards without a word, so
-  // it refuses the document instead.
-  check(exported.value("version", 0) == 2, "the export is format version 2");
+  // Version 3: an older reader would drop the alarm's recurrence and item
+  // link without a word, so it refuses the document instead.
+  check(exported.value("version", 0) == 3, "the export is format version 3");
+  check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&
+            exported.at("alarms").at(0).value("itemId", 0) == monoidId,
+        "recurrence and linked item are exported");
   check(exported.contains("cards") && exported.at("cards").size() == 4, "the export holds every card");
   if (exported.contains("cards") && exported.at("cards").size() == 4) {
     const auto &card = exported.at("cards").at(0);
@@ -179,6 +186,9 @@ int main() {
         "two cards asking the same are both kept");
   check(value(copy.app.cards.loadCards(copy.itemNamed("Semigroup")), "the imported cards of Semigroup").size() == 1,
         "each card goes to its own item");
+  const auto copiedAlarms = value(copy.app.alarms.loadAlarms(), "copied alarms");
+  check(copiedAlarms.size() == 1 && copiedAlarms[0].repeatDays == 7 && copiedAlarms[0].itemId == copied,
+        "the recurring alarm follows its imported item");
 
   // Again: nothing is duplicated.
   const auto again = value(lexicon::exchange::importDocument(copy.app, withFiles), "import a second time");
@@ -227,6 +237,10 @@ int main() {
         "the cards follow their item to its new ID");
   check(value(other.app.cards.loadCards(other.itemNamed("Semigroup")), "kept Semigroup's cards").empty(),
         "an item that was already here gets no cards");
+  const auto mergedAlarms = value(other.app.alarms.loadAlarms(), "merged alarms");
+  check(mergedAlarms.size() == 1 && mergedAlarms[0].repeatDays == 7 &&
+            mergedAlarms[0].itemId == other.itemNamed("Monoid"),
+        "the linked alarm maps to the new item ID");
 
   // An export written before cards existed - version 1 - has none and imports
   // as before.
@@ -259,7 +273,7 @@ int main() {
   };
   refused("not json", "text that is not JSON");
   refused(R"({"format":"something-else","version":1})", "another format");
-  refused(R"({"format":"lexicon-export","version":3,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":4,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
   refused(R"({"format":"lexicon-export","version":0,"groups":[],"types":[],"items":[],"links":[]})", "version 0");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[{"id":1}],"links":[]})",
           "an item without a title");

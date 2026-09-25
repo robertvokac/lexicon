@@ -399,6 +399,20 @@ int main(int argc, char *argv[]) {
     return importDictionary(*parsed);
   case Command::Backup:
     return backupNow(parsed->config);
+  case Command::VerifyBackup: {
+    if (parsed->verifyBackupPath.empty()) {
+      std::cerr << "verify-backup needs --path DIR.\n";
+      return 2;
+    }
+    auto verified = lexicon::backup::verifyBackup(parsed->verifyBackupPath);
+    if (!verified) {
+      std::cerr << verified.error().message << '\n';
+      return 1;
+    }
+    std::cout << "Backup verified: " << parsed->verifyBackupPath << " ("
+              << *verified << " referenced files).\n";
+    return 0;
+  }
   case Command::Serve:
     break;
   }

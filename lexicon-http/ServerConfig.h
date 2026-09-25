@@ -60,7 +60,7 @@ Result<void> validateBackupDirectory(const ServerConfig &config);
 // is served to anyone who can reach the port.
 Result<void> validateWebDirectory(const ServerConfig &config);
 
-enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Backup, Help, Version };
+enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Backup, VerifyBackup, Help, Version };
 
 struct CommandLine {
   Command command = Command::Serve;
@@ -68,6 +68,8 @@ struct CommandLine {
   // export: the file to write, empty for standard output; import: the file
   // to read.
   std::string exchangePath;
+  // verify-backup: the completed backup directory to inspect.
+  std::string verifyBackupPath;
   // export: whether the files values refer to travel in the document.
   bool exchangeFiles = false;
 };

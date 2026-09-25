@@ -3,7 +3,9 @@
 #include "ApplicationContext.h"
 
 #include <QDialog>
+#include <QByteArray>
 #include <QHash>
+#include <QVector>
 
 #include <functional>
 
@@ -78,6 +80,8 @@ private slots:
     void addLinksFromContent();
 
     void validateAndAccept();
+    void undoEdit();
+    void redoEdit();
 
 protected:
     void showEvent(QShowEvent* event) override;
@@ -97,6 +101,18 @@ private:
     bool promptForProperty(PropertyRecord& property, int skipIndex = -1);
     void setupUi();
     void connectSignals();
+    void scheduleHistory();
+    void recordHistory();
+    void applyHistory(int index);
+    void updateHistoryButtons();
+    struct EditSnapshot {
+        ItemRecord item;
+        QList<LinkRecord> links;
+        QList<LinkRecord> backlinks;
+        QMap<int, QString> blobPaths;
+        QByteArray fingerprint;
+    };
+    EditSnapshot currentSnapshot() const;
     QString getInputValue(const QString& title, const QString& label, const QString& initialValue, const QStringList& suggestions);
     void addValue(QListWidget* list, const QString& title, const QStringList& suggestions = QStringList());
     void editValue(QListWidget* list, const QString& title, const QStringList& suggestions = QStringList());
@@ -150,4 +166,10 @@ private:
 
     QPushButton* m_saveButton = nullptr;
     QPushButton* m_cardsButton = nullptr;
+    QPushButton* m_undoButton = nullptr;
+    QPushButton* m_redoButton = nullptr;
+    QTimer* m_historyTimer = nullptr;
+    QVector<EditSnapshot> m_history;
+    int m_historyIndex = -1;
+    bool m_applyingHistory = false;
 };

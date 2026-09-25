@@ -8,8 +8,9 @@ else.
 of truth.** Groups, types, fields, items, values, metadata, links, backlinks,
 blobs, cards and their counts, validation, filtering and transactions all live
 on the server; the app shows them and sends back what the person changes.
-There is no local replica, no offline queue and no synchronization. Lists and
-pages are loaded on demand and held in memory only while a screen shows them.
+There is no editable local replica. The app stores encrypted copies of
+previously loaded read responses for offline browsing and queues Inbox ideas
+until the server returns. Other changes still require the server.
 
 ```text
                     LexiconApplication
@@ -249,10 +250,15 @@ accept it; install a proper certificate instead.
 - **Manage.** Groups (add, edit, delete, with the desktop's warning that the
   items go too) and types with their fields (the item and value counts come from
   the server before anything destructive happens).
+- **History and Trash.** Open an item's previous versions from its page or
+  deleted items from the drawer. Restoring a deleted item gives it a new ID.
+- **Account.** Settings can change the password and list or revoke sessions.
+  Changing the password signs every device out immediately.
 - **Alarms.** Every alarm, the soonest first, with the date and time it goes
   off in the phone's time zone; those already gone off are marked. **+** adds
   one, a tap edits it: a title, a date and a time (typed, or chosen with the
-  date and time pickers) and a description. The server stores the time in UTC.
+  date and time pickers), a description, repeat days and an optional linked
+  item. The server stores the time in UTC.
   An alarm that has gone off shows **Dismiss** and **Snooze 10 min** until
   someone deals with it, here or in another client.
 - **Alarm notifications.** Alarms ring even when the app is closed. The app
@@ -433,6 +439,10 @@ the Qt and web clients, with an Android interaction model.
 | Blob upload and download | Yes, through the system document picker |
 | Groups, types and fields management | Yes, with the desktop's warnings and counts |
 | Cards: list, add, edit, delete | Yes; the counts and last attempt are shown, never edited |
+| Item history and Trash | Yes, including restore |
+| Password change and session revocation | Yes, in Settings |
+| Offline read cache | Previously loaded responses, encrypted per account |
+| Repeating alarms and linked items | Yes |
 | Card quiz: this item, or its neighbourhood one to three links deep | Yes, from the item page, its card list and the relationship graph |
 | All tags / flags / aliases | Yes |
 | Light, dark, system theme | Yes, stored on the device only |
@@ -493,11 +503,12 @@ with R8.
 
 ## Limitations
 
-- Online, except for the Inbox. Without the server the app shows why and
-  offers to retry. Inbox ideas wait on the phone and are sent later (see
-  **Offline Inbox**); nothing else is queued. An edit whose save fails stays
-  in the editor. There is no copy of the dictionary on the phone, so nothing
-  can be browsed offline.
+- Previously loaded item lists, details, groups, types and cards can be read
+  offline from the app's encrypted cache. On the unreachable-server screen,
+  **Browse offline** appears when this account has cached pages. Search and
+  pages that were never loaded still need the server. Writes other than Inbox
+  ideas are not queued; an edit whose save fails stays in the editor. The
+  cache is a convenience copy, not a backup or a full offline dictionary.
 - Unsaved editor changes survive rotation, the session expiring and, for notes
   up to about 200,000 characters, the system ending the app in the background.
   Longer notes reload from the server after process death.

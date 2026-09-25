@@ -92,6 +92,7 @@ fun ItemDetailScreen(
     onCreateItem: (title: String, disambiguation: String) -> Unit = { _, _ -> },
     onShowGraph: ((Int) -> Unit)? = null,
     onShowCards: ((Int) -> Unit)? = null,
+    onShowHistory: ((Int) -> Unit)? = null,
     onCardQuiz: ((Int) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -169,6 +170,15 @@ fun ItemDetailScreen(
                                     onClick = {
                                         menu = false
                                         state.bundle?.item?.id?.let(onShowCards)
+                                    },
+                                )
+                            }
+                            if (onShowHistory != null) {
+                                DropdownMenuItem(
+                                    text = { Text("History") },
+                                    onClick = {
+                                        menu = false
+                                        state.bundle?.item?.id?.let(onShowHistory)
                                     },
                                 )
                             }

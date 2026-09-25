@@ -669,6 +669,14 @@ Result<ImportReport> ExchangeService::importDictionary(
         continue;
       AlarmRecord alarm = source;
       alarm.id = -1;
+      if (source.itemId > 0) {
+        const auto mapped = itemIds.find(source.itemId);
+        if (mapped != itemIds.end()) alarm.itemId = mapped->second;
+        else {
+          alarm.itemId = -1;
+          warn("Alarm '" + source.title + "' belongs to an item missing from the file; its item link was left out.");
+        }
+      }
       if (auto saved = repository_.saveAlarm(alarm); !saved)
         return std::unexpected(Error{saved.error().code, "Alarm '" + source.title + "': " + saved.error().message});
       ++report.alarmsCreated;

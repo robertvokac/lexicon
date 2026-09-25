@@ -123,6 +123,7 @@ fun ItemsScreen(
     selectedItemId: Int? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val offlineRead by viewModel.offlineRead.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -197,6 +198,12 @@ fun ItemsScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
+            if (offlineRead) {
+                Text("Showing saved copy · read-only until the server is reachable",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+            }
             SearchField(
                 text = state.search,
                 onTextChange = viewModel::setSearch,

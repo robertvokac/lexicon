@@ -73,6 +73,7 @@ import com.robertvokac.lexicon.ui.common.LoadingBox
 import com.robertvokac.lexicon.ui.common.SyncedTextField
 import com.robertvokac.lexicon.ui.common.userMessage
 import com.robertvokac.lexicon.ui.item.DateDialog
+import com.robertvokac.lexicon.ui.item.ItemPickerDialog
 import com.robertvokac.lexicon.ui.item.TimeDialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -388,6 +389,16 @@ private fun AlarmRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            if (alarm.repeatDays > 0 || alarm.itemId != null) {
+                Text(
+                    listOfNotNull(
+                        alarm.repeatDays.takeIf { it > 0 }?.let { "Every $it day(s)" },
+                        alarm.itemId?.let { "Item #$it" },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                )
+            }
             if (ringing) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = onDismiss, enabled = !busy) { Text("Dismiss") }
@@ -416,8 +427,13 @@ private fun AlarmDialog(
     var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
     var date by rememberSaveable { mutableStateOf(start?.first.orEmpty()) }
     var time by rememberSaveable { mutableStateOf(start?.second.orEmpty()) }
+    var repeatDays by rememberSaveable { mutableStateOf((initial?.repeatDays ?: 0).toString()) }
+    var itemId by rememberSaveable { mutableStateOf(initial?.itemId) }
+    var itemLabel by rememberSaveable { mutableStateOf(initial?.itemId?.let { "Item #$it" }.orEmpty()) }
+    var pickingItem by rememberSaveable { mutableStateOf(false) }
     var titleError by rememberSaveable { mutableStateOf<String?>(null) }
     var timeError by rememberSaveable { mutableStateOf<String?>(null) }
+    var repeatError by rememberSaveable { mutableStateOf<String?>(null) }
     var pickingDate by rememberSaveable { mutableStateOf(false) }
     var pickingTime by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
@@ -475,6 +491,21 @@ private fun AlarmDialog(
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                SyncedTextField(
+                    value = repeatDays,
+                    onValueChange = { repeatDays = it; repeatError = null },
+                    label = "Repeat every (days)",
+                    singleLine = true,
+                    isError = repeatError != null,
+                    supportingText = repeatError ?: "0 means one time; maximum 365 days.",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { pickingItem = true }) {
+                        Text(if (itemId == null) "Link an item" else itemLabel)
+                    }
+                    if (itemId != null) TextButton(onClick = { itemId = null; itemLabel = "" }) { Text("Clear") }
+                }
                 if (serverError != null) {
                     Text(serverError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
@@ -485,10 +516,12 @@ private fun AlarmDialog(
                 enabled = !busy,
                 onClick = {
                     val firesAt = AlarmTimes.toUtc(date, time)
+                    val days = repeatDays.toIntOrNull()
                     when {
                         title.isBlank() -> titleError = "Enter a title."
                         firesAt == null -> timeError = "Enter a date as YYYY-MM-DD and a time as HH:MM."
-                        else -> onConfirm(AlarmWrite(title.trim(), description, firesAt))
+                        days == null || days !in 0..365 -> repeatError = "Repeat every 0 to 365 days."
+                        else -> onConfirm(AlarmWrite(title.trim(), description, firesAt, days, itemId))
                     }
                 },
             ) { Text(if (busy) "Saving…" else "Save") }
@@ -515,6 +548,17 @@ private fun AlarmDialog(
                 pickingTime = false
             },
             onDismiss = { pickingTime = false },
+        )
+    }
+    if (pickingItem) {
+        ItemPickerDialog(
+            title = "Link an item",
+            onPick = { picked ->
+                itemId = picked.id
+                itemLabel = picked.displayTitle
+                pickingItem = false
+            },
+            onDismiss = { pickingItem = false },
         )
     }
 }

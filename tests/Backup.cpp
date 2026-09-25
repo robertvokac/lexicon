@@ -115,10 +115,17 @@ void checkBackups() {
   const fs::path one = lexicon::utf8Path(made->path);
   check(one.filename() == "lexicon-backup-2026-09-20T08-00-00Z", "named by its time");
   check(made->blobsCopied == 1 && made->blobsLinked == 0, "the referenced file is copied");
+  auto verified = lexicon::backup::verifyBackup(made->path);
+  check(verified && *verified == 1, "the completed backup verifies without changing it");
+  const auto originalExport = readFile(one / "lexicon-export.json");
+  { std::ofstream(one / "lexicon-export.json", std::ios::binary | std::ios::trunc) << "{}"; }
+  check(!lexicon::backup::verifyBackup(made->path), "verification detects a changed export");
+  { std::ofstream(one / "lexicon-export.json", std::ios::binary | std::ios::trunc) << originalExport; }
   check(readFile(one / "blobs" / first.substr(0, 2) / first.substr(2)) == "the first file", "byte for byte");
   check(!fs::exists(one / "blobs" / orphan.substr(0, 2) / orphan.substr(2)), "a file nothing refers to is left out");
   const auto manifest = nlohmann::json::parse(readFile(one / "backup.json"));
-  check(manifest.value("format", "") == "lexicon-backup" && manifest.value("blobs", 0) == 1, "with a manifest");
+  check(manifest.value("format", "") == "lexicon-backup" && manifest.value("version", 0) == 2 &&
+            manifest.value("blobs", 0) == 1, "with a checksummed manifest");
   const auto document = nlohmann::json::parse(readFile(one / "lexicon-export.json"));
   check(document.value("format", "") == "lexicon-export" && document.at("items").size() == 1, "and a portable export");
   check(document.contains("cards") && document.at("cards").size() == 1 &&
@@ -231,8 +238,10 @@ void checkChangesDuringABackup() {
     if (entry.path().filename().string().starts_with(".partial-")) ++partials;
   check(partials == 0, "nor its half-made directory");
 
-  // A damaged file fails it too. (The item of the vanished file goes first.)
+  // A deleted item's file remains referenced by Trash. Restore this test
+  // fixture's vanished bytes before testing damage in another file.
   application.items.deleteItem(application.search.findItemId("Group", "").value_or(-1));
+  { std::ofstream(data.blobFile(doomed), std::ios::binary) << "the group file"; }
   const auto damaged = data.itemWithFile("Ring", "the ring file");
   options.afterDatabaseCopy = [&] {
     // Blob files are stored read-only; this one rots anyway.
@@ -287,6 +296,8 @@ void checkDamageInThePreviousBackup() {
   check(!fourth.has_value() && fourth.error().message.find(hash) != std::string::npos,
         "with no sound copy anywhere the backup fails and names the file");
   check(lexicon::backup::listBackups(backups).size() == 3, "and adds nothing that looks complete");
+  if (third)
+    check(!lexicon::backup::verifyBackup(third->path).has_value(), "verification detects a damaged referenced file");
 }
 
 void checkScheduler() {
@@ -324,6 +335,34 @@ void checkScheduler() {
   check(lexicon::backup::listBackups(directory).size() == before, "no backup before the interval has passed");
 }
 
+void checkDeletedItemFiles() {
+  Dictionary data;
+  const auto hash = data.itemWithFile("Gone", "a file retained by Trash");
+  const int id = data.application->search.findItemId("Gone", "").value_or(-1);
+  check(data.application->items.deleteItem(id).has_value(), "delete the file-bearing item");
+  auto scan = data.application->blobs.scanStorage(lexicon::BlobScanDepth::FullIntegrity);
+  check(scan.has_value(), "scan storage after the deletion");
+  if (scan) {
+    auto collected = data.application->blobs.collectUnusedBlobs(*scan);
+    check(collected.has_value() && fs::exists(data.blobFile(hash)),
+          "Blob cleanup keeps a file referenced by Trash");
+  }
+  lexicon::backup::BackupOptions options{lexicon::pathToUtf8(data.database),
+      lexicon::pathToUtf8(data.temp.path / "backups"), 2, {}};
+  auto made = lexicon::backup::createBackup(options, at("2026-09-22T08:00:00Z"));
+  check(made.has_value(), "backup of a deleted file-bearing item succeeds");
+  if (!made) return;
+  auto verified = lexicon::backup::verifyBackup(made->path);
+  check(verified && *verified == 1, "backup includes the file retained by Trash");
+  const auto trash = data.application->items.loadTrash();
+  if (trash && !trash->empty()) {
+    const auto restored = data.application->items.restoreItemHistory(trash->front().id);
+    const auto item = restored ? data.application->items.loadItem(*restored) : lexicon::Result<lexicon::ItemRecord>{};
+    check(item && item->fieldValues.at(data.fileField) == hash,
+          "restoring the deleted item reuses its intact file");
+  }
+}
+
 void checkCommandLine() {
   using lexicon::http::parseCommandLine;
   auto backup = parseCommandLine({"backup", "--backup-dir", "/srv/backups", "--backup-keep", "30"});
@@ -348,6 +387,7 @@ int main() {
   checkBackups();
   checkChangesDuringABackup();
   checkDamageInThePreviousBackup();
+  checkDeletedItemFiles();
   checkScheduler();
   checkCommandLine();
   if (failures == 0) std::cout << "backup: all checks passed\n";

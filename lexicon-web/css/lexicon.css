@@ -988,3 +988,6 @@ svg.graph { flex: none; margin: auto; }
     .quiz-verdict button { flex: 1 1 0; min-height: var(--touch); }
     .quiz-show { min-height: var(--touch); }
 }
+.history-entries { width: 100%; min-height: 12rem; }
+.history-preview { max-height: 18rem; overflow: auto; white-space: pre-wrap; }
+.session-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem 0; }

@@ -92,7 +92,16 @@ failures return 429 with `Retry-After`.
 ```http
 POST /api/v1/auth/logout   → 204, the token stops working immediately
 GET  /api/v1/auth/me       → { "username": "robert", "apiVersion": 1 }
+GET  /api/v1/auth/sessions → { "sessions": [ { "id": "...", "createdAtSeconds": 0, "lastSeenSeconds": 0, "current": true } ] }
+DELETE /api/v1/auth/sessions/{id} → 204
+POST /api/v1/auth/change-password → 204
+{ "currentPassword": "...", "newPassword": "..." }
 ```
+
+The session ID is an opaque identifier used only for revocation. Changing the
+password requires the current password, writes the credential file atomically,
+and ends all sessions, including the caller's. Sign in again with the new
+password. A wrong current password returns 403.
 
 ## Groups
 
@@ -201,7 +210,16 @@ POST   /api/v1/items/{id}/read                   → 204 (records a read in the 
 GET    /api/v1/items/{id}/links                  → { "links": [ ... ] }
 GET    /api/v1/items/{id}/backlinks              → { "backlinks": [ ... ] }
 GET    /api/v1/items/resolve?title=&disambiguation= → { "itemId": 7 }
+GET    /api/v1/items/{id}/history               → { "entries": [ ... ] }
+GET    /api/v1/items/trash                      → { "entries": [ ... ] }
+POST   /api/v1/items/history/{historyId}/restore → { "itemId": 7 }
 ```
+
+Each history entry has `id`, `itemId`, `operation` (`updated` or `deleted`),
+`happenedAt` and the previous `item`. Restoring a deleted item creates a new
+ID. Its cards and links are restored when their other endpoint still exists.
+Restoring a previous version of a live item keeps its ID. The latest 100
+saved versions per item are retained; Trash lists every unrestored deletion.
 
 ```http
 GET /api/v1/items/{id}/graph?depth=2&limit=100
@@ -478,7 +496,8 @@ POST   /api/v1/alarms/{id}/snooze    → 200 { "alarm": { ... } }
 
 ```json
 { "id": 4, "title": "Dentist", "description": "Bring the card.",
-  "firesAt": "2026-10-02T08:30:00Z", "dismissedAt": null }
+  "firesAt": "2026-10-02T08:30:00Z", "dismissedAt": null,
+  "repeatDays": 7, "itemId": 19 }
 ```
 
 An alarm is a reminder at a moment: a `title` (required, trimmed), a
@@ -498,6 +517,12 @@ oldest first, and says what time the server has. `dismiss` sets `dismissedAt`
 `PUT` makes it ring again at the new time; changing only its title or
 description does not. `dismissedAt` is ignored on `PUT`, and read on `POST`
 only so that an imported alarm keeps its state.
+
+`repeatDays` is zero for a one-time alarm or 1–365 for an interval in days.
+`itemId` is an optional linked item, returned as `null` when absent. Dismissing
+a repeating alarm schedules its next occurrence from the original time;
+snoozing does not shift that recurring schedule. Deleting the linked item
+leaves the alarm in place without a link.
 
 ## Export and import
 

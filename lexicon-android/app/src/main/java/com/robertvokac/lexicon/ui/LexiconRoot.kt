@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.School
@@ -72,6 +73,8 @@ import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.share.LaunchRequest
 import com.robertvokac.lexicon.storage.ThemePreference
 import com.robertvokac.lexicon.ui.alarms.AlarmsScreen
+import com.robertvokac.lexicon.ui.history.HistoryScreen
+import com.robertvokac.lexicon.ui.history.HistoryViewModel
 import com.robertvokac.lexicon.ui.alarms.AlarmsViewModel
 import com.robertvokac.lexicon.ui.cards.CardQuizScreen
 import com.robertvokac.lexicon.ui.cards.CardQuizViewModel
@@ -98,6 +101,8 @@ import com.robertvokac.lexicon.ui.login.LoginViewModel
 import com.robertvokac.lexicon.ui.login.StartingScreen
 import com.robertvokac.lexicon.ui.login.UnreachableScreen
 import com.robertvokac.lexicon.ui.navigation.AlarmsRoute
+import com.robertvokac.lexicon.ui.navigation.TrashRoute
+import com.robertvokac.lexicon.ui.navigation.ItemHistoryRoute
 import com.robertvokac.lexicon.ui.navigation.CardQuizRoute
 import com.robertvokac.lexicon.ui.navigation.CardsRoute
 import com.robertvokac.lexicon.ui.navigation.EditItemRoute
@@ -261,6 +266,8 @@ fun LexiconRoot(
                             onSignIn = { container.sessions.abandonStoredSession() },
                             waitingIdeas = ideas.count { it.server == current.server.value && it.username == current.username },
                             onSaveIdea = { offlineIdea = InboxState() },
+                            onBrowseSaved = if (container.offlineCache?.hasIdentity(current.server, current.username) == true)
+                                ({ container.sessions.browseOffline() }) else null,
                         )
                         offlineIdea?.let { idea ->
                             InboxDialog(
@@ -302,6 +309,7 @@ private enum class Destination(val label: String) {
     Groups("Groups"),
     Types("Types"),
     Alarms("Alarms"),
+    Trash("Trash"),
     Tags("All tags"),
     Flags("All flags"),
     Aliases("All aliases"),
@@ -351,6 +359,7 @@ private fun MainScaffold(
             Destination.Groups -> GroupsRoute
             Destination.Types -> TypesRoute
             Destination.Alarms -> AlarmsRoute
+            Destination.Trash -> TrashRoute
             Destination.Tags -> OverviewRoute(OverviewKind.Tags.name)
             Destination.Flags -> OverviewRoute(OverviewKind.Flags.name)
             Destination.Aliases -> OverviewRoute(OverviewKind.Aliases.name)
@@ -385,6 +394,7 @@ private fun MainScaffold(
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
                     DrawerEntry(Destination.Types, Icons.Filled.Category, ::go)
                     DrawerEntry(Destination.Alarms, Icons.Filled.Alarm, ::go)
+                    DrawerEntry(Destination.Trash, Icons.Filled.Delete, ::go)
                     DrawerHeading("Overview")
                     DrawerEntry(Destination.Tags, Icons.AutoMirrored.Filled.Label, ::go)
                     DrawerEntry(Destination.Flags, Icons.Filled.Flag, ::go)
@@ -486,6 +496,7 @@ private fun LexiconNavHost(
                                 },
                                 onShowGraph = { navController.navigate(GraphRoute(it)) },
                                 onShowCards = { navController.navigate(CardsRoute(it)) },
+                                onShowHistory = { navController.navigate(ItemHistoryRoute(it)) },
                                 onCardQuiz = { navController.navigate(CardQuizRoute(it)) },
                             )
                         }
@@ -515,6 +526,7 @@ private fun LexiconNavHost(
                 },
                 onShowGraph = { navController.navigate(GraphRoute(it)) },
                 onShowCards = { navController.navigate(CardsRoute(it)) },
+                onShowHistory = { navController.navigate(ItemHistoryRoute(it)) },
                 onCardQuiz = { navController.navigate(CardQuizRoute(it)) },
             )
         }
@@ -590,6 +602,15 @@ private fun LexiconNavHost(
         composable<AlarmsRoute> {
             val context = LocalContext.current.applicationContext
             AlarmsScreen(lexiconViewModel { app, _ -> AlarmsViewModel(app, AlarmRinger(context, app)) }, onBack = back)
+        }
+        composable<TrashRoute> {
+            HistoryScreen(lexiconViewModel { app, _ -> HistoryViewModel(app, null) }, trash = true,
+                onBack = back, onRestored = { navController.navigate(ItemRoute(it)) })
+        }
+        composable<ItemHistoryRoute> { entry ->
+            val route = entry.toRoute<ItemHistoryRoute>()
+            HistoryScreen(lexiconViewModel { app, _ -> HistoryViewModel(app, route.itemId) }, trash = false,
+                onBack = back, onRestored = { navController.navigate(ItemRoute(it)) })
         }
         composable<ReviewRoute> {
             ReviewScreen(

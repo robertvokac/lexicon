@@ -1,11 +1,13 @@
 // Application shell: configuration, login, the menu bar, themes and the switch
 // between the login screen and the main view.
 import { api, API_VERSION, ApiError } from './api.js';
+import { changePasswordDialog, openSessions } from './account.js';
 import { errorDialog, messageDialog } from './dialogs.js';
 import { clearAllDrafts, setDraftOwner } from './drafts.js';
 import { exportDictionary, importDictionary } from './exchange.js';
 import { openGroupManager } from './groups.js';
 import { MainView } from './items.js';
+import { openItemHistory, openTrash } from './history.js';
 import { showValueOverview } from './overviews.js';
 import { openReview } from './review.js';
 import { openTypeManager } from './types.js';
@@ -219,6 +221,9 @@ class Application {
                         },
                     },
                     { separator: true },
+                    { label: 'Change password...', action: () => changePasswordDialog(() => this.logout()) },
+                    { label: 'Signed-in sessions...', action: () => openSessions() },
+                    { separator: true },
                     { label: 'Logout', action: () => this.logout() },
                 ],
             },
@@ -235,6 +240,23 @@ class Application {
                         label: 'Types...',
                         action: async () => {
                             if (await openTypeManager()) await this.view.refreshAll();
+                        },
+                    },
+                    { separator: true },
+                    {
+                        label: "Selected item's history...",
+                        action: async () => {
+                            const id = this.view?.selectedItemId;
+                            if (!id) { await messageDialog('Item history', 'Select an item first.'); return; }
+                            const restored = await openItemHistory(id);
+                            if (restored) await this.view.navigateToTitle(restored.title, restored.id);
+                        },
+                    },
+                    {
+                        label: 'Trash...',
+                        action: async () => {
+                            const restored = await openTrash();
+                            if (restored) await this.view.navigateToTitle(restored.title, restored.id);
                         },
                     },
                     { separator: true },

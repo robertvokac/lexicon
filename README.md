@@ -53,7 +53,9 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - An Inbox for ideas: a title and plain text, saved to `Default` with the type `Inbox` in one step; on Android also without a connection, sent when the server is back
-- Alarms: reminders with a title, a description and the date and time they go off, listed and edited in every client
+- Alarms: one-time or recurring reminders, optionally linked to an item, listed and edited in every client
+- Item history and Trash: restore an earlier version or a deleted item with its cards and links
+- Encrypted offline reading of previously loaded pages in Android
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
 - Cards: questions and answers about an item, and a quiz over one item or its relationship neighbourhood - the question, the answer on request, then Yes or No - that counts how often each card was known, apart from Review
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
@@ -331,7 +333,7 @@ instrumented tests on an emulator.
 | `lexicon-android/` | Native Android client in Kotlin and Jetpack Compose, a separate Gradle project outside the CMake build. No database of its own, no C++. Talks only REST. |
 | `web/` | The project website: the home page, the screenshot gallery, the [user guide](web/users/index.html) and the [developer documentation](web/developers/index.html). Static HTML and CSS; not part of any build. |
 
-Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. The schema grows only by appended migrations (26 so far, in `lexicon-storage-sqlite/Migrations.cpp`); a database written by any earlier Lexicon, including the former QtSql desktop client, is upgraded when opened, and version 10 and version 20 fixtures test that path. See [web/developers/database.html](web/developers/database.html) for the tables and the migration list.
+Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. The schema grows only by appended migrations (28 so far, in `lexicon-storage-sqlite/Migrations.cpp`); a database written by any earlier Lexicon, including the former QtSql desktop client, is upgraded when opened, and version 10 and version 20 fixtures test that path. See [web/developers/database.html](web/developers/database.html) for the tables and the migration list.
 
 Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding. The one exception is the full-text search index (below), which folds case and diacritics in every script.
 
@@ -399,6 +401,7 @@ starting it; `auth set-user` asks for a password interactively:
 | `LexiconServer export [--output FILE] [--with-files] [options]` | Export the dictionary as JSON; standard output if `--output` is omitted. |
 | `LexiconServer import --input FILE [options]` | Merge a JSON export into the dictionary. |
 | `LexiconServer backup --backup-dir DIR [--backup-keep N] [options]` | Make one backup immediately. |
+| `LexiconServer verify-backup --path DIR` | Verify a completed backup's database, export and referenced files. |
 | `LexiconServer --help` / `LexiconServer --version` | Show CLI help / version. |
 
 ### Ways to start the server
@@ -504,7 +507,7 @@ other apps. It keeps no Lexicon database; the server is the source of truth.
 
 ## Extensive user manual
 
-The [User Guide](web/users/index.html) has step-by-step chapters for all three clients, including [Cards and the card quiz](web/users/cards.html). The technical contracts are in [REST API](docs/rest-api.md) and [export format](docs/export-format.md); export format version 2 includes cards and their attempt counts.
+The [User Guide](web/users/index.html) has step-by-step chapters for all three clients, including [Cards and the card quiz](web/users/cards.html). The technical contracts are in [REST API](docs/rest-api.md) and [export format](docs/export-format.md); export format version 3 includes cards and recurring, item-linked alarms.
 
 ### 1) First launch
 
@@ -723,7 +726,7 @@ At the end the sitting says how many cards there were and how many you knew and 
 
 ### 13) Alarms
 
-`Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title and the first line of its description. Alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a small form - a title, the date and time it goes off, and a plain-text description; **Delete** asks first.
+`Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title and the first line of its description. One-time alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a form for the title, date and time, description, repeat interval in days, and optional linked item; **Delete** asks first. Dismissing a repeating alarm schedules its next occurrence from the original time. Snoozing does not move that schedule.
 
 Times are entered and shown in your own time zone and stored in UTC, so an alarm set on the desktop in Prague shows the same moment in the web client or on a phone elsewhere. The web client has the same dialog under `Manage -> Alarms...`, and the Android app lists alarms under **Alarms** in the drawer, with date and time pickers. Alarms travel with export and import.
 
@@ -735,7 +738,13 @@ When an alarm's time comes, it rings until someone deals with it, in any client:
 
 A dismissal is kept on the server, so dismissing an alarm on the phone stops it ringing on the desktop and in the browser too. An alarm moved to a new time rings again then. Signing out of the Android app takes its alarms off the phone.
 
-### 14) Editing and deletion safety notes
+### 14) Item history and Trash
+
+Each saved item update and link change records the previous version. Deleting an item puts a snapshot in **Trash**, including its cards and links. Open **History** for an item or **Trash** from the desktop or web menus, or from the Android item screen and drawer. Restoring an earlier version replaces the current item fields and links. Restoring a deleted item creates a new item ID and restores its cards and links whose other item still exists. History snapshots also keep referenced Blob and Image files safe from cleanup. Keep independent backups as well: deleting a group or changing a type is outside item history.
+
+The Qt item editor has **Undo** and **Redo** for unsaved changes across item fields, metadata and links (`Ctrl+Z` and `Ctrl+Y`/`Ctrl+Shift+Z`). Common item actions also have shortcuts: `Ctrl+N` new, `Ctrl+E` edit, `Ctrl+Delete` delete, `Ctrl+F` search, `F5` refresh and `Ctrl+Shift+H` history.
+
+### 15) Editing and deletion safety notes
 
 - Deleting an item removes its aliases/tags/flags, related links and cards due to cascade rules.
 - Deleting a group removes all contained items.
@@ -778,9 +787,9 @@ Design notes:
 **The SQLite database and Blob directory together form the complete Lexicon data set.**
 Backing up only `lexicon.db` is insufficient when Blob Fields are used.
 
-`LexiconServer --backup-dir DIR` backs the dictionary up automatically, every 24 hours by default, keeping the newest 14 backups: each a consistent copy of the database, a portable export and the Blob files, with unchanged files shared between backups through hard links. `LexiconServer backup --backup-dir DIR` makes one on demand. See [docs/server.md](docs/server.md#backups-while-the-server-runs).
+`LexiconServer --backup-dir DIR` backs the dictionary up automatically, every 24 hours by default, keeping the newest 14 backups: each a consistent copy of the database, a portable export and the Blob files, with unchanged files shared between backups through hard links. `LexiconServer backup --backup-dir DIR` makes one on demand. `LexiconServer verify-backup --path DIR` checks a completed backup's database integrity, references and file hashes before restoration. See [docs/server.md](docs/server.md#backups-while-the-server-runs).
 
-`File -> Export...` writes the whole dictionary as one JSON file, including cards and their attempt statistics, optionally with the files Blob and Image values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. The web client and the Android app offer the same, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
+`File -> Export...` writes the current dictionary as one JSON file, including cards, recurring alarms and their linked items, optionally with the files Blob and Image values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. Exports omit prior item versions and Trash; a full database backup preserves them. The web client and the Android app offer export and import, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
 
 ### Blob lifecycle and maintenance
 
@@ -839,6 +848,7 @@ Backup strategies:
 - Qt-free `LexiconServer` with a versioned REST/JSON API, single-user authentication and TLS
 - `lexicon-web`, an independently deployable static web client with desktop feature parity
 - `lexicon-android`, a native Android client (Kotlin, Jetpack Compose) for `LexiconServer`
+- item history and Trash; backup verification; password and session management; Android offline reading; recurring, item-linked alarms; Qt item shortcuts and undo/redo
 - saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups; an offline Inbox on Android; cards on items with a Yes/No quiz over an item or its neighbourhood
 - item table supports sorting by clicking column headers
 - `New item` now prefills `Title` from current `Search` text
@@ -850,8 +860,6 @@ used day to day; fixes come from that use. Ideas for later, not promises:
 
 - export to static HTML, to publish a dictionary as a website
 - export to CSV, for spreadsheets
-- a trash and an item history, to undo a deletion or an edit
-- recurring alarms, and alarms that belong to an item
 - automatic backups for the desktop client without a server
 
 See [TODO.md](TODO.md) for the smaller polish items.

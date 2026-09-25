@@ -6,8 +6,8 @@ Lexicon currently has Groups, Items, Types, Fields, typed Values, Links and Back
 
 - [ ] Improve table column density and wrapping for long Tags, Aliases, and Flags.
 - [ ] Review resizing between the item table, content preview, and links area.
-- [ ] Add keyboard shortcuts for common item actions.
-- [ ] Add undo/redo for edits spanning multiple item fields or links.
+- [x] Add keyboard shortcuts for common item actions.
+- [x] Add undo/redo for edits spanning multiple item fields or links.
 
 ## Product features
 

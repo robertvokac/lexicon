@@ -14,6 +14,7 @@
 #include <semaphore>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace lexicon::http {
 struct Credentials {
@@ -78,6 +79,20 @@ public:
   std::optional<std::string> authenticate(const std::string &token);
   bool logout(const std::string &token);
   std::size_t sessionCount() const;
+  struct SessionView {
+    std::string id;
+    std::int64_t createdAtSeconds = 0;
+    std::int64_t lastSeenSeconds = 0;
+    bool current = false;
+  };
+  std::vector<SessionView> listSessions(const std::string &currentToken) const;
+  bool revokeSession(const std::string &currentToken, const std::string &sessionId);
+  // Returns false for a wrong current password or a session that ended.
+  // A successful change is written atomically before all sessions end.
+  Result<bool> changePassword(const std::string &currentToken,
+                              const std::string &currentPassword,
+                              const std::string &newPassword,
+                              const std::string &authFilePath);
 
   // Test hook: shifts the internal clock so expiry and rate-limit windows can
   // be exercised without sleeping.
@@ -148,6 +163,7 @@ private:
 
   // Serializes writes of the session file; the newest snapshot wins.
   std::mutex saveMutex_;
+  std::mutex credentialChangeMutex_;
   std::uint64_t savedGeneration_ = 0;
 
   // Independent of mutex_ on purpose: these are touched while no lock is held.

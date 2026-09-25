@@ -101,6 +101,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <li>Each backup holds a <strong>consistent copy of the database</strong> taken while the server keeps running, a portable <strong>JSON export</strong>, and the <strong>blob files</strong> the dictionary refers to.</li>
       <li>Files that did not change are <strong>shared between backups through hard links</strong>, so fourteen backups cost far less than fourteen copies.</li>
       <li><code>LexiconServer backup --backup-dir DIR</code> makes one on demand — handy before an upgrade.</li>
+      <li><code>LexiconServer verify-backup --path DIR</code> checks a completed backup's database and every referenced file before restoration; new backups also carry database and export checksums.</li>
     </ul>
 
     <h2 id="export">Export and import</h2>
@@ -109,7 +110,8 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <li><code>File → Export...</code> writes the whole dictionary as <strong>one documented JSON file</strong>, optionally with the files its blob and image values refer to.</li>
       <li><code>File → Import...</code> merges such a file into the open dictionary: groups, types and fields are matched by name, and items that are already there are left untouched.</li>
       <li>The web client and the Android app offer the same two actions, and <code>LexiconServer export</code> and <code>LexiconServer import</code> do it from the command line.</li>
-      <li>Alarms, review dates, links, metadata, <a href="cards.html">cards and their quiz counts</a> all travel with it. Export format version 2 includes cards; older Lexicon releases refuse that version instead of silently dropping them. See <a href="https://github.com/robertvokac/lexicon/blob/develop/docs/export-format.md" target="_blank" rel="noopener">the export format</a>.</li>
+      <li>Alarms, including recurrence and linked items, review dates, links, metadata, <a href="cards.html">cards and their quiz counts</a> all travel with it. Export format version 3 carries those alarm fields so older Lexicon releases refuse it rather than silently dropping them. See <a href="https://github.com/robertvokac/lexicon/blob/develop/docs/export-format.md" target="_blank" rel="noopener">the export format</a>.</li>
+      <li>Exports contain current data. To preserve earlier item versions and Trash, keep the database and Blob files in a full backup.</li>
     </ul>
 
     <h2 id="safety">Deletion safety rules</h2>
@@ -119,6 +121,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <span class="callout-icon">⚠️</span>
       <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, properties, custom field values, <a href="cards.html">cards</a>, and all links/backlinks pointing to or from it.</p>
     </div>
+    <p><strong>Trash</strong> keeps a snapshot so you can restore a deleted item with its cards and surviving links. Previous saved item versions are available through <strong>History</strong>. A full database backup preserves both; a portable export contains current data only.</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
       <p><strong>Deleting a group</strong> removes <em>every item inside it</em> — including all of their content and metadata. This is the most destructive action in the application.</p>

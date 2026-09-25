@@ -384,6 +384,22 @@ void checkCards(lexicon::LexiconApplication &application, int group) {
   existing.setGroups(services().groups.loadGroups());
   existing.setItem(loaded);
   check(child<QPushButton>(existing, "itemCards")->isEnabled(), "a stored item's cards are one click away");
+  const auto beforeEdit = existing.item();
+  child<QLineEdit>(existing, "itemTitle")->setText("Changed in editor");
+  child<QTextEdit>(existing, "itemContent")->setPlainText("Changed notes");
+  child<QPushButton>(existing, "itemUndo")->click();
+  check(existing.item().title == beforeEdit.title && existing.item().content == beforeEdit.content,
+        "undo restores several unsaved item fields together");
+  child<QPushButton>(existing, "itemRedo")->click();
+  check(existing.item().title == "Changed in editor" && existing.item().content == "Changed notes",
+        "redo restores the changed item fields");
+  child<QTextEdit>(existing, "itemContent")->setFocus();
+  QTest::keyClick(child<QTextEdit>(existing, "itemContent"), Qt::Key_Z, Qt::ControlModifier);
+  check(existing.item().title == beforeEdit.title && existing.item().content == beforeEdit.content,
+        "Ctrl+Z undoes the whole unsaved edit while content has focus");
+  QTest::keyClick(child<QTextEdit>(existing, "itemContent"), Qt::Key_Y, Qt::ControlModifier);
+  check(existing.item().title == "Changed in editor" && existing.item().content == "Changed notes",
+        "Ctrl+Y redoes the whole unsaved edit while content has focus");
 }
 
 void checkInbox(lexicon::LexiconApplication &application) {
@@ -444,7 +460,7 @@ void checkAlarms(lexicon::LexiconApplication &application) {
   check(list.alarmCount() == 2 && table->rowCount() == 2, "the list shows every alarm");
   check(table->item(0, 1)->text() == "Old call" && table->item(1, 1)->text() == "Renew the passport",
         "the soonest first");
-  check(table->item(1, 2)->text() == "Photos first.", "with its description");
+  check(table->item(1, 4)->text() == "Photos first.", "with its description");
   check(table->item(0, 0)->toolTip() == "Ringing" && table->item(0, 0)->font().bold(),
         "one gone off and not dismissed is marked as ringing");
   check(summary->text() == "2 alarm(s), 1 still to go off", "the summary counts what is still to come");

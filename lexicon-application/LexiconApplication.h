@@ -41,6 +41,9 @@ public:
                             const std::vector<LinkRecord> &backlinks = {});
   Result<void> saveItem(const ItemRecord &item);
   Result<void> deleteItem(ItemId id) { return repository_.deleteItem(id); }
+  Result<std::vector<ItemHistoryEntry>> loadItemHistory(ItemId id) { return repository_.loadItemHistory(id); }
+  Result<std::vector<ItemHistoryEntry>> loadTrash() { return repository_.loadTrash(); }
+  Result<ItemId> restoreItemHistory(int historyId) { return repository_.restoreItemHistory(historyId); }
   Result<void> logItemRead(ItemId id) { return repository_.logItemRead(id); }
   Result<ItemId> saveItemWithLinks(const ItemRecord &item,
                                    const std::vector<LinkRecord> &links,

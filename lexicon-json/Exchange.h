@@ -14,9 +14,9 @@ using Json = http::Json;
 inline constexpr const char *kFormat = "lexicon-export";
 // The version written. It goes up whenever a reader of the previous one would
 // import a new document by leaving part of it out: version 2 carries cards,
-// which a version 1 reader would drop without a word. Every version from 1 up
-// is read.
-inline constexpr int kVersion = 2;
+// and version 3 carries alarm recurrence and item links. Every version from 1
+// up is read.
+inline constexpr int kVersion = 3;
 inline constexpr int kOldestVersion = 1;
 
 // With `includeFiles`, the contents of every file a value refers to travel in

@@ -42,6 +42,12 @@ data object ReviewRoute
 data object AlarmsRoute
 
 @Serializable
+data object TrashRoute
+
+@Serializable
+data class ItemHistoryRoute(val itemId: Int)
+
+@Serializable
 data class GraphRoute(val itemId: Int)
 
 @Serializable

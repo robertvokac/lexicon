@@ -18,6 +18,7 @@ public:
   using ItemColumnFilters = lexicon::ItemColumnFilters;
   using ItemPropertyFilter = lexicon::ItemPropertyFilter;
   using ItemRecord = lexicon::ItemRecord;
+  using ItemHistoryEntry = lexicon::ItemHistoryEntry;
   using LinkRecord = lexicon::LinkRecord;
   using UsageValueRecord = lexicon::UsageValueRecord;
   using SortOrder = lexicon::SortOrder;
@@ -69,6 +70,9 @@ public:
   Result<void> saveItem(const ItemRecord &item) override;
   Result<int> saveItemReturningId(const ItemRecord &item) override;
   Result<void> deleteItem(int itemId) override;
+  Result<std::vector<ItemHistoryEntry>> loadItemHistory(int itemId) override;
+  Result<std::vector<ItemHistoryEntry>> loadTrash() override;
+  Result<int> restoreItemHistory(int historyId) override;
   Result<std::vector<LinkRecord>> loadLinks(int itemId) override;
   Result<std::vector<LinkRecord>> loadBacklinks(int itemId) override;
   Result<void> saveLink(const LinkRecord &link) override;

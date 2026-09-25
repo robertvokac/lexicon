@@ -494,4 +494,76 @@ std::size_t AuthState::sessionCount() const {
   std::lock_guard lock(mutex_);
   return activeSessions_.size();
 }
+
+std::vector<AuthState::SessionView> AuthState::listSessions(const std::string &currentToken) const {
+  const auto currentHash = sha256Hex(currentToken);
+  std::lock_guard lock(mutex_);
+  if (activeSessions_.find(currentHash) == activeSessions_.end()) return {};
+  std::vector<SessionView> result;
+  result.reserve(activeSessions_.size());
+  for (const auto &[hash, session] : activeSessions_)
+    result.push_back({hash.substr(0, 24), epochSeconds(session.created),
+                      epochSeconds(session.lastSeen), hash == currentHash});
+  std::sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
+    return a.createdAtSeconds > b.createdAtSeconds;
+  });
+  return result;
+}
+
+bool AuthState::revokeSession(const std::string &currentToken, const std::string &sessionId) {
+  if (sessionId.size() != 24 || sessionId.find_first_not_of("0123456789abcdef") != std::string::npos)
+    return false;
+  std::unique_lock lock(mutex_);
+  if (!activeSessions_.contains(sha256Hex(currentToken))) return false;
+  for (auto it = activeSessions_.begin(); it != activeSessions_.end(); ++it) {
+    if (it->first.starts_with(sessionId)) {
+      activeSessions_.erase(it);
+      saveSessions(lock);
+      return true;
+    }
+  }
+  return false;
+}
+
+Result<bool> AuthState::changePassword(const std::string &currentToken,
+                                       const std::string &currentPassword,
+                                       const std::string &newPassword,
+                                       const std::string &authFilePath) {
+  if (newPassword.size() < 12 || newPassword.size() > 1024 || containsNul(newPassword))
+    return std::unexpected(Error{Error::Code::Validation,
+                                 "Choose a new password of 12 to 1024 characters without NUL bytes."});
+  if (currentPassword.size() > 1024 || containsNul(currentPassword)) return false;
+  std::lock_guard changeLock(credentialChangeMutex_);
+  if (!authenticate(currentToken)) return false;
+  Credentials expected;
+  {
+    std::lock_guard lock(mutex_);
+    if (!credentials_) return false;
+    expected = *credentials_;
+  }
+  {
+    const HashPermit permit(*this);
+    auto verified = verifyPassword(expected.password, currentPassword);
+    if (!verified) return std::unexpected(verified.error());
+    if (!*verified) return false;
+  }
+  auto hashed = hashPassword(newPassword, expected.password.parameters);
+  if (!hashed) return std::unexpected(hashed.error());
+  auto onDisk = readCredentialsFile(authFilePath);
+  if (!onDisk) return std::unexpected(onDisk.error());
+  if (onDisk->username != expected.username || onDisk->password.hash != expected.password.hash ||
+      onDisk->password.salt != expected.password.salt)
+    return std::unexpected(Error{Error::Code::Conflict,
+                                 "Credentials changed on disk. Restart the server before changing the password."});
+  {
+    std::lock_guard lock(mutex_);
+    if (!activeSessions_.contains(sha256Hex(currentToken)) || !credentials_ ||
+        credentials_->password.hash != expected.password.hash) return false;
+  }
+  Credentials replacement{expected.username, std::move(*hashed)};
+  if (auto written = writeCredentialsFile(authFilePath, replacement); !written)
+    return std::unexpected(written.error());
+  setCredentials(std::move(replacement));
+  return true;
+}
 } // namespace lexicon::http

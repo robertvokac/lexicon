@@ -60,11 +60,12 @@
       <li><strong>LexiconServer</strong> with a versioned REST API, and two clients for it: the <strong>web client</strong> and the <strong>Android app</strong>.</li>
       <li><strong>Search</strong> that ignores case and diacritics and ranks exact titles first.</li>
       <li><strong>Conflicts</strong>: a save based on an item another client changed meanwhile is refused with a choice to overwrite or reload.</li>
-      <li><strong>Export and import</strong> of the whole dictionary in documented JSON format version 2, including cards and their attempt counts.</li>
+      <li><strong>Export and import</strong> of the current dictionary in documented JSON format version 3, including cards, recurring alarms and linked items.</li>
       <li><strong>Review</strong> with spaced repetition, <strong><code>[[wiki links]]</code></strong> between items, and a <strong>relationship graph</strong>.</li>
       <li>An <strong>Inbox</strong> for quick ideas, marked with an Inbox item type and available offline on Android.</li>
       <li><strong>Alarms</strong> that ring in every client, <strong>Image</strong> values, and <strong>automatic server backups</strong>.</li>
       <li><strong>Cards</strong> on items, with a Yes/No quiz over one item or its relationship neighbourhood, kept apart from Review.</li>
+      <li><strong>Trash and item history</strong>, backup verification, account session controls, Android offline reading, recurring alarms, and Qt editor Undo/Redo.</li>
     </ul>
 
     <h2 id="roadmap">Ideas for later</h2>
@@ -77,14 +78,6 @@
       <div class="card">
         <h3>📊 Export to CSV</h3>
         <p>Items and their values as a table, for spreadsheets and scripts.</p>
-      </div>
-      <div class="card">
-        <h3>🗑️ Trash and item history</h3>
-        <p>Undo a deletion or go back to an earlier version of an item.</p>
-      </div>
-      <div class="card">
-        <h3>⏰ Recurring alarms</h3>
-        <p>Alarms that repeat, and alarms that belong to an item.</p>
       </div>
       <div class="card">
         <h3>💾 Desktop backups</h3>
@@ -101,8 +94,6 @@
     <ul>
       <li>Improve table column density and wrapping for long Tags, Aliases, and Flags.</li>
       <li>Review resizing between the item table, content preview, and links area.</li>
-      <li>Add keyboard shortcuts for common item actions.</li>
-      <li>Add undo/redo for edits spanning multiple item fields or links.</li>
     </ul>
 
     <div class="callout callout-tip">

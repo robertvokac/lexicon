@@ -182,6 +182,10 @@ Result<void> validateAlarm(const AlarmRecord &alarm) {
     return invalid("Alarm title cannot be empty.");
   if (normalizedUtcTime(alarm.firesAt).empty())
     return invalid("An alarm needs a time as UTC YYYY-MM-DDTHH:MM:SSZ.");
+  if (alarm.repeatDays < 0 || alarm.repeatDays > 365)
+    return invalid("Repeat an alarm every 1 to 365 days, or use 0 for one time.");
+  if (alarm.itemId == 0)
+    return invalid("An alarm's item must have a valid ID.");
   return {};
 }
 Result<void> validateCardText(std::string_view question, std::string_view answer) {

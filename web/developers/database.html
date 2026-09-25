@@ -72,6 +72,7 @@
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
       <tr><td><code>link</code></td><td>Typed, directed relationships between items</td></tr>
       <tr><td><code>alarm</code></td><td>Reminders at a moment, and whether they were dismissed</td></tr>
+      <tr><td><code>item_history</code></td><td>Previous item versions and deleted items available for restoration</td></tr>
       <tr><td><code>card</code></td><td>Questions and answers about an item for a quiz, with how often they were known</td></tr>
       <tr><td><code>item_search</code></td><td>FTS5 full-text index of items, where SQLite has FTS5; rebuilt from the other tables</td></tr>
       <tr><td><code>log</code></td><td>Operation log (create/update/delete/read events)</td></tr>
@@ -91,7 +92,7 @@
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–26</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–28</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
       <li>A migration that rebuilds a table — SQLite cannot change a <code>CHECK</code> constraint in place — runs with foreign keys switched off around its transaction, so dropping the old table cannot cascade into the rows that refer to it, and must pass <code>PRAGMA foreign_key_check</code> before it commits.</li>
     </ol>
     <table>
@@ -122,6 +123,8 @@
       <tr><td>24</td><td>Rebuilds <code>item_field</code> so <code>data_type</code> admits 10, <code>Image</code>, keeping IDs, the ID sequence, indexes and triggers</td></tr>
       <tr><td>25</td><td>Adds <code>alarm.dismissed_at</code>; alarms already past count as dismissed</td></tr>
       <tr><td>26</td><td>Creates the <code>card</code> table and its <code>(item_id, id)</code> index</td></tr>
+      <tr><td>27</td><td>Creates <code>item_history</code> for previous versions and Trash</td></tr>
+      <tr><td>28</td><td>Adds <code>alarm.repeat_days</code>, linked <code>item_id</code> and recurrence anchor</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -237,16 +240,22 @@ CREATE INDEX idx_link_from_item_id ON link(from_item_id);
 CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
     <p>Links are directed: querying by <code>from_item_id</code> yields an item's outgoing links, querying by <code>to_item_id</code> yields its backlinks. <code>link_type</code> stores the <code>LinkType</code> enum value (<a href="architecture.html#enums">see Architecture</a>).</p>
 
+    <h3><code>item_history</code></h3>
+    <p>Before an item or its links change, Lexicon saves the previous item, links, cards and referenced file hashes as a JSON snapshot. A deletion adds a Trash entry independent of the live item. The latest 100 update snapshots per item are retained; deleted entries remain available for restoration. Referenced files stay protected from Blob cleanup. A raw database backup preserves the snapshots, while a portable export contains current data only.</p>
+
     <h3><code>alarm</code></h3>
     <pre><code>CREATE TABLE alarm (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   title        TEXT NOT NULL CHECK(TRIM(title) &lt;&gt; ''),
   description  TEXT NOT NULL DEFAULT '',
   fires_at     TEXT NOT NULL,  -- UTC "YYYY-MM-DDTHH:MM:SSZ"
-  dismissed_at TEXT            -- UTC; migration 25
+  dismissed_at TEXT,           -- UTC; migration 25
+  repeat_days  INTEGER NOT NULL DEFAULT 0 CHECK(repeat_days BETWEEN 0 AND 365),
+  item_id      INTEGER REFERENCES item(id) ON DELETE SET NULL,
+  anchor_at    TEXT            -- original recurrence time
 );
 CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);</code></pre>
-    <p>Times are UTC text of one fixed shape, so text order is time order. An alarm whose <code>fires_at</code> has passed rings in every client until <code>dismissed_at</code> is set; snoozing moves <code>fires_at</code> and clears it.</p>
+    <p>Times are UTC text of one fixed shape, so text order is time order. A one-time alarm whose <code>fires_at</code> has passed rings until <code>dismissed_at</code> is set. Dismissing a recurring alarm moves it to the next occurrence derived from <code>anchor_at</code>; snoozing does not shift that schedule.</p>
 
     <h3><code>card</code></h3>
     <pre><code>CREATE TABLE card (

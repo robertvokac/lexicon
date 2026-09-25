@@ -363,6 +363,27 @@ void applyMigrations(const Connection &db) {
             " FOREIGN KEY(item_id) REFERENCES item(id) ON DELETE CASCADE"
             ");",
             "CREATE INDEX idx_card_item_id ON card(item_id, id);"
+        }},
+        {27, {
+            // Snapshots are independent of the live item, so a deleted item
+            // can still be restored. The full previous record is JSON; the
+            // database backup carries every snapshot with it.
+            "CREATE TABLE item_history ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " item_id INTEGER NOT NULL,"
+            " operation TEXT NOT NULL CHECK(operation IN ('updated', 'deleted')) ,"
+            " snapshot TEXT NOT NULL,"
+            " restored_item_id INTEGER,"
+            " happened_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+            ");",
+            "CREATE INDEX idx_item_history_item ON item_history(item_id, id DESC);"
+        }},
+        {28, {
+            "ALTER TABLE alarm ADD COLUMN repeat_days INTEGER NOT NULL DEFAULT 0 "
+            "CHECK(repeat_days BETWEEN 0 AND 365);",
+            "ALTER TABLE alarm ADD COLUMN item_id INTEGER REFERENCES item(id) ON DELETE SET NULL;",
+            "ALTER TABLE alarm ADD COLUMN anchor_at TEXT;",
+            "CREATE INDEX idx_alarm_item_id ON alarm(item_id);"
         }}
     };
 

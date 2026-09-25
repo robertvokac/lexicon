@@ -25,14 +25,15 @@ class SessionManagerTest {
     private lateinit var sessions: SessionManager
     private lateinit var api: LexiconApi
 
-    private fun newManager(): SessionManager {
+    private fun newManager(offlineAvailable: Boolean = false): SessionManager {
         lateinit var manager: SessionManager
         val client = ApiClient(AppContainer.httpClient(), object : com.robertvokac.lexicon.api.SessionAccess {
             override val current get() = manager.current
             override fun onUnauthorized(session: com.robertvokac.lexicon.api.Session) = manager.onUnauthorized(session)
         })
         api = LexiconApi(client)
-        manager = SessionManager({ api }, environment.tokenStore, environment.settings, environment.scope, allowCleartextDevelopmentHosts = true)
+        manager = SessionManager({ api }, environment.tokenStore, environment.settings, environment.scope,
+            allowCleartextDevelopmentHosts = true, canBrowseOffline = { _, _ -> offlineAvailable })
         return manager
     }
 
@@ -187,5 +188,18 @@ class SessionManagerTest {
         assertNotNull(environment.tokenStore.load())
         restarted.abandonStoredSession().join()
         assertNull(environment.tokenStore.load())
+    }
+
+    @Test
+    fun aStoredSessionCanOpenCachedPagesWhenTheServerIsDown() = runBlocking {
+        sessions.login(fake.baseUrl, fake.username, fake.password)
+        fake.close()
+        val restarted = newManager(offlineAvailable = true).also { sessions = it }
+        restarted.start()
+        awaitState { it is SessionState.Unreachable }
+        assertTrue(restarted.browseOffline())
+        assertTrue(restarted.state.value is SessionState.SignedIn)
+        assertEquals("token-1", restarted.current?.token)
+        assertNotNull(environment.tokenStore.load())
     }
 }

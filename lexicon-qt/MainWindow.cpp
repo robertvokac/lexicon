@@ -29,6 +29,7 @@
 #include <QHeaderView>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QListWidget>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
@@ -377,7 +378,11 @@ void MainWindow::setupUi() {
 void MainWindow::setupMenus() {
     auto* fileMenu = menuBar()->addMenu("File");
     auto* refreshAction = fileMenu->addAction("Refresh");
+    refreshAction->setShortcut(QKeySequence::Refresh);
     connect(refreshAction, &QAction::triggered, this, &MainWindow::refreshAll);
+    auto* addAction = fileMenu->addAction("New item...");
+    addAction->setShortcut(QKeySequence::New);
+    connect(addAction, &QAction::triggered, this, &MainWindow::addItem);
     fileMenu->addSeparator();
     auto* inboxAction = fileMenu->addAction("Inbox...");
     inboxAction->setShortcut(QKeySequence("Ctrl+I"));
@@ -392,6 +397,18 @@ void MainWindow::setupMenus() {
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
 
     auto* manageMenu = menuBar()->addMenu("Manage");
+    auto* editAction = manageMenu->addAction("Edit selected item...");
+    editAction->setShortcut(QKeySequence("Ctrl+E"));
+    connect(editAction, &QAction::triggered, this, &MainWindow::editSelectedItem);
+    auto* deleteAction = manageMenu->addAction("Delete selected item...");
+    deleteAction->setShortcut(QKeySequence("Ctrl+Delete"));
+    connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedItem);
+    auto* historyAction = manageMenu->addAction("Selected item's history...");
+    historyAction->setShortcut(QKeySequence("Ctrl+Shift+H"));
+    connect(historyAction, &QAction::triggered, this, &MainWindow::openItemHistory);
+    auto* trashAction = manageMenu->addAction("Trash...");
+    connect(trashAction, &QAction::triggered, this, &MainWindow::openTrash);
+    manageMenu->addSeparator();
     auto* groupsAction = manageMenu->addAction("Groups...");
     auto* typesAction = manageMenu->addAction("Types...");
     connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
@@ -417,6 +434,13 @@ void MainWindow::setupMenus() {
     });
 
     auto* viewMenu = menuBar()->addMenu("View");
+    auto* searchAction = viewMenu->addAction("Focus search");
+    searchAction->setShortcut(QKeySequence::Find);
+    connect(searchAction, &QAction::triggered, this, [this] {
+        m_searchEdit->setFocus();
+        m_searchEdit->selectAll();
+    });
+    viewMenu->addSeparator();
     auto* reviewAction = viewMenu->addAction("Review...");
     reviewAction->setShortcut(QKeySequence("Ctrl+R"));
     connect(reviewAction, &QAction::triggered, this, [this] {
@@ -1149,6 +1173,85 @@ void MainWindow::deleteSelectedItem() {
         return;
     }
     refreshAll();
+}
+
+void MainWindow::openItemHistory() {
+    const int itemId = selectedItemId();
+    if (itemId < 0) {
+        QMessageBox::information(this, "Item history", "Select an item first.");
+        return;
+    }
+    auto entries = services().core.items.loadItemHistory(itemId);
+    if (!entries) { showError(qtbridge::toQt(entries.error().message)); return; }
+    QDialog dialog(this);
+    dialog.setWindowTitle("Item history");
+    dialog.resize(720, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* list = new QListWidget(&dialog);
+    auto* preview = new QTextEdit(&dialog);
+    preview->setReadOnly(true);
+    auto* restore = new QPushButton("Restore selected version", &dialog);
+    restore->setEnabled(false);
+    for (const auto& entry : *entries)
+        list->addItem(QString("%1 · revision %2 · %3")
+                          .arg(qtbridge::toQt(entry.happenedAt))
+                          .arg(entry.item.revision)
+                          .arg(qtbridge::toQt(entry.item.title)));
+    layout->addWidget(list);
+    layout->addWidget(preview);
+    layout->addWidget(restore);
+    connect(list, &QListWidget::currentRowChanged, &dialog, [&, preview, restore](int row) {
+        restore->setEnabled(row >= 0);
+        preview->setPlainText(row < 0 ? QString() : qtbridge::toQt((*entries)[static_cast<std::size_t>(row)].item.content));
+    });
+    connect(restore, &QPushButton::clicked, &dialog, [&, this] {
+        const int row = list->currentRow();
+        if (row < 0) return;
+        const auto& entry = (*entries)[static_cast<std::size_t>(row)];
+        if (QMessageBox::question(&dialog, "Restore version",
+                                  "Replace the current item and its links with this version?") != QMessageBox::Yes) return;
+        auto restored = services().core.items.restoreItemHistory(entry.id);
+        if (!restored) { QMessageBox::critical(&dialog, "Restore version", qtbridge::toQt(restored.error().message)); return; }
+        dialog.accept();
+        refreshAll();
+        showItemTitled(qtbridge::toQt(entry.item.title), *restored);
+    });
+    dialog.exec();
+}
+
+void MainWindow::openTrash() {
+    auto entries = services().core.items.loadTrash();
+    if (!entries) { showError(qtbridge::toQt(entries.error().message)); return; }
+    QDialog dialog(this);
+    dialog.setWindowTitle("Trash");
+    dialog.resize(720, 520);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* list = new QListWidget(&dialog);
+    auto* preview = new QTextEdit(&dialog);
+    preview->setReadOnly(true);
+    auto* restore = new QPushButton("Restore selected item", &dialog);
+    restore->setEnabled(false);
+    for (const auto& entry : *entries)
+        list->addItem(QString("%1 · %2")
+                          .arg(qtbridge::toQt(entry.happenedAt), qtbridge::toQt(entry.item.title)));
+    layout->addWidget(list);
+    layout->addWidget(preview);
+    layout->addWidget(restore);
+    connect(list, &QListWidget::currentRowChanged, &dialog, [&, preview, restore](int row) {
+        restore->setEnabled(row >= 0);
+        preview->setPlainText(row < 0 ? QString() : qtbridge::toQt((*entries)[static_cast<std::size_t>(row)].item.content));
+    });
+    connect(restore, &QPushButton::clicked, &dialog, [&, this] {
+        const int row = list->currentRow();
+        if (row < 0) return;
+        const auto& entry = (*entries)[static_cast<std::size_t>(row)];
+        auto restored = services().core.items.restoreItemHistory(entry.id);
+        if (!restored) { QMessageBox::critical(&dialog, "Restore item", qtbridge::toQt(restored.error().message)); return; }
+        dialog.accept();
+        refreshAll();
+        showItemTitled(qtbridge::toQt(entry.item.title), *restored);
+    });
+    dialog.exec();
 }
 
 void MainWindow::openGroupManager() {

@@ -82,6 +82,13 @@ ServerHarness::ServerHarness(HarnessOptions options)
       startupError_ = hashed.error().message;
       return;
     }
+    auto stored = lexicon::http::writeCredentialsFile(
+        lexicon::pathToUtf8(directory_ / "lexicon-auth.json"),
+        {options_.username, *hashed});
+    if (!stored) {
+      startupError_ = stored.error().message;
+      return;
+    }
     auth_->setCredentials({options_.username, *hashed});
   }
 

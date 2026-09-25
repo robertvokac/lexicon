@@ -113,17 +113,25 @@ int main() {
   if (!success(app.items.saveItem(first), "Remove first reference")) return 1;
   scan = app.blobs.scanStorage();
   if (!success(scan, "Scan one reference") ||
-      !expect(scan->referenceCount == 1 && scan->orphanedBlobCount == 0 && fs::exists(canonical),
-              "Removing one reference deleted or orphaned a shared Blob")) return 1;
+      !expect(scan->referenceCount == 2 && scan->orphanedBlobCount == 0 && fs::exists(canonical),
+              "Item history did not retain the removed Blob reference")) return 1;
   second.id = *secondId; second.fieldValues.clear();
   if (!success(app.items.saveItem(second), "Remove last reference")) return 1;
   scan = app.blobs.scanStorage();
-  if (!success(scan, "Scan orphan") ||
-      !expect(scan->orphanedBlobCount == 1 && scan->orphanedBytes == 12 && fs::exists(canonical),
-              "Removing last reference did not retain an orphan")) return 1;
+  if (!success(scan, "Scan historical references") ||
+      !expect(scan->referenceCount == 2 && scan->orphanedBlobCount == 0 && fs::exists(canonical),
+              "Removing both live references lost the Blob kept by history")) return 1;
 
-  // A stale scan is never authority for deletion. The Item now references X again.
-  second.fieldValues[field.id] = *hash;
+  // A stale scan is never authority for deletion. Import a genuinely unused
+  // file, scan it, then give it a live reference before collecting it.
+  const auto orphanSource = directory / "orphan-source";
+  write(orphanSource, "orphan bytes");
+  auto orphanHash = app.blobs.importFile(orphanSource.string());
+  if (!success(orphanHash, "Import orphan")) return 1;
+  scan = app.blobs.scanStorage();
+  if (!success(scan, "Scan orphan") || !expect(scan->orphanedBlobCount == 1,
+      "A never-referenced imported file is not an orphan")) return 1;
+  second.fieldValues[field.id] = *orphanHash;
   if (!success(app.items.saveItem(second), "Restore reference")) return 1;
   auto staleGc = app.blobs.collectUnusedBlobs(*scan);
   if (!success(staleGc, "GC with stale scan") ||
@@ -131,16 +139,21 @@ int main() {
               "Stale scan deleted a re-referenced Blob")) return 1;
   second.fieldValues.clear();
   if (!success(app.items.saveItem(second), "Remove restored reference")) return 1;
+  const auto finalSource = directory / "final-orphan-source";
+  write(finalSource, "final orphan");
+  auto finalHash = app.blobs.importFile(finalSource.string());
+  if (!success(finalHash, "Import final orphan")) return 1;
+  const auto finalCanonical = directory / "blobs" / finalHash->substr(0, 2) / finalHash->substr(2);
   scan = app.blobs.scanStorage();
   if (!success(scan, "Scan final orphan")) return 1;
   auto gc = app.blobs.collectUnusedBlobs(*scan);
   if (!success(gc, "Collect orphan") ||
-      !expect(gc->deleted == 1 && gc->deletedBytes == 12 && !fs::exists(canonical),
+      !expect(gc->deleted == 1 && gc->deletedBytes == 12 && !fs::exists(finalCanonical),
               "Orphan GC failed")) return 1;
   scan = app.blobs.scanStorage();
   if (!success(scan, "Rescan after GC") ||
-      !expect(scan->physicalBlobCount == 0 && scan->orphanedBlobCount == 0,
-              "GC left a canonical Blob")) return 1;
+      !expect(scan->physicalBlobCount == 2 && scan->orphanedBlobCount == 0,
+              "GC damaged a Blob retained by history")) return 1;
 
   // Create a valid reference, then simulate external loss of its physical file.
   auto restored = app.blobs.importFile(source.string());
@@ -200,11 +213,11 @@ int main() {
   second.fieldValues.clear();
   if (!success(app.items.saveItem(second), "Remove corrupt reference")) return 1;
   auto corruptFast = app.blobs.scanStorage();
-  if (!success(corruptFast, "Scan corrupt orphan")) return 1;
+  if (!success(corruptFast, "Scan corrupt historical Blob")) return 1;
   auto corruptSweep = app.blobs.collectUnusedBlobs(*corruptFast);
-  if (!success(corruptSweep, "GC corrupt orphan") ||
-      !expect(corruptSweep->deleted == 0 && corruptSweep->skipped == 1 && fs::exists(canonical),
-              "GC deleted a corrupt orphan")) return 1;
+  if (!success(corruptSweep, "GC corrupt historical Blob") ||
+      !expect(corruptSweep->deleted == 0 && fs::exists(canonical),
+              "GC deleted a Blob still referenced by history")) return 1;
 
   // A real permission failure must be counted as failed, not as a deletion.
   write(source, "permission test");

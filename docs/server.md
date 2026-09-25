@@ -72,7 +72,7 @@ and a threading library.
 ### 1. Create the user
 
 The server is a single-user personal installation. There is no registration,
-no password reset by email and no account management API. The credential is
+no password reset by email. The initial credential is
 created locally on the server machine:
 
 ```bash
@@ -84,9 +84,11 @@ with terminal echo disabled and is never a command line argument, so it does
 not reach the shell history or the process list. `LexiconServer auth show`
 prints the configured user name and the hash parameters, never the hash.
 
-The server reads the credentials once, at startup. After changing the password
-restart it; the sessions opened with the old password are not restored, so
-anyone signed in with it is signed out.
+The server reads the credentials once, at startup. Signed-in clients can change
+the password in Account/Settings by entering the current password. This writes
+the credential file atomically and ends every session immediately. The
+`auth set-user` command can also replace credentials locally while the server
+is stopped; restart it afterwards.
 
 Credentials are stored in `lexicon-auth.json` next to the database (override
 with `--auth-file`). Changing the password rewrites that file, so the write
@@ -405,6 +407,8 @@ later. Each backup is a directory of its own, complete by itself:
   Nothing is removed while backups fail.
 - The credentials file and the sessions are not backed up: re-create the user
   with `auth set-user`, and people sign in again.
+- The database copy and Blob files include item history and Trash. The portable
+  JSON export inside the backup contains current dictionary data only.
 - Backups hold every note in the dictionary. On POSIX they are created
   owner-only (mode 0700 directories, 0600 files); on Windows they inherit the
   ACL of the backup directory, so choose one only you can read. The backup
@@ -413,6 +417,13 @@ later. Each backup is a directory of its own, complete by itself:
 `LexiconServer backup --backup-dir DIR [--backup-keep N]` makes one backup now,
 with the same layout and rotation, also while the server runs - for cron, or
 before an upgrade.
+
+`LexiconServer verify-backup --path DIR` checks a completed backup before
+restoration. New manifests carry SHA-256 checksums for the database and export;
+the command also accepts older manifests. It validates the manifest and export, runs SQLite integrity and
+foreign-key checks, and hashes every referenced Blob and Image file, including
+files retained by item history. It reports the verified file count and does
+not modify the backup. Use the path of one `lexicon-backup-...` directory.
 
 To restore, stop the server and copy one backup's `lexicon.db` and `blobs/`
 back next to each other (`cp -a` copies shared files as ordinary files), or import its

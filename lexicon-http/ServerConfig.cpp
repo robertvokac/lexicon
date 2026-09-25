@@ -175,6 +175,7 @@ Usage:
   LexiconServer export [--output FILE] [--with-files] [options]
   LexiconServer import --input FILE [options]
   LexiconServer backup --backup-dir DIR [--backup-keep N] [options]
+  LexiconServer verify-backup --path DIR
   LexiconServer --help | --version
 
 The server exposes JSON under /api/v1. With --web-dir it also serves that
@@ -230,6 +231,7 @@ Export and import (docs/export-format.md), also while the server runs:
   --output FILE              export: write here instead of standard output
   --with-files               export: include the files that values refer to
   --input FILE               import: the export to merge into the database
+  --path DIR                 verify-backup: completed backup directory
 )";
 }
 
@@ -260,6 +262,9 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
     } else if (command == "backup") {
       ++index;
       parsed.command = Command::Backup;
+    } else if (command == "verify-backup") {
+      ++index;
+      parsed.command = Command::VerifyBackup;
     } else {
       return invalid("Unknown command '" + command + "'.");
     }
@@ -306,6 +311,8 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.config.authFilePath = *value;
     else if (option == "--session-file")
       parsed.config.sessionFilePath = *value;
+    else if (option == "--path")
+      parsed.verifyBackupPath = *value;
     else if (option == "--output" || option == "--input")
       parsed.exchangePath = *value;
     else if (option == "--listen")

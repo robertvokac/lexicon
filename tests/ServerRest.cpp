@@ -433,6 +433,38 @@ void checkItems(Checks &checks) {
                      404, "a deleted item is gone");
 }
 
+void checkHistory(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const auto created = client.post("/api/v1/items", Json{{"item", Json{{"groupId", groupId},
+      {"title", "Versioned"}, {"content", "Original"}}}}.dump());
+  checks.expectEqual(created.status, 201, "history fixture item is created");
+  const int id = parse(created).value("id", 0);
+  const auto itemPath = "/api/v1/items/" + std::to_string(id);
+  checks.expectEqual(client.put(itemPath, Json{{"item", Json{{"groupId", groupId},
+      {"title", "Versioned"}, {"content", "Edited"}}}}.dump()).status,
+      200, "item update succeeds before history restore");
+  const auto history = parse(client.get(itemPath + "/history")).at("entries");
+  checks.expect(!history.empty() && history.at(0).at("item").value("content", "") == "Original",
+                "REST history returns the previous item");
+  const int historyId = history.at(0).value("id", 0);
+  checks.expectEqual(client.post("/api/v1/items/history/" + std::to_string(historyId) + "/restore", "{}").status,
+                     200, "REST restores an earlier item version");
+  checks.expectEqual(parse(client.get(itemPath)).at("item").value("content", ""), "Original",
+                     "restored content is served");
+  checks.expectEqual(client.remove(itemPath).status, 204, "item moves to Trash");
+  const auto trash = parse(client.get("/api/v1/items/trash")).at("entries");
+  checks.expect(!trash.empty() && trash.at(0).at("item").value("title", "") == "Versioned",
+                "REST Trash lists the deletion");
+  const int deletionId = trash.at(0).value("id", 0);
+  const auto restored = client.post("/api/v1/items/history/" + std::to_string(deletionId) + "/restore", "{}");
+  checks.expectEqual(restored.status, 200, "REST restores a deleted item");
+  checks.expect(parse(restored).value("itemId", 0) != id,
+                "restored deleted item has a new ID");
+}
+
 void checkLinks(Checks &checks) {
   ServerHarness harness;
   Session session(harness, checks);
@@ -1094,6 +1126,26 @@ void checkAlarms(Checks &checks) {
   Session other(destination, checks);
   checks.expectEqual(parse(other.client().post("/api/v1/import", exported.body)).at("report").value("alarmsCreated", 0),
                      1, "and is created on another server");
+
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const int linkedItem = parse(client.post("/api/v1/items", Json{{"item", Json{{"groupId", groupId},
+      {"title", "Daily item"}}}}.dump())).value("id", 0);
+  const auto repeating = client.post("/api/v1/alarms", Json{{"title", "Daily"},
+      {"firesAt", "2020-01-01T10:00:00Z"}, {"repeatDays", 1}, {"itemId", linkedItem}}.dump());
+  checks.expectEqual(repeating.status, 201, "a recurring linked alarm is created");
+  const auto repeatRecord = parse(repeating).at("alarm");
+  checks.expectEqual(repeatRecord.value("repeatDays", 0), 1, "repeat interval round-trips");
+  checks.expectEqual(repeatRecord.value("itemId", 0), linkedItem, "linked item round-trips");
+  const auto repeatPath = "/api/v1/alarms/" + std::to_string(repeatRecord.value("id", 0));
+  const auto repeated = client.post(repeatPath + "/dismiss", "{}");
+  checks.expectEqual(repeated.status, 200, "a recurring alarm can be dismissed");
+  checks.expect(parse(repeated).at("alarm").at("dismissedAt").is_null(),
+                "recurring dismissal leaves it scheduled");
+  checks.expect(parse(repeated).at("alarm").value("firesAt", "") > due.value("now", std::string{}),
+                "recurring dismissal advances it into the future");
+  client.remove("/api/v1/items/" + std::to_string(linkedItem));
+  checks.expect(parse(client.get(repeatPath)).at("alarm").at("itemId").is_null(),
+                "deleting the linked item keeps the alarm without a link");
 }
 
 void checkExportImport(Checks &checks) {
@@ -1116,7 +1168,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
-  checks.expectEqual(document.value("version", 0), 2, "of format version 2");
+  checks.expectEqual(document.value("version", 0), 3, "of format version 3");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");
@@ -1406,6 +1458,7 @@ int main() {
   checkGroups(checks);
   checkTypesAndFields(checks);
   checkItems(checks);
+  checkHistory(checks);
   checkLinks(checks);
   checkSearchAndUsage(checks);
   checkBlobs(checks);

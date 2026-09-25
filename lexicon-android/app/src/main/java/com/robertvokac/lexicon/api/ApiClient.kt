@@ -6,6 +6,8 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -46,7 +48,10 @@ class ApiClient(
     private val httpClient: OkHttpClient,
     private val sessions: SessionAccess,
     private val json: Json = LexiconJson,
+    private val offlineCache: OfflineReadCache? = null,
 ) {
+    private val _offlineRead = MutableStateFlow(false)
+    val offlineRead = _offlineRead.asStateFlow()
     /** How a request authenticates. */
     sealed interface Auth {
         /** The current session's Bearer token; fails with NotSignedIn without one. */
@@ -60,10 +65,50 @@ class ApiClient(
     }
 
     suspend fun <T> get(path: String, response: DeserializationStrategy<T>, auth: Auth = Auth.Session, query: Map<String, String> = emptyMap()): T =
-        execute("GET", path, null, auth, query) { decode(response, it) }
+        read("GET", path, null, response, auth, query)
 
-    suspend fun <B, T> post(path: String, body: B, request: SerializationStrategy<B>, response: DeserializationStrategy<T>, auth: Auth = Auth.Session): T =
-        execute("POST", path, jsonBody(request, body), auth) { decode(response, it) }
+    suspend fun <B, T> post(path: String, body: B, request: SerializationStrategy<B>, response: DeserializationStrategy<T>, auth: Auth = Auth.Session): T {
+        val encoded = json.encodeToString(request, body)
+        return read("POST", path, encoded.toRequestBody(JSON), response, auth, emptyMap(), encoded)
+    }
+
+    private suspend fun <T> read(
+        method: String,
+        path: String,
+        body: RequestBody?,
+        response: DeserializationStrategy<T>,
+        auth: Auth,
+        query: Map<String, String>,
+        encodedBody: String = "",
+    ): T {
+        val session = if (auth == Auth.Session) sessions.current else null
+        val cacheable = session != null && offlineCache != null &&
+            ((method == "POST" && path == "items/query") ||
+                (method == "GET" && listOf("items", "groups", "types", "fields", "usage", "search", "cards")
+                    .any { path == it || path.startsWith("$it/") }))
+        if (!cacheable) return execute(method, path, body, auth, query) { decode(response, it) }
+        val requestKey = buildString {
+            append(method).append(' ').append(path)
+            query.toSortedMap().forEach { (key, value) -> append('\n').append(key).append('=').append(value) }
+            append('\n').append(encodedBody)
+        }
+        try {
+            val (value, raw) = execute(method, path, body, auth, query) { reply ->
+                val text = reply.body.string()
+                json.decodeFromString(response, text) to text
+            }
+            offlineCache.write(session, requestKey, raw)
+            _offlineRead.value = false
+            return value
+        } catch (failure: ApiException) {
+            if (failure !is ApiException.CannotConnect && failure !is ApiException.Timeout &&
+                failure !is ApiException.Network) throw failure
+            val cached = offlineCache.read(session, requestKey) ?: throw failure
+            val value = runCatching { json.decodeFromString(response, cached) }.getOrNull() ?: throw failure
+            _offlineRead.value = true
+            return value
+        }
+    }
 
     suspend fun <B, T> put(path: String, body: B, request: SerializationStrategy<B>, response: DeserializationStrategy<T>): T =
         execute("PUT", path, jsonBody(request, body), Auth.Session) { decode(response, it) }
@@ -71,6 +116,10 @@ class ApiClient(
     /** A request without a body, answered with 204 (logout, read log, deletes). */
     suspend fun send(method: String, path: String, auth: Auth = Auth.Session) {
         execute(method, path, if (method == "POST") EMPTY_BODY else null, auth) { }
+    }
+
+    suspend fun <B> postNoResponse(path: String, body: B, request: SerializationStrategy<B>) {
+        execute("POST", path, jsonBody(request, body), Auth.Session) { }
     }
 
     /**

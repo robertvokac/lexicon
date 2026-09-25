@@ -541,6 +541,34 @@ void RestServer::Impl::registerRoutes() {
                      {"apiVersion", kApiVersion}});
   });
 
+  api.Post("/api/v1/auth/change-password", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body) return;
+    const auto current = requiredString(*body, "currentPassword");
+    const auto next = requiredString(*body, "newPassword");
+    auto changed = auth.changePassword(bearerToken(request), current, next, config.resolvedAuthFilePath());
+    if (!changed) { respondError(response, changed.error(), "changePassword"); return; }
+    if (!*changed) {
+      respondFailure(response, {403, "forbidden", "The current password is incorrect."});
+      return;
+    }
+    respondNoContent(response);
+  });
+  api.Get("/api/v1/auth/sessions", [this](const Request &request, Response &response) {
+    Json sessions = Json::array();
+    for (const auto &session : auth.listSessions(bearerToken(request)))
+      sessions.push_back(Json{{"id", session.id}, {"createdAtSeconds", session.createdAtSeconds},
+                              {"lastSeenSeconds", session.lastSeenSeconds}, {"current", session.current}});
+    respondJson(response, 200, Json{{"sessions", std::move(sessions)}});
+  });
+  api.Delete("/api/v1/auth/sessions/:id", [this](const Request &request, Response &response) {
+    if (!auth.revokeSession(bearerToken(request), request.path_params.at("id"))) {
+      respondFailure(response, {404, "not_found", "Session not found."});
+      return;
+    }
+    respondNoContent(response);
+  });
+
   // Groups ----------------------------------------------------------------
   const auto sendGroups = [this](Response &response) {
     auto groups = guarded.with(
@@ -923,6 +951,41 @@ void RestServer::Impl::registerRoutes() {
       return;
     }
     respondJson(response, 200, Json{{"itemId", *id}});
+  });
+
+  const auto historyJson = [](const ItemHistoryEntry &entry) {
+    return Json{{"id", entry.id}, {"itemId", entry.itemId},
+                {"operation", entry.operation}, {"happenedAt", entry.happenedAt},
+                {"item", toJson(entry.item)}};
+  };
+  api.Get("/api/v1/items/trash", [this, historyJson](const Request &, Response &response) {
+    auto entries = guarded.with([](LexiconApplication &application) {
+      return application.items.loadTrash();
+    });
+    if (!entries) { respondError(response, entries.error(), "loadTrash"); return; }
+    Json list = Json::array();
+    for (const auto &entry : *entries) list.push_back(historyJson(entry));
+    respondJson(response, 200, Json{{"entries", std::move(list)}});
+  });
+  api.Get("/api/v1/items/:id/history", [this, historyJson](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id) return;
+    auto entries = guarded.with([&](LexiconApplication &application) {
+      return application.items.loadItemHistory(*id);
+    });
+    if (!entries) { respondError(response, entries.error(), "loadItemHistory"); return; }
+    Json list = Json::array();
+    for (const auto &entry : *entries) list.push_back(historyJson(entry));
+    respondJson(response, 200, Json{{"entries", std::move(list)}});
+  });
+  api.Post("/api/v1/items/history/:historyId/restore", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "historyId");
+    if (!id) return;
+    auto restored = guarded.with([&](LexiconApplication &application) {
+      return application.items.restoreItemHistory(*id);
+    });
+    if (!restored) { respondError(response, restored.error(), "restoreItemHistory"); return; }
+    respondJson(response, 200, Json{{"itemId", *restored}});
   });
 
   api.Get("/api/v1/items/:id", [this](const Request &request,

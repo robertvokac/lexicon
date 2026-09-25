@@ -154,6 +154,8 @@ private slots:
     void importDictionary();
     void editSelectedItem();
     void deleteSelectedItem();
+    void openItemHistory();
+    void openTrash();
     void showGraph();
     // The selected item's cards, and a quiz over them.
     void openCards();

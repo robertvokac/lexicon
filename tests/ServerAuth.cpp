@@ -93,6 +93,50 @@ void checkProtectedEndpoints(Checks &checks) {
                      "the token stops working after logout");
 }
 
+void checkAccountManagement(Checks &checks) {
+  ServerHarness harness;
+  HttpTestClient first("127.0.0.1", harness.port());
+  HttpTestClient second("127.0.0.1", harness.port());
+  const auto login = [&](HttpTestClient &client, const std::string &password) {
+    const auto reply = client.post("/api/v1/auth/login",
+        credentials(harness.options().username, password));
+    if (reply.status == 200)
+      client.setBearerToken(Json::parse(reply.body).value("token", std::string{}));
+    return reply.status;
+  };
+  checks.expectEqual(login(first, harness.options().password), 200, "first account session signs in");
+  checks.expectEqual(login(second, harness.options().password), 200, "second account session signs in");
+  auto sessions = first.get("/api/v1/auth/sessions");
+  checks.expectEqual(sessions.status, 200, "sessions can be listed");
+  auto listed = Json::parse(sessions.body).at("sessions");
+  checks.expectEqual(static_cast<long long>(listed.size()), 2, "two sessions are listed");
+  std::string otherId;
+  for (const auto &entry : listed)
+    if (!entry.value("current", false)) otherId = entry.value("id", std::string{});
+  checks.expectEqual(static_cast<long long>(otherId.size()), 24, "session identifier is an opaque prefix");
+  checks.expectEqual(first.remove("/api/v1/auth/sessions/" + otherId).status, 204,
+                     "another session can be revoked");
+  checks.expectEqual(second.get("/api/v1/auth/me").status, 401,
+                     "revoked session cannot make requests");
+  checks.expectEqual(first.post("/api/v1/auth/change-password",
+      Json{{"currentPassword", "wrong"}, {"newPassword", "a-new-strong-password"}}.dump()).status,
+      403, "old password is required");
+  checks.expectEqual(first.post("/api/v1/auth/change-password",
+      Json{{"currentPassword", harness.options().password},
+           {"newPassword", "a-new-strong-password"}}.dump()).status,
+      204, "password can be changed");
+  checks.expectEqual(first.get("/api/v1/auth/me").status, 401,
+                     "password change revokes the current session");
+  checks.expectEqual(login(first, harness.options().password), 401,
+                     "old password no longer signs in");
+  checks.expectEqual(login(first, "a-new-strong-password"), 200,
+                     "new password signs in");
+  const auto onDisk = lexicon::http::readCredentialsFile(
+      (std::filesystem::path(harness.databasePath()).parent_path() / "lexicon-auth.json").string());
+  checks.expect(onDisk.has_value() && onDisk->username == harness.options().username,
+                "new password is saved to the auth file");
+}
+
 void checkInvalidLogin(Checks &checks) {
   ServerHarness harness;
   HttpTestClient client("127.0.0.1", harness.port());
@@ -1003,6 +1047,7 @@ int main() {
   Checks checks;
   checkHealth(checks);
   checkProtectedEndpoints(checks);
+  checkAccountManagement(checks);
   checkInvalidLogin(checks);
   checkSessionExpiry(checks);
   checkRateLimiting(checks);

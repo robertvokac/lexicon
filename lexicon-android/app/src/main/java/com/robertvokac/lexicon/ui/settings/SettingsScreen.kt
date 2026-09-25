@@ -19,16 +19,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,6 +44,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +57,7 @@ import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.api.ServerUrl
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.model.ImportReport
+import com.robertvokac.lexicon.model.ServerSession
 import com.robertvokac.lexicon.storage.SettingsStore
 import com.robertvokac.lexicon.storage.ThemePreference
 import com.robertvokac.lexicon.ui.common.ConfirmDialog
@@ -73,6 +80,8 @@ import kotlinx.coroutines.withContext
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.time.LocalDate
+import java.text.DateFormat
+import java.util.Date
 
 /** An export or import on its way, or how the last one ended. */
 data class ExchangeState(
@@ -82,11 +91,19 @@ data class ExchangeState(
     val report: ImportReport? = null,
 )
 
+data class AccountState(
+    val busy: Boolean = false,
+    val sessions: List<ServerSession> = emptyList(),
+    val error: String? = null,
+)
+
 /** Client preferences of this installation and the session it holds. */
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val transfer = BlobTransfer(container.api, container.contentResolver)
     private val _exchange = MutableStateFlow(ExchangeState())
     val exchange: StateFlow<ExchangeState> = _exchange.asStateFlow()
+    private val _account = MutableStateFlow(AccountState())
+    val account: StateFlow<AccountState> = _account.asStateFlow()
 
     val theme: StateFlow<ThemePreference> =
         container.settings.theme.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemePreference.System)
@@ -119,6 +136,43 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun logout() {
         container.sessions.logout()
+    }
+
+    fun loadSessions() {
+        viewModelScope.launch {
+            _account.value = AccountState(busy = true)
+            try {
+                _account.value = AccountState(sessions = container.api.sessions())
+            } catch (failure: ApiException) {
+                _account.value = AccountState(error = failure.userMessage())
+            }
+        }
+    }
+
+    fun revokeSession(id: String) {
+        viewModelScope.launch {
+            _account.update { it.copy(busy = true, error = null) }
+            try {
+                container.api.revokeSession(id)
+                _account.value = AccountState(sessions = container.api.sessions())
+            } catch (failure: ApiException) {
+                _account.update { it.copy(busy = false, error = failure.userMessage()) }
+            }
+        }
+    }
+
+    fun changePassword(current: String, next: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            _account.update { it.copy(busy = true, error = null) }
+            try {
+                container.api.changePassword(current, next)
+                onDone()
+                container.sessions.logout("Password changed. Sign in again.")
+                _account.value = AccountState()
+            } catch (failure: ApiException) {
+                _account.update { it.copy(busy = false, error = failure.userMessage()) }
+            }
+        }
     }
 
     /** Writes the whole dictionary into the document the person created. */
@@ -206,7 +260,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val session by viewModel.session.collectAsStateWithLifecycle()
     val signedIn = session as? SessionState.SignedIn
     val exchange by viewModel.exchange.collectAsStateWithLifecycle()
+    val account by viewModel.account.collectAsStateWithLifecycle()
     var changingServer by rememberSaveable { mutableStateOf(false) }
+    var changingPassword by rememberSaveable { mutableStateOf(false) }
+    var showingSessions by rememberSaveable { mutableStateOf(false) }
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var includeFiles by rememberSaveable { mutableStateOf(true) }
     var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
@@ -253,6 +310,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = { confirmLogout = true }, enabled = signedIn != null) { Text("Log out") }
+            OutlinedButton(onClick = { changingPassword = true }, enabled = signedIn != null) { Text("Change password…") }
+            OutlinedButton(onClick = { showingSessions = true; viewModel.loadSessions() }, enabled = signedIn != null) {
+                Text("Signed-in sessions…")
+            }
 
             SectionHeader("Appearance")
             Column(Modifier.selectableGroup()) {
@@ -326,6 +387,59 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 viewModel.changeServer(it)
             },
             onDismiss = { changingServer = false },
+        )
+    }
+    if (changingPassword) {
+        val current = rememberTextFieldState()
+        val next = rememberTextFieldState()
+        val confirm = rememberTextFieldState()
+        AlertDialog(
+            onDismissRequest = { if (!account.busy) changingPassword = false },
+            title = { Text("Change password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedSecureTextField(state = current, label = { Text("Current password") },
+                        enabled = !account.busy, modifier = Modifier.fillMaxWidth())
+                    OutlinedSecureTextField(state = next, label = { Text("New password") },
+                        enabled = !account.busy, modifier = Modifier.fillMaxWidth())
+                    OutlinedSecureTextField(state = confirm, label = { Text("Repeat new password") },
+                        enabled = !account.busy, modifier = Modifier.fillMaxWidth())
+                    account.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !account.busy && current.text.isNotEmpty() && next.text.length >= 12 &&
+                        next.text.toString() == confirm.text.toString(),
+                    onClick = {
+                        viewModel.changePassword(current.text.toString(), next.text.toString()) {
+                            current.clearText(); next.clearText(); confirm.clearText()
+                            changingPassword = false
+                        }
+                    },
+                ) { Text(if (account.busy) "Changing…" else "Change") }
+            },
+            dismissButton = { TextButton(onClick = { changingPassword = false }, enabled = !account.busy) { Text("Cancel") } },
+        )
+    }
+    if (showingSessions) {
+        AlertDialog(
+            onDismissRequest = { showingSessions = false },
+            title = { Text("Signed-in sessions") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (account.busy) Text("Loading…")
+                    account.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    for (entry in account.sessions) {
+                        val opened = DateFormat.getDateTimeInstance().format(Date(entry.createdAtSeconds * 1000))
+                        Text("${if (entry.current) "This session" else "Session"} · opened $opened")
+                        if (!entry.current) TextButton(onClick = { viewModel.revokeSession(entry.id) }, enabled = !account.busy) {
+                            Text("Revoke")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showingSessions = false }) { Text("Close") } },
         )
     }
     pendingImport?.let { uri ->

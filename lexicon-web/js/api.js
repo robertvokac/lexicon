@@ -176,6 +176,13 @@ export class LexiconApi {
     }
 
     me() { return this.get('/auth/me'); }
+    changePassword(currentPassword, newPassword) {
+        return this.request('POST', '/auth/change-password', {
+            body: { currentPassword, newPassword }, expect: 'none',
+        });
+    }
+    async sessions() { return (await this.get('/auth/sessions')).sessions; }
+    revokeSession(id) { return this.delete(`/auth/sessions/${encodeURIComponent(id)}`); }
 
     // Groups ---------------------------------------------------------------
     async groups() { return (await this.get('/groups')).groups; }
@@ -214,6 +221,9 @@ export class LexiconApi {
     captureIdea(title, content) { return this.post('/inbox', { title, content }); }
     updateItem(id, payload) { return this.put(`/items/${id}`, payload); }
     deleteItem(id) { return this.delete(`/items/${id}`); }
+    async trash() { return (await this.get('/items/trash')).entries; }
+    async itemHistory(id) { return (await this.get(`/items/${id}/history`)).entries; }
+    restoreItemHistory(id) { return this.post(`/items/history/${id}/restore`, {}); }
     logItemRead(id) { return this.request('POST', `/items/${id}/read`, { expect: 'none' }); }
     async itemLinks(id) { return (await this.get(`/items/${id}/links`)).links; }
     itemGraph(id, depth = 2, limit = 100) {

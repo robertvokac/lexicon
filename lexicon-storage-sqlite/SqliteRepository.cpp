@@ -3,6 +3,7 @@
 #include "Utf8Path.h"
 #include "ImageValue.h"
 #include "Review.h"
+#include "Transport.h"
 #include "Validation.h"
 
 #include <algorithm>
@@ -569,9 +570,9 @@ SqliteRepository::Result<int> SqliteRepository::countItems(
   });
 }
 
-SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadItem(int itemId) {
-  return guarded([&] {
-    Statement stmt(impl_->db,
+namespace {
+lexicon::ItemRecord loadItemNative(const Connection &db, int itemId) {
+    Statement stmt(db,
       "SELECT t.id, t.group_id, m.name, t.title, COALESCE(t.disambiguation, ''), "
       "t.understanding, t.status, t.pinned, COALESCE(t.content, ''), t.item_type_id, COALESCE(ty.name, ''), "
       "t.revision, COALESCE(t.reviewed_at, ''), COALESCE(" + reviewDueSql() + ", '') "
@@ -579,7 +580,7 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
       "LEFT JOIN item_type ty ON ty.id = t.item_type_id WHERE t.id = ?;");
     stmt.bind(itemId);
     require(stmt.step(), "Item not found.", lexicon::Error::Code::NotFound);
-    ItemRecord item;
+    lexicon::ItemRecord item;
     item.id = stmt.integer(0); item.groupId = stmt.integer(1); item.groupName = stmt.text(2);
     item.title = stmt.text(3); item.disambiguation = stmt.text(4);
     item.understanding = static_cast<lexicon::UnderstandingLevel>(stmt.integer(5));
@@ -588,21 +589,69 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
     item.itemTypeId = stmt.isNull(9) ? -1 : stmt.integer(9); item.itemTypeName = stmt.text(10);
     item.revision = stmt.integer(11);
     item.reviewedAt = stmt.text(12); item.reviewDueAt = stmt.text(13);
-    Statement values(impl_->db, "SELECT item_field_id, value FROM item_value WHERE item_id = ?;");
+    Statement values(db, "SELECT item_field_id, value FROM item_value WHERE item_id = ?;");
     values.bind(itemId);
     while (values.step()) item.fieldValues[values.integer(0)] = values.text(1);
-    Statement properties(impl_->db, "SELECT \"key\", value FROM property WHERE item_id = ? ORDER BY \"key\" COLLATE NOCASE;");
+    Statement properties(db, "SELECT \"key\", value FROM property WHERE item_id = ? ORDER BY \"key\" COLLATE NOCASE;");
     properties.bind(itemId);
     while (properties.step()) item.properties.push_back({properties.text(0), properties.text(1)});
-    item.aliases = strings(impl_->db, "SELECT alias FROM alias WHERE item_id = ? ORDER BY alias COLLATE NOCASE;", itemId);
-    item.tags = strings(impl_->db, "SELECT name FROM tag WHERE item_id = ? ORDER BY name COLLATE NOCASE;", itemId);
-    item.flags = strings(impl_->db, "SELECT name FROM flag WHERE item_id = ? ORDER BY name COLLATE NOCASE;", itemId);
+    item.aliases = strings(db, "SELECT alias FROM alias WHERE item_id = ? ORDER BY alias COLLATE NOCASE;", itemId);
+    item.tags = strings(db, "SELECT name FROM tag WHERE item_id = ? ORDER BY name COLLATE NOCASE;", itemId);
+    item.flags = strings(db, "SELECT name FROM flag WHERE item_id = ? ORDER BY name COLLATE NOCASE;", itemId);
     return item;
-  });
+}
+}
+SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadItem(int itemId) {
+  return guarded([&] { return loadItemNative(impl_->db, itemId); });
 }
 
 namespace {
 void verifySavedBlobs(const Connection &db, const std::string &databasePath, int itemId);
+void snapshotItem(const Connection &db, int itemId, const char *operation) {
+  using lexicon::http::Json;
+  Json links = Json::array();
+  Statement link(db, "SELECT id, from_item_id, to_item_id, link_type, position, custom_value "
+                     "FROM link WHERE from_item_id = ? OR to_item_id = ? ORDER BY id;");
+  link.bind(itemId).bind(itemId);
+  while (link.step()) {
+    lexicon::LinkRecord record;
+    record.id = link.integer(0); record.fromItemId = link.integer(1);
+    record.toItemId = link.integer(2); record.linkType = static_cast<lexicon::LinkType>(link.integer(3));
+    record.position = link.integer(4); record.customValue = link.text(5);
+    links.push_back(lexicon::http::toJson(record));
+  }
+  Json cards = Json::array();
+  Statement card(db, "SELECT id, question, answer, success_count, failure_count, "
+                     "COALESCE(last_attempt, '') FROM card WHERE item_id = ? ORDER BY id;");
+  card.bind(itemId);
+  while (card.step()) {
+    lexicon::CardRecord record;
+    record.id = card.integer(0); record.itemId = itemId; record.question = card.text(1);
+    record.answer = card.text(2); record.successCount = card.integer(3);
+    record.failureCount = card.integer(4); record.lastAttempt = card.text(5);
+    cards.push_back(lexicon::http::toJson(record));
+  }
+  Json files = Json::array();
+  Statement values(db, "SELECT f.data_type, iv.value FROM item_value iv "
+                       "JOIN item_field f ON f.id = iv.item_field_id "
+                       "WHERE iv.item_id = ? AND f.data_type IN (8, 10);");
+  values.bind(itemId);
+  while (values.step()) {
+    const auto hash = lexicon::storedFileHash(
+        static_cast<lexicon::FieldDataType>(values.integer(0)), values.text(1));
+    if (!hash.empty()) files.push_back(hash);
+  }
+  Json snapshot{{"item", lexicon::http::toJson(loadItemNative(db, itemId))},
+                {"links", std::move(links)}, {"cards", std::move(cards)}, {"files", std::move(files)}};
+  Statement(db, "INSERT INTO item_history(item_id, operation, snapshot) VALUES(?, ?, ?);")
+      .bind(itemId).bind(operation).bind(snapshot.dump()).run();
+  // The UI offers the latest 100 versions. Keep storage bounded to those
+  // versions, while deletions remain in Trash until explicitly restored.
+  Statement(db, "DELETE FROM item_history WHERE item_id = ? AND operation = 'updated' "
+                "AND id NOT IN (SELECT id FROM item_history WHERE item_id = ? "
+                "AND operation = 'updated' ORDER BY id DESC LIMIT 100);")
+      .bind(itemId).bind(itemId).run();
+}
 int saveItemNative(const Connection &db, const std::string &databasePath,
                    const lexicon::ItemRecord &item) {
   auto fields = item.itemTypeId > 0 ? fieldsFor(db, item.itemTypeId) : std::vector<lexicon::ItemFieldRecord>{};
@@ -621,6 +670,7 @@ int saveItemNative(const Connection &db, const std::string &databasePath,
       if (item.revision > 0 && existing.integer(0) != item.revision)
         throw Failure("This item was changed elsewhere after you opened it.",
                       lexicon::Error::Code::Conflict);
+      snapshotItem(db, item.id, "updated");
     }
     const std::string title = lexicon::trim(item.title);
     const std::string disambiguation = lexicon::trim(item.disambiguation);
@@ -682,9 +732,105 @@ SqliteRepository::Result<int> SqliteRepository::saveItemReturningId(const ItemRe
 }
 SqliteRepository::Result<void> SqliteRepository::deleteItem(int itemId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    snapshotItem(impl_->db, itemId, "deleted");
     Statement(impl_->db, "DELETE FROM item WHERE id = ?;").bind(itemId).run();
     requireChanged(impl_->db, "Item");
     logOperation(impl_->db, "item", itemId, 3); tx.commit(); });
+}
+namespace {
+lexicon::ItemHistoryEntry historyEntry(Statement &row) {
+  lexicon::ItemHistoryEntry entry;
+  entry.id = row.integer(0); entry.itemId = row.integer(1);
+  entry.operation = row.text(2); entry.happenedAt = row.text(3);
+  const auto snapshot = lexicon::http::Json::parse(row.text(4));
+  entry.item = lexicon::http::itemFromJson(snapshot.at("item"));
+  return entry;
+}
+} // namespace
+SqliteRepository::Result<std::vector<SqliteRepository::ItemHistoryEntry>>
+SqliteRepository::loadItemHistory(int itemId) {
+  return guarded([&] {
+    Statement rows(impl_->db, "SELECT id, item_id, operation, happened_at, snapshot "
+                              "FROM item_history WHERE item_id = ? ORDER BY id DESC LIMIT 100;");
+    rows.bind(itemId);
+    std::vector<ItemHistoryEntry> entries;
+    while (rows.step()) entries.push_back(historyEntry(rows));
+    return entries;
+  });
+}
+SqliteRepository::Result<std::vector<SqliteRepository::ItemHistoryEntry>> SqliteRepository::loadTrash() {
+  return guarded([&] {
+    Statement rows(impl_->db, "SELECT id, item_id, operation, happened_at, snapshot "
+                              "FROM item_history WHERE operation = 'deleted' AND restored_item_id IS NULL "
+                              "ORDER BY id DESC;");
+    std::vector<ItemHistoryEntry> entries;
+    while (rows.step()) entries.push_back(historyEntry(rows));
+    return entries;
+  });
+}
+SqliteRepository::Result<int> SqliteRepository::restoreItemHistory(int historyId) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_restore");
+    Statement row(impl_->db, "SELECT item_id, operation, snapshot, restored_item_id "
+                             "FROM item_history WHERE id = ?;");
+    row.bind(historyId);
+    require(row.step(), "History entry not found.", lexicon::Error::Code::NotFound);
+    const int oldId = row.integer(0);
+    const bool deleted = row.text(1) == "deleted";
+    require(row.isNull(3), "This deleted item was already restored.");
+    const auto snapshot = lexicon::http::Json::parse(row.text(2));
+    auto item = lexicon::http::itemFromJson(snapshot.at("item"));
+    if (deleted) {
+      item.id = -1;
+    } else {
+      Statement existing(impl_->db, "SELECT 1 FROM item WHERE id = ?;");
+      existing.bind(oldId);
+      require(existing.step(), "The item no longer exists; restore its deletion from Trash instead.",
+              lexicon::Error::Code::NotFound);
+      item.id = oldId;
+    }
+    item.revision = 0;
+    const int id = saveItemNative(impl_->db, impl_->path, item);
+    // The old links are a part of the selected version. A link whose other
+    // item was deleted in the meantime cannot be recreated and is skipped.
+    if (!deleted) {
+      Statement peers(impl_->db, "SELECT DISTINCT CASE WHEN from_item_id = ? THEN to_item_id "
+                                   "ELSE from_item_id END FROM link WHERE from_item_id = ? OR to_item_id = ?;");
+      peers.bind(id).bind(id).bind(id);
+      while (peers.step())
+        Statement(impl_->db, "UPDATE item SET revision = revision + 1 WHERE id = ?;").bind(peers.integer(0)).run();
+      Statement(impl_->db, "DELETE FROM link WHERE from_item_id = ? OR to_item_id = ?;").bind(id).bind(id).run();
+    }
+    for (const auto &saved : snapshot.at("links")) {
+      auto link = lexicon::http::linkFromJson(saved);
+      link.fromItemId = link.fromItemId == oldId ? id : link.fromItemId;
+      link.toItemId = link.toItemId == oldId ? id : link.toItemId;
+      Statement peers(impl_->db, "SELECT COUNT(*) FROM item WHERE id IN (?, ?);");
+      peers.bind(link.fromItemId).bind(link.toItemId);
+      if (!peers.step() || peers.integer(0) != (link.fromItemId == link.toItemId ? 1 : 2)) continue;
+      Statement(impl_->db, "INSERT INTO link(from_item_id, to_item_id, link_type, position, custom_value) "
+                           "VALUES(?, ?, ?, ?, ?);")
+          .bind(link.fromItemId).bind(link.toItemId).bind(static_cast<int>(link.linkType))
+          .bind(link.position).bind(link.customValue).run();
+      if (link.fromItemId != id)
+        Statement(impl_->db, "UPDATE item SET revision = revision + 1 WHERE id = ?;").bind(link.fromItemId).run();
+      if (link.toItemId != id && link.toItemId != link.fromItemId)
+        Statement(impl_->db, "UPDATE item SET revision = revision + 1 WHERE id = ?;").bind(link.toItemId).run();
+    }
+    if (deleted) {
+      for (const auto &saved : snapshot.at("cards")) {
+        const auto card = lexicon::http::exportedCardFromJson(saved);
+        Statement(impl_->db, "INSERT INTO card(item_id, question, answer, success_count, failure_count, last_attempt) "
+                             "VALUES(?, ?, ?, ?, ?, NULLIF(?, ''));")
+            .bind(id).bind(card.question).bind(card.answer).bind(card.successCount)
+            .bind(card.failureCount).bind(card.lastAttempt).run();
+      }
+      Statement(impl_->db, "UPDATE item_history SET restored_item_id = ? WHERE id = ?;")
+          .bind(id).bind(historyId).run();
+    }
+    tx.commit();
+    return id;
+  });
 }
 namespace {
 std::vector<lexicon::LinkRecord> loadLinksNative(const Connection &db, int itemId, bool incoming) {
@@ -723,6 +869,10 @@ SqliteRepository::Result<void> SqliteRepository::saveLink(const LinkRecord &link
     Transaction tx(impl_->db, "lexicon_write");
     int id = link.id;
     if (id < 0) {
+      if (impl_->unitState == Impl::UnitState::Idle) {
+        snapshotItem(impl_->db, link.fromItemId, "updated");
+        if (link.toItemId != link.fromItemId) snapshotItem(impl_->db, link.toItemId, "updated");
+      }
       Statement(impl_->db, "INSERT INTO link (from_item_id, to_item_id, link_type, position, custom_value) VALUES (?, ?, ?, ?, ?);")
         .bind(link.fromItemId).bind(link.toItemId).bind(static_cast<int>(link.linkType)).bind(link.position)
         .bind(customValue).run();
@@ -746,6 +896,9 @@ SqliteRepository::Result<void> SqliteRepository::saveLink(const LinkRecord &link
         tx.commit();
         return;
       }
+      if (impl_->unitState == Impl::UnitState::Idle)
+        for (const int endpoint : std::set<int>{oldFrom, oldTo, link.fromItemId, link.toItemId})
+          snapshotItem(impl_->db, endpoint, "updated");
       Statement(impl_->db, "UPDATE link SET from_item_id = ?, to_item_id = ?, link_type = ?, position = ?, custom_value = ? WHERE id = ?;")
         .bind(link.fromItemId).bind(link.toItemId).bind(static_cast<int>(link.linkType)).bind(link.position)
         .bind(customValue).bind(id).run();
@@ -760,6 +913,14 @@ SqliteRepository::Result<void> SqliteRepository::saveLink(const LinkRecord &link
 }
 SqliteRepository::Result<void> SqliteRepository::deleteLink(int linkId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    if (impl_->unitState == Impl::UnitState::Idle) {
+      Statement endpoints(impl_->db, "SELECT from_item_id, to_item_id FROM link WHERE id = ?;");
+      endpoints.bind(linkId);
+      require(endpoints.step(), "Link not found.", lexicon::Error::Code::NotFound);
+      snapshotItem(impl_->db, endpoints.integer(0), "updated");
+      if (endpoints.integer(1) != endpoints.integer(0))
+        snapshotItem(impl_->db, endpoints.integer(1), "updated");
+    }
     bumpRevisions(impl_->db, "id IN (SELECT from_item_id FROM link WHERE id = ?1 "
                              "UNION SELECT to_item_id FROM link WHERE id = ?1)", linkId);
     Statement(impl_->db, "DELETE FROM link WHERE id = ?;").bind(linkId).run();
@@ -872,9 +1033,13 @@ SqliteRepository::Result<int> SqliteRepository::findItemId(const std::string &ti
   });
 }
 namespace {
-const char *kAlarmColumns = "SELECT id, title, description, fires_at, COALESCE(dismissed_at, '') FROM alarm ";
+const char *kAlarmColumns = "SELECT id, title, description, fires_at, COALESCE(dismissed_at, ''), "
+                            "repeat_days, item_id FROM alarm ";
 lexicon::AlarmRecord readAlarm(Statement &stmt) {
-  return {stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3), stmt.text(4)};
+  lexicon::AlarmRecord alarm{stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3), stmt.text(4)};
+  alarm.repeatDays = stmt.integer(5);
+  alarm.itemId = stmt.isNull(6) ? -1 : stmt.integer(6);
+  return alarm;
 }
 } // namespace
 SqliteRepository::Result<std::vector<lexicon::AlarmRecord>> SqliteRepository::loadAlarms() {
@@ -903,16 +1068,24 @@ SqliteRepository::Result<int> SqliteRepository::saveAlarm(const lexicon::AlarmRe
       // A new alarm rings when its time comes, unless it arrives already
       // dismissed, as one from an export does.
       const auto dismissedAt = lexicon::normalizedUtcTime(alarm.dismissedAt);
-      Statement insert(impl_->db, "INSERT INTO alarm(title, description, fires_at, dismissed_at) VALUES(?, ?, ?, ?);");
+      Statement insert(impl_->db, "INSERT INTO alarm(title, description, fires_at, dismissed_at, repeat_days, item_id, anchor_at) "
+                                   "VALUES(?, ?, ?, ?, ?, ?, NULLIF(?, ''));");
       insert.bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt);
-      if (dismissedAt.empty()) insert.null(); else insert.bind(dismissedAt);
+      if (dismissedAt.empty() || alarm.repeatDays > 0) insert.null(); else insert.bind(dismissedAt);
+      insert.bind(alarm.repeatDays).nullableId(alarm.itemId)
+          .bind(alarm.repeatDays > 0 ? firesAt : std::string{});
       insert.run();
       id = impl_->db.lastId();
     } else {
       // A new time rings again; a changed title or description does not.
-      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, "
+      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, repeat_days = ?, item_id = ?, "
+                           "anchor_at = CASE WHEN fires_at = ? AND repeat_days = ? THEN anchor_at "
+                           "ELSE NULLIF(?, '') END, "
                            "dismissed_at = CASE WHEN fires_at = ? THEN dismissed_at END, fires_at = ? WHERE id = ?;")
-          .bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt).bind(firesAt).bind(id).run();
+          .bind(lexicon::trim(alarm.title)).bind(alarm.description)
+          .bind(alarm.repeatDays).nullableId(alarm.itemId)
+          .bind(firesAt).bind(alarm.repeatDays).bind(alarm.repeatDays > 0 ? firesAt : std::string{})
+          .bind(firesAt).bind(firesAt).bind(id).run();
       requireChanged(impl_->db, "Alarm");
     }
     logOperation(impl_->db, "alarm", id, alarm.id < 0 ? 1 : 2);
@@ -942,8 +1115,13 @@ SqliteRepository::Result<void> SqliteRepository::dismissAlarm(int alarmId) {
   return guarded([&] {
     Transaction tx(impl_->db, "lexicon_write");
     // Dismissing twice keeps the first time.
-    Statement(impl_->db, std::string("UPDATE alarm SET dismissed_at = COALESCE(dismissed_at, ") + kNow +
-                             ") WHERE id = ?;").bind(alarmId).run();
+    Statement(impl_->db, std::string("UPDATE alarm SET ") +
+                         "fires_at = CASE WHEN repeat_days > 0 AND fires_at <= " + kNow +
+                         " THEN strftime('%Y-%m-%dT%H:%M:%SZ', anchor_at, '+' || "
+                         "(MAX(1, 1 + (strftime('%s', 'now') - strftime('%s', anchor_at)) / (repeat_days * 86400)) "
+                         "* repeat_days * 86400) || ' seconds') ELSE fires_at END, "
+                         "dismissed_at = CASE WHEN repeat_days > 0 THEN NULL ELSE COALESCE(dismissed_at, " + kNow +
+                         ") END WHERE id = ?;").bind(alarmId).run();
     requireChanged(impl_->db, "Alarm");
     logOperation(impl_->db, "alarm", alarmId, 2);
     tx.commit();
@@ -1302,6 +1480,18 @@ LiveBlobs liveBlobs(const Connection &db) {
     ++live.references;
     if (validHash(hash)) live.hashes.insert(std::move(hash));
     else live.invalid.insert(std::move(value));
+  }
+  Statement history(db, "SELECT snapshot FROM item_history;");
+  while (history.step()) {
+    const auto snapshot = lexicon::http::Json::parse(history.text(0));
+    if (!snapshot.contains("files") || !snapshot["files"].is_array()) continue;
+    for (const auto &file : snapshot["files"]) {
+      ++live.references;
+      if (!file.is_string()) { live.invalid.insert("<history file>"); continue; }
+      auto hash = file.get<std::string>();
+      if (validHash(hash)) live.hashes.insert(std::move(hash));
+      else live.invalid.insert(std::move(hash));
+    }
   }
   return live;
 }

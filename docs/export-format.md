@@ -34,7 +34,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 2,
+  "version": 3,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -56,7 +56,8 @@ and keep the files as files, shared between backups.
     { "fromItemId": 7, "toItemId": 8, "linkType": "IsA", "position": 1, "customValue": "" }
   ],
   "alarms": [
-    { "id": 4, "title": "Dentist", "description": "Bring the card.", "firesAt": "2026-10-02T08:30:00Z" }
+    { "id": 4, "title": "Dentist", "description": "Bring the card.", "firesAt": "2026-10-02T08:30:00Z",
+      "dismissedAt": null, "repeatDays": 7, "itemId": 7 }
   ],
   "cards": [
     { "id": 12, "itemId": 7, "question": "What is a monoid?", "answer": "A semigroup with a unit.",
@@ -70,7 +71,7 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 2.
+  before anything is written. This document describes version 3.
 - **Versions.** The version goes up whenever a reader of the previous one
   would import a new document by leaving part of it out - silently losing
   data - rather than refusing it:
@@ -79,10 +80,11 @@ and keep the files as files, shared between backups.
   | --- | --- | --- |
   | 1 | Lexicon before cards | groups, types, fields, items, links, alarms, files |
   | 2 | Lexicon with cards | `cards` |
+  | 3 | Lexicon with recurring alarms | `repeatDays` and linked `itemId` on alarms |
 
   A reader takes every version up to its own and refuses a newer one: an
-  older Lexicon says it does not know version 2 instead of importing it
-  without the cards. A version 1 document has no cards; the few that
+  older Lexicon says it does not know version 3 instead of importing it
+  without the recurrence and item link. A version 1 document has no cards; the few that
   development builds wrote with cards have them read all the same.
 - Groups, types, fields, items and links have the shapes of the
   [REST API](rest-api.md), with the same symbolic enum names. Read-only parts
@@ -92,7 +94,10 @@ and keep the files as files, shared between backups.
   of one document: `groupId`, `itemTypeId`, the keys of `fieldValues`,
   `fromItemId` and `toItemId` refer to them.
 - `alarms` holds every alarm, with `firesAt` and `dismissedAt` in UTC, so an
-  alarm that was dismissed does not ring again after an import. Documents
+  alarm that was dismissed does not ring again after an import. `repeatDays`
+  is 0 for a one-time alarm or 1–365 for a recurring interval. An optional
+  `itemId` links to an exported item and is mapped to its imported ID.
+  Documents
   written before alarms existed have no `alarms`; they import as before.
 - `cards` holds every card with its `itemId`, `question`, `answer` and
   statistics - `successCount`, `failureCount` and `lastAttempt` (UTC, or
@@ -103,6 +108,9 @@ and keep the files as files, shared between backups.
 - `blobs` is present when files were included. `data` is standard base64 with
   padding; `hash` is the SHA-256 of the decoded bytes, the value `Blob` fields
   store and the part after the colon of an `Image` value (`image/png:<hash>`).
+
+Exports contain the current dictionary, not prior item versions or Trash.
+A server backup's `lexicon.db` and Blob files retain that history.
 
 ## Importing
 

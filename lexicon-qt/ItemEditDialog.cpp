@@ -8,6 +8,8 @@
 #include "ImageValueView.h"
 #include "MarkdownConverter.h"
 #include "WikiLinks.h"
+#include "Transport.h"
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCompleter>
@@ -19,10 +21,12 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLocale>
 #include <QListWidget>
+#include <QAbstractItemModel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpressionValidator>
@@ -76,8 +80,14 @@ ItemEditDialog::ItemEditDialog(QWidget* parent)
     m_previewTimer->setInterval(1000);
     connect(m_previewTimer, &QTimer::timeout, this, &ItemEditDialog::updatePreview);
 
+    m_historyTimer = new QTimer(this);
+    m_historyTimer->setSingleShot(true);
+    m_historyTimer->setInterval(350);
+    connect(m_historyTimer, &QTimer::timeout, this, &ItemEditDialog::recordHistory);
+
     setupUi();
     connectSignals();
+    qApp->installEventFilter(this);
 }
 
 void ItemEditDialog::setupUi() {
@@ -114,6 +124,7 @@ void ItemEditDialog::setupUi() {
 
     m_pinnedCheck = new QCheckBox(this);
     m_titleEdit = new QLineEdit(this);
+    m_titleEdit->setObjectName("itemTitle");
     m_disambiguationEdit = new QLineEdit(this);
 
     formLayout->addRow("Group:", m_groupCombo);
@@ -169,6 +180,7 @@ void ItemEditDialog::setupUi() {
     m_contentToolbar->addAction("Table", this, SLOT(formatTable()))->setToolTip("Insert Table (|)");
 
     m_contentEdit = new QTextEdit(this);
+    m_contentEdit->setObjectName("itemContent");
     m_contentEdit->setAcceptRichText(false);
     m_contentEdit->setPlaceholderText("Markdown content...");
 
@@ -232,6 +244,13 @@ void ItemEditDialog::setupUi() {
     rootLayout->addWidget(m_tabWidget);
 
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+    m_undoButton = buttonBox->addButton("Undo", QDialogButtonBox::ActionRole);
+    m_redoButton = buttonBox->addButton("Redo", QDialogButtonBox::ActionRole);
+    m_undoButton->setObjectName("itemUndo");
+    m_redoButton->setObjectName("itemRedo");
+    connect(m_undoButton, &QPushButton::clicked, this, &ItemEditDialog::undoEdit);
+    connect(m_redoButton, &QPushButton::clicked, this, &ItemEditDialog::redoEdit);
+    updateHistoryButtons();
     m_saveButton = buttonBox->button(QDialogButtonBox::Save);
     QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, &ItemEditDialog::validateAndAccept);
     QObject::connect(buttonBox, &QDialogButtonBox::rejected, this, &ItemEditDialog::reject);
@@ -253,8 +272,21 @@ void ItemEditDialog::setupUi() {
 
 void ItemEditDialog::connectSignals() {
     connect(m_contentEdit, &QTextEdit::textChanged, m_previewTimer, QOverload<>::of(&QTimer::start));
+    connect(m_contentEdit, &QTextEdit::textChanged, this, &ItemEditDialog::scheduleHistory);
     connect(m_groupCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshTypes(); });
     connect(m_typeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { typeSelectionChanged(); });
+    for (auto* edit : {m_titleEdit, m_disambiguationEdit})
+        connect(edit, &QLineEdit::textChanged, this, &ItemEditDialog::scheduleHistory);
+    for (auto* combo : {m_groupCombo, m_typeCombo, m_statusCombo, m_understandingCombo})
+        connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), this, &ItemEditDialog::scheduleHistory);
+    connect(m_pinnedCheck, &QCheckBox::toggled, this, &ItemEditDialog::scheduleHistory);
+    for (auto* list : {m_aliasList, m_tagList, m_flagList, m_propertyList, m_linksList, m_backlinksList}) {
+        auto* model = list->model();
+        connect(model, &QAbstractItemModel::rowsInserted, this, &ItemEditDialog::scheduleHistory);
+        connect(model, &QAbstractItemModel::rowsRemoved, this, &ItemEditDialog::scheduleHistory);
+        connect(model, &QAbstractItemModel::dataChanged, this, &ItemEditDialog::scheduleHistory);
+        connect(model, &QAbstractItemModel::layoutChanged, this, &ItemEditDialog::scheduleHistory);
+    }
 }
 
 void ItemEditDialog::showEvent(QShowEvent* event) {
@@ -305,6 +337,20 @@ void ItemEditDialog::refreshTypes() {
 }
 
 bool ItemEditDialog::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress && watched->isWidgetType() &&
+        static_cast<QWidget*>(watched)->window() == this) {
+        auto* key = static_cast<QKeyEvent*>(event);
+        const bool control = key->modifiers().testFlag(Qt::ControlModifier);
+        const bool shift = key->modifiers().testFlag(Qt::ShiftModifier);
+        if (control && key->key() == Qt::Key_Z && !shift) {
+            if (!key->isAutoRepeat()) undoEdit();
+            return true;
+        }
+        if (control && (key->key() == Qt::Key_Y || (key->key() == Qt::Key_Z && shift))) {
+            if (!key->isAutoRepeat()) redoEdit();
+            return true;
+        }
+    }
     if (event->type() == QEvent::MouseButtonRelease && m_imageViewers.contains(watched)) {
         // Queued: the viewer is modal, and the click is still being delivered.
         QMetaObject::invokeMethod(this, m_imageViewers.value(watched), Qt::QueuedConnection);
@@ -574,6 +620,12 @@ void ItemEditDialog::refreshFields() {
             m_fieldsLayout->addRow(field.name + ":", line);
         }
         m_fieldEditors.insert(field.id, editor);
+        if (auto* line = qobject_cast<QLineEdit*>(editor))
+            connect(line, &QLineEdit::textChanged, this, &ItemEditDialog::scheduleHistory);
+        if (auto* combo = qobject_cast<QComboBox*>(editor))
+            connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), this, &ItemEditDialog::scheduleHistory);
+        if (auto* path = m_blobPathEditors.value(field.id))
+            connect(path, &QLineEdit::textChanged, this, &ItemEditDialog::scheduleHistory);
     }
     m_fieldsBox->setVisible(!m_currentFields.isEmpty());
     m_noFieldsLabel->setVisible(m_currentFields.isEmpty());
@@ -635,6 +687,98 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
     m_cardsButton->setEnabled(m_itemId > 0);
     m_cardsButton->setToolTip(m_itemId > 0 ? "Add, edit and delete this item's cards; they are saved at once"
                                            : "Save the Item before adding Cards.");
+    if (!m_applyingHistory) {
+        m_historyTimer->stop();
+        m_history.clear();
+        m_history.append(currentSnapshot());
+        m_historyIndex = 0;
+        updateHistoryButtons();
+    }
+}
+
+ItemEditDialog::EditSnapshot ItemEditDialog::currentSnapshot() const {
+    EditSnapshot snapshot;
+    snapshot.item = item();
+    snapshot.links = m_currentLinks;
+    snapshot.backlinks = m_currentBacklinks;
+    snapshot.blobPaths = m_pendingBlobPaths;
+    for (auto it = m_blobPathEditors.cbegin(); it != m_blobPathEditors.cend(); ++it)
+        snapshot.blobPaths.insert(it.key(), it.value()->text());
+
+    auto json = lexicon::http::Json::object();
+    json["item"] = lexicon::http::toJson(qtbridge::toCore(snapshot.item));
+    json["links"] = lexicon::http::toJsonArray(qtbridge::toCore(snapshot.links));
+    json["backlinks"] = lexicon::http::toJsonArray(qtbridge::toCore(snapshot.backlinks));
+    for (auto it = snapshot.blobPaths.cbegin(); it != snapshot.blobPaths.cend(); ++it)
+        json["blobPaths"][std::to_string(it.key())] = qtbridge::toCore(it.value());
+    snapshot.fingerprint = QByteArray::fromStdString(json.dump());
+    return snapshot;
+}
+
+void ItemEditDialog::scheduleHistory() {
+    if (!m_applyingHistory && m_historyIndex >= 0) {
+        m_historyTimer->start();
+        updateHistoryButtons();
+    }
+}
+
+void ItemEditDialog::recordHistory() {
+    if (m_applyingHistory || m_historyIndex < 0) return;
+    const auto snapshot = currentSnapshot();
+    if (snapshot.fingerprint == m_history.at(m_historyIndex).fingerprint) return;
+    m_history.resize(m_historyIndex + 1);
+    m_history.append(snapshot);
+    m_historyIndex = m_history.size() - 1;
+    if (m_history.size() > 100) {
+        m_history.removeFirst();
+        --m_historyIndex;
+    }
+    updateHistoryButtons();
+}
+
+void ItemEditDialog::applyHistory(int index) {
+    if (index < 0 || index >= m_history.size()) return;
+    m_historyTimer->stop();
+    m_applyingHistory = true;
+    const int originalTypeId = m_originalTypeId;
+    const auto originalFields = m_originalFieldValues;
+    const bool typeChangeConfirmed = m_originalTypeChangeConfirmed;
+    const auto snapshot = m_history.at(index);
+    setItem(snapshot.item);
+    m_originalTypeId = originalTypeId;
+    m_originalFieldValues = originalFields;
+    m_originalTypeChangeConfirmed = typeChangeConfirmed;
+    m_currentLinks = snapshot.links;
+    m_currentBacklinks = snapshot.backlinks;
+    updateLinksList();
+    m_pendingBlobPaths = snapshot.blobPaths;
+    for (auto it = m_blobPathEditors.cbegin(); it != m_blobPathEditors.cend(); ++it)
+        it.value()->setText(snapshot.blobPaths.value(it.key()));
+    m_historyIndex = index;
+    m_applyingHistory = false;
+    updateHistoryButtons();
+}
+
+void ItemEditDialog::undoEdit() {
+    if (m_historyTimer->isActive()) {
+        m_historyTimer->stop();
+        recordHistory();
+    }
+    applyHistory(m_historyIndex - 1);
+}
+
+void ItemEditDialog::redoEdit() {
+    if (m_historyTimer->isActive()) {
+        m_historyTimer->stop();
+        recordHistory();
+    }
+    applyHistory(m_historyIndex + 1);
+}
+
+void ItemEditDialog::updateHistoryButtons() {
+    m_undoButton->setEnabled(m_historyIndex > 0 || m_historyTimer->isActive());
+    m_redoButton->setEnabled(!m_historyTimer->isActive() && m_historyIndex >= 0 &&
+                             m_historyIndex + 1 < m_history.size());
 }
 
 ItemRecord ItemEditDialog::item() const {

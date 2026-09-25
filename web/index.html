@@ -110,7 +110,7 @@
         <div class="card">
           <span class="card-emoji">⏰</span>
           <h3>Alarms that ring</h3>
-          <p>Reminders with a title, a description and a time. They ring on the desktop, in the browser and on the phone — even when the app is closed — until one dismissal quiets them everywhere.</p>
+          <p>One-time or recurring reminders, optionally linked to an item. They ring on the desktop, in the browser and on the phone — even when the app is closed.</p>
         </div>
         <div class="card">
           <span class="card-emoji">📥</span>
@@ -125,7 +125,12 @@
         <div class="card">
           <span class="card-emoji">🛟</span>
           <h3>Backups and one-file export</h3>
-          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Export the whole thing, including cards and quiz counts, as one documented JSON file, with or without its images.</p>
+          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Verify database, export and file checksums before restoring. Portable exports contain current items, cards and alarms.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🗑️</span>
+          <h3>History and Trash</h3>
+          <p>Restore an earlier item version or a deleted item with its cards and links. The desktop editor also has Undo and Redo for unsaved changes.</p>
         </div>
         <div class="card">
           <span class="card-emoji">📄</span>
@@ -235,7 +240,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
       <div class="grid grid-3">
         <div class="card"><h3>🖧 LexiconServer</h3><p>A Qt-free REST server next to your database. It serves your other devices and backs the dictionary up by itself.</p></div>
         <div class="card"><h3>🌐 Web client</h3><p>Static HTML, CSS and JavaScript — no build step. Everything the desktop does, in a browser, down to a phone-sized screen.</p></div>
-        <div class="card"><h3>📱 Android app</h3><p>Kotlin and Jetpack Compose: search, edit, review, alarms that ring when the app is closed, and an Inbox that works offline.</p></div>
+        <div class="card"><h3>📱 Android app</h3><p>Kotlin and Jetpack Compose: search, edit, review, alarms that ring when the app is closed, encrypted offline reading of loaded pages, and an Inbox that works offline.</p></div>
       </div>
       <div class="grid grid-2" style="margin-top:1.5rem">
         <figure class="screenshot">

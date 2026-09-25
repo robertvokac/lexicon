@@ -109,9 +109,9 @@ int main() {
         !expect(rawQuery("SELECT COUNT(*) FROM temp.sqlite_master;") == "0" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'migration_%';") == "0",
                 "The rebuild left a working table")) return 1;
-    if (!expect(rawQuery("SELECT version FROM db_version;") == "26" &&
+    if (!expect(rawQuery("SELECT version FROM db_version;") == "28" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'card';") == "1",
-                "The Qt v20 database did not reach version 26 with its card table")) return 1;
+                "The Qt v20 database did not reach version 28 with its card table")) return 1;
     auto found = app.search.findItemId("Příliš žluťoučký kůň", "česky");
     if (!success(found, "Find Qt UTF-8 item")) return 1;
     auto item = app.items.loadItem(*found);
@@ -279,15 +279,20 @@ int main() {
       sqlite3_close(raw);
       return result;
     };
-    // Migration 26 only adds the table and its index, so without them the
-    // file is exactly what version 25 wrote.
-    if (!expect(run("DROP TABLE card; UPDATE db_version SET version = 25;") &&
+    // Remove the structures introduced by migrations 26–28 to reconstruct
+    // the last database version without cards, history or recurring alarms.
+    if (!expect(run("DROP INDEX idx_alarm_item_id; "
+                    "ALTER TABLE alarm DROP COLUMN anchor_at; "
+                    "ALTER TABLE alarm DROP COLUMN item_id; "
+                    "ALTER TABLE alarm DROP COLUMN repeat_days; "
+                    "DROP TABLE item_history; DROP TABLE card; "
+                    "UPDATE db_version SET version = 25;") &&
                     query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "0",
                 "Could not take the database back to version 25")) return 1;
     SqliteRepository repository;
     if (!success(repository.open(v25.string()), "Migrate a version 25 database")) return 1;
     lexicon::LexiconApplication app(repository);
-    if (!expect(query("SELECT version FROM db_version;") == "26", "Migration 26 did not run") ||
+    if (!expect(query("SELECT version FROM db_version;") == "28", "Migrations 26–28 did not run") ||
         !expect(query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "2",
                 "Migration 26 did not add the card table and its index")) return 1;
     auto item = app.items.loadItem(kept);
@@ -309,7 +314,7 @@ int main() {
     }
     sqlite3 *raw = nullptr;
     const bool bumped = sqlite3_open(future.string().c_str(), &raw) == SQLITE_OK &&
-                        sqlite3_exec(raw, "UPDATE db_version SET version = 27;", nullptr, nullptr, nullptr) == SQLITE_OK;
+                        sqlite3_exec(raw, "UPDATE db_version SET version = 29;", nullptr, nullptr, nullptr) == SQLITE_OK;
     sqlite3_close(raw);
     if (!expect(bumped, "Could not mark fixture as a newer schema")) return 1;
     SqliteRepository repository;

@@ -328,13 +328,43 @@ data class Alarm(
     val description: String = "",
     val firesAt: String,
     val dismissedAt: String? = null,
+    val repeatDays: Int = 0,
+    val itemId: Int? = null,
 )
 
 @Serializable
 internal data class SnoozeRequest(val minutes: Int)
 
 @Serializable
-data class AlarmWrite(val title: String, val description: String = "", val firesAt: String)
+data class AlarmWrite(
+    val title: String,
+    val description: String = "",
+    val firesAt: String,
+    val repeatDays: Int = 0,
+    val itemId: Int? = null,
+)
+
+@Serializable
+data class ServerSession(
+    val id: String,
+    val createdAtSeconds: Long,
+    val lastSeenSeconds: Long,
+    val current: Boolean,
+)
+
+@Serializable internal data class ServerSessionsEnvelope(val sessions: List<ServerSession>)
+@Serializable internal data class ChangePasswordRequest(val currentPassword: String, val newPassword: String)
+
+@Serializable
+data class ItemHistoryEntry(
+    val id: Int,
+    val itemId: Int,
+    val operation: String,
+    val happenedAt: String,
+    val item: Item,
+)
+
+@Serializable internal data class ItemHistoryEnvelope(val entries: List<ItemHistoryEntry>)
 
 @Serializable internal data class AlarmsEnvelope(val alarms: List<Alarm>)
 @Serializable internal data class AlarmEnvelope(val alarm: Alarm)

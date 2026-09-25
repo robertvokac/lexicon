@@ -56,6 +56,9 @@ std::vector<BackupEntry> listBackups(const std::string &directory);
 // built under a temporary name and renamed when complete, so an interrupted
 // or failed backup never looks like one.
 Result<BackupReport> createBackup(const BackupOptions &options, Clock::time_point now = Clock::now());
+// Checks a completed backup without changing it: manifest, SQLite integrity,
+// foreign keys, export JSON and every Blob/Image file referred to by the copy.
+Result<std::size_t> verifyBackup(const std::string &path);
 // "Backup ... written: 3 files copied, 12 shared, 4.2 MB; removed 1 old backup."
 std::string describe(const BackupReport &report);
 

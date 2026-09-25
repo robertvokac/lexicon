@@ -95,7 +95,7 @@ add_library(lexicon-storage-sqlite STATIC
     lexicon-storage-sqlite/SearchIndex.cpp
 )
 target_include_directories(lexicon-storage-sqlite PUBLIC lexicon-storage-sqlite)
-target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application PRIVATE SQLite::SQLite3 OpenSSL::Crypto)
+target_link_libraries(lexicon-storage-sqlite PUBLIC lexicon-application PRIVATE SQLite::SQLite3 OpenSSL::Crypto lexicon-json)
 set_target_properties(lexicon-storage-sqlite PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
 # Vendored, pinned, header-only third-party libraries. Normal builds never
@@ -161,7 +161,7 @@ if (LEXICON_BUILD_SERVER)
         lexicon-server/Backup.cpp
     )
     target_include_directories(lexicon-backup PUBLIC lexicon-server)
-    target_link_libraries(lexicon-backup PUBLIC lexicon-application lexicon-storage-sqlite lexicon-json Threads::Threads)
+    target_link_libraries(lexicon-backup PUBLIC lexicon-application lexicon-storage-sqlite lexicon-json Threads::Threads PRIVATE SQLite::SQLite3 OpenSSL::Crypto)
     set_target_properties(lexicon-backup PROPERTIES AUTOMOC OFF AUTORCC OFF)
 
     add_executable(LexiconServer lexicon-server/main.cpp)
@@ -373,6 +373,9 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-repository-correctness PRIVATE lexicon-application lexicon-storage-sqlite)
     set_target_properties(lexicon-repository-correctness PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME repository_correctness COMMAND lexicon-repository-correctness)
+    add_executable(lexicon-history-and-alarms tests/HistoryAndAlarms.cpp)
+    target_link_libraries(lexicon-history-and-alarms PRIVATE lexicon-application lexicon-storage-sqlite)
+    add_test(NAME history_and_alarms COMMAND lexicon-history-and-alarms)
 
     add_executable(lexicon-search tests/Search.cpp)
     # SQLite directly as well: the test edits the database behind the

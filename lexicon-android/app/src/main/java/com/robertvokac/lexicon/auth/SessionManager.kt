@@ -53,6 +53,7 @@ class SessionManager(
     private val settings: SettingsStore,
     private val scope: CoroutineScope,
     private val allowCleartextDevelopmentHosts: Boolean,
+    private val canBrowseOffline: (ServerUrl, String) -> Boolean = { _, _ -> false },
 ) : SessionAccess {
     sealed interface LoginResult {
         data object Success : LoginResult
@@ -135,6 +136,16 @@ class SessionManager(
     fun retry(): Job? {
         val session = pending ?: return null
         return scope.launch { verify(session) }
+    }
+
+    /** Opens the encrypted local read cache with the stored identity. Writes
+     * still require the server, and the next 401 ends this session. */
+    fun browseOffline(): Boolean {
+        val session = pending ?: return false
+        if (!canBrowseOffline(session.server, session.username)) return false
+        pending = null
+        activate(session, LexiconApi.API_VERSION)
+        return true
     }
 
     /** Leaves Unreachable or Incompatible for the login screen, forgetting the stored session. */
