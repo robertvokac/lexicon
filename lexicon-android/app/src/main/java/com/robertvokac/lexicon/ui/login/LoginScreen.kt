@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
@@ -19,6 +21,7 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -54,7 +58,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class LoginState(val busy: Boolean = false, val error: String? = null)
+data class LoginState(
+    val busy: Boolean = false,
+    val error: String? = null,
+    val allowHttpForTesting: Boolean = false,
+)
 
 /**
  * Health, API version, then login. The password lives in [password] only
@@ -67,12 +75,17 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
     val password = TextFieldState()
     private val _state = MutableStateFlow(LoginState())
     val state: StateFlow<LoginState> = _state.asStateFlow()
+    val canAllowHttpForTesting: Boolean = container.allowCleartextDevelopmentHosts
 
     init {
         viewModelScope.launch {
             server.setTextAndPlaceCursorAtEnd(container.settings.lastServerUrl() ?: container.defaultServerUrl)
             username.setTextAndPlaceCursorAtEnd(container.settings.lastUsername().orEmpty())
         }
+    }
+
+    fun setAllowHttpForTesting(allow: Boolean) {
+        _state.update { it.copy(allowHttpForTesting = allow && canAllowHttpForTesting, error = null) }
     }
 
     fun login() {
@@ -83,6 +96,7 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
                 server.text.toString(),
                 username.text.toString(),
                 password.text.toString(),
+                allowHttpForTesting = _state.value.allowHttpForTesting,
             )
             when (result) {
                 SessionManager.LoginResult.Success -> {
@@ -142,6 +156,28 @@ fun LoginScreen(viewModel: LoginViewModel, notice: String?, modifier: Modifier =
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (viewModel.canAllowHttpForTesting) {
+                    Row(
+                        Modifier.fillMaxWidth().toggleable(
+                            value = state.allowHttpForTesting,
+                            enabled = !state.busy,
+                            role = Role.Checkbox,
+                            onValueChange = viewModel::setAllowHttpForTesting,
+                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = state.allowHttpForTesting, onCheckedChange = null, enabled = !state.busy)
+                        Text("Allow HTTP for testing")
+                    }
+                    if (state.allowHttpForTesting) {
+                        Text(
+                            "Your password and session token will travel without encryption. Use only on a trusted test network.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
                 OutlinedTextField(
                     state = viewModel.username,
                     label = { Text("User name") },

@@ -138,10 +138,9 @@ LexiconServer --database ~/lexicon/lexicon.db     # 127.0.0.1:8628
 ```
 
 The Android emulator reaches the machine's loopback address as `10.0.2.2`. A
-**debug** build proposes `http://10.0.2.2:8628` on its login screen and may use
-plain HTTP to exactly these development hosts: `10.0.2.2`, `10.0.3.2`
-(Genymotion), `localhost` and `127.0.0.1`
-([`src/debug/res/xml/network_security_config.xml`](app/src/debug/res/xml/network_security_config.xml)).
+**debug** build proposes `http://10.0.2.2:8628` on its login screen and accepts
+plain HTTP to these development hosts without another step: `10.0.2.2`,
+`10.0.3.2` (Genymotion), `localhost` and `127.0.0.1`.
 
 ```bash
 ./gradlew installDebug
@@ -150,6 +149,22 @@ adb shell am start -n com.robertvokac.lexicon/.MainActivity
 
 A phone on USB can use the same server through `adb reverse tcp:8628 tcp:8628`
 and `http://127.0.0.1:8628`.
+
+### Phone and server on the same test network
+
+Start the server so the phone can reach it, then enter the computer's network
+address in the debug app and check **Allow HTTP for testing** on the login
+screen:
+
+```bash
+LexiconServer --database ~/lexicon/lexicon.db --listen 0.0.0.0 --allow-http
+# On the phone: http://192.168.1.20:8628 (use your computer's actual IP)
+```
+
+This opt-in is available only in debug builds. With it, the password and
+session token travel over the network without encryption. An HTTP session
+remains usable after the app restarts; signing in again to a network HTTP
+address requires checking the box again. Release builds remain HTTPS-only.
 
 ### Production: HTTPS
 
@@ -366,12 +381,11 @@ after typing stops, and the item page composes only the visible blocks.
 - **Changing the server** logs out and requires a new sign-in.
 - **Transport.** Release builds permit no cleartext traffic at all and trust
   only the system certificate store; there is no trust-all manager, no hostname
-  verifier override and no bundled CA. Debug builds add plain HTTP to the
-  development hosts listed above and nothing else. The app also refuses, before
-  any request, a plain `http://` URL to any other host — the same rule
-  LexiconServer applies when it refuses to serve passwords over plaintext
-  HTTP — and URLs with `file:`, `content:`, `javascript:` and other schemes,
-  user info, queries or fragments.
+  verifier override and no bundled CA. Debug builds permit HTTP transport,
+  but the app refuses an HTTP URL outside the development hosts until **Allow
+  HTTP for testing** is checked on the login screen. Release builds refuse all
+  HTTP. URLs with `file:`, `content:`, `javascript:` and other schemes, user
+  info, queries or fragments are refused in every build.
 - **Redirects** are never followed. A `3xx` answer is reported with its target
   and nothing is sent there, so neither the Bearer token nor a password can be
   carried to another host (`ApiClientTest.redirectsAreRefusedAndCredentialsNeverLeaveForAnotherHost`).
@@ -493,7 +507,8 @@ with R8.
 - Neither client pushes changes to the other; the app shows another client's
   edit on its next load or refresh.
 - One user, as the server has one user.
-- Plain HTTP works only in debug builds and only to the development hosts.
+- Plain HTTP works only in debug builds; a network host requires the explicit
+  login-screen test option.
 
 ## Source layout
 

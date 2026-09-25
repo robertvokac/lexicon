@@ -148,8 +148,13 @@ class SessionManager(
      * Health, API version, then login. The password is used for this one
      * request and is neither stored nor logged.
      */
-    suspend fun login(serverInput: String, username: String, password: String): LoginResult {
-        val server = when (val parsed = ServerUrl.parse(serverInput, allowCleartextDevelopmentHosts)) {
+    suspend fun login(
+        serverInput: String,
+        username: String,
+        password: String,
+        allowHttpForTesting: Boolean = false,
+    ): LoginResult {
+        val server = when (val parsed = ServerUrl.parse(serverInput, allowCleartextDevelopmentHosts, allowHttpForTesting)) {
             is ServerUrl.Parsed.Valid -> parsed.url
             is ServerUrl.Parsed.Invalid -> return LoginResult.Failure(parsed.message)
         }

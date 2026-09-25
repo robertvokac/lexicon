@@ -100,7 +100,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     </div>
 
     <h2 id="android">3. The Android app</h2>
-    <p>The native app (Kotlin and Jetpack Compose) is built from <code>lexicon-android/</code> with Gradle and installed as an APK. On first start it asks for the server address, a user name and a password; after that the dictionary is a tap away.</p>
+    <p>The native app (Kotlin and Jetpack Compose) is built from <code>lexicon-android/</code> with Gradle and installed as an APK. On first start it asks for the server address, a user name and a password; after that the dictionary is a tap away. For a phone and server on the same test network, a debug APK can sign in to a <code>http://</code> address when you check <strong>Allow HTTP for testing</strong> on that screen and start the server with <code>--listen 0.0.0.0 --allow-http</code>. Release APKs require HTTPS.</p>
     <ul>
       <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
       <li>The editor with the same tabs, including image values.</li>

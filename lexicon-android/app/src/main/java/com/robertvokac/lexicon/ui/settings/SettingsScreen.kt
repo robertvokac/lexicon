@@ -106,11 +106,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Null when the URL is usable, or why not. */
     fun serverUrlProblem(input: String): String? =
-        (ServerUrl.parse(input, container.allowCleartextDevelopmentHosts) as? ServerUrl.Parsed.Invalid)?.message
+        (ServerUrl.parse(input, container.allowCleartextDevelopmentHosts,
+            allowHttpForTesting = container.allowCleartextDevelopmentHosts) as? ServerUrl.Parsed.Invalid)?.message
 
     /** Another server means another sign-in; the current session ends. */
     fun changeServer(input: String) {
-        val parsed = ServerUrl.parse(input, container.allowCleartextDevelopmentHosts) as? ServerUrl.Parsed.Valid ?: return
+        // This only chooses a URL. The login screen still requires the HTTP checkbox before credentials are sent.
+        val parsed = ServerUrl.parse(input, container.allowCleartextDevelopmentHosts,
+            allowHttpForTesting = container.allowCleartextDevelopmentHosts) as? ServerUrl.Parsed.Valid ?: return
         container.sessions.changeServer(parsed.url)
     }
 

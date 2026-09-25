@@ -35,10 +35,15 @@ class ServerUrl private constructor(val httpUrl: HttpUrl) {
 
         /**
          * Parses what a person typed. Without a scheme, https:// is assumed.
-         * [allowCleartextDevelopmentHosts] is true only in debug builds, whose
-         * network security configuration permits exactly those hosts.
+         * [allowCleartextDevelopmentHosts] is true only in debug builds.
+         * [allowHttpForTesting] is an explicit choice on the login screen and
+         * permits other HTTP hosts only in those builds.
          */
-        fun parse(input: String, allowCleartextDevelopmentHosts: Boolean): Parsed {
+        fun parse(
+            input: String,
+            allowCleartextDevelopmentHosts: Boolean,
+            allowHttpForTesting: Boolean = false,
+        ): Parsed {
             var text = input.trim()
             if (text.isEmpty()) return Parsed.Invalid("Enter the server URL.")
             if (text.any { it.isWhitespace() || it.isISOControl() }) {
@@ -73,16 +78,16 @@ class ServerUrl private constructor(val httpUrl: HttpUrl) {
                 segments.forEach { addPathSegment(it) }
             }.build()
             if (!normalized.isHttps) {
-                if (!isDevelopmentHost(normalized.host)) {
-                    return Parsed.Invalid(
-                        "Refusing to send your password over plain http:// to ${normalized.host}. " +
-                            "Use https://, as LexiconServer does for every address but this machine.",
-                    )
-                }
                 if (!allowCleartextDevelopmentHosts) {
                     return Parsed.Invalid(
                         "This build connects over https:// only. Plain http:// to a development " +
                             "server is available in debug builds.",
+                    )
+                }
+                if (!isDevelopmentHost(normalized.host) && !allowHttpForTesting) {
+                    return Parsed.Invalid(
+                        "Refusing to send your password over plain http:// to ${normalized.host}. " +
+                            "Turn on Allow HTTP for testing to use this server.",
                     )
                 }
             }
@@ -91,6 +96,7 @@ class ServerUrl private constructor(val httpUrl: HttpUrl) {
 
         /** For values this app stored itself after validating them. */
         fun fromStored(value: String, allowCleartextDevelopmentHosts: Boolean): ServerUrl? =
-            (parse(value, allowCleartextDevelopmentHosts) as? Parsed.Valid)?.url
+            (parse(value, allowCleartextDevelopmentHosts, allowHttpForTesting = allowCleartextDevelopmentHosts)
+                as? Parsed.Valid)?.url
     }
 }

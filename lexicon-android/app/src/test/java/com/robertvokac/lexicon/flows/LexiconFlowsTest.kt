@@ -182,6 +182,13 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun loginOffersAnExplicitHttpTestingOption() {
+        compose.waitForText("Allow HTTP for testing")
+        compose.onNodeWithText("Allow HTTP for testing").performClick()
+        compose.waitForText("Your password and session token will travel without encryption. Use only on a trusted test network.")
+    }
+
+    @Test
     fun aWrongPasswordIsExplained() {
         compose.waitForText("Log in")
         field("Server URL").performTextReplacement(fake.baseUrl)

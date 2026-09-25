@@ -5,14 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerUrlTest {
-    private fun valid(input: String, debug: Boolean = false): String =
-        when (val parsed = ServerUrl.parse(input, debug)) {
+    private fun valid(input: String, debug: Boolean = false, allowHttp: Boolean = false): String =
+        when (val parsed = ServerUrl.parse(input, debug, allowHttp)) {
             is ServerUrl.Parsed.Valid -> parsed.url.value
             is ServerUrl.Parsed.Invalid -> throw AssertionError("'$input' was refused: ${parsed.message}")
         }
 
-    private fun invalid(input: String, debug: Boolean = false): String =
-        when (val parsed = ServerUrl.parse(input, debug)) {
+    private fun invalid(input: String, debug: Boolean = false, allowHttp: Boolean = false): String =
+        when (val parsed = ServerUrl.parse(input, debug, allowHttp)) {
             is ServerUrl.Parsed.Valid -> throw AssertionError("'$input' was accepted as ${parsed.url}")
             is ServerUrl.Parsed.Invalid -> parsed.message
         }
@@ -56,13 +56,15 @@ class ServerUrlTest {
     }
 
     @Test
-    fun plainHttpOnlyReachesDevelopmentHostsInDebugBuilds() {
+    fun plainHttpToANetworkServerRequiresTheDebugLoginOption() {
         assertEquals("http://10.0.2.2:8628", valid("http://10.0.2.2:8628", debug = true))
         assertEquals("http://127.0.0.1:8628", valid("http://127.0.0.1:8628", debug = true))
         assertEquals("http://localhost:8628", valid("http://localhost:8628/", debug = true))
         assertTrue(invalid("http://10.0.2.2:8628", debug = false).contains("https://"))
-        assertTrue(invalid("http://lexicon.example.com", debug = true).contains("Refusing"))
-        assertTrue(invalid("http://192.168.1.20:8628", debug = true).contains("Refusing"))
+        assertTrue(invalid("http://192.168.1.20:8628", debug = true).contains("Allow HTTP"))
+        assertEquals("http://192.168.1.20:8628", valid("http://192.168.1.20:8628", debug = true, allowHttp = true))
+        assertEquals("http://lexicon.example.com", valid("http://lexicon.example.com", debug = true, allowHttp = true))
+        assertTrue(invalid("http://192.168.1.20:8628", allowHttp = true).contains("https://"))
     }
 
     @Test

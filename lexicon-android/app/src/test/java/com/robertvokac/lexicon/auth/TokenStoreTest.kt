@@ -34,6 +34,16 @@ class TokenStoreTest {
     }
 
     @Test
+    fun aDebugHttpSessionOnTheNetworkSurvivesARestart() = runBlocking {
+        val httpServer = (ServerUrl.parse("http://192.168.1.20:8628", true, allowHttpForTesting = true)
+            as ServerUrl.Parsed.Valid).url
+        environment.tokenStore.save(httpServer, "robert", "test-token")
+        val restored = environment.tokenStore.load()!!
+        assertEquals(httpServer, restored.server)
+        assertEquals("test-token", restored.token)
+    }
+
+    @Test
     fun theTokenIsNeverStoredInTheClear() = runBlocking {
         environment.tokenStore.save(server, "robert", "opaque-token-value")
         val file = File(environment.directory, "session.preferences_pb")
