@@ -82,6 +82,10 @@ export function openGraph(itemId) {
     function fit() {
         zoom = 1;
         applyZoom();
+        // Fit means the new centre item is in the middle, even after a pan or
+        // after selecting a node in an asymmetrical neighbourhood.
+        canvas.scrollLeft = (canvas.scrollWidth - canvas.clientWidth) / 2;
+        canvas.scrollTop = (canvas.scrollHeight - canvas.clientHeight) / 2;
     }
 
     const zoomIn = el('button', { type: 'button', class: 'secondary graph-tool', text: '+',
@@ -157,13 +161,15 @@ export function openGraph(itemId) {
         const index = new Map(graph.nodes.map((node, position) => [node.id, position]));
         const points = layoutGraph(graph.nodes.map((node) => node.depth),
             graph.edges.map((edge) => [index.get(edge.fromItemId), index.get(edge.toItemId)]));
-        const xs = points.map((point) => point.x);
-        const ys = points.map((point) => point.y);
         const margin = RADIUS + 60;
-        const minX = Math.min(...xs) - margin;
-        const minY = Math.min(...ys) - margin;
-        const width = Math.max(...xs) - Math.min(...xs) + 2 * margin;
-        const height = Math.max(...ys) - Math.min(...ys) + 2 * margin;
+        // The layout holds node 0 at the origin. A bounding box around all
+        // nodes can have an off-centre midpoint, so use symmetric bounds.
+        const halfWidth = Math.max(...points.map((point) => Math.abs(point.x))) + margin;
+        const halfHeight = Math.max(...points.map((point) => Math.abs(point.y))) + margin;
+        const minX = -halfWidth;
+        const minY = -halfHeight;
+        const width = 2 * halfWidth;
+        const height = 2 * halfHeight;
         natural = { width, height };
         drawing = svg('svg', {
             viewBox: `${minX} ${minY} ${width} ${height}`,

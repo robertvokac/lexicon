@@ -275,7 +275,12 @@ void GraphDialog::reload() {
         const QRectF box = caption->boundingRect();
         caption->setPos(point.x - box.width() / 2, point.y + kRadius + 2);
     }
-    m_scene->setSceneRect(m_scene->itemsBoundingRect().adjusted(-40, -40, 40, 40));
+    // The layout keeps the centre item at (0, 0). Fit symmetrically around it:
+    // the items' bounding box can otherwise move the centre off screen centre.
+    const QRectF bounds = m_scene->itemsBoundingRect().adjusted(-40, -40, 40, 40);
+    const double halfWidth = std::max(std::abs(bounds.left()), std::abs(bounds.right()));
+    const double halfHeight = std::max(std::abs(bounds.top()), std::abs(bounds.bottom()));
+    m_scene->setSceneRect(-halfWidth, -halfHeight, 2 * halfWidth, 2 * halfHeight);
     fit();
     m_summary->setText(QString("%1 item(s), %2 link(s)%3")
                            .arg(graph->nodes.size())

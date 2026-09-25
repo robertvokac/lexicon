@@ -196,13 +196,21 @@ void checkGraph(lexicon::LexiconApplication &application, int group) {
     return where;
   };
   check(nodeCentre(abelian) != QPoint(-1, -1), "the graph draws a node for Abelian group");
+  const auto isAtScreenCentre = [&](int itemId) {
+    const QPoint node = nodeCentre(itemId);
+    const QPoint middle = view->viewport()->rect().center();
+    return std::abs(node.x() - middle.x()) <= 3 && std::abs(node.y() - middle.y()) <= 3;
+  };
+  check(isAtScreenCentre(ring), "the first centre item is at the middle of the view");
   QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), nodeCentre(abelian));
   QApplication::processEvents();
   check(dialog.centreItemId() == abelian, "a click on a node centres the graph on it");
+  check(isAtScreenCentre(abelian), "the clicked centre item is at the middle of the view");
 
   dialog.centreOn(module);
   check(dialog.nodeCount() == 3 && dialog.centreItemId() == module,
         "centring on Module reloads around it, where Field is three links away");
+  check(isAtScreenCentre(module), "another asymmetric graph keeps its centre in the middle");
   QTest::mouseDClick(view->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), nodeCentre(abelian));
   QApplication::processEvents();
   check(dialog.openedItemId() == abelian && dialog.result() == QDialog::Accepted,

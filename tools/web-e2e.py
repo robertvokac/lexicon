@@ -342,6 +342,11 @@ def run(browser, web, server):
         b.wait("!!document.querySelector('tbody tr.selected')", "the selection")
         menu("View", "Relationship graph...")
         b.wait("document.querySelectorAll('dialog[open] .graph-node').length === 2", "both items in the graph")
+        centred = """(() => { const canvas = document.querySelector('dialog[open] .graph-canvas').getBoundingClientRect();
+            const node = document.querySelector('dialog[open] .graph-node.centre circle').getBoundingClientRect();
+            return Math.abs((node.left + node.right - canvas.left - canvas.right) / 2) <= 3
+                && Math.abs((node.top + node.bottom - canvas.top - canvas.bottom) / 2) <= 3; })()"""
+        b.wait(centred, "the first item at the centre of the graph canvas")
         width = "parseFloat(document.querySelector('dialog[open] svg.graph').style.width)"
         fitted = b.js(width)
         click("dialog[open] button", "+")
@@ -364,6 +369,10 @@ def run(browser, web, server):
         b.wait(f"document.querySelector('dialog[open] .graph-canvas') !== null"
                f" && document.querySelector('dialog[open]').getBoundingClientRect().width < {window}",
                "the graph back in its dialog")
+        b.js("document.querySelector('dialog[open] .graph-node:not(.centre)').dispatchEvent(new MouseEvent('click', {bubbles: true})); true")
+        b.wait("document.querySelector('dialog[open] .graph-node.centre title')?.textContent.includes('Object lifetime')",
+               "the clicked item becoming the graph centre")
+        b.wait(centred, "the clicked item at the centre of the graph canvas")
         click("dialog[open] button", "Close")
         b.wait("!document.querySelector('dialog[open]')", "the graph to close")
 

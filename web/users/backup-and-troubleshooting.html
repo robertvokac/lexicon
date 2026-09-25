@@ -41,6 +41,7 @@
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="review.html">Review</a></li>
+        <li><a href="cards.html">Cards &amp; quiz</a></li>
         <li><a href="alarms.html">Alarms</a></li>
         <li><a href="inbox.html">Inbox</a></li>
         <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
@@ -108,7 +109,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <li><code>File → Export...</code> writes the whole dictionary as <strong>one documented JSON file</strong>, optionally with the files its blob and image values refer to.</li>
       <li><code>File → Import...</code> merges such a file into the open dictionary: groups, types and fields are matched by name, and items that are already there are left untouched.</li>
       <li>The web client and the Android app offer the same two actions, and <code>LexiconServer export</code> and <code>LexiconServer import</code> do it from the command line.</li>
-      <li>Alarms, reviews, links and metadata all travel with it. The format is described in <code>docs/export-format.md</code>.</li>
+      <li>Alarms, review dates, links, metadata, <a href="cards.html">cards and their quiz counts</a> all travel with it. Export format version 2 includes cards; older Lexicon releases refuse that version instead of silently dropping them. See <a href="https://github.com/robertvokac/lexicon/blob/develop/docs/export-format.md" target="_blank" rel="noopener">the export format</a>.</li>
     </ul>
 
     <h2 id="safety">Deletion safety rules</h2>
@@ -116,7 +117,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
     <p>Lexicon uses cascade deletion to keep the database consistent. Know the two rules before you delete anything:</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
-      <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, properties, custom field values, and all links/backlinks pointing to or from it.</p>
+      <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, properties, custom field values, <a href="cards.html">cards</a>, and all links/backlinks pointing to or from it.</p>
     </div>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>

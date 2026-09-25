@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Screenshots — Lexicon</title>
-<meta name="description" content="Screenshots of Lexicon in all three clients: the Qt desktop application, the web client in a browser and the native Android app - main window, item editor, relationship graph, review, alarms, Inbox and images.">
+<meta name="description" content="Screenshots of Lexicon on desktop, web and Android: items, relationships, Cards and their quiz, Review, alarms, Inbox and images.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -31,8 +31,8 @@
 <main class="section">
   <div class="container">
     <h1 style="text-align:center">Screenshots</h1>
-    <p class="section-lead">One dictionary in three clients. The shots share one small sample dictionary: C++ and OpenGL ES terms, a few books, and a <code>Term</code> type with <code>Standard</code>, <code>Difficulty</code> and <code>Diagram</code> fields. Click any image to view it full size.</p>
-    <p style="text-align:center"><a class="btn btn-ghost" href="#desktop">Desktop client</a> <a class="btn btn-ghost" href="#web">Web client</a> <a class="btn btn-ghost" href="#android">Android app</a></p>
+    <p class="section-lead">Lexicon in three clients. The shots show C++ concepts, typed fields and links, plus <a href="users/cards.html">Cards and the card quiz</a> in each client. Click any image to view it full size.</p>
+    <p style="text-align:center"><a class="btn btn-ghost" href="#desktop">Desktop client</a> <a class="btn btn-ghost" href="#web">Web client</a> <a class="btn btn-ghost" href="#android">Android app</a> <a class="btn btn-ghost" href="#cards">Cards &amp; quiz</a></p>
 
     <h2 id="desktop">Desktop client</h2>
     <p>The Qt Widgets application, which opens the SQLite database directly.</p>
@@ -97,7 +97,7 @@
         <img src="assets/img/desktop-graph.png" alt="The relationship graph of one item with labelled arrows to its neighbours" loading="lazy">
         <figcaption>
           <strong>Relationship graph</strong>
-          <span>The neighbourhood of an item up to three links away. Zoom in and out, fit it again, or take it full screen.</span>
+          <span>The active item stays in the middle. Zoom, fit, take the graph full screen or quiz its cards.</span>
         </figcaption>
       </figure>
       <figure>
@@ -119,6 +119,20 @@
         <figcaption>
           <strong>Alarms</strong>
           <span>Every alarm in one list, the soonest first; the one still ringing is in bold.</span>
+        </figcaption>
+      </figure>
+      <figure id="cards">
+        <img src="assets/img/desktop-cards.png" alt="Desktop Cards dialog listing questions, answers and quiz statistics for an item" loading="lazy">
+        <figcaption>
+          <strong>Cards</strong>
+          <span>Questions and answers belong to an item; the quiz records successes, failures and the last attempt.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/desktop-card-quiz.png" alt="Desktop card quiz with the question, revealed answer and Yes and No buttons" loading="lazy">
+        <figcaption>
+          <strong>Card quiz</strong>
+          <span>Reveal the answer, then choose Yes or No. Quiz one item or its relationship neighborhood.</span>
         </figcaption>
       </figure>
       <figure>
@@ -172,7 +186,7 @@
         <img src="assets/img/web-graph.png" alt="The relationship graph in the web client" loading="lazy">
         <figcaption>
           <strong>Graph in the browser</strong>
-          <span>Zoom with the buttons, the keys or Ctrl and the wheel; drag the background to move around.</span>
+          <span>Click a node to centre on it; zoom with the buttons, keys or Ctrl and the wheel.</span>
         </figcaption>
       </figure>
       <figure>
@@ -187,6 +201,20 @@
         <figcaption>
           <strong>Alarms in the browser</strong>
           <span>Add, edit and delete alarms, and allow system notifications for them.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-cards.png" alt="Web Cards dialog showing three questions, answers and their Success and Failure counts" loading="lazy">
+        <figcaption>
+          <strong>Cards in the browser</strong>
+          <span>Manage an item's questions and answers without leaving the browser.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/web-card-quiz.png" alt="Web card quiz showing an answer and Yes and No controls" loading="lazy">
+        <figcaption>
+          <strong>Card quiz in the browser</strong>
+          <span>Choose this item or a linked neighborhood, reveal the answer, then record Yes or No.</span>
         </figcaption>
       </figure>
       <figure>
@@ -254,7 +282,7 @@
         <img src="assets/img/android-graph.png" alt="The relationship graph in the Android app" loading="lazy">
         <figcaption>
           <strong>Graph</strong>
-          <span>Zoom, fit, and the items listed below.</span>
+          <span>Select an item and choose Centre here; the active node stays in the middle.</span>
         </figcaption>
       </figure>
       <figure>
@@ -269,6 +297,20 @@
         <figcaption>
           <strong>Review</strong>
           <span>The same queue on the phone.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-cards.png" alt="Android Cards screen with three questions, answers and quiz statistics" loading="lazy">
+        <figcaption>
+          <strong>Cards</strong>
+          <span>Questions, answers and attempt counts on the item page.</span>
+        </figcaption>
+      </figure>
+      <figure>
+        <img src="assets/img/android-card-quiz.png" alt="Android card quiz showing the question, answer and Yes and No buttons" loading="lazy">
+        <figcaption>
+          <strong>Card quiz</strong>
+          <span>The same quiz on a phone, with this item or its neighborhood as the scope.</span>
         </figcaption>
       </figure>
       <figure>

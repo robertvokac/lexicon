@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cards and the card quiz — Lexicon User Guide</title>
+<meta name="description" content="Create question-and-answer cards for Lexicon items and quiz yourself on one item or its relationship neighborhood on desktop, web and Android.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="cards.html" class="active">Cards &amp; quiz</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#create">Create cards</a></li>
+        <li><a href="#quiz">Take a quiz</a></li>
+        <li><a href="#scope">Choose the scope</a></li>
+        <li><a href="#review">Cards and Review</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Cards &amp; quiz</p>
+    <h1>Cards and the card quiz</h1>
+    <p class="lead">Add short questions and answers to an item, then test yourself on that item or the concepts linked to it. The same cards and answer counts are available on desktop, web and Android.</p>
+
+    <h2 id="create">Create cards</h2>
+    <p>Save the item first, then open its cards. Each card has a <strong>Question</strong> and an <strong>Answer</strong>. Both accept multiple lines of plain text. An item can have any number of cards.</p>
+    <table>
+      <tr><th>Client</th><th>Open an item's cards</th></tr>
+      <tr><td>Desktop</td><td>Select the item and use <code>Manage → Cards of selected item...</code> (<code>Ctrl+K</code>), its table context menu, or <strong>Cards...</strong> in the item editor.</td></tr>
+      <tr><td>Web client</td><td>Select the item and use <code>Manage → Cards of selected item...</code>, <strong>Cards</strong> in the item preview, or <strong>Cards...</strong> in the editor.</td></tr>
+      <tr><td>Android</td><td>Open the item and tap <strong>Cards</strong>.</td></tr>
+    </table>
+    <p>Use <strong>Add</strong> to write a question and answer, <strong>Edit</strong> to change them, and <strong>Delete</strong> to remove a card. The list shows <strong>Success</strong>, <strong>Failure</strong> and <strong>Last attempt</strong> for each card. These values start at zero, zero and no attempt, and change only when you answer in a quiz. Card changes are saved immediately, independently of the item editor's Save or Cancel. Deleting an item also deletes its cards.</p>
+    <figure class="screenshot">
+      <img src="../assets/img/desktop-cards.png" alt="The desktop Cards dialog with questions, answers and attempt statistics" loading="lazy">
+      <figcaption>An item's cards on the desktop. The web client and Android show the same questions and counts.</figcaption>
+    </figure>
+
+    <h2 id="quiz">Take a quiz</h2>
+    <table>
+      <tr><th>Client</th><th>Start a card quiz</th></tr>
+      <tr><td>Desktop</td><td><code>View → Card quiz...</code> (<code>Ctrl+Shift+K</code>) for the selected item, its context menu, or <strong>Quiz cards</strong> in the relationship graph.</td></tr>
+      <tr><td>Web client</td><td><code>View → Card quiz...</code>, <strong>Card quiz</strong> in the item preview, or <strong>Quiz cards</strong> in the graph.</td></tr>
+      <tr><td>Android</td><td><strong>Card quiz</strong> on the item page or <strong>Quiz cards</strong> in the graph; the Cards screen also has a quiz action.</td></tr>
+    </table>
+    <ol class="steps">
+      <li><strong>Recall the answer.</strong> The quiz shows the source item, progress such as <code>3 / 17</code>, and the question.</li>
+      <li><strong>Reveal it.</strong> <strong>Show answer</strong> displays the answer without recording an attempt. On desktop and web, <code>Space</code> does the same.</li>
+      <li><strong>Answer honestly.</strong> <strong>Yes</strong> adds one success; <strong>No</strong> adds one failure. Both update Last attempt and move to the next card. On desktop and web you can use <code>Y</code> or <code>N</code> after revealing the answer.</li>
+    </ol>
+    <p>At the end, the quiz shows the number of cards and the Yes and No totals for that sitting. <strong>Start again</strong> loads the current cards for another sitting. Closing before answering a card leaves it unchanged; an empty scope says that no cards are available.</p>
+    <div class="phone-shots">
+      <figure>
+        <img src="../assets/img/android-cards.png" alt="The Cards screen on Android, with three questions and their attempt counts" loading="lazy">
+        <figcaption>Cards on Android</figcaption>
+      </figure>
+      <figure>
+        <img src="../assets/img/android-card-quiz.png" alt="The Android card quiz showing a revealed answer and Yes and No buttons" loading="lazy">
+        <figcaption>Quiz on Android</figcaption>
+      </figure>
+    </div>
+    <p>See the <a href="../screenshots.html">screenshot gallery</a> for the desktop and browser quiz windows as well.</p>
+
+    <h2 id="scope">Choose the scope</h2>
+    <p><strong>This item</strong> quizzes only its own cards. <strong>Neighborhood</strong> includes the item and the items one, two or three links away, following the same relationship walk as the graph. Starting from <strong>Quiz cards</strong> in the graph uses its centre and current depth. Each reachable card appears once, even if several paths lead to its item; an item with no cards adds none. For a very large neighborhood, the quiz includes the nearest 150 items and tells you when it has truncated the scope.</p>
+
+    <h2 id="review">Cards and Review</h2>
+    <p><a href="review.html">Review</a> asks about an entire item and uses four ratings to change its understanding level and next review date. A card quiz asks a specific question and records only that card's success or failure count. Cards have no due date or spaced repetition schedule; every quiz goes through the cards in its chosen scope. Answering a card does not change the item's Review state, and reviewing an item does not change its cards.</p>
+    <p>Cards and their attempt statistics are included in a full <a href="backup-and-troubleshooting.html#export">export</a>. Export format version 2 preserves them when you move a dictionary between installations.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="review.html"><span class="dir">← Previous</span>Review</a>
+      <a class="next" href="alarms.html"><span class="dir">Next →</span>Alarms</a>
+    </div>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

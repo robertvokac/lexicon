@@ -59,15 +59,14 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - `[[Title]]` links between items in the Markdown content, which open the item or offer to create it
 - A relationship graph of the items around one item, up to three links away
 - Image values: a picture stored with its type, shown as a thumbnail in the editor and under the item's content, and at full size on request
-- A Qt-free REST server and an independently deployable static web client with the same capabilities
+- A Qt-free REST server that can also serve the static web client from the same port with `--web-dir`; the client can be hosted separately too
 - A native Android client (Kotlin, Jetpack Compose) for the same server
 
 ## Screenshots
 
-All three clients here show one small sample dictionary: C++ and OpenGL ES
-terms, a few books, and a `Term` type with `Standard`, `Difficulty` and
-`Diagram` fields. The website has the same tour in a
-[gallery](https://github.com/robertvokac/lexicon/tree/develop/web).
+These screenshots use small sample dictionaries with C++ and OpenGL ES terms,
+typed fields and linked items. The Cards examples ask about pointer
+provenance. The website has the same tour in its [screenshot gallery](web/screenshots.html).
 
 - [Desktop client](#desktop-client)
 - [Web client](#web-client)
@@ -138,6 +137,15 @@ and **Full screen** gives it the window.
 The items due now, one card at a time: the title first, then the answer, then a
 rating that moves the understanding level and sets the next review.
 
+#### Cards and card quiz
+
+![Cards of an item](images/Screenshot_Cards.png)
+
+Cards hold questions and answers about an item, with success and failure counts.
+The separate quiz shows an answer on request and records Yes or No:
+
+![Card quiz](images/Screenshot_Card_Quiz.png)
+
 #### Alarms
 
 ![Alarms](images/Screenshot_Alarms.png)
@@ -179,6 +187,12 @@ ratings as the desktop:
 
 ![Web client: review](images/Screenshot_Web_Review.png)
 
+Cards and their quiz work in the browser too:
+
+![Web client: cards](images/Screenshot_Web_Cards.png)
+
+![Web client: card quiz](images/Screenshot_Web_Card_Quiz.png)
+
 On a phone-sized screen the same page turns into a card list with a filter
 panel; this one uses the dark theme.
 
@@ -215,6 +229,13 @@ The relationship graph, the review, an alarm going off and the Inbox:
   <img src="images/Screenshot_Android_Inbox.png" alt="Android: the Inbox" width="200">
 </p>
 
+An item's Cards screen and the card quiz on Android:
+
+<p>
+  <img src="images/Screenshot_Android_Cards.png" alt="Android: cards of an item" width="200">
+  <img src="images/Screenshot_Android_Card_Quiz.png" alt="Android: card quiz with revealed answer" width="200">
+</p>
+
 On screens at least 840 dp wide, such as tablets, the list and the selected item
 sit side by side:
 
@@ -245,13 +266,20 @@ cmake --build build --target Lexicon -j
 ./build/Lexicon
 ```
 
-The REST server is built by the same tree and needs no Qt:
+The REST server is built by the same tree. Its target needs no Qt (configure
+with `-DLEXICON_BUILD_DESKTOP=OFF` if Qt is not installed):
 
 ```bash
 cmake --build build --target LexiconServer -j
 ./build/LexiconServer auth set-user --database ~/lexicon.db
-./build/LexiconServer --database ~/lexicon.db --allowed-origin http://127.0.0.1:8080
+./build/LexiconServer --database ~/lexicon.db --web-dir ./lexicon-web
 ```
+
+Run those commands from the repository root, then open
+<http://127.0.0.1:8628/>. The server redirects `/` to `/web/`, serves
+`lexicon-web` there and answers its API requests under `/api/v1` on the same
+origin. This setup needs neither a separate static web server nor
+`--allowed-origin`.
 
 Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 `-DLEXICON_BUILD_SERVER=OFF`.
@@ -353,12 +381,12 @@ ctest --test-dir build --output-on-failure
 ## REST server and web client
 
 `LexiconServer` exposes the application services over HTTP so a browser can use
-the same database as the desktop client:
+the same database as the desktop client. To serve `lexicon-web` directly from
+the server, create the user and point `--web-dir` at that directory:
 
 ```bash
-LexiconServer auth set-user --database ~/lexicon/lexicon.db   # asks interactively
-LexiconServer --database ~/lexicon/lexicon.db \
-  --allowed-origin https://lexicon.example.com
+LexiconServer auth set-user --database ~/lexicon.db   # asks interactively
+LexiconServer --database ~/lexicon.db --web-dir /path/to/lexicon-web
 ```
 
 It binds `127.0.0.1:8628` by default, requires a Bearer session for every
@@ -366,22 +394,22 @@ domain endpoint, hashes the password with scrypt, rate limits failed logins,
 and refuses to serve password authentication over plaintext HTTP on a public
 address unless you override it explicitly.
 
-`--web-dir` serves the web client from the same port, so one process is the
-whole installation:
-
-```bash
-LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web
-# http://127.0.0.1:8628/ redirects to /web/, and the client talks to /api/v1
-# on the same origin - no --allowed-origin, no second web server.
-```
-
-Only that directory is served, read-only, and the server refuses one that
-holds the database, the credentials, the sessions or the Blobs.
+Open <http://127.0.0.1:8628/> to reach the client at `/web/`. Its API calls
+go to `/api/v1` on the same origin, so no CORS setting is needed. Only the
+`--web-dir` directory is served, read-only; the server refuses one that holds
+the database, credentials, sessions or Blobs.
 
 `lexicon-web/` is the browser client: HTML, CSS and vanilla JavaScript modules
-with no bundler, no transpiler and no `npm install`. Copy the directory to any
-static host - or hand it to `LexiconServer --web-dir` - point it at the API and
-log in. It reproduces the desktop
+with no bundler, no transpiler and no `npm install`. You can also copy the
+directory to a separate static host. In that case, leave off `--web-dir`,
+allow the web host's exact origin, and sign in using the server's address:
+
+```bash
+LexiconServer --database ~/lexicon.db \
+  --allowed-origin https://lexicon.example.com
+```
+
+The web client reproduces the desktop
 workflows - the filtered item table, the six-tab item editor, group and type
 management, the overview dialogs, Markdown editing with live preview, and light
 and dark themes - and adapts to phones with a responsive layout.
@@ -398,6 +426,8 @@ other apps. It keeps no Lexicon database; the server is the source of truth.
 - [`lexicon-android/README.md`](lexicon-android/README.md) - build, run, security, feature parity
 
 ## Extensive user manual
+
+The [User Guide](web/users/index.html) has step-by-step chapters for all three clients, including [Cards and the card quiz](web/users/cards.html). The technical contracts are in [REST API](docs/rest-api.md) and [export format](docs/export-format.md); export format version 2 includes cards and their attempt counts.
 
 ### 1) First launch
 
@@ -673,7 +703,7 @@ Backing up only `lexicon.db` is insufficient when Blob Fields are used.
 
 `LexiconServer --backup-dir DIR` backs the dictionary up automatically, every 24 hours by default, keeping the newest 14 backups: each a consistent copy of the database, a portable export and the Blob files, with unchanged files shared between backups through hard links. `LexiconServer backup --backup-dir DIR` makes one on demand. See [docs/server.md](docs/server.md#backups-while-the-server-runs).
 
-`File -> Export...` writes the whole dictionary as one JSON file, optionally with the files Blob values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. The web client and the Android app offer the same, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
+`File -> Export...` writes the whole dictionary as one JSON file, including cards and their attempt statistics, optionally with the files Blob and Image values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. The web client and the Android app offer the same, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
 
 ### Blob lifecycle and maintenance
 

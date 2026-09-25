@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lexicon — Knowledge Dictionary for Desktop, Web and Android</title>
-<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for structured learning and technical note-taking: groups, items, metadata, typed links, a relationship graph, spaced-repetition review, alarms and an Inbox — on the desktop, in a browser and on Android, over one SQLite database.">
+<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for desktop, web and Android: linked items, question-and-answer cards, quizzes, spaced-repetition review, alarms and an Inbox over one SQLite database.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -105,7 +105,7 @@
         <div class="card">
           <span class="card-emoji">🧩</span>
           <h3>Cards and a quiz</h3>
-          <p>Questions and answers about an item, asked one at a time — for the item alone or everything linked to it — with a Yes or a No that counts how often you knew each one.</p>
+          <p>Questions and answers about an item, asked one at a time — for that item or its relationship neighborhood. <a href="users/cards.html">Learn how cards and the quiz work</a>.</p>
         </div>
         <div class="card">
           <span class="card-emoji">⏰</span>
@@ -125,7 +125,7 @@
         <div class="card">
           <span class="card-emoji">🛟</span>
           <h3>Backups and one-file export</h3>
-          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Export the whole thing as one documented JSON file, with or without its images.</p>
+          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Export the whole thing, including cards and quiz counts, as one documented JSON file, with or without its images.</p>
         </div>
         <div class="card">
           <span class="card-emoji">📄</span>
@@ -215,6 +215,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
           <img src="assets/img/desktop-alarms.png" alt="The alarm list with the soonest alarm first" loading="lazy">
           <figcaption>Alarms that ring in every client</figcaption>
         </figure>
+        <figure class="screenshot">
+          <img src="assets/img/desktop-cards.png" alt="Cards of an item with questions, answers and attempt counts" loading="lazy">
+          <figcaption>Cards with questions and answers about an item</figcaption>
+        </figure>
+        <figure class="screenshot">
+          <img src="assets/img/desktop-card-quiz.png" alt="Card quiz with a revealed answer and Yes and No buttons" loading="lazy">
+          <figcaption>A quiz over an item or its linked neighborhood</figcaption>
+        </figure>
       </div>
       <p style="text-align:center; margin-top:1.5rem"><a class="btn btn-ghost" href="screenshots.html">Browse all screenshots</a></p>
     </div>
@@ -256,6 +264,10 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
           <img src="assets/img/android-review.png" alt="The Android app: a review card" loading="lazy">
           <figcaption>Review</figcaption>
         </figure>
+        <figure>
+          <img src="assets/img/android-card-quiz.png" alt="The Android app: a card quiz with the answer visible" loading="lazy">
+          <figcaption>Card quiz</figcaption>
+        </figure>
       </div>
       <p style="text-align:center; margin-top:1.5rem"><a class="btn btn-primary" href="users/server-and-clients.html">Set up the server, web and Android</a> <a class="btn btn-ghost" href="developers/roadmap.html">Roadmap and TODO list</a></p>
     </div>
@@ -281,6 +293,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
           <li><a href="users/installation.html">Installation</a></li>
           <li><a href="users/getting-started.html">Getting started</a></li>
           <li><a href="users/review.html">Review</a></li>
+          <li><a href="users/cards.html">Cards &amp; quiz</a></li>
           <li><a href="users/alarms.html">Alarms</a></li>
           <li><a href="users/server-and-clients.html">Server, web &amp; Android</a></li>
           <li><a href="users/backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>

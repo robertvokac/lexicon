@@ -4,20 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Page not found — Lexicon</title>
-<link rel="icon" type="image/png" href="/assets/img/appicon.png">
-<link rel="stylesheet" href="/css/style.css">
+<base href="/lexicon/">
+<script>(function(){var p=location.pathname,b=p.startsWith('/lexicon/')?'/lexicon/':p.startsWith('/web/')?'/web/':'/';document.querySelector('base').href=b})();</script>
+<link rel="icon" type="image/png" href="assets/img/appicon.png">
+<link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
 </head>
 <body>
 
 <header class="site-header">
   <div class="container nav-wrap">
-    <a class="brand" href="/index.html"><img class="brand-icon" src="/assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <a class="brand" href="index.html"><img class="brand-icon" src="assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
     <nav class="site-nav" id="siteNav">
-      <a href="/index.html">Home</a>
-      <a href="/screenshots.html">Screenshots</a>
-      <a href="/users/index.html">Users</a>
-      <a href="/developers/index.html">Developers</a>
+      <a href="index.html">Home</a>
+      <a href="screenshots.html">Screenshots</a>
+      <a href="users/index.html">Users</a>
+      <a href="developers/index.html">Developers</a>
       <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
     </nav>
     <div class="nav-actions">
@@ -33,9 +35,9 @@
     <h1>404 — item not found</h1>
     <p class="section-lead">This page isn't in the lexicon. Maybe it was moved, or maybe it's waiting to be written.</p>
     <p>
-      <a class="btn btn-primary" href="/index.html">Back to Home</a>
-      <a class="btn btn-ghost" href="/users/index.html">User Guide</a>
-      <a class="btn btn-ghost" href="/developers/index.html">Developer Docs</a>
+      <a class="btn btn-primary" href="index.html">Back to Home</a>
+      <a class="btn btn-ghost" href="users/index.html">User Guide</a>
+      <a class="btn btn-ghost" href="developers/index.html">Developer Docs</a>
     </p>
   </div>
 </main>
@@ -48,6 +50,6 @@
   </div>
 </footer>
 
-<script src="/js/main.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

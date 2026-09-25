@@ -167,7 +167,7 @@ fun GraphScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     // Full screen leaves the graph alone on the screen: no depth choice, no list.
     var fullScreen by rememberSaveable { mutableStateOf(false) }
-    val view = remember(state.graph) { GraphView() }
+    val view = remember(state.graph, state.centre) { GraphView() }
     BackHandler(enabled = fullScreen) { fullScreen = false }
     Scaffold(
         topBar = {

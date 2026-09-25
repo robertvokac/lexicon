@@ -41,6 +41,7 @@
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="review.html">Review</a></li>
+        <li><a href="cards.html">Cards &amp; quiz</a></li>
         <li><a href="alarms.html">Alarms</a></li>
         <li><a href="inbox.html">Inbox</a></li>
         <li><a href="server-and-clients.html" class="active">Server, web &amp; Android</a></li>
@@ -85,7 +86,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <pre><code>LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web</code></pre>
     <p>Open <code>http://127.0.0.1:8628/</code> and you are on the client: it is served read-only under <code>/web</code> on the same port, it finds the API by itself because it is the same address, and <code>--allowed-origin</code> is not needed at all. One process is then the whole installation.</p>
     <p>You can also copy the directory to any web server instead — GitHub Pages, nginx, a Raspberry Pi. Then tell the server that address with <code>--allowed-origin</code>, and sign in with the server's address, your user name and your password.</p>
-    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
+    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
 
     <div class="phone-shots">
       <figure>
@@ -103,7 +104,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <ul>
       <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
       <li>The editor with the same tabs, including image values.</li>
-      <li><a href="review.html">Review</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, and the <a href="inbox.html">Inbox</a> that also works offline.</li>
+      <li><a href="review.html">Review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, and the <a href="inbox.html">Inbox</a> that also works offline.</li>
       <li>The <a href="links-and-relationships.html#graph">relationship graph</a>, with pinch to zoom and a full-screen mode.</li>
     </ul>
 
