@@ -392,7 +392,9 @@ LexiconServer --database ~/lexicon.db --web-dir /path/to/lexicon-web
 It binds `127.0.0.1:8628` by default, requires a Bearer session for every
 domain endpoint, hashes the password with scrypt, rate limits failed logins,
 and refuses to serve password authentication over plaintext HTTP on a public
-address unless you override it explicitly.
+address unless you explicitly pass `--allow-http` for a closed test network.
+The older `--allow-insecure-http` spelling remains accepted. Passwords and
+session tokens are exposed to that network when using HTTP.
 
 Open <http://127.0.0.1:8628/> to reach the client at `/web/`. Its API calls
 go to `/api/v1` on the same origin, so no CORS setting is needed. Only the

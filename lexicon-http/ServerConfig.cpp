@@ -91,7 +91,7 @@ Result<void> validate(const ServerConfig &config) {
         "Refusing to serve password authentication over plaintext HTTP on " +
         config.listenAddress +
         ". Configure --tls-cert and --tls-key, bind to 127.0.0.1 behind a "
-        "reverse proxy, or pass --allow-insecure-http to override.");
+        "reverse proxy, or pass --allow-http for testing only.");
   if (config.maxJsonBytes < 1024)
     return invalid("--max-json-bytes must be at least 1024.");
   if (config.maxBlobBytes < config.maxJsonBytes)
@@ -191,7 +191,8 @@ Options:
   --port PORT                TCP port (default: 8628)
   --tls-cert PATH            PEM certificate chain for embedded HTTPS
   --tls-key PATH             PEM private key for embedded HTTPS
-  --allow-insecure-http      Permit a non-loopback plaintext listener
+  --allow-http               Permit non-loopback plaintext HTTP for testing
+  --allow-insecure-http      Legacy alias for --allow-http
   --allowed-origin ORIGIN    Exact CORS origin, repeatable
   --trusted-proxy ADDRESS    Honour X-Forwarded-For from this peer, repeatable
   --session-idle-timeout S   Idle session timeout in seconds (default: 28800)
@@ -280,7 +281,7 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
       parsed.command = Command::Version;
       return parsed;
     }
-    if (option == "--allow-insecure-http") {
+    if (option == "--allow-http" || option == "--allow-insecure-http") {
       parsed.config.allowInsecureHttp = true;
       continue;
     }

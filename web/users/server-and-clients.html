@@ -78,7 +78,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
 
     <div class="callout callout-warning">
       <span class="callout-icon">🔒</span>
-      <p><strong>Off the loopback, use HTTPS</strong> Put a reverse proxy (nginx, Caddy, Apache) with a certificate in front of the server, or give it <code>--tls-cert</code> and <code>--tls-key</code>. The full list of options is in <code>docs/server.md</code>.</p>
+      <p><strong>Off the loopback, use HTTPS.</strong> Put a reverse proxy (nginx, Caddy, Apache) with a certificate in front of the server, or give it <code>--tls-cert</code> and <code>--tls-key</code>. For a closed test network only, <code>--listen 0.0.0.0 --allow-http</code> permits plain HTTP and prints a warning. An HTTPS web page cannot call an HTTP API because browsers block mixed content. The full list of options is in <code>docs/server.md</code>.</p>
     </div>
 
     <h2 id="web">2. The web client in a browser</h2>

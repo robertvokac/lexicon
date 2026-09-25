@@ -170,7 +170,8 @@ leave `--web-dir` off and use `--allowed-origin`.
 | `--port PORT` | `8628` | TCP port |
 | `--tls-cert PATH` | — | PEM certificate chain for embedded HTTPS |
 | `--tls-key PATH` | — | PEM private key |
-| `--allow-insecure-http` | off | Permit a non-loopback plaintext listener |
+| `--allow-http` | off | Permit a non-loopback plaintext listener for testing |
+| `--allow-insecure-http` | off | Older spelling of `--allow-http` |
 | `--allowed-origin ORIGIN` | none | Exact CORS origin, repeatable |
 | `--trusted-proxy ADDRESS` | none | Honour `X-Forwarded-For` from this peer, repeatable |
 | `--session-idle-timeout S` | `28800` (8 h) | Idle session timeout |
@@ -260,11 +261,20 @@ send the password and the session token in the clear:
 ```text
 Refusing to serve password authentication over plaintext HTTP on 0.0.0.0.
 Configure --tls-cert and --tls-key, bind to 127.0.0.1 behind a reverse proxy,
-or pass --allow-insecure-http to override.
+or pass --allow-http for testing only.
 ```
 
-`--allow-insecure-http` exists for closed test networks and prints a loud
-warning. Never use it on the Internet.
+For a test device on a closed network, start the server explicitly with:
+
+```bash
+LexiconServer --listen 0.0.0.0 --allow-http --database ~/lexicon/lexicon.db
+```
+
+`--allow-http` prints a warning: passwords and session tokens cross the network
+without encryption. The older spelling `--allow-insecure-http` still works.
+Do not use either option on the Internet. A web page opened over HTTPS cannot
+call a plain HTTP API because the browser blocks mixed content; use HTTPS for
+that setup.
 
 ## Running as a service
 

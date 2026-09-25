@@ -324,6 +324,15 @@ void checkConfigurationGuards(Checks &checks) {
   exposed.allowInsecureHttp = true;
   checks.expect(lexicon::http::validate(exposed).has_value(),
                 "the refusal can be overridden explicitly");
+  const auto testHttp = lexicon::http::parseCommandLine(
+      {"--listen", "0.0.0.0", "--allow-http"});
+  checks.expect(testHttp.has_value() && testHttp->config.allowInsecureHttp &&
+                    lexicon::http::validate(testHttp->config).has_value(),
+                "--allow-http explicitly permits a test HTTP listener");
+  const auto legacyHttp = lexicon::http::parseCommandLine(
+      {"--listen", "0.0.0.0", "--allow-insecure-http"});
+  checks.expect(legacyHttp.has_value() && legacyHttp->config.allowInsecureHttp,
+                "the old HTTP override remains accepted");
   ServerConfig tls;
   tls.listenAddress = "0.0.0.0";
   tls.tlsCertificatePath = "cert.pem";
