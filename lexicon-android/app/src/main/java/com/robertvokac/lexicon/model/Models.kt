@@ -13,7 +13,7 @@ data class Health(
 )
 
 @Serializable
-data class LoginRequest(val username: String, val password: String) {
+data class LoginRequest(val username: String, val password: String, val rememberDevice: Boolean = false) {
     override fun toString(): String = "LoginRequest(username=$username, password=<redacted>)"
 }
 
@@ -24,6 +24,7 @@ data class LoginResponse(
     val apiVersion: Int,
     val idleTimeoutSeconds: Long = 0,
     val absoluteLifetimeSeconds: Long = 0,
+    val refreshToken: String = "",
 ) {
     override fun toString(): String =
         "LoginResponse(username=$username, apiVersion=$apiVersion, token=<redacted>)"
@@ -31,6 +32,18 @@ data class LoginResponse(
 
 @Serializable
 data class Me(val username: String, val apiVersion: Int)
+
+@Serializable
+data class RefreshRequest(val refreshToken: String) {
+    override fun toString(): String = "RefreshRequest(refreshToken=<redacted>)"
+}
+
+@Serializable
+data class RememberedDevice(val id: String, val createdAtSeconds: Long, val lastUsedSeconds: Long,
+    val current: Boolean = false)
+
+@Serializable
+data class RememberedDevicesEnvelope(val devices: List<RememberedDevice>)
 
 @Serializable
 data class Group(

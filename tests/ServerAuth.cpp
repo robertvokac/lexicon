@@ -93,6 +93,97 @@ void checkProtectedEndpoints(Checks &checks) {
                      "the token stops working after logout");
 }
 
+void checkRememberedDevice(Checks &checks) {
+  ServerHarness harness;
+  HttpTestClient client("127.0.0.1", harness.port());
+  const auto rememberedLogin = Json{{"username", harness.options().username},
+                                    {"password", harness.options().password},
+                                    {"rememberDevice", true}}.dump();
+  checks.expectEqual(client.post("/api/v1/auth/login", Json{
+      {"username", harness.options().username}, {"password", harness.options().password},
+      {"rememberDevice", "yes"}}.dump()).status, 400,
+      "rememberDevice must be a JSON boolean");
+  checks.expectEqual(client.post("/api/v1/auth/login", rememberedLogin).status, 400,
+                     "remembered phone requires session persistence");
+  const auto sessionFile = (std::filesystem::path(harness.databasePath()).parent_path() /
+                            "lexicon-sessions.json").string();
+  checks.expect(harness.auth().useSessionFile(sessionFile).has_value(),
+                "remembered devices use the persistent session file");
+  const auto login = client.post("/api/v1/auth/login", rememberedLogin);
+  checks.expectEqual(login.status, 200, "phone can request a remembered device");
+  const auto original = Json::parse(login.body);
+  const auto firstAccess = original.value("token", std::string{});
+  const auto firstSecret = original.value("refreshToken", std::string{});
+  checks.expect(firstSecret.size() >= 43 && firstSecret != firstAccess,
+                "refresh credential is separate and unpredictable");
+  const auto disk = [&] {
+    std::ifstream input(sessionFile);
+    return std::string(std::istreambuf_iterator<char>(input), {});
+  };
+  checks.expect(disk().find(firstSecret) == std::string::npos,
+                "session file never stores the refresh secret");
+  client.setBearerToken(firstAccess);
+  harness.auth().advanceClockForTests(std::chrono::hours(9));
+  checks.expectEqual(client.get("/api/v1/auth/me").status, 401,
+                     "ordinary session expires after eight idle hours");
+  const auto refresh = client.post("/api/v1/auth/refresh",
+      Json{{"refreshToken", firstSecret}}.dump());
+  checks.expectEqual(refresh.status, 200, "remembered phone renews without a password");
+  const auto renewed = Json::parse(refresh.body);
+  const auto secondAccess = renewed.value("token", std::string{});
+  const auto secondSecret = renewed.value("refreshToken", std::string{});
+  checks.expect(secondAccess != firstAccess && secondSecret != firstSecret,
+                "both credentials rotate");
+  client.setBearerToken(secondAccess);
+  checks.expectEqual(client.get("/api/v1/auth/me").status, 200,
+                     "renewed session works");
+  checks.expectEqual(client.get("/api/v1/auth/devices").status, 200,
+                     "remembered devices are listed");
+  checks.expectEqual(client.post("/api/v1/auth/refresh",
+      Json{{"refreshToken", firstSecret}}.dump()).status, 401,
+      "replaying the spent secret is rejected");
+  checks.expectEqual(client.get("/api/v1/auth/me").status, 401,
+                     "replay revokes this phone's sessions");
+  checks.expectEqual(client.post("/api/v1/auth/refresh",
+      Json{{"refreshToken", secondSecret}}.dump()).status, 401,
+      "replay revokes the device grant");
+
+  const auto again = Json::parse(client.post("/api/v1/auth/login",
+      Json{{"username", harness.options().username}, {"password", harness.options().password},
+           {"rememberDevice", true}}.dump()).body);
+  client.setBearerToken(again.value("token", std::string{}));
+  const auto devices = Json::parse(client.get("/api/v1/auth/devices").body).at("devices");
+  checks.expectEqual(static_cast<long long>(devices.size()), 1,
+                     "a new phone grant is listed");
+  const auto id = devices.at(0).value("id", std::string{});
+  checks.expectEqual(client.remove("/api/v1/auth/devices/" + id).status, 204,
+                     "phone grant can be revoked by id");
+  checks.expectEqual(client.post("/api/v1/auth/refresh",
+      Json{{"refreshToken", again.value("refreshToken", std::string{})}}.dump()).status, 401,
+      "revoked phone cannot renew");
+
+  const auto persistent = Json::parse(client.post("/api/v1/auth/login",
+      Json{{"username", harness.options().username}, {"password", harness.options().password},
+           {"rememberDevice", true}}.dump()).body);
+  const auto credentialFile = (std::filesystem::path(harness.databasePath()).parent_path() /
+                               "lexicon-auth.json").string();
+  auto credentials = lexicon::http::readCredentialsFile(credentialFile);
+  checks.expect(credentials.has_value(), "credentials can be read for restart check");
+  if (credentials) {
+    lexicon::http::AuthState restarted(harness.options().sessions, harness.options().loginLimits);
+    restarted.setCredentials(*credentials);
+    checks.expect(restarted.useSessionFile(sessionFile).has_value(),
+                  "remembered phone survives a server restart");
+    const auto afterRestart = restarted.refresh(persistent.value("refreshToken", std::string{}));
+    checks.expect(afterRestart.status == lexicon::http::AuthState::LoginStatus::Ok,
+                  "phone renews after a server restart");
+    restarted.advanceClockForTests(std::chrono::hours(24 * 91));
+    checks.expect(restarted.refresh(afterRestart.refreshToken).status ==
+                  lexicon::http::AuthState::LoginStatus::InvalidCredentials,
+                  "phone unused for 90 days cannot renew");
+  }
+}
+
 void checkAccountManagement(Checks &checks) {
   ServerHarness harness;
   HttpTestClient first("127.0.0.1", harness.port());
@@ -1047,6 +1138,7 @@ int main() {
   Checks checks;
   checkHealth(checks);
   checkProtectedEndpoints(checks);
+  checkRememberedDevice(checks);
   checkAccountManagement(checks);
   checkInvalidLogin(checks);
   checkSessionExpiry(checks);

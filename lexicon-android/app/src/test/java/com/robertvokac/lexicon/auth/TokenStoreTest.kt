@@ -25,12 +25,14 @@ class TokenStoreTest {
 
     @Test
     fun roundTripsTheSession() = runBlocking {
-        environment.tokenStore.save(server, "robert", "opaque-token-value")
+        environment.tokenStore.save(server, "robert", "opaque-token-value", "refresh-secret-value")
         val stored = environment.tokenStore.load()!!
         assertEquals(server, stored.server)
         assertEquals("robert", stored.username)
         assertEquals("opaque-token-value", stored.token)
+        assertEquals("refresh-secret-value", stored.refreshToken)
         assertFalse(stored.toString().contains("opaque-token-value"))
+        assertFalse(stored.toString().contains("refresh-secret-value"))
     }
 
     @Test
@@ -45,10 +47,11 @@ class TokenStoreTest {
 
     @Test
     fun theTokenIsNeverStoredInTheClear() = runBlocking {
-        environment.tokenStore.save(server, "robert", "opaque-token-value")
+        environment.tokenStore.save(server, "robert", "opaque-token-value", "refresh-secret-value")
         val file = File(environment.directory, "session.preferences_pb")
         val raw = file.readBytes().toString(Charsets.ISO_8859_1)
         assertFalse(raw.contains("opaque-token-value"))
+        assertFalse(raw.contains("refresh-secret-value"))
         val sealed = environment.sessionStore.data.first()[stringPreferencesKey("token")]!!
         assertFalse(sealed.contains("opaque-token-value"))
     }

@@ -26,18 +26,25 @@ class TokenStore(
     private val allowCleartextDevelopmentHosts: Boolean,
     private val cryptoDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
-    data class Stored(val server: ServerUrl, val username: String, val token: String) {
-        override fun toString(): String = "Stored(server=$server, username=$username, token=<redacted>)"
+    data class Stored(val server: ServerUrl, val username: String, val token: String, val refreshToken: String? = null) {
+        override fun toString(): String = "Stored(server=$server, username=$username, token=<redacted>, refreshToken=<redacted>)"
     }
 
-    suspend fun save(server: ServerUrl, username: String, token: String) {
+    suspend fun save(server: ServerUrl, username: String, token: String, refreshToken: String? = null) {
         val sealed = withContext(cryptoDispatcher) {
-            cipher.encrypt(token.toByteArray(Charsets.UTF_8), associatedData(server.value, username))
+            cipher.encrypt(token.toByteArray(Charsets.UTF_8), associatedData(server.value, username, "access"))
+        }
+        val sealedRefresh = refreshToken?.let { secret ->
+            withContext(cryptoDispatcher) {
+                cipher.encrypt(secret.toByteArray(Charsets.UTF_8), associatedData(server.value, username, "refresh"))
+            }
         }
         dataStore.edit {
             it[SERVER] = server.value
             it[USERNAME] = username
             it[TOKEN] = Base64.getEncoder().encodeToString(sealed)
+            if (sealedRefresh == null) it.remove(REFRESH_TOKEN)
+            else it[REFRESH_TOKEN] = Base64.getEncoder().encodeToString(sealedRefresh)
         }
     }
 
@@ -52,7 +59,7 @@ class TokenStore(
             withContext(cryptoDispatcher) {
                 try {
                     val sealed = Base64.getDecoder().decode(sealedText)
-                    String(cipher.decrypt(sealed, associatedData(serverText, username)), Charsets.UTF_8)
+                    String(cipher.decrypt(sealed, associatedData(serverText, username, "access")), Charsets.UTF_8)
                 } catch (_: GeneralSecurityException) {
                     // Altered data, a restored backup, or a key the system
                     // invalidated: the session is simply gone.
@@ -66,19 +73,33 @@ class TokenStore(
             clear()
             return null
         }
-        return Stored(server, username, token)
+        val refreshToken = preferences[REFRESH_TOKEN]?.let { encoded ->
+            try {
+                val sealed = Base64.getDecoder().decode(encoded)
+                withContext(cryptoDispatcher) {
+                    String(cipher.decrypt(sealed, associatedData(serverText, username, "refresh")), Charsets.UTF_8)
+                }
+            } catch (_: GeneralSecurityException) {
+                null
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        }
+        return Stored(server, username, token, refreshToken)
     }
 
     suspend fun clear() {
         dataStore.edit { it.clear() }
     }
 
-    private fun associatedData(server: String, username: String): ByteArray =
-        "lexicon-session-v1\n$server\n$username".toByteArray(Charsets.UTF_8)
+    private fun associatedData(server: String, username: String, purpose: String): ByteArray =
+        ("lexicon-session-v1\n$server\n$username" + if (purpose == "refresh") "\nrefresh" else "")
+            .toByteArray(Charsets.UTF_8)
 
     private companion object {
         val SERVER = stringPreferencesKey("server")
         val USERNAME = stringPreferencesKey("username")
         val TOKEN = stringPreferencesKey("token")
+        val REFRESH_TOKEN = stringPreferencesKey("refresh_token")
     }
 }

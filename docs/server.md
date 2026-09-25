@@ -215,6 +215,14 @@ startup the server takes over the sessions that are still within
 current credentials; `auth set-user` therefore ends them all. With
 `--no-session-file` sessions live in memory only and a restart ends them.
 
+Android can remember a phone after an explicit choice at login. The session
+file then also holds a hash of its one-use renewal secret. The phone exchanges
+that secret for a new session and secret when its ordinary session expires.
+The server rotates the secret on every renewal, detects reuse of the previous
+one, and revokes the phone on reuse, logout, password change or removal from
+the remembered phones list. A phone unused for 90 days can no longer renew.
+This feature requires the session file; `--no-session-file` disables it.
+
 ## HTTP, HTTPS and reverse proxies
 
 The recommended production arrangement:

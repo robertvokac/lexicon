@@ -59,15 +59,28 @@ public:
   bool configured() const;
   std::string username() const;
 
-  enum class LoginStatus { Ok, InvalidCredentials, RateLimited, Unavailable };
+  enum class LoginStatus { Ok, InvalidCredentials, RateLimited, Unavailable, CannotRemember };
   struct LoginResult {
     LoginStatus status = LoginStatus::InvalidCredentials;
     std::string token;
+    std::string refreshToken;
     int retryAfterSeconds = 0;
   };
   // clientKey identifies the caller for rate limiting. It is never logged.
   LoginResult login(const std::string &clientKey, const std::string &username,
-                    const std::string &password);
+                    const std::string &password, bool rememberDevice = false);
+  // A remembered device trades its one-use secret for a fresh session and
+  // secret. A replay of the previous secret revokes that device.
+  LoginResult refresh(const std::string &refreshToken);
+  void forgetDevice(const std::string &refreshToken);
+  struct DeviceView {
+    std::string id;
+    std::int64_t createdAtSeconds = 0;
+    std::int64_t lastUsedSeconds = 0;
+    bool current = false;
+  };
+  std::vector<DeviceView> listDevices(const std::string &currentToken) const;
+  bool revokeDevice(const std::string &currentToken, const std::string &id);
 
   // Keeps the sessions in `path` from now on, so they survive a restart, and
   // takes over the ones stored there that are still valid for the current
@@ -113,6 +126,14 @@ private:
     Clock::time_point lastSeen;
     // lastSeen as last written to the session file.
     Clock::time_point savedLastSeen;
+    std::string deviceId;
+  };
+  struct RememberedDevice {
+    std::string id;
+    std::string username;
+    Clock::time_point created;
+    Clock::time_point lastUsed;
+    std::string previousHash;
   };
   struct FailureCounter {
     int failures = 0;
@@ -144,6 +165,9 @@ private:
   // mutex_ held through `lock`; the file is written after releasing it, so a
   // slow disk never delays authentication.
   void saveSessions(std::unique_lock<std::mutex> &lock);
+  Result<void> persistLocked();
+  std::string sessionDocument();
+  void revokeDeviceSessions(const std::string &id);
   bool limited(const std::string &clientKey, Clock::time_point moment,
                int &retryAfterSeconds);
   void recordFailure(const std::string &clientKey, Clock::time_point moment);
@@ -155,6 +179,7 @@ private:
   std::optional<Credentials> credentials_;
   // Keyed by the SHA-256 of the token; raw tokens are never kept.
   std::map<std::string, Session> activeSessions_;
+  std::map<std::string, RememberedDevice> rememberedDevices_;
   std::map<std::string, FailureCounter> failures_;
   FailureCounter totalFailures_;
   std::chrono::seconds testOffset_{0};

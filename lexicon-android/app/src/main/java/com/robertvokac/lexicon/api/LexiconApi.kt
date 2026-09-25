@@ -40,6 +40,9 @@ import com.robertvokac.lexicon.model.ItemQuery
 import com.robertvokac.lexicon.model.ItemType
 import com.robertvokac.lexicon.model.LoginRequest
 import com.robertvokac.lexicon.model.LoginResponse
+import com.robertvokac.lexicon.model.RefreshRequest
+import com.robertvokac.lexicon.model.RememberedDevice
+import com.robertvokac.lexicon.model.RememberedDevicesEnvelope
 import com.robertvokac.lexicon.model.Me
 import com.robertvokac.lexicon.model.SaveItemRequest
 import com.robertvokac.lexicon.model.SavedItem
@@ -67,14 +70,27 @@ class LexiconApi(private val client: ApiClient) {
     suspend fun health(server: ServerUrl): Health =
         client.get("health", Health.serializer(), ApiClient.Auth.Anonymous(server))
 
-    suspend fun login(server: ServerUrl, username: String, password: String): LoginResponse =
+    suspend fun login(server: ServerUrl, username: String, password: String, rememberDevice: Boolean = false): LoginResponse =
         client.post(
             "auth/login",
-            LoginRequest(username, password),
+            LoginRequest(username, password, rememberDevice),
             LoginRequest.serializer(),
             LoginResponse.serializer(),
             ApiClient.Auth.Anonymous(server),
         )
+
+    suspend fun refresh(server: ServerUrl, secret: String): LoginResponse =
+        client.post("auth/refresh", RefreshRequest(secret), RefreshRequest.serializer(),
+            LoginResponse.serializer(), ApiClient.Auth.Anonymous(server))
+
+    suspend fun forgetDevice(server: ServerUrl, secret: String) =
+        client.postNoResponse("auth/forget-device", RefreshRequest(secret), RefreshRequest.serializer(),
+            ApiClient.Auth.Anonymous(server))
+
+    suspend fun rememberedDevices(): List<RememberedDevice> =
+        client.get("auth/devices", RememberedDevicesEnvelope.serializer()).devices
+
+    suspend fun revokeDevice(id: String) = client.send("DELETE", "auth/devices/$id")
 
     suspend fun logout(session: Session) = client.send("POST", "auth/logout", ApiClient.Auth.Explicit(session))
 

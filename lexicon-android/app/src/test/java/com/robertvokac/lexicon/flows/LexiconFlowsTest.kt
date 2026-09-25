@@ -1,5 +1,7 @@
 package com.robertvokac.lexicon.flows
 
+import com.robertvokac.lexicon.auth.SessionState
+
 import android.net.Uri
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
@@ -142,11 +144,12 @@ class LexiconFlowsTest {
     private fun lastBody(method: String, path: String): JsonObject =
         LexiconJson.parseToJsonElement(fake.requestsTo(method, path).last().body!!.utf8()).jsonObject
 
-    private fun login() {
+    private fun login(remember: Boolean = true) {
         compose.waitForText("Log in")
         field("Server URL").performTextReplacement(fake.baseUrl)
         field("User name").performTextReplacement(fake.username)
         field("Password").performTextInput(fake.password)
+        if (!remember) compose.onNodeWithText("Remember this phone").performClick()
         compose.onNode(hasText("Log in") and hasClickAction()).performClick()
         compose.waitForText("Pointer provenance")
     }
@@ -751,7 +754,7 @@ class LexiconFlowsTest {
 
     @Test
     fun anExpiredSessionReturnsToLoginAndKeepsTheEditor() {
-        login()
+        login(remember = false)
         compose.onNodeWithText("RAII").performClick()
         compose.waitForText("Resource acquisition is initialization.")
         openEditor()
@@ -767,5 +770,19 @@ class LexiconFlowsTest {
         compose.waitForCondition { fake.items.getValue(raii.id!!).title == "RAII, kept" }
         // One 401, no retry loop.
         assertEquals(1, fake.requests.count { it.method == "PUT" && it.headers["Authorization"] == "Bearer token-1" })
+    }
+
+    @Test
+    fun aRememberedPhoneSavesAfterTheOrdinarySessionExpires() {
+        login()
+        compose.onNodeWithText("RAII").performClick()
+        compose.waitForText("Resource acquisition is initialization.")
+        openEditor()
+        field("Title").performTextReplacement("RAII, renewed")
+        fake.tokens.clear()
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        compose.waitForCondition { fake.items.getValue(raii.id!!).title == "RAII, renewed" }
+        assertTrue(container.sessions.state.value is SessionState.SignedIn)
+        assertEquals(1, fake.requestsTo("POST", "/api/v1/auth/refresh").size)
     }
 }

@@ -10,6 +10,7 @@ import com.robertvokac.lexicon.storage.SettingsStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -62,10 +64,12 @@ class SessionManager(
 
     private val lock = Any()
     private val storage = Mutex()
+    private val refreshLock = Mutex()
     private val started = AtomicBoolean(false)
     private val _state = MutableStateFlow<SessionState>(SessionState.Restoring)
     private var active: Session? = null
     private var pending: Session? = null
+    private var refreshToken: String? = null
     private var epoch = 0
 
     val state: StateFlow<SessionState> = _state.asStateFlow()
@@ -92,6 +96,7 @@ class SessionManager(
             _state.value = SessionState.SignedOut()
             return
         }
+        synchronized(lock) { refreshToken = stored.refreshToken }
         verify(Session(stored.server, stored.username, stored.token))
     }
 
@@ -119,9 +124,21 @@ class SessionManager(
             pending = null
             activate(session, health.apiVersion)
         } catch (_: ApiException.Unauthorized) {
-            pending = null
-            storage.withLock { tokenStore.clear() }
-            _state.value = SessionState.SignedOut("Your session has expired. Sign in again.")
+            try {
+                val renewed = renew(session, restoring = true)
+                if (renewed != null) {
+                    pending = null
+                    activate(renewed, LexiconApi.API_VERSION)
+                } else {
+                    pending = null
+                    storage.withLock { tokenStore.clear() }
+                    _state.value = SessionState.SignedOut("Your session has expired. Sign in again.")
+                }
+            } catch (failure: ApiException) {
+                pending = session
+                _state.value = SessionState.Unreachable(session.server, session.username,
+                    failure.message ?: "The server could not be reached.")
+            }
         } catch (failure: ApiException) {
             pending = session
             _state.value = SessionState.Unreachable(
@@ -151,6 +168,7 @@ class SessionManager(
     /** Leaves Unreachable or Incompatible for the login screen, forgetting the stored session. */
     fun abandonStoredSession(): Job = scope.launch {
         pending = null
+        synchronized(lock) { refreshToken = null }
         storage.withLock { tokenStore.clear() }
         _state.value = SessionState.SignedOut()
     }
@@ -164,6 +182,7 @@ class SessionManager(
         username: String,
         password: String,
         allowHttpForTesting: Boolean = false,
+        rememberDevice: Boolean = false,
     ): LoginResult {
         val server = when (val parsed = ServerUrl.parse(serverInput, allowCleartextDevelopmentHosts, allowHttpForTesting)) {
             is ServerUrl.Parsed.Valid -> parsed.url
@@ -178,7 +197,7 @@ class SessionManager(
             if (compatibility is ApiCompatibility.Result.Incompatible) {
                 return LoginResult.Failure(compatibility.message)
             }
-            val response = api().login(server, username, password)
+            val response = api().login(server, username, password, rememberDevice)
             if (response.apiVersion != LexiconApi.API_VERSION) {
                 return LoginResult.Failure(
                     "This Lexicon app speaks API version ${LexiconApi.API_VERSION}, but the server " +
@@ -187,9 +206,13 @@ class SessionManager(
             }
             val name = response.username.ifEmpty { username }
             val session = Session(server, name, response.token)
+            if (rememberDevice && response.refreshToken.isEmpty()) {
+                runCatching { api().logout(session) }
+                return LoginResult.Failure("This server cannot remember this phone. Update LexiconServer or uncheck Remember this phone.")
+            }
             storage.withLock {
                 try {
-                    tokenStore.save(server, name, response.token)
+                    tokenStore.save(server, name, response.token, response.refreshToken.ifEmpty { null })
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
@@ -197,6 +220,7 @@ class SessionManager(
                     // closes; it is never written unencrypted.
                     tokenStore.clear()
                 }
+                synchronized(lock) { refreshToken = response.refreshToken.ifEmpty { null } }
                 settings.rememberSignIn(
                     server.value,
                     name,
@@ -223,10 +247,53 @@ class SessionManager(
         _state.value = SessionState.SignedIn(identity, serverApiVersion)
     }
 
+    override suspend fun refresh(session: Session): Session? = renew(session, restoring = false)
+
+    private suspend fun renew(session: Session, restoring: Boolean): Session? = refreshLock.withLock refresh@ {
+        if (!restoring) {
+            val currentSession = current
+            if (currentSession?.token != session.token) return@refresh currentSession
+        }
+        val secret = synchronized(lock) { refreshToken } ?: return@refresh null
+        val response = try {
+            api().refresh(session.server, secret)
+        } catch (_: ApiException.Unauthorized) {
+            synchronized(lock) { if (refreshToken == secret) refreshToken = null }
+            return@refresh null
+        }
+        if (response.apiVersion != LexiconApi.API_VERSION ||
+            response.username != session.username || response.refreshToken.isEmpty()) {
+            throw ApiException.Incompatible("The server returned an invalid device session.")
+        }
+        val renewed = Session(session.server, session.username, response.token)
+        val accepted = withContext(NonCancellable) {
+            storage.withLock {
+                if (!restoring && current?.token != session.token) return@withLock false
+                try {
+                    tokenStore.save(session.server, session.username, renewed.token, response.refreshToken)
+                } catch (_: Exception) {
+                    // Keep the renewed session in memory, but never save its secrets in plaintext.
+                    tokenStore.clear()
+                }
+                synchronized(lock) {
+                    if (!restoring && active?.token != session.token) false
+                    else {
+                        refreshToken = response.refreshToken
+                        if (!restoring) active = renewed
+                        true
+                    }
+                }
+            }
+        }
+        if (!accepted) return@refresh current
+        renewed
+    }
+
     override fun onUnauthorized(session: Session) {
         synchronized(lock) {
             if (active?.token != session.token) return
             active = null
+            refreshToken = null
             _state.value = SessionState.SignedOut(
                 "Your session has expired or was ended on the server. Sign in again.",
                 retained = (_state.value as? SessionState.SignedIn)?.identity,
@@ -244,14 +311,22 @@ class SessionManager(
      * reached.
      */
     fun logout(message: String = "You are signed out."): Job {
-        val session = synchronized(lock) {
-            val previous = active
+        val (session, secret) = synchronized(lock) {
+            val previous = active ?: pending
+            val remembered = refreshToken
             active = null
+            pending = null
+            refreshToken = null
             _state.value = SessionState.SignedOut(message)
-            previous
+            previous to remembered
         }
         return scope.launch {
             storage.withLock { if (current == null) tokenStore.clear() }
+            if (session != null && secret != null) {
+                withTimeoutOrNull(LOGOUT_TIMEOUT_MS) {
+                    try { api().forgetDevice(session.server, secret) } catch (_: ApiException) { }
+                }
+            }
             if (session != null) {
                 withTimeoutOrNull(LOGOUT_TIMEOUT_MS) {
                     try {

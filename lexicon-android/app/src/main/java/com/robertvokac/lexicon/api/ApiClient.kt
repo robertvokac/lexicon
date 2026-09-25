@@ -118,8 +118,8 @@ class ApiClient(
         execute(method, path, if (method == "POST") EMPTY_BODY else null, auth) { }
     }
 
-    suspend fun <B> postNoResponse(path: String, body: B, request: SerializationStrategy<B>) {
-        execute("POST", path, jsonBody(request, body), Auth.Session) { }
+    suspend fun <B> postNoResponse(path: String, body: B, request: SerializationStrategy<B>, auth: Auth = Auth.Session) {
+        execute("POST", path, jsonBody(request, body), auth) { }
     }
 
     /**
@@ -196,26 +196,37 @@ class ApiClient(
             .header("Accept", accept)
             .apply { if (session != null) header("Authorization", "Bearer ${session.token}") }
             .build()
-        val call = httpClient.newCall(request)
-        try {
-            return call.await { response ->
+        suspend fun perform(candidate: Request): T = try {
+            httpClient.newCall(candidate).await { response ->
                 when {
                     response.isSuccessful -> handle(response)
                     else -> throw errorFor(response, server)
                 }
             }
-        } catch (unauthorized: ApiException.Unauthorized) {
-            // Only a session the server rejected is dropped. A failed login is
-            // an Anonymous request and leaves everything as it was. Never retry:
-            // that is how request loops start.
-            if (session != null && auth == Auth.Session) sessions.onUnauthorized(session)
-            throw unauthorized
         } catch (failure: ApiException) {
             throw failure
         } catch (failure: SerializationException) {
             throw incompatible(failure)
         } catch (failure: IOException) {
             throw transportFailure(failure, server)
+        }
+        try {
+            return perform(request)
+        } catch (unauthorized: ApiException.Unauthorized) {
+            if (session != null && auth == Auth.Session) {
+                val renewed = sessions.refresh(session)
+                if (renewed != null) {
+                    val retry = request.newBuilder().header("Authorization", "Bearer ${renewed.token}").build()
+                    try {
+                        return perform(retry)
+                    } catch (again: ApiException.Unauthorized) {
+                        sessions.onUnauthorized(renewed)
+                        throw again
+                    }
+                }
+                sessions.onUnauthorized(session)
+            }
+            throw unauthorized
         }
     }
 

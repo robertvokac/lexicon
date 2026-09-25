@@ -193,6 +193,10 @@ accept it; install a proper certificate instead.
   `GET /api/v1/health` and refuses a server that does not report API version 1,
   then logs in. Wrong credentials, a refused connection, a TLS failure, an
   incompatible server and too many attempts each get their own message.
+  **Remember this phone** is selected by default: the server issues a separate
+  one-use renewal secret so the app can replace an expired session without
+  another password prompt. Uncheck it on a shared phone. A remembered phone
+  expires after 90 days without renewal and can be revoked in Settings.
 - **Items.** The main screen: a search field, the active filters as chips, and
   the items as a list, loaded a page at a time as you scroll. Pull down to
   refresh. Tap an item to read it; long-press, or use its ⋮ button, to edit or
@@ -252,7 +256,8 @@ accept it; install a proper certificate instead.
   the server before anything destructive happens).
 - **History and Trash.** Open an item's previous versions from its page or
   deleted items from the drawer. Restoring a deleted item gives it a new ID.
-- **Account.** Settings can change the password and list or revoke sessions.
+- **Account.** Settings can change the password, list or revoke sessions, and
+  list or revoke remembered phones.
   Changing the password signs every device out immediately.
 - **Alarms.** Every alarm, the soonest first, with the date and time it goes
   off in the phone's time zone; those already gone off are marked. **+** adds
@@ -368,7 +373,7 @@ after typing stops, and the item page composes only the visible blocks.
   It is never stored, logged or put into saved instance state. The field is a
   Material secure text field (masked, no copy) marked as a password for
   Android autofill; the user name field is marked as a user name.
-- **Session token.** Stored in its own DataStore file, encrypted with
+- **Session and renewal tokens.** Stored in their own DataStore file, encrypted with
   AES-256-GCM under a key generated in **Android Keystore**
   (`lexicon.session.v1`, non-exportable, randomized IVs). The server URL and
   user name are bound to the ciphertext as associated data, so a token cannot be
@@ -376,12 +381,13 @@ after typing stops, and the item page composes only the visible blocks.
   altered data, a restored backup, a key the system invalidated — is discarded
   and the person signs in again. If the key cannot be used at all, the session
   lasts only until the app closes; the token is never written in the clear.
-- **Expired sessions.** A `401` drops the local session once, deletes the stored
-  token and shows the login screen. Nothing is retried. The screens underneath
-  stay alive, so signing in again as the same person continues where the
+- **Expired sessions.** For a remembered phone, a `401` exchanges the one-use
+  renewal secret and retries the original request once. Concurrent requests
+  share the renewal; a revoked or expired phone returns to the login screen.
+  The screens underneath stay alive, so signing in again as the same person continues where the
   session ended, with unsaved editor text intact; signing in as someone else, or
   logging out, discards them.
-- **Logout** forgets the token locally first, then calls `POST /auth/logout`
+- **Logout** forgets both tokens locally first, revokes the phone, then calls `POST /auth/logout`
   with a 10 second limit; a server that cannot be reached does not keep anyone
   signed in.
 - **Changing the server** logs out and requires a new sign-in.

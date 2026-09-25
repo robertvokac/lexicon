@@ -52,6 +52,7 @@ class FakeLexiconServer : Dispatcher() {
     var username = "robert"
     var password = "correct horse battery staple"
     val tokens = mutableSetOf<String>()
+    val refreshSecrets = mutableMapOf<String, String>()
     private var nextToken = 1
 
     val groups = mutableListOf(Group(1, "Default", "Default group for new items when no group is selected.", 0))
@@ -180,13 +181,35 @@ class FakeLexiconServer : Dispatcher() {
             }
             val token = "token-${nextToken++}"
             tokens += token
+            val remembered = body["rememberDevice"]?.jsonPrimitive?.booleanOrNull == true
+            val refresh = if (remembered) "refresh-${nextToken++}" else ""
+            if (remembered) refreshSecrets[refresh] = "device-${nextToken++}"
             return json(buildJsonObject {
                 put("token", token)
+                put("refreshToken", refresh)
                 put("username", username)
                 put("apiVersion", apiVersion)
                 put("idleTimeoutSeconds", 28800)
                 put("absoluteLifetimeSeconds", 604800)
             })
+        }
+        if (path == "/auth/refresh" && method == "POST") {
+            val secret = bodyObject(request)["refreshToken"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val device = refreshSecrets.remove(secret) ?: return error(401, "unauthorized", "Device not remembered.")
+            val token = "token-${nextToken++}"
+            val next = "refresh-${nextToken++}"
+            tokens += token
+            refreshSecrets[next] = device
+            return json(buildJsonObject {
+                put("token", token); put("refreshToken", next); put("username", username)
+                put("apiVersion", apiVersion); put("idleTimeoutSeconds", 28800)
+                put("absoluteLifetimeSeconds", 604800)
+            })
+        }
+        if (path == "/auth/forget-device" && method == "POST") {
+            val secret = bodyObject(request)["refreshToken"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            refreshSecrets.remove(secret)
+            return noContent()
         }
         val token = request.headers["Authorization"]?.removePrefix("Bearer ")
         if (token == null || token !in tokens) return error(401, "unauthorized", "Authentication is required.")
@@ -201,6 +224,17 @@ class FakeLexiconServer : Dispatcher() {
                 put("username", username)
                 put("apiVersion", apiVersion)
             })
+            path == "/auth/devices" && method == "GET" -> json(buildJsonObject {
+                put("devices", buildJsonArray {
+                    refreshSecrets.values.distinct().forEach { id -> add(buildJsonObject {
+                        put("id", id); put("createdAtSeconds", 1); put("lastUsedSeconds", 1)
+                    }) }
+                })
+            })
+            segments.size == 3 && segments[0] == "auth" && segments[1] == "devices" && method == "DELETE" -> {
+                refreshSecrets.entries.removeIf { it.value == segments[2] }
+                noContent()
+            }
             path == "/groups" && method == "GET" -> json(buildJsonObject { put("groups", encode(groups.sortedWith(compareBy({ it.position }, { it.name })))) })
             path == "/groups/default" -> json(buildJsonObject { put("groupId", 1) })
             path == "/groups" && method == "POST" -> {

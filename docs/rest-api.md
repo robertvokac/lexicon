@@ -7,7 +7,8 @@ web client is deployed separately as static files.
 - Base path: `/api/v1`
 - Content type: `application/json; charset=utf-8` (UTF-8 everywhere)
 - Authentication: `Authorization: Bearer <token>` on every endpoint except
-  `GET /api/v1/health` and `POST /api/v1/auth/login`
+  `GET /api/v1/health`, `POST /api/v1/auth/login`,
+  `POST /api/v1/auth/refresh` and `POST /api/v1/auth/forget-device`
 
 ## Conventions
 
@@ -89,11 +90,37 @@ The token is 256 bits of cryptographically random material. Failures return a
 generic 401 that does not reveal whether the user name exists; repeated
 failures return 429 with `Retry-After`.
 
+Android can add `"rememberDevice": true` to the login body. The response then
+also contains a nonempty `refreshToken`. This requires the persistent session
+file. Ordinary logins return an empty `refreshToken` and keep their existing
+expiry policy.
+
+```http
+POST /api/v1/auth/refresh
+{ "refreshToken": "..." }
+```
+
+This public endpoint returns a new `token` and `refreshToken` in the same
+shape as login. The previous refresh token stops working immediately. Reusing
+it revokes the remembered phone and its sessions. A remembered phone expires
+after 90 days without a refresh; regular use can renew it indefinitely.
+The server stores only token hashes. A changed password revokes all phones.
+
+```http
+POST /api/v1/auth/forget-device
+{ "refreshToken": "..." }
+```
+
+This public, idempotent endpoint returns 204 and revokes that phone. It works
+even when its ordinary session has expired.
+
 ```http
 POST /api/v1/auth/logout   → 204, the token stops working immediately
 GET  /api/v1/auth/me       → { "username": "robert", "apiVersion": 1 }
 GET  /api/v1/auth/sessions → { "sessions": [ { "id": "...", "createdAtSeconds": 0, "lastSeenSeconds": 0, "current": true } ] }
 DELETE /api/v1/auth/sessions/{id} → 204
+GET  /api/v1/auth/devices → { "devices": [ { "id": "...", "createdAtSeconds": 0, "lastUsedSeconds": 0, "current": true } ] }
+DELETE /api/v1/auth/devices/{id} → 204
 POST /api/v1/auth/change-password → 204
 { "currentPassword": "...", "newPassword": "..." }
 ```

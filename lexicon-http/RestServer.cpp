@@ -451,7 +451,8 @@ void RestServer::Impl::createServer() {
 
 void RestServer::Impl::registerRoutes() {
   httplib::Server &api = *server;
-  publicRoutes = {"/api/v1/health", "/api/v1/auth/login"};
+  publicRoutes = {"/api/v1/health", "/api/v1/auth/login",
+                  "/api/v1/auth/refresh", "/api/v1/auth/forget-device"};
 
   // The static web client ------------------------------------------------
   if (!config.webDirectory.empty()) {
@@ -493,11 +494,20 @@ void RestServer::Impl::registerRoutes() {
                                 "The user name or password is too long."});
       return;
     }
-    const auto outcome = auth.login(request.remote_addr, username, password);
+    bool remember = false;
+    if (auto choice = body->find("rememberDevice"); choice != body->end()) {
+      if (!choice->is_boolean()) {
+        respondFailure(response, {400, "validation", "rememberDevice must be true or false."});
+        return;
+      }
+      remember = choice->get<bool>();
+    }
+    const auto outcome = auth.login(request.remote_addr, username, password, remember);
     switch (outcome.status) {
     case AuthState::LoginStatus::Ok:
       respondJson(response, 200,
                   Json{{"token", outcome.token},
+                       {"refreshToken", outcome.refreshToken},
                        {"username", auth.username()},
                        {"apiVersion", kApiVersion},
                        {"idleTimeoutSeconds",
@@ -518,6 +528,10 @@ void RestServer::Impl::registerRoutes() {
       respondFailure(response, {500, "internal",
                                 "The server could not verify the credentials."});
       return;
+    case AuthState::LoginStatus::CannotRemember:
+      respondFailure(response, {400, "validation",
+                                "Remembering a phone requires the server session file."});
+      return;
     case AuthState::LoginStatus::InvalidCredentials:
       break;
     }
@@ -525,6 +539,41 @@ void RestServer::Impl::registerRoutes() {
     response.set_header("WWW-Authenticate", "Bearer");
     respondFailure(response,
                    {401, "unauthorized", "Invalid user name or password."});
+  });
+
+  api.Post("/api/v1/auth/refresh", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body) return;
+    const auto secret = requiredString(*body, "refreshToken");
+    if (secret.size() > 1024) {
+      respondFailure(response, {400, "validation", "The refresh token is too long."});
+      return;
+    }
+    const auto outcome = auth.refresh(secret);
+    if (outcome.status == AuthState::LoginStatus::Unavailable) {
+      respondFailure(response, {500, "internal", "The device session could not be saved."});
+    } else if (outcome.status != AuthState::LoginStatus::Ok) {
+      respondFailure(response, {401, "unauthorized", "This remembered device is no longer authorized."});
+    } else {
+      respondJson(response, 200, Json{{"token", outcome.token},
+                                      {"refreshToken", outcome.refreshToken},
+                                      {"username", auth.username()},
+                                      {"apiVersion", kApiVersion},
+                                      {"idleTimeoutSeconds", config.sessions.idleTimeout.count()},
+                                      {"absoluteLifetimeSeconds", config.sessions.absoluteLifetime.count()}});
+    }
+  });
+
+  api.Post("/api/v1/auth/forget-device", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body) return;
+    const auto secret = requiredString(*body, "refreshToken");
+    if (secret.size() > 1024) {
+      respondFailure(response, {400, "validation", "The refresh token is too long."});
+      return;
+    }
+    auth.forgetDevice(secret);
+    respondNoContent(response);
   });
 
   api.Post("/api/v1/auth/logout", [this](const Request &request,
@@ -564,6 +613,20 @@ void RestServer::Impl::registerRoutes() {
   api.Delete("/api/v1/auth/sessions/:id", [this](const Request &request, Response &response) {
     if (!auth.revokeSession(bearerToken(request), request.path_params.at("id"))) {
       respondFailure(response, {404, "not_found", "Session not found."});
+      return;
+    }
+    respondNoContent(response);
+  });
+  api.Get("/api/v1/auth/devices", [this](const Request &request, Response &response) {
+    Json devices = Json::array();
+    for (const auto &device : auth.listDevices(bearerToken(request)))
+      devices.push_back(Json{{"id", device.id}, {"createdAtSeconds", device.createdAtSeconds},
+                             {"lastUsedSeconds", device.lastUsedSeconds}, {"current", device.current}});
+    respondJson(response, 200, Json{{"devices", std::move(devices)}});
+  });
+  api.Delete("/api/v1/auth/devices/:id", [this](const Request &request, Response &response) {
+    if (!auth.revokeDevice(bearerToken(request), request.path_params.at("id"))) {
+      respondFailure(response, {404, "not_found", "Remembered device not found."});
       return;
     }
     respondNoContent(response);

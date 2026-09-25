@@ -62,6 +62,7 @@ data class LoginState(
     val busy: Boolean = false,
     val error: String? = null,
     val allowHttpForTesting: Boolean = false,
+    val rememberDevice: Boolean = true,
 )
 
 /**
@@ -88,6 +89,10 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(allowHttpForTesting = allow && canAllowHttpForTesting, error = null) }
     }
 
+    fun setRememberDevice(remember: Boolean) {
+        _state.update { it.copy(rememberDevice = remember) }
+    }
+
     fun login() {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, error = null) }
@@ -97,6 +102,7 @@ class LoginViewModel(private val container: AppContainer) : ViewModel() {
                 username.text.toString(),
                 password.text.toString(),
                 allowHttpForTesting = _state.value.allowHttpForTesting,
+                rememberDevice = _state.value.rememberDevice,
             )
             when (result) {
                 SessionManager.LoginResult.Success -> {
@@ -197,6 +203,23 @@ fun LoginScreen(viewModel: LoginViewModel, notice: String?, modifier: Modifier =
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                     onKeyboardAction = { viewModel.login() },
                     modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
+                )
+                Row(
+                    Modifier.fillMaxWidth().toggleable(
+                        value = state.rememberDevice,
+                        enabled = !state.busy,
+                        role = Role.Checkbox,
+                        onValueChange = viewModel::setRememberDevice,
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = state.rememberDevice, onCheckedChange = null, enabled = !state.busy)
+                    Text("Remember this phone")
+                }
+                Text(
+                    "Stay signed in while you use this phone. Sign out or revoke it from Account to stop renewal.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 state.error?.let {
                     Text(

@@ -427,6 +427,13 @@ tokens travel unencrypted. The older `--allow-insecure-http` spelling still
 works. Android debug builds also require **Allow HTTP for testing** on the
 login screen; release builds require HTTPS.
 
+Android's **Remember this phone** choice renews an expired session without
+asking for the password again. The server keeps only a hash of the rotating
+device secret in its session file. A remembered phone can be revoked in the
+Android Account settings and expires after 90 days without renewal. A password
+change or logout revokes it immediately; `--no-session-file` disables this
+feature.
+
 With `--web-dir`, the server redirects `/` to `/web/` and serves that directory
 read-only on the same origin as the API; no `--allowed-origin` is needed. If
 the web client is hosted separately, omit `--web-dir` and pass its exact origin

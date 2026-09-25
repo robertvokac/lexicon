@@ -29,6 +29,7 @@ class SessionManagerTest {
         lateinit var manager: SessionManager
         val client = ApiClient(AppContainer.httpClient(), object : com.robertvokac.lexicon.api.SessionAccess {
             override val current get() = manager.current
+            override suspend fun refresh(session: com.robertvokac.lexicon.api.Session) = manager.refresh(session)
             override fun onUnauthorized(session: com.robertvokac.lexicon.api.Session) = manager.onUnauthorized(session)
         })
         api = LexiconApi(client)
@@ -111,6 +112,54 @@ class SessionManagerTest {
         restarted.start()
         val state = awaitState { it is SessionState.SignedOut } as SessionState.SignedOut
         assertTrue(state.message!!.contains("expired"))
+        assertNull(environment.tokenStore.load())
+    }
+
+    @Test
+    fun rememberedPhoneRenewsAfterIdleExpiryAndRetriesTheRequest() = runBlocking {
+        assertEquals(SessionManager.LoginResult.Success,
+            sessions.login(fake.baseUrl, fake.username, fake.password, rememberDevice = true))
+        val original = environment.tokenStore.load()!!
+        assertNotNull(original.refreshToken)
+        fake.tokens.clear()
+        assertTrue(api.groups().isNotEmpty())
+        val renewed = environment.tokenStore.load()!!
+        assertTrue(renewed.token != original.token)
+        assertTrue(renewed.refreshToken != original.refreshToken)
+        assertTrue(sessions.state.value is SessionState.SignedIn)
+        assertEquals(1, fake.requestsTo("POST", "/api/v1/auth/refresh").size)
+        assertEquals(2, fake.requestsTo("GET", "/api/v1/groups").size)
+    }
+
+    @Test
+    fun rememberedPhoneRenewsOnColdStart() = runBlocking {
+        sessions.login(fake.baseUrl, fake.username, fake.password, rememberDevice = true)
+        fake.tokens.clear()
+        val restarted = newManager().also { sessions = it }
+        restarted.start()
+        awaitState { it is SessionState.SignedIn }
+        assertNotNull(restarted.current)
+        assertEquals(1, fake.requestsTo("POST", "/api/v1/auth/refresh").size)
+    }
+
+    @Test
+    fun revokedPhoneRequiresThePasswordAgain() = runBlocking {
+        sessions.login(fake.baseUrl, fake.username, fake.password, rememberDevice = true)
+        fake.tokens.clear()
+        fake.refreshSecrets.clear()
+        val restarted = newManager().also { sessions = it }
+        restarted.start()
+        val state = awaitState { it is SessionState.SignedOut } as SessionState.SignedOut
+        assertTrue(state.message!!.contains("expired"))
+        assertNull(environment.tokenStore.load())
+    }
+
+    @Test
+    fun loggingOutForgetsTheRememberedPhone() = runBlocking {
+        sessions.login(fake.baseUrl, fake.username, fake.password, rememberDevice = true)
+        assertEquals(1, fake.refreshSecrets.size)
+        sessions.logout().join()
+        assertTrue(fake.refreshSecrets.isEmpty())
         assertNull(environment.tokenStore.load())
     }
 

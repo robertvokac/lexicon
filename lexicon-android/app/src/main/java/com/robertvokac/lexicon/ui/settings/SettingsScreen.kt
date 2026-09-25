@@ -58,6 +58,7 @@ import com.robertvokac.lexicon.api.ServerUrl
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.model.ImportReport
 import com.robertvokac.lexicon.model.ServerSession
+import com.robertvokac.lexicon.model.RememberedDevice
 import com.robertvokac.lexicon.storage.SettingsStore
 import com.robertvokac.lexicon.storage.ThemePreference
 import com.robertvokac.lexicon.ui.common.ConfirmDialog
@@ -94,6 +95,7 @@ data class ExchangeState(
 data class AccountState(
     val busy: Boolean = false,
     val sessions: List<ServerSession> = emptyList(),
+    val devices: List<RememberedDevice> = emptyList(),
     val error: String? = null,
 )
 
@@ -155,6 +157,34 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             try {
                 container.api.revokeSession(id)
                 _account.value = AccountState(sessions = container.api.sessions())
+            } catch (failure: ApiException) {
+                _account.update { it.copy(busy = false, error = failure.userMessage()) }
+            }
+        }
+    }
+
+    fun loadDevices() {
+        viewModelScope.launch {
+            _account.value = AccountState(busy = true)
+            try {
+                _account.value = AccountState(devices = container.api.rememberedDevices())
+            } catch (failure: ApiException) {
+                _account.value = AccountState(error = failure.userMessage())
+            }
+        }
+    }
+
+    fun revokeDevice(device: RememberedDevice) {
+        viewModelScope.launch {
+            _account.update { it.copy(busy = true, error = null) }
+            try {
+                container.api.revokeDevice(device.id)
+                if (device.current) {
+                    container.sessions.logout("This phone is no longer remembered. Sign in again.")
+                    _account.value = AccountState()
+                } else {
+                    _account.value = AccountState(devices = container.api.rememberedDevices())
+                }
             } catch (failure: ApiException) {
                 _account.update { it.copy(busy = false, error = failure.userMessage()) }
             }
@@ -264,6 +294,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     var changingServer by rememberSaveable { mutableStateOf(false) }
     var changingPassword by rememberSaveable { mutableStateOf(false) }
     var showingSessions by rememberSaveable { mutableStateOf(false) }
+    var showingDevices by rememberSaveable { mutableStateOf(false) }
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var includeFiles by rememberSaveable { mutableStateOf(true) }
     var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
@@ -305,7 +336,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 )
             }
             Text(
-                "The session token is stored encrypted with a key in Android Keystore. Your password is never stored.",
+                "This phone renews its session automatically when remembered. Its tokens are encrypted with Android Keystore; your password is never stored. A remembered phone expires after 90 days without use.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -313,6 +344,9 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             OutlinedButton(onClick = { changingPassword = true }, enabled = signedIn != null) { Text("Change password…") }
             OutlinedButton(onClick = { showingSessions = true; viewModel.loadSessions() }, enabled = signedIn != null) {
                 Text("Signed-in sessions…")
+            }
+            OutlinedButton(onClick = { showingDevices = true; viewModel.loadDevices() }, enabled = signedIn != null) {
+                Text("Remembered phones…")
             }
 
             SectionHeader("Appearance")
@@ -440,6 +474,27 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 }
             },
             confirmButton = { TextButton(onClick = { showingSessions = false }) { Text("Close") } },
+        )
+    }
+    if (showingDevices) {
+        AlertDialog(
+            onDismissRequest = { showingDevices = false },
+            title = { Text("Remembered phones") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (account.busy) Text("Loading…")
+                    account.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (!account.busy && account.error == null && account.devices.isEmpty()) Text("No remembered phones.")
+                    for (device in account.devices) {
+                        val used = DateFormat.getDateTimeInstance().format(Date(device.lastUsedSeconds * 1000))
+                        Text("${if (device.current) "This phone" else "Phone ${device.id.take(8)}"} · last used $used")
+                        TextButton(onClick = { viewModel.revokeDevice(device) }, enabled = !account.busy) {
+                            Text("Revoke")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showingDevices = false }) { Text("Close") } },
         )
     }
     pendingImport?.let { uri ->

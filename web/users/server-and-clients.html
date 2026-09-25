@@ -100,13 +100,13 @@ LexiconServer --database ~/lexicon/lexicon.db \
     </div>
 
     <h2 id="android">3. The Android app</h2>
-    <p>The native app (Kotlin and Jetpack Compose) is built from <code>lexicon-android/</code> with Gradle and installed as an APK. On first start it asks for the server address, a user name and a password; after that the dictionary is a tap away. For a phone and server on the same test network, a debug APK can sign in to a <code>http://</code> address when you check <strong>Allow HTTP for testing</strong> on that screen and start the server with <code>--listen 0.0.0.0 --allow-http</code>. Release APKs require HTTPS.</p>
+    <p>The native app (Kotlin and Jetpack Compose) is built from <code>lexicon-android/</code> with Gradle and installed as an APK. On first start it asks for the server address, a user name and a password. <strong>Remember this phone</strong> lets the app renew an expired session without another password prompt; you can turn it off on a shared phone. For a phone and server on the same test network, a debug APK can sign in to a <code>http://</code> address when you check <strong>Allow HTTP for testing</strong> on that screen and start the server with <code>--listen 0.0.0.0 --allow-http</code>. Release APKs require HTTPS.</p>
     <ul>
       <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
       <li>The editor with the same tabs, including image values.</li>
       <li><a href="review.html">Review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, and the <a href="inbox.html">Inbox</a> that also works offline.</li>
       <li>Previously loaded pages can be read from an encrypted cache when the server is unreachable. Other edits still need the server; Inbox ideas can wait and sync later.</li>
-      <li>Settings can change the password and revoke signed-in sessions. A password change signs every device out.</li>
+      <li>Settings can change the password and revoke signed-in sessions or remembered phones. A password change signs every device out.</li>
       <li>The <a href="links-and-relationships.html#graph">relationship graph</a>, with pinch to zoom and a full-screen mode.</li>
     </ul>
 

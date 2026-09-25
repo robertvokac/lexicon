@@ -167,6 +167,7 @@ void AuthState::setCredentials(Credentials credentials) {
   credentials_ = std::move(credentials);
   // Changing the credentials invalidates every existing session.
   activeSessions_.clear();
+  rememberedDevices_.clear();
   saveSessions(lock);
 }
 
@@ -222,7 +223,8 @@ Result<std::size_t> AuthState::useSessionFile(const std::string &path) {
       continue;
     Session session{user, fromEpochSeconds(created->get<long long>()),
                     fromEpochSeconds(lastSeen->get<long long>()),
-                    fromEpochSeconds(lastSeen->get<long long>())};
+                    fromEpochSeconds(lastSeen->get<long long>()),
+                    entry.value("deviceId", std::string{})};
     if (moment - session.lastSeen > sessions_.idleTimeout ||
         moment - session.created > sessions_.absoluteLifetime)
       continue;
@@ -235,27 +237,74 @@ Result<std::size_t> AuthState::useSessionFile(const std::string &path) {
                                       return left.second.lastSeen < right.second.lastSeen;
                                     }));
   activeSessions_ = std::move(restored);
+  rememberedDevices_.clear();
+  if (document.contains("devices") && document["devices"].is_array()) {
+    for (const auto &entry : document["devices"]) {
+      if (!entry.is_object()) continue;
+      const auto hash = entry.value("tokenHash", std::string{});
+      const auto id = entry.value("id", std::string{});
+      const auto user = entry.value("username", std::string{});
+      const auto previous = entry.value("previousHash", std::string{});
+      const auto created = entry.find("created");
+      const auto lastUsed = entry.find("lastUsed");
+      if (!validTokenHash(hash) || id.empty() || user != credentials_->username ||
+          (!previous.empty() && !validTokenHash(previous)) ||
+          created == entry.end() || !created->is_number_integer() ||
+          lastUsed == entry.end() || !lastUsed->is_number_integer()) continue;
+      const auto used = fromEpochSeconds(lastUsed->get<long long>());
+      if (moment - used > std::chrono::hours(24 * 90)) continue;
+      rememberedDevices_.emplace(hash, RememberedDevice{id, user,
+          fromEpochSeconds(created->get<long long>()), used, previous});
+    }
+  }
+  while (rememberedDevices_.size() > sessions_.maxSessions) {
+    auto oldest = std::min_element(rememberedDevices_.begin(), rememberedDevices_.end(),
+        [](const auto &left, const auto &right) {
+          return left.second.lastUsed < right.second.lastUsed;
+        });
+    rememberedDevices_.erase(oldest);
+  }
   return activeSessions_.size();
+}
+
+std::string AuthState::sessionDocument() {
+  Json sessions = Json::array();
+  for (auto &[hash, session] : activeSessions_) {
+    session.savedLastSeen = session.lastSeen;
+    sessions.push_back(Json{{"tokenHash", hash}, {"username", session.username},
+                            {"created", epochSeconds(session.created)},
+                            {"lastSeen", epochSeconds(session.lastSeen)},
+                            {"deviceId", session.deviceId}});
+  }
+  Json devices = Json::array();
+  for (const auto &[hash, device] : rememberedDevices_)
+    devices.push_back(Json{{"tokenHash", hash}, {"id", device.id},
+                           {"username", device.username},
+                           {"created", epochSeconds(device.created)},
+                           {"lastUsed", epochSeconds(device.lastUsed)},
+                           {"previousHash", device.previousHash}});
+  return Json{{"version", 1}, {"credentials", credentialsFingerprint()},
+              {"sessions", std::move(sessions)}, {"devices", std::move(devices)}}.dump(2) + "\n";
+}
+
+Result<void> AuthState::persistLocked() {
+  if (sessionFile_.empty())
+    return invalid("Remembered devices require a session file.");
+  const auto text = sessionDocument();
+  const auto generation = ++saveGeneration_;
+  std::lock_guard save(saveMutex_);
+  if (auto written = writePrivateFile(sessionFile_, text); !written) return written;
+  savedGeneration_ = generation;
+  return {};
 }
 
 void AuthState::saveSessions(std::unique_lock<std::mutex> &lock) {
   if (sessionFile_.empty())
     return;
-  Json sessions = Json::array();
-  for (auto &[hash, session] : activeSessions_) {
-    session.savedLastSeen = session.lastSeen;
-    sessions.push_back(Json{{"tokenHash", hash},
-                            {"username", session.username},
-                            {"created", epochSeconds(session.created)},
-                            {"lastSeen", epochSeconds(session.lastSeen)}});
-  }
-  const Json document{{"version", 1},
-                      {"credentials", credentialsFingerprint()},
-                      {"sessions", std::move(sessions)}};
+  const auto text = sessionDocument();
   const auto generation = ++saveGeneration_;
   const auto path = sessionFile_;
   lock.unlock();
-  const auto text = document.dump(2) + "\n";
   std::lock_guard save(saveMutex_);
   // A newer snapshot may have been written while this one waited.
   if (generation <= savedGeneration_)
@@ -377,7 +426,8 @@ void AuthState::clearFailures(const std::string &clientKey) {
 
 AuthState::LoginResult AuthState::login(const std::string &clientKey,
                                         const std::string &username,
-                                        const std::string &password) {
+                                        const std::string &password,
+                                        bool rememberDevice) {
   LoginResult result;
 
   // Phase one, under the lock: apply the rate limit and take a copy of the
@@ -440,6 +490,24 @@ AuthState::LoginResult AuthState::login(const std::string &clientKey,
     result.status = LoginStatus::Unavailable;
     return result;
   }
+  std::string refreshToken;
+  std::string deviceId;
+  if (rememberDevice) {
+    if (sessionFile_.empty()) {
+      result.status = LoginStatus::CannotRemember;
+      return result;
+    }
+    auto secret = randomToken();
+    auto id = randomToken();
+    if (!secret || !id) {
+      result.status = LoginStatus::Unavailable;
+      return result;
+    }
+    refreshToken = std::move(*secret);
+    deviceId = std::move(*id);
+  }
+  const auto oldSessions = rememberDevice ? activeSessions_ : decltype(activeSessions_){};
+  const auto oldDevices = rememberDevice ? rememberedDevices_ : decltype(rememberedDevices_){};
   if (activeSessions_.size() >= sessions_.maxSessions) {
     auto oldest = std::min_element(activeSessions_.begin(),
                                   activeSessions_.end(),
@@ -451,12 +519,143 @@ AuthState::LoginResult AuthState::login(const std::string &clientKey,
       activeSessions_.erase(oldest);
   }
   activeSessions_.emplace(sha256Hex(*token),
-                          Session{credentials_->username, moment, moment, moment});
+                          Session{credentials_->username, moment, moment, moment, deviceId});
+  if (rememberDevice) {
+    if (rememberedDevices_.size() >= sessions_.maxSessions) {
+      auto oldest = std::min_element(rememberedDevices_.begin(), rememberedDevices_.end(),
+          [](const auto &left, const auto &right) {
+            return left.second.lastUsed < right.second.lastUsed;
+          });
+      if (oldest != rememberedDevices_.end()) {
+        revokeDeviceSessions(oldest->second.id);
+        rememberedDevices_.erase(oldest);
+      }
+    }
+    rememberedDevices_.emplace(sha256Hex(refreshToken),
+        RememberedDevice{deviceId, credentials_->username, moment, moment, {}});
+    if (auto saved = persistLocked(); !saved) {
+      activeSessions_ = oldSessions;
+      rememberedDevices_ = oldDevices;
+      result.status = LoginStatus::Unavailable;
+      return result;
+    }
+  }
   clearFailures(clientKey);
   result.status = LoginStatus::Ok;
   result.token = std::move(*token);
-  saveSessions(lock);
+  result.refreshToken = std::move(refreshToken);
+  if (!rememberDevice) saveSessions(lock);
   return result;
+}
+
+void AuthState::revokeDeviceSessions(const std::string &id) {
+  for (auto it = activeSessions_.begin(); it != activeSessions_.end();) {
+    if (it->second.deviceId == id) it = activeSessions_.erase(it);
+    else ++it;
+  }
+}
+
+AuthState::LoginResult AuthState::refresh(const std::string &refreshToken) {
+  LoginResult result;
+  if (refreshToken.empty()) return result;
+  std::unique_lock lock(mutex_);
+  const auto hash = sha256Hex(refreshToken);
+  const auto moment = now();
+  auto found = rememberedDevices_.find(hash);
+  if (found == rememberedDevices_.end()) {
+    // A reused, already rotated secret ends the whole device grant.
+    for (auto it = rememberedDevices_.begin(); it != rememberedDevices_.end(); ++it) {
+      if (it->second.previousHash == hash) {
+        revokeDeviceSessions(it->second.id);
+        rememberedDevices_.erase(it);
+        saveSessions(lock);
+        break;
+      }
+    }
+    return result;
+  }
+  if (moment - found->second.lastUsed > std::chrono::hours(24 * 90)) {
+    revokeDeviceSessions(found->second.id);
+    rememberedDevices_.erase(found);
+    saveSessions(lock);
+    return result;
+  }
+  auto access = randomToken();
+  auto nextSecret = randomToken();
+  if (!access || !nextSecret) {
+    result.status = LoginStatus::Unavailable;
+    return result;
+  }
+  const auto oldSessions = activeSessions_;
+  const auto oldDevices = rememberedDevices_;
+  RememberedDevice device = found->second;
+  rememberedDevices_.erase(found);
+  device.previousHash = hash;
+  device.lastUsed = moment;
+  rememberedDevices_.emplace(sha256Hex(*nextSecret), device);
+  revokeDeviceSessions(device.id);
+  if (activeSessions_.size() >= sessions_.maxSessions) {
+    auto oldest = std::min_element(activeSessions_.begin(), activeSessions_.end(),
+        [](const auto &left, const auto &right) {
+          return left.second.lastSeen < right.second.lastSeen;
+        });
+    if (oldest != activeSessions_.end()) activeSessions_.erase(oldest);
+  }
+  activeSessions_.emplace(sha256Hex(*access),
+      Session{device.username, moment, moment, moment, device.id});
+  if (auto saved = persistLocked(); !saved) {
+    activeSessions_ = oldSessions;
+    rememberedDevices_ = oldDevices;
+    result.status = LoginStatus::Unavailable;
+    return result;
+  }
+  result.status = LoginStatus::Ok;
+  result.token = std::move(*access);
+  result.refreshToken = std::move(*nextSecret);
+  return result;
+}
+
+void AuthState::forgetDevice(const std::string &refreshToken) {
+  if (refreshToken.empty()) return;
+  std::unique_lock lock(mutex_);
+  const auto hash = sha256Hex(refreshToken);
+  for (auto it = rememberedDevices_.begin(); it != rememberedDevices_.end(); ++it) {
+    if (it->first == hash || it->second.previousHash == hash) {
+      revokeDeviceSessions(it->second.id);
+      rememberedDevices_.erase(it);
+      saveSessions(lock);
+      return;
+    }
+  }
+}
+
+std::vector<AuthState::DeviceView> AuthState::listDevices(const std::string &currentToken) const {
+  std::lock_guard lock(mutex_);
+  const auto session = activeSessions_.find(sha256Hex(currentToken));
+  if (session == activeSessions_.end()) return {};
+  std::vector<DeviceView> result;
+  for (const auto &[hash, device] : rememberedDevices_)
+    if (now() - device.lastUsed <= std::chrono::hours(24 * 90))
+      result.push_back({device.id, epochSeconds(device.created),
+                        epochSeconds(device.lastUsed), device.id == session->second.deviceId});
+  std::sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
+    return a.lastUsedSeconds > b.lastUsedSeconds;
+  });
+  return result;
+}
+
+bool AuthState::revokeDevice(const std::string &currentToken, const std::string &id) {
+  std::unique_lock lock(mutex_);
+  if (!activeSessions_.contains(sha256Hex(currentToken))) return false;
+  for (auto it = rememberedDevices_.begin(); it != rememberedDevices_.end(); ++it) {
+    if (it->second.id == id) {
+      revokeDeviceSessions(id);
+      rememberedDevices_.erase(it);
+      saveSessions(lock);
+      return true;
+    }
+  }
+  return false;
 }
 
 std::optional<std::string> AuthState::authenticate(const std::string &token) {
@@ -484,10 +683,17 @@ bool AuthState::logout(const std::string &token) {
   if (token.empty())
     return false;
   std::unique_lock lock(mutex_);
-  const bool removed = activeSessions_.erase(sha256Hex(token)) != 0;
-  if (removed)
-    saveSessions(lock);
-  return removed;
+  const auto found = activeSessions_.find(sha256Hex(token));
+  if (found == activeSessions_.end()) return false;
+  const auto deviceId = found->second.deviceId;
+  activeSessions_.erase(found);
+  if (!deviceId.empty()) {
+    for (auto it = rememberedDevices_.begin(); it != rememberedDevices_.end(); ++it)
+      if (it->second.id == deviceId) { rememberedDevices_.erase(it); break; }
+    revokeDeviceSessions(deviceId);
+  }
+  saveSessions(lock);
+  return true;
 }
 
 std::size_t AuthState::sessionCount() const {
@@ -517,7 +723,13 @@ bool AuthState::revokeSession(const std::string &currentToken, const std::string
   if (!activeSessions_.contains(sha256Hex(currentToken))) return false;
   for (auto it = activeSessions_.begin(); it != activeSessions_.end(); ++it) {
     if (it->first.starts_with(sessionId)) {
+      const auto deviceId = it->second.deviceId;
       activeSessions_.erase(it);
+      if (!deviceId.empty()) {
+        for (auto device = rememberedDevices_.begin(); device != rememberedDevices_.end(); ++device)
+          if (device->second.id == deviceId) { rememberedDevices_.erase(device); break; }
+        revokeDeviceSessions(deviceId);
+      }
       saveSessions(lock);
       return true;
     }

@@ -89,7 +89,7 @@ class ApiClientTest {
         val login = server.takeRequest()
         assertNull(login.headers["Authorization"])
         assertTrue(login.headers["Content-Type"]!!.startsWith("application/json"))
-        assertEquals("""{"username":"robert","password":"pw-pw-pw-pw-pw"}""", login.body!!.utf8())
+        assertEquals("""{"username":"robert","password":"pw-pw-pw-pw-pw","rememberDevice":false}""", login.body!!.utf8())
     }
 
     @Test

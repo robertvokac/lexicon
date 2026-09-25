@@ -11,6 +11,9 @@ interface SessionAccess {
     /** The session to authenticate with, or null when signed out. */
     val current: Session?
 
+    /** Exchange a remembered device secret for a new session after a 401. */
+    suspend fun refresh(session: Session): Session? = null
+
     /**
      * Called once when the server answers 401 to a request made with
      * [session]. Implementations drop that session if it is still current;
