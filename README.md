@@ -279,7 +279,8 @@ Run those commands from the repository root, then open
 <http://127.0.0.1:8628/>. The server redirects `/` to `/web/`, serves
 `lexicon-web` there and answers its API requests under `/api/v1` on the same
 origin. This setup needs neither a separate static web server nor
-`--allowed-origin`.
+`--allowed-origin`. All server commands and options, including how to change
+the listen address and port, are listed in [REST server and web client](#rest-server-and-web-client).
 
 Turn either client off with `-DLEXICON_BUILD_DESKTOP=OFF` or
 `-DLEXICON_BUILD_SERVER=OFF`.
@@ -381,20 +382,100 @@ ctest --test-dir build --output-on-failure
 ## REST server and web client
 
 `LexiconServer` exposes the application services over HTTP so a browser can use
-the same database as the desktop client. To serve `lexicon-web` directly from
-the server, create the user and point `--web-dir` at that directory:
+the same database as the desktop client. Create its single user locally before
+starting it; `auth set-user` asks for a password interactively:
 
 ```bash
-LexiconServer auth set-user --database ~/lexicon.db   # asks interactively
-LexiconServer --database ~/lexicon.db --web-dir /path/to/lexicon-web
+./build/LexiconServer auth set-user --database ~/lexicon.db
 ```
 
-It binds `127.0.0.1:8628` by default, requires a Bearer session for every
-domain endpoint, hashes the password with scrypt, rate limits failed logins,
-and refuses to serve password authentication over plaintext HTTP on a public
-address unless you explicitly pass `--allow-http` for a closed test network.
-The older `--allow-insecure-http` spelling remains accepted. Passwords and
-session tokens are exposed to that network when using HTTP.
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `LexiconServer [serve] [options]` | Start the REST API; `serve` is optional. |
+| `LexiconServer auth set-user [options]` | Create or replace the user and password interactively. Restart the server after changing them. |
+| `LexiconServer auth show [options]` | Show the configured user name and password hash parameters, never the password. |
+| `LexiconServer export [--output FILE] [--with-files] [options]` | Export the dictionary as JSON; standard output if `--output` is omitted. |
+| `LexiconServer import --input FILE [options]` | Merge a JSON export into the dictionary. |
+| `LexiconServer backup --backup-dir DIR [--backup-keep N] [options]` | Make one backup immediately. |
+| `LexiconServer --help` / `LexiconServer --version` | Show CLI help / version. |
+
+### Ways to start the server
+
+These examples run from the repository root after building `LexiconServer`.
+Use the same `--database` path for `auth set-user` and the server. The API is
+always under `/api/v1`.
+
+| Setup | Command | Address to open |
+| --- | --- | --- |
+| Local API and web client in one process | `./build/LexiconServer --database ~/lexicon.db --web-dir ./lexicon-web` | `http://127.0.0.1:8628/` |
+| Local API only; web client hosted separately | `./build/LexiconServer --database ~/lexicon.db --allowed-origin https://lexicon.example.com` | `http://127.0.0.1:8628/api/v1` through a reverse proxy for remote clients |
+| LAN HTTP for testing | `./build/LexiconServer --database ~/lexicon.db --listen 192.168.1.20 --port 9000 --allow-http --web-dir ./lexicon-web` | `http://192.168.1.20:9000/` (replace the IP with the computer's LAN address) |
+| Embedded HTTPS | `./build/LexiconServer --database ~/lexicon.db --listen 0.0.0.0 --port 8443 --tls-cert cert.pem --tls-key key.pem --web-dir ./lexicon-web` | `https://SERVER_ADDRESS:8443/` (the certificate must match the address) |
+
+The port is **configurable with `--port PORT` (1–65535)**; `8628` is only the
+default. The same port serves both `/api/v1` and `/web/` when `--web-dir` is
+set. `--listen` selects the network address: the default `127.0.0.1` accepts
+connections only from the server computer; a LAN address accepts connections
+from that network. For LAN HTTP, `--allow-http` explicitly permits plaintext
+authentication outside loopback **for testing only**. Passwords and session
+tokens travel unencrypted. The older `--allow-insecure-http` spelling still
+works. Android debug builds also require **Allow HTTP for testing** on the
+login screen; release builds require HTTPS.
+
+With `--web-dir`, the server redirects `/` to `/web/` and serves that directory
+read-only on the same origin as the API; no `--allowed-origin` is needed. If
+the web client is hosted separately, omit `--web-dir` and pass its exact origin
+with `--allowed-origin`. This CORS option is for browsers, not Android network
+access. The server requires a Bearer session for domain endpoints, hashes the
+password with scrypt, and rate limits failed logins.
+
+### Server options
+
+All options below may follow `LexiconServer` or `LexiconServer serve`. Paths
+are relative to the current working directory unless absolute.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--database PATH` | `lexicon.db` | SQLite database. |
+| `--auth-file PATH` | `<database directory>/lexicon-auth.json` | Credentials file. |
+| `--listen ADDRESS` | `127.0.0.1` | Address to bind. |
+| `--port PORT` | `8628` | TCP port, 1–65535. |
+| `--tls-cert PATH` | off | PEM certificate chain; use with `--tls-key`. |
+| `--tls-key PATH` | off | PEM private key; use with `--tls-cert`. |
+| `--allow-http` | off | Permit plaintext HTTP outside loopback for testing. |
+| `--allow-insecure-http` | off | Older alias for `--allow-http`. |
+| `--allowed-origin ORIGIN` | none | Exact browser CORS origin; repeatable. |
+| `--trusted-proxy ADDRESS` | none | Trust `X-Forwarded-For` from this proxy; repeatable. |
+| `--web-dir DIR` | off | Serve a copy of `lexicon-web` at `/web/` on the API port. |
+| `--session-file PATH` | `<database directory>/lexicon-sessions.json` | Persist sessions across restarts. |
+| `--no-session-file` | off | Keep sessions in memory only. |
+| `--session-idle-timeout S` | `28800` (8 h) | Session idle timeout in seconds. |
+| `--session-max-lifetime S` | `604800` (7 d) | Maximum session lifetime in seconds. |
+| `--max-sessions N` | `32` | Maximum simultaneous sessions. |
+| `--login-max-failures N` | `10` | Failed logins per client before HTTP 429. |
+| `--login-failure-window S` | `900` | Login rate limit window in seconds. |
+| `--login-max-failures-total N` | `200` | Total failed logins before HTTP 429; `0` disables this limit. |
+| `--login-max-parallel-hashes N` | `2` | Simultaneous password hash operations. |
+| `--max-json-bytes N` | `1048576` | Maximum JSON request size. |
+| `--max-blob-bytes N` | `67108864` | Maximum Blob upload size. |
+| `--read-timeout S` | `15` | Socket read timeout in seconds. |
+| `--write-timeout S` | `15` | Socket write timeout in seconds. |
+| `--keep-alive-timeout S` | `5` | Keep-alive timeout in seconds. |
+| `--backup-dir DIR` | off | Enable automatic backups in this directory. |
+| `--backup-interval H` | `24` | Hours between automatic backups. |
+| `--backup-keep N` | `14` | Number of backups retained. |
+| `--quiet` | off | Suppress one log line per request. |
+| `-h`, `--help` | — | Show CLI help. |
+| `--version` | — | Show version. |
+
+For `export`, `--output FILE` writes to a file instead of standard output and
+`--with-files` includes referenced files. For `import`, `--input FILE` is
+required. `backup` requires `--backup-dir DIR` and accepts `--backup-keep N`.
+These command-specific options and the commands above are the complete CLI;
+`./build/LexiconServer --help` prints the same list. See
+[server documentation](docs/server.md) for TLS, reverse proxies and backups.
 
 Open <http://127.0.0.1:8628/> to reach the client at `/web/`. Its API calls
 go to `/api/v1` on the same origin, so no CORS setting is needed. Only the
@@ -403,13 +484,7 @@ the database, credentials, sessions or Blobs.
 
 `lexicon-web/` is the browser client: HTML, CSS and vanilla JavaScript modules
 with no bundler, no transpiler and no `npm install`. You can also copy the
-directory to a separate static host. In that case, leave off `--web-dir`,
-allow the web host's exact origin, and sign in using the server's address:
-
-```bash
-LexiconServer --database ~/lexicon.db \
-  --allowed-origin https://lexicon.example.com
-```
+directory to a separate static host and sign in using the server's address.
 
 The web client reproduces the desktop
 workflows - the filtered item table, the six-tab item editor, group and type

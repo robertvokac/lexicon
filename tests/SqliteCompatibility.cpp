@@ -300,6 +300,24 @@ int main() {
     if (!success(app.items.deleteItem(kept), "Delete the upgraded item") ||
         !expect(query("SELECT COUNT(*) FROM card;") == "0", "The upgraded card table does not cascade")) return 1;
   }
+  // An older binary must not open and write a schema it does not understand.
+  {
+    const auto future = temp.path / "future.db";
+    {
+      SqliteRepository repository;
+      if (!success(repository.open(future.string()), "Create future-version fixture")) return 1;
+    }
+    sqlite3 *raw = nullptr;
+    const bool bumped = sqlite3_open(future.string().c_str(), &raw) == SQLITE_OK &&
+                        sqlite3_exec(raw, "UPDATE db_version SET version = 27;", nullptr, nullptr, nullptr) == SQLITE_OK;
+    sqlite3_close(raw);
+    if (!expect(bumped, "Could not mark fixture as a newer schema")) return 1;
+    SqliteRepository repository;
+    auto opened = repository.open(future.string());
+    if (!expect(!opened && opened.error().code == lexicon::Error::Code::Storage &&
+                    opened.error().message.find("newer") != std::string::npos,
+                "A newer database schema was accepted")) return 1;
+  }
   if (!expect(lexicon::asciiFold("ABCéÉ") == "abcéÉ", "Core case policy changed")) return 1;
   return 0;
 }

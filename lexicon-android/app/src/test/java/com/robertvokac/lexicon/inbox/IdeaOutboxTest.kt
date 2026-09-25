@@ -12,12 +12,15 @@ import com.robertvokac.lexicon.testing.signInDirectly
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.IOException
 
 @RunWith(AndroidJUnit4::class)
 class IdeaOutboxTest {
@@ -68,6 +71,47 @@ class IdeaOutboxTest {
         outbox.add("Kept", "on the phone", server, user)
         val again = IdeaOutbox(File(environment.directory, "inbox-outbox.json")) { container.api }
         assertEquals(listOf("Kept"), again.ideas.value.map { it.title })
+    }
+
+    @Test
+    fun failedReplacementKeepsThePreviousFileAndMemory() = runBlocking {
+        outbox.add("Kept", "on the phone", server, user)
+        val file = File(environment.directory, "inbox-outbox.json")
+        val before = file.readText()
+        val failing = IdeaOutbox(file, replaceFile = { _, _ -> throw IOException("rename failed") }) { container.api }
+        try {
+            failing.add("New", "must not appear", server, user)
+            fail("A failed replacement must be reported")
+        } catch (_: IOException) {
+            // The old queue is still both on disk and in memory.
+        }
+        assertEquals(before, file.readText())
+        assertEquals(listOf("Kept"), failing.ideas.value.map { it.title })
+        assertEquals(listOf("Kept"), IdeaOutbox(file) { container.api }.ideas.value.map { it.title })
+    }
+
+    @Test
+    fun unreadableQueueIsPreservedAndCannotBeOverwritten() = runBlocking {
+        val file = File(environment.directory, "inbox-outbox.json")
+        file.writeText("{damaged")
+        val blocked = IdeaOutbox(file) { container.api }
+        assertNotNull(blocked.storageError)
+        try {
+            blocked.add("New", "must not overwrite the file", server, user)
+            fail("A damaged queue must block new writes")
+        } catch (_: IOException) {
+            // Keep the original for recovery instead of treating it as empty.
+        }
+        assertEquals("{damaged", file.readText())
+    }
+
+    @Test
+    fun legacyStagingFileIsRecoveredWhenTheOriginalIsMissing() = runBlocking {
+        outbox.add("Recovered", "from the old staging file", server, user)
+        val file = File(environment.directory, "inbox-outbox.json")
+        val staging = File(environment.directory, "inbox-outbox.json.new")
+        assertTrue(file.renameTo(staging))
+        assertEquals(listOf("Recovered"), IdeaOutbox(file) { container.api }.ideas.value.map { it.title })
     }
 
     @Test

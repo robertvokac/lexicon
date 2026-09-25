@@ -14,6 +14,11 @@ as one UTF-8 JSON document. Every client writes and reads the same format:
 
 The command line works on the database file directly, so it can export a
 dictionary while the server runs; SQLite coordinates the two connections.
+With `--with-files`, a missing, unreadable or damaged referenced file makes
+the export fail instead of producing an incomplete document. When `--output`
+names an existing file, the command writes and syncs a temporary file in the
+same directory before replacing it; a failed write leaves the previous export
+in place.
 
 **An export is for moving a dictionary, not for backing up a large one.**
 With files included, every file is read into memory, grows by a third as

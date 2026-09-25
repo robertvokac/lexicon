@@ -366,6 +366,10 @@ void applyMigrations(const Connection &db) {
         }}
     };
 
+  if (currentVersion > migrations.back().version)
+    throw Failure("Database schema version " + std::to_string(currentVersion) +
+                  " is newer than this Lexicon supports (version " +
+                  std::to_string(migrations.back().version) + ").");
 
   for (const auto &migration : migrations) {
     if (migration.version <= currentVersion) continue;

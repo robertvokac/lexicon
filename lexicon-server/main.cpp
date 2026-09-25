@@ -1,5 +1,5 @@
 // Composition root for LexiconServer: SqliteRepository + LexiconApplication +
-// HTTP adapter. No Qt, no HTML, no static files.
+// HTTP adapter. No Qt; static web assets are optional with --web-dir.
 #include "AuthState.h"
 #include "Backup.h"
 #include "Exchange.h"
@@ -8,6 +8,7 @@
 #include "RestServer.h"
 #include "ServerConfig.h"
 #include "SqliteRepository.h"
+#include "TempFile.h"
 
 #include <atomic>
 #include <csignal>
@@ -203,11 +204,22 @@ int exportDictionary(const lexicon::http::CommandLine &command) {
     std::cout << *document << std::flush;
     return 0;
   }
-  std::ofstream output(lexicon::utf8Path(command.exchangePath), std::ios::binary | std::ios::trunc);
-  output << *document;
-  output.close();
-  if (!output) {
-    std::cerr << "Cannot write " << command.exchangePath << '\n';
+  const auto destination = lexicon::utf8Path(command.exchangePath);
+  auto temporary = lexicon::http::TempFile::create(
+      lexicon::pathToUtf8(destination.parent_path()));
+  if (!temporary) {
+    std::cerr << "Cannot export to " << command.exchangePath << ": "
+              << temporary.error().message << '\n';
+    return 1;
+  }
+  if (auto written = temporary->write(document->data(), document->size()); !written) {
+    std::cerr << "Cannot export to " << command.exchangePath << ": "
+              << written.error().message << '\n';
+    return 1;
+  }
+  if (auto installed = temporary->replace(command.exchangePath); !installed) {
+    std::cerr << "Cannot export to " << command.exchangePath << ": "
+              << installed.error().message << '\n';
     return 1;
   }
   std::cerr << "Exported to " << command.exchangePath << ".\n";
@@ -304,16 +316,21 @@ int serve(const ServerConfig &config) {
   else
     std::cout << "Sessions: in memory only, a restart ends them\n";
   if (config.allowedOrigins.empty())
-    std::cout << "No CORS origin is allowed yet. Browser clients need "
-                 "--allowed-origin <https://your-static-host>.\n";
+    std::cout << "No CORS origin is allowed for separately hosted browser "
+                 "clients. Use --allowed-origin <https://your-static-host> "
+                 "if needed.\n";
   else
     for (const auto &origin : config.allowedOrigins)
       std::cout << "Allowed origin: " << origin << '\n';
   if (!tls && !lexicon::http::isLoopbackAddress(config.listenAddress))
     std::cout << "WARNING: serving plaintext HTTP on a non-loopback address. "
                  "Passwords and session tokens are exposed on the network.\n";
-  std::cout << "This server never serves lexicon-web; deploy it separately.\n"
-            << std::flush;
+  if (config.webDirectory.empty())
+    std::cout << "Web client: not served; deploy lexicon-web separately.\n";
+  else
+    std::cout << "Web client: " << config.webDirectory
+              << " served at /web/ on this port.\n";
+  std::cout << std::flush;
 
   // Backups run in a thread of their own, on a connection of their own.
   std::unique_ptr<lexicon::backup::BackupScheduler> backups;

@@ -256,7 +256,7 @@ fun LexiconRoot(
                         val scope = rememberCoroutineScope()
                         UnreachableScreen(
                             server = current.server.value,
-                            message = current.message,
+                            message = listOfNotNull(current.message, container.outbox.storageError).joinToString("\n"),
                             onRetry = { container.sessions.retry() },
                             onSignIn = { container.sessions.abandonStoredSession() },
                             waitingIdeas = ideas.count { it.server == current.server.value && it.username == current.username },
@@ -272,8 +272,13 @@ fun LexiconRoot(
                                         offlineIdea = idea.copy(error = "Enter a title.")
                                     } else {
                                         scope.launch {
-                                            container.outbox.add(idea.title, idea.content, current.server.value, current.username)
-                                            offlineIdea = null
+                                            try {
+                                                container.outbox.add(idea.title, idea.content, current.server.value, current.username)
+                                                offlineIdea = null
+                                            } catch (_: java.io.IOException) {
+                                                offlineIdea = idea.copy(error =
+                                                    "Could not save the idea on this phone. It is still in the editor.")
+                                            }
                                         }
                                     }
                                 },

@@ -288,6 +288,16 @@ int main() {
   check(!broken, "an item with a blank title fails the import");
   check(empty.itemCount() == 0 && empty.groupNamed("G") < 0, "and leaves nothing behind");
 
+  // A portable export must never claim success if a referenced file is gone.
+  // Restoring such a document would otherwise silently drop its field value.
+  const auto blobPath = SqliteRepository::blobDirectory((directory.path / "source" / "lexicon.db").string());
+  fs::remove(fs::path(blobPath) / hash.substr(0, 2) / hash.substr(2));
+  auto incomplete = lexicon::exchange::exportDocument(app, true);
+  check(!incomplete && incomplete.error().message.find(hash) != std::string::npos,
+        "export with files refuses a missing referenced Blob");
+  check(lexicon::exchange::exportDocument(app, false).has_value(),
+        "export without files still works when a referenced Blob is missing");
+
   if (failures == 0) std::cout << "exchange: all checks passed\n";
   return failures == 0 ? 0 : 1;
 }

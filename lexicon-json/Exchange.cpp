@@ -121,11 +121,12 @@ Result<std::string> exportDocument(LexiconApplication &application, bool include
             hashes.insert(std::move(hash));
     Json blobs = Json::array();
     for (const auto &hash : hashes) {
-      // A file missing from this database is left out; importing the value
-      // then says so.
       auto data = application.blobs.readData(hash);
-      if (data)
-        blobs.push_back(Json{{"hash", hash}, {"data", base64Encode(*data)}});
+      if (!data)
+        return std::unexpected(Error{data.error().code,
+                                     "Cannot include Blob " + hash + " in the export: " +
+                                         data.error().message});
+      blobs.push_back(Json{{"hash", hash}, {"data", base64Encode(*data)}});
     }
     document["blobs"] = std::move(blobs);
   }

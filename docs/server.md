@@ -3,6 +3,8 @@
 `LexiconServer` is the Qt-free REST server for Lexicon. It opens the same
 SQLite database as the desktop client, composes the same
 `LexiconApplication` services, and exposes them as JSON under `/api/v1`.
+An older Lexicon refuses a database with a newer schema version so it cannot
+silently write data it does not understand.
 
 > **LexiconServer serves no web assets unless you ask it to.** By default it
 > answers REST calls and nothing else, and the web client is static content you
@@ -156,9 +158,12 @@ That is the whole installation for a personal setup: one process, one port.
   session file or the `blobs` directory - everything under it is public to
   anyone who can reach the port.
 
-Behind a reverse proxy nothing changes: proxy the whole origin, and `/web` and
-`/api/v1` arrive together. To serve the client from a different host instead,
-leave `--web-dir` off and use `--allowed-origin`.
+Behind an HTTPS reverse proxy, proxy the whole origin so `/web` and `/api/v1`
+arrive together. Forward the public `Host` and `X-Forwarded-Proto: https`, and
+configure that proxy with `--trusted-proxy`. Otherwise the HTTP backend sees
+its own origin as `http://...` and rejects the browser's same-origin
+`Origin: https://...` on write requests. To serve the client from a different
+host instead, allow the client's exact origin with `--allowed-origin`.
 
 ## Options
 
@@ -234,16 +239,18 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8628;
         proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $remote_addr;
         client_max_body_size 64m;
     }
 }
 ```
 
-Add `--trusted-proxy 127.0.0.1` so the rate limiter counts the real client
-address. `X-Forwarded-For` is honoured **only** when the peer on the TCP
-connection is a configured trusted proxy; otherwise the connection address is
-used and the header is ignored.
+Add `--trusted-proxy 127.0.0.1` so the server recognises the public HTTPS
+origin and the rate limiter counts the real client address. `X-Forwarded-For`
+is honoured **only** when the peer on the TCP connection is a configured
+trusted proxy; otherwise the connection address is used and the header is
+ignored.
 
 A reverse proxy is not required. The server terminates TLS itself with
 OpenSSL:

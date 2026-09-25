@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 // Two files: settings may be backed up, the session never is (see
@@ -63,6 +64,8 @@ class AppContainer(
         return try {
             outbox.flush(session.identity.server.value, session.identity.username)
         } catch (_: ApiException) {
+            0
+        } catch (_: IOException) {
             0
         }
     }

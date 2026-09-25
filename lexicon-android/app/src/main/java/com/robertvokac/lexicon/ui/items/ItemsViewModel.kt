@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 /** Quick Add: a title, the Default group semantics, and nothing else. */
 data class QuickAddState(
@@ -103,7 +104,9 @@ data class ItemsUiState(
 
 class ItemsViewModel(private val container: AppContainer) : ViewModel() {
     private val api = container.api
-    private val _state = MutableStateFlow(ItemsUiState())
+    private val _state = MutableStateFlow(
+        ItemsUiState(message = container.outbox.storageError?.let(::UserMessage)),
+    )
     val state: StateFlow<ItemsUiState> = _state.asStateFlow()
 
     private var pageSize = SettingsStore.DEFAULT_PAGE_SIZE
@@ -504,8 +507,19 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try {
                 val saved = api.captureIdea(title, inbox.content)
-                inbox.waitingId?.let { container.outbox.remove(it) }
-                _state.update { it.copy(inbox = null, message = UserMessage("Saved “$title” to the Inbox.", openItemId = saved.id)) }
+                val localCleanupFailed = try {
+                    inbox.waitingId?.let { container.outbox.remove(it) }
+                    false
+                } catch (_: IOException) {
+                    true
+                }
+                _state.update {
+                    it.copy(inbox = null, message = UserMessage(
+                        if (!localCleanupFailed) "Saved “$title” to the Inbox."
+                        else "Saved “$title” to the server, but its offline copy could not be cleared yet.",
+                        openItemId = saved.id,
+                    ))
+                }
                 container.dataChanges.itemChanged(saved.id)
                 // The first idea makes the Inbox type, which the filters offer.
                 if (_state.value.types.none { it.id == saved.item.itemTypeId }) container.dataChanges.typesChanged()
@@ -514,18 +528,30 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
                 if (me != null && IdeaOutbox.keepsForLater(failure)) {
                     // No connection, the server away or the session gone: the
                     // idea waits on this phone instead of being lost.
-                    val waitingId = inbox.waitingId
-                    if (waitingId != null) {
-                        container.outbox.update(waitingId, title, inbox.content)
-                    } else {
-                        container.outbox.add(title, inbox.content, me.server.value, me.username)
-                    }
-                    _state.update {
-                        it.copy(inbox = null, message = UserMessage("Saved “$title” on this phone. It goes to the server as soon as it can."))
+                    try {
+                        val waitingId = inbox.waitingId
+                        if (waitingId != null) {
+                            container.outbox.update(waitingId, title, inbox.content)
+                        } else {
+                            container.outbox.add(title, inbox.content, me.server.value, me.username)
+                        }
+                        _state.update {
+                            it.copy(inbox = null, message = UserMessage("Saved “$title” on this phone. It goes to the server as soon as it can."))
+                        }
+                    } catch (_: IOException) {
+                        _state.update {
+                            it.copy(inbox = it.inbox?.copy(busy = false,
+                                error = "Could not save the idea on this phone. It is still in the editor."))
+                        }
                     }
                 } else {
                     // Everything typed stays, with the reason.
                     _state.update { it.copy(inbox = it.inbox?.copy(busy = false, error = failure.userMessage() ?: it.inbox.error)) }
+                }
+            } catch (_: IOException) {
+                _state.update {
+                    it.copy(inbox = it.inbox?.copy(busy = false,
+                        error = "Could not save the idea on this phone. It is still in the editor."))
                 }
             }
         }
@@ -550,6 +576,8 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
                 }
             } catch (failure: ApiException) {
                 _state.update { it.copy(message = failure.userMessage()?.let(::UserMessage)) }
+            } catch (_: IOException) {
+                _state.update { it.copy(message = UserMessage("Could not update the offline Inbox. The ideas remain on this phone.")) }
             } finally {
                 _state.update { it.copy(sendingIdeas = false) }
             }
@@ -561,7 +589,13 @@ class ItemsViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(showWaitingIdeas = false, inbox = InboxState(title = idea.title, content = idea.content, waitingId = idea.id)) }
 
     fun deleteWaitingIdea(idea: PendingIdea) {
-        viewModelScope.launch { container.outbox.remove(idea.id) }
+        viewModelScope.launch {
+            try {
+                container.outbox.remove(idea.id)
+            } catch (_: IOException) {
+                _state.update { it.copy(message = UserMessage("Could not delete the offline idea. It remains on this phone.")) }
+            }
+        }
     }
 
     /** Items anywhere whose title, full title or alias is exactly [text], ignoring case. */

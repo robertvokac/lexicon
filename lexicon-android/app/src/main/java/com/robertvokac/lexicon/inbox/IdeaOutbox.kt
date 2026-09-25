@@ -16,6 +16,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -41,10 +47,20 @@ data class PendingIdea(
  * app-private storage that is never backed up, and are sent oldest first as
  * soon as the account they belong to is signed in with the server in reach.
  */
-class IdeaOutbox(private val file: File, private val api: () -> LexiconApi) {
+class IdeaOutbox(
+    private val file: File,
+    private val replaceFile: (Path, Path) -> Unit = { source, target ->
+        Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    },
+    private val api: () -> LexiconApi,
+) {
     private val mutex = Mutex()
-    private val _ideas = MutableStateFlow(read())
+    private val loaded = runCatching { read() }
+    private val _ideas = MutableStateFlow(loaded.getOrDefault(emptyList()))
     val ideas: StateFlow<List<PendingIdea>> = _ideas.asStateFlow()
+    val storageError: String? = loaded.exceptionOrNull()?.let {
+        "Offline Inbox could not be read. Its file is preserved; new ideas cannot be saved on this phone yet."
+    }
 
     private val _delivered = MutableStateFlow(0)
 
@@ -129,23 +145,39 @@ class IdeaOutbox(private val file: File, private val api: () -> LexiconApi) {
         return null
     }
 
-    private fun read(): List<PendingIdea> = try {
-        if (file.exists()) LexiconJson.decodeFromString(ListSerializer(PendingIdea.serializer()), file.readText()) else emptyList()
-    } catch (_: Exception) {
-        emptyList()
+    private fun read(): List<PendingIdea> {
+        // Recover a complete staging file left by an older app version if its
+        // delete-then-rename fallback removed the original before a crash.
+        val legacyStaging = File(file.parentFile, "${file.name}.new")
+        fun readIfPresent(candidate: File): String? = try {
+            Files.readAllBytes(candidate.toPath()).toString(Charsets.UTF_8)
+        } catch (_: NoSuchFileException) {
+            null
+        }
+        val contents = readIfPresent(file) ?: readIfPresent(legacyStaging) ?: return emptyList()
+        return LexiconJson.decodeFromString(ListSerializer(PendingIdea.serializer()), contents)
     }
 
-    // Written whole to a new file and moved over the old one, so a crash
-    // leaves either the old list or the new one.
+    // Never delete the previous list. A failed write or rename leaves it and
+    // the in-memory list unchanged. Both files are on the same filesystem.
     private suspend fun save(ideas: List<PendingIdea>) {
-        _ideas.value = ideas
+        if (storageError != null)
+            throw IOException(storageError, loaded.exceptionOrNull())
         withContext(Dispatchers.IO) {
-            file.parentFile?.mkdirs()
-            val next = File(file.parentFile, "${file.name}.new")
-            next.writeText(LexiconJson.encodeToString(ListSerializer(PendingIdea.serializer()), ideas))
-            if (!next.renameTo(file)) {
-                file.delete()
-                next.renameTo(file)
+            val parent = file.absoluteFile.parentFile ?: throw IOException("Offline Inbox has no parent directory.")
+            Files.createDirectories(parent.toPath())
+            val staged = Files.createTempFile(parent.toPath(), ".${file.name}-", ".tmp")
+            try {
+                val bytes = LexiconJson.encodeToString(ListSerializer(PendingIdea.serializer()), ideas)
+                    .toByteArray(Charsets.UTF_8)
+                FileOutputStream(staged.toFile()).use { output ->
+                    output.write(bytes)
+                    output.fd.sync()
+                }
+                replaceFile(staged, file.toPath())
+                _ideas.value = ideas
+            } finally {
+                Files.deleteIfExists(staged)
             }
         }
     }
