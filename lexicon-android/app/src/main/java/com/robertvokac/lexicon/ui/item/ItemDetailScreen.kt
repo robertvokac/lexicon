@@ -343,7 +343,7 @@ private fun LazyListScope.values(
                         )
                     }
                     field.dataType == FieldDataType.Blob -> Text(value, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                    field.dataType == FieldDataType.Boolean -> Text(if (value == "true") "True" else "False")
+                    field.dataType == FieldDataType.Boolean -> Text(if (value == "true") "Yes" else "No")
                     else -> Text(value)
                 }
             }

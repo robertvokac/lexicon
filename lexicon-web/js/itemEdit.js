@@ -197,8 +197,8 @@ function fieldEditor(fieldRecord, storedValue, onChange) {
         const select = el('select', common);
         fillSelect(select, [
             { value: '', label: 'Not set' },
-            { value: 'false', label: 'False' },
-            { value: 'true', label: 'True' },
+            { value: 'false', label: 'No' },
+            { value: 'true', label: 'Yes' },
         ], storedValue || '');
         select.addEventListener('change', () => onChange(select.value));
         return { node: select, read: () => select.value };

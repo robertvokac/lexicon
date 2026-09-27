@@ -300,7 +300,7 @@ private fun FieldEditor(
         when (field.dataType) {
         FieldDataType.Boolean -> Column {
             Text(field.name, style = MaterialTheme.typography.labelLarge)
-            val options = listOf("" to "Not set", "false" to "False", "true" to "True")
+            val options = listOf("" to "Not set", "false" to "No", "true" to "Yes")
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 options.forEachIndexed { index, (stored, label) ->
                     SegmentedButton(

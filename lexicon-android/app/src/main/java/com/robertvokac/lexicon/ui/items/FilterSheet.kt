@@ -246,7 +246,7 @@ private fun ValueFilter(field: ItemField, value: String, onChange: (String) -> U
     when (field.dataType) {
         FieldDataType.Boolean -> ChoiceField(
             label = field.name,
-            choices = listOf(Choice("", "Any"), Choice("false", "False"), Choice("true", "True")),
+            choices = listOf(Choice("", "Any"), Choice("false", "No"), Choice("true", "Yes")),
             selected = value,
             onSelected = onChange,
         )

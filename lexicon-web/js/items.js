@@ -474,7 +474,7 @@ export class MainView {
                 'aria-label': `${fieldRecord.name} filter`,
             });
             const options = fieldRecord.dataType === 'Boolean'
-                ? [{ value: 'false', label: 'False' }, { value: 'true', label: 'True' }]
+                ? [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }]
                 : fieldRecord.enumOptions.map((option) => ({ value: option, label: option }));
             fillSelect(select, [{ value: '', label: 'Any' }, ...options], previous);
             select.addEventListener('change', () => {
@@ -883,7 +883,9 @@ export class MainView {
         if (column.field) {
             const value = (item.fieldValues || {})[String(column.field.id)] || '';
             // An image reads as its kind, not as its hash.
-            return column.field.dataType === 'Image' ? describeImage(value) || value : value;
+            if (column.field.dataType === 'Image') return describeImage(value) || value;
+            if (column.field.dataType === 'Boolean' && value) return value === 'true' ? 'Yes' : 'No';
+            return value;
         }
         return '';
     }

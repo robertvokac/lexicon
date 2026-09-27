@@ -457,8 +457,8 @@ void ItemEditDialog::refreshFields() {
             auto* combo = new QComboBox(m_fieldsBox);
             combo->addItem("Not set", "");
             if (field.dataType == FieldDataType::Boolean) {
-                combo->addItem("False", "false");
-                combo->addItem("True", "true");
+                combo->addItem("No", "false");
+                combo->addItem("Yes", "true");
             } else {
                 for (const auto& option : field.enumOptions) {
                     combo->addItem(option, option);

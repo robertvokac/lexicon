@@ -671,8 +671,8 @@ void MainWindow::refreshValueFilters() {
             auto* combo = new QComboBox();
             combo->addItem("Any", QString());
             if (field.dataType == FieldDataType::Boolean) {
-                combo->addItem("False", "false");
-                combo->addItem("True", "true");
+                combo->addItem("No", "false");
+                combo->addItem("Yes", "true");
             } else {
                 for (const auto& option : field.enumOptions) combo->addItem(option, option);
             }
@@ -868,6 +868,8 @@ void MainWindow::refreshItems() {
                     auto* cell = new QStandardItem(imagevalues::describe(value));
                     cell->setData(imagevalues::thumbnail(value, 24), Qt::DecorationRole);
                     row << cell;
+                } else if (field.dataType == FieldDataType::Boolean && !value.isEmpty()) {
+                    row << new QStandardItem(value == "true" ? "Yes" : "No");
                 } else {
                     row << new QStandardItem(value);
                 }
