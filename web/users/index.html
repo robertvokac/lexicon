@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>User Guide — Lexicon</title>
-<meta name="description" content="Lexicon User Guide for desktop, web and Android: create items and cards, quiz yourself, review what is due, manage alarms and back up your dictionary.">
+<meta name="description" content="Lexicon User Guide for desktop, web and Android: create items and cards, use the shared Markdown Board, review what is due, manage alarms and back up your dictionary.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -44,6 +44,7 @@
         <li><a href="cards.html">Cards &amp; quiz</a></li>
         <li><a href="alarms.html">Alarms</a></li>
         <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="board.html">Board</a></li>
         <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
       </ul>
@@ -70,7 +71,7 @@
     <h2 id="what">What is Lexicon?</h2>
     <p>Lexicon is a free, open-source application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>items</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
     <p>Data is stored locally in a SQLite file, with optional attachments in an adjacent directory — no account, no cloud, no telemetry. You own your knowledge.</p>
-    <p>There are <strong>three clients over one dictionary</strong>: the Qt desktop application, which opens the database file directly, and a web client and a native Android app, which talk to <code>LexiconServer</code> next to that same file. What you write in one shows up in the others — including <a href="review.html">reviews</a>, <a href="cards.html">cards</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>.</p>
+    <p>There are <strong>three clients over one dictionary</strong>: the Qt desktop application, which opens the database file directly, and a web client and a native Android app, which talk to <code>LexiconServer</code> next to that same file. What you write in one shows up in the others — including <a href="review.html">reviews</a>, <a href="cards.html">cards</a>, <a href="alarms.html">alarms</a>, the <a href="inbox.html">Inbox</a> and the shared <a href="board.html">Board</a>.</p>
 
     <figure class="screenshot">
       <img src="../assets/img/desktop-main.png" alt="Lexicon main window with filters, item table, and rendered content" loading="lazy">
@@ -87,7 +88,7 @@
       <tr><td><strong>Alias</strong></td><td>An alternate name or synonym that also matches in search.</td><td><code>RAII</code> for <em>Resource Acquisition Is Initialization</em></td></tr>
       <tr><td><strong>Link</strong></td><td>A typed relationship between two items (with automatic backlinks).</td><td><code>std::vector</code> — <em>Is A</em> → <code>container</code></td></tr>
     </table>
-    <p>Review brings due items back on a schedule, while <a href="cards.html">cards</a> let you quiz yourself on specific questions. <a href="alarms.html">Alarms</a> ring in every client, and the <a href="inbox.html">Inbox</a> catches an idea before it is gone.</p>
+    <p>Review brings due items back on a schedule, while <a href="cards.html">cards</a> let you quiz yourself on specific questions. <a href="alarms.html">Alarms</a> ring in every client, the <a href="inbox.html">Inbox</a> catches an idea before it is gone, and the shared <a href="board.html">Board</a> keeps one living Markdown overview close at hand.</p>
 
     <h2 id="quick-start">Quick start checklist</h2>
     <ol class="steps">
@@ -138,6 +139,10 @@
       <a class="card card-link" href="inbox.html">
         <h3>📥 Inbox</h3>
         <p>Catch an idea in one step, even without a connection, and file it properly later.</p>
+      </a>
+      <a class="card card-link" href="board.html">
+        <h3>📋 Board</h3>
+        <p>Read and edit one shared Markdown dashboard from the desktop, browser or Android app.</p>
       </a>
       <a class="card card-link" href="server-and-clients.html">
         <h3>🖧 Server, web &amp; Android</h3>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Server, web &amp; Android — Lexicon</title>
-<meta name="description" content="Use one Lexicon dictionary from every device: LexiconServer over REST, the static web client in any browser, and the native Android app - with the same items, reviews and alarms.">
+<meta name="description" content="Use one Lexicon dictionary from every device: LexiconServer over REST, the static web client in any browser, and the native Android app - with the same items, reviews, alarms and Markdown Board.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -44,6 +44,7 @@
         <li><a href="cards.html">Cards &amp; quiz</a></li>
         <li><a href="alarms.html">Alarms</a></li>
         <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="board.html">Board</a></li>
         <li><a href="server-and-clients.html" class="active">Server, web &amp; Android</a></li>
         <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
       </ul>
@@ -61,7 +62,7 @@
 
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Server, web &amp; Android</p>
     <h1>Server, web &amp; Android</h1>
-    <p class="lead">The desktop client opens the SQLite file directly. Run <code>LexiconServer</code> next to that same file and the dictionary is also available in a browser and on your phone — the same items, the same reviews, the same alarms.</p>
+    <p class="lead">The desktop client opens the SQLite file directly. Run <code>LexiconServer</code> next to that same file and the dictionary is also available in a browser and on your phone — the same items, reviews, alarms and shared Board.</p>
 
     <figure class="screenshot">
       <img src="../assets/img/web-main.png" alt="The web client: search, the item table and the rendered content of an item" loading="lazy">
@@ -86,7 +87,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <pre><code>LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web</code></pre>
     <p>Open <code>http://127.0.0.1:8628/</code> and you are on the client: it is served read-only under <code>/web</code> on the same port, it finds the API by itself because it is the same address, and <code>--allowed-origin</code> is not needed at all. One process is then the whole installation.</p>
     <p>You can also copy the directory to any web server instead — GitHub Pages, nginx, a Raspberry Pi. Then tell the server that address with <code>--allowed-origin</code>, and sign in with the server's address, your user name and your password.</p>
-    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> and the <a href="inbox.html">Inbox</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
+    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a>, the <a href="inbox.html">Inbox</a> and the <a href="board.html">Board</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
 
     <div class="phone-shots">
       <figure>
@@ -104,7 +105,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <ul>
       <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
       <li>The editor with the same tabs, including image values.</li>
-      <li><a href="review.html">Review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, and the <a href="inbox.html">Inbox</a> that also works offline.</li>
+      <li><a href="review.html">Review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, the <a href="inbox.html">Inbox</a> that also works offline, and the shared <a href="board.html">Board</a>.</li>
       <li>Previously loaded pages can be read from an encrypted cache when the server is unreachable. Other edits still need the server; Inbox ideas can wait and sync later.</li>
       <li>Settings can change the password and revoke signed-in sessions or remembered phones. A password change signs every device out.</li>
       <li>The <a href="links-and-relationships.html#graph">relationship graph</a>, with pinch to zoom and a full-screen mode.</li>
@@ -128,7 +129,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <h2 id="together">Working on the same dictionary</h2>
     <ul>
       <li><strong>One database.</strong> The desktop client and the server open the same SQLite file; the web client and the Android app hold no data of their own.</li>
-      <li><strong>No lost edits.</strong> Every item carries a revision. If another client saved an item after you opened it, your save is refused with a list of what differs and the choice to <strong>Overwrite</strong>, <strong>Reload</strong>, or keep editing.</li>
+      <li><strong>No silent overwrites.</strong> Every item and the Board carry revisions. If another client saves first, an older save is refused instead of replacing the newer text.</li>
       <li><strong>Sessions survive a restart</strong> of the server, so an upgrade does not sign your phone out.</li>
     </ul>
 
@@ -138,7 +139,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     </div>
 
     <div class="page-nav">
-      <a class="prev" href="inbox.html"><span class="dir">← Previous</span>Inbox</a>
+      <a class="prev" href="board.html"><span class="dir">← Previous</span>Board</a>
       <a class="next" href="backup-and-troubleshooting.html"><span class="dir">Next →</span>Backup &amp; troubleshooting</a>
     </div>
 

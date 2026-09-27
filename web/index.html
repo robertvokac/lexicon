@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lexicon — Knowledge Dictionary for Desktop, Web and Android</title>
-<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for desktop, web and Android: linked items, question-and-answer cards, quizzes, spaced-repetition review, alarms and an Inbox over one SQLite database.">
+<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for desktop, web and Android: linked items, cards, quizzes, review, alarms, an Inbox and one shared Markdown Board over one SQLite database.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -118,6 +118,11 @@
           <p>A title and a few lines, saved in one step and sorted out later. On Android it works offline too and goes out when the server is back.</p>
         </div>
         <div class="card">
+          <span class="card-emoji">📋</span>
+          <h3>One shared Board</h3>
+          <p>A living Markdown dashboard shared by the desktop, web and Android clients, with a rendered reading view and the same source/preview editor as item content. <a href="users/board.html">Learn about the Board</a>.</p>
+        </div>
+        <div class="card">
           <span class="card-emoji">🔎</span>
           <h3>Fast search &amp; filters</h3>
           <p>Search titles, aliases, tags, flags and the content itself — the full-text index ignores diacritics, so <code>prilis</code> finds <em>Příliš</em>. Then narrow it down with a filter per column.</p>
@@ -125,7 +130,7 @@
         <div class="card">
           <span class="card-emoji">🛟</span>
           <h3>Backups and one-file export</h3>
-          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Verify database, export and file checksums before restoring. Portable exports contain current items, cards and alarms.</p>
+          <p>The server backs the dictionary up by itself, keeping snapshots that share unchanged files. Verify database, export and file checksums before restoring. Portable exports contain current items, cards, alarms and the Board.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🗑️</span>
@@ -140,7 +145,7 @@
         <div class="card">
           <span class="card-emoji">🖧</span>
           <h3>Your dictionary everywhere</h3>
-          <p>A Qt-free REST server, a static web client and a native Android app — the same items, reviews and alarms, with revisions that keep two clients from overwriting each other.</p>
+          <p>A Qt-free REST server, a static web client and a native Android app — the same items, reviews, alarms and Board, with revisions that keep two clients from overwriting each other.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🌗</span>
@@ -165,7 +170,7 @@
             <li>Creating groups and items</li>
             <li>The Markdown content editor</li>
             <li>Tags, flags, aliases, links &amp; backlinks</li>
-            <li>Review, cards, alarms and the Inbox</li>
+            <li>Review, cards, alarms, the Inbox and the Board</li>
             <li>The server, the web client and the Android app</li>
             <li>Search, filtering, backup, and troubleshooting</li>
           </ul>
@@ -240,7 +245,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
       <div class="grid grid-3">
         <div class="card"><h3>🖧 LexiconServer</h3><p>A Qt-free REST server next to your database. It serves your other devices and backs the dictionary up by itself.</p></div>
         <div class="card"><h3>🌐 Web client</h3><p>Static HTML, CSS and JavaScript — no build step. Everything the desktop does, in a browser, down to a phone-sized screen.</p></div>
-        <div class="card"><h3>📱 Android app</h3><p>Kotlin and Jetpack Compose: search, edit, review, alarms that ring when the app is closed, encrypted offline reading of loaded pages, and an Inbox that works offline.</p></div>
+        <div class="card"><h3>📱 Android app</h3><p>Kotlin and Jetpack Compose: search, edit, review, the shared Board, alarms that ring when the app is closed, encrypted offline reading of loaded pages, and an Inbox that works offline.</p></div>
       </div>
       <div class="grid grid-2" style="margin-top:1.5rem">
         <figure class="screenshot">

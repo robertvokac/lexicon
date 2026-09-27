@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Board — Lexicon</title>
+<meta name="description" content="Use the Lexicon Board as one shared Markdown document across the desktop, web and Android clients, with rendered reading and source/preview editing modes.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="cards.html">Cards &amp; quiz</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="board.html" class="active">Board</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#one-document">One shared document</a></li>
+        <li><a href="#open">Open the Board</a></li>
+        <li><a href="#edit">Read and edit</a></li>
+        <li><a href="#safety">Concurrent edits and backup</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Board</p>
+    <h1>Board</h1>
+    <p class="lead">The Board is one shared Markdown document for information that should stay visible without becoming a collection of separate items — a dashboard, current priorities, a reading list, or whatever belongs on your front wall.</p>
+
+    <h2 id="one-document">One shared document</h2>
+    <p>There is exactly one Board for the whole dictionary. It has no title, group, type, fields or other item metadata. Open it from any client and you see the same content; save it in one client and the next client loads that change.</p>
+    <p>The Board starts empty. Markdown gives it structure: headings, emphasis, lists, quotes, links, code and tables all render into a clean reading view.</p>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Board or item?</strong> Use the Board for one living overview. Use an <a href="editing-items.html">item</a> when the note needs its own title, metadata, search result, relationships or review schedule.</p>
+    </div>
+
+    <h2 id="open">Open the Board</h2>
+    <table>
+      <tr><th>Client</th><th>How to open it</th></tr>
+      <tr><td>Desktop</td><td>The <code>Board</code> button to the right of <code>Inbox</code>, or <code>File → Board...</code></td></tr>
+      <tr><td>Web client</td><td>The <code>Board</code> button beside <code>Inbox</code> above the item table; on a narrow screen it is in <strong>⋮ More actions</strong></td></tr>
+      <tr><td>Android</td><td><strong>Board</strong> in the navigation drawer</td></tr>
+    </table>
+
+    <h2 id="edit">Read and edit</h2>
+    <ol class="steps">
+      <li>Opening Board first shows the rendered document. An empty Board says so instead of showing a blank screen.</li>
+      <li>Choose <strong>Edit</strong>. The editor uses the same Markdown experience as the Content tab of an item, including the formatting toolbar and source/preview views.</li>
+      <li>Choose <strong>Save</strong> to publish the new version. Cancel or go back to leave the stored Board unchanged; Android warns before discarding unsaved text.</li>
+    </ol>
+    <p>Because it is a single document, headings make a useful permanent outline. A small example:</p>
+    <pre><code># Board
+
+## Now
+- Finish the release notes
+- Review the database migration
+
+## Later
+1. Clean up old Inbox items
+2. Plan the next learning topic</code></pre>
+
+    <h2 id="safety">Concurrent edits and backup</h2>
+    <p>Every saved Board has a revision. If another client saves after you opened the editor, your older save is refused instead of silently overwriting the newer text. Reload to take the newer version, keep editing, or deliberately overwrite it where the client offers that choice.</p>
+    <p>The Board is stored inside <code>lexicon.db</code>. A full database backup includes it, and portable export format version 4 carries it too. Import fills an empty Board, but keeps a different Board that is already in use and reports a warning — it never replaces existing Board text silently.</p>
+
+    <div class="page-nav">
+      <a class="prev" href="inbox.html"><span class="dir">← Previous</span>Inbox</a>
+      <a class="next" href="server-and-clients.html"><span class="dir">Next →</span>Server, web &amp; Android</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
