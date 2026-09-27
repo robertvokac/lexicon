@@ -34,7 +34,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 9,
+  "version": 10,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -65,7 +65,7 @@ and keep the files as files, shared between backups.
       "successCount": 4, "failureCount": 2, "lastAttempt": "2026-09-24T14:00:00Z" }
   ],
   "studyPlans": [
-    { "id": 1, "item": "Effective Modern C++", "type": "Book", "unitType": "Page",
+    { "id": 1, "item": "Effective Modern C++", "group": "Programming", "type": "Book", "unitType": "Page",
       "currentProgress": 50, "startDate": "2026-09-27", "endDate": "2026-11-30",
       "note": "Study carefully", "firstUnit": 1, "lastUnit": 334,
       "studyDaysMask": 127, "customUnit": "" }
@@ -82,7 +82,7 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 9.
+  before anything is written. This document describes version 10.
 - **Versions.** The version goes up whenever a reader of the previous one
   would import a new document by leaving part of it out - silently losing
   data - rather than refusing it:
@@ -98,6 +98,7 @@ and keep the files as files, shared between backups.
   | 7 | Lexicon with organized alarms | `asap` and `group` on alarms |
   | 8 | Lexicon with foreign-key fields | `ForeignKey` and `targetItemTypeId` on fields |
   | 9 | Lexicon with Study Plans | `studyPlans` with progress, calendar dates, unit ranges and weekdays |
+  | 10 | Lexicon with Study Plan groups | plain text `group` on `studyPlans` |
 
   A reader takes every version up to its own and refuses a newer one: an
   older Lexicon says it does not know version 3 instead of importing it
@@ -125,11 +126,11 @@ and keep the files as files, shared between backups.
   The counts are whole numbers and never negative, and `lastAttempt` is
   given exactly when one of them is above zero. Documents written before
   cards existed have no `cards`; they import as before, with none.
-- `studyPlans` holds each independent plan as plain UTF-8 `item` text, with
-  symbolic `type` and `unitType`. `currentProgress` is the last completed
+- `studyPlans` holds each independent plan as plain UTF-8 `item` and optional
+  `group` text, with symbolic `type` and `unitType`. `currentProgress` is the last completed
   absolute unit, or 0 when none is complete. Date endpoints are inclusive
   local calendar dates; the Monday-to-Sunday bit mask defaults to 127. Older
-  exports have no plans. Reimporting an unchanged plan does not duplicate it.
+  exports have no plans or no Group text. Reimporting an unchanged plan does not duplicate it.
 - `blobs` is present when files were included. `data` is standard base64 with
   padding; `hash` is the SHA-256 of the decoded bytes, the value `Blob` fields
   store and the part after the colon of an `Image` value (`image/png:<hash>`).

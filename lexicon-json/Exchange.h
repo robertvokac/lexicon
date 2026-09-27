@@ -18,9 +18,9 @@ inline constexpr const char *kFormat = "lexicon-export";
 // the original Board. Version 5 carries item-field descriptions, and version
 // 6 carries every named Board, version 7 carries alarm ASAP and Group, and
 // version 8 carries ForeignKey fields and their target item types; version 9
-// carries Study Plans.
+// carries Study Plans; version 10 carries their Group text.
 // Every version from 1 up is read.
-inline constexpr int kVersion = 9;
+inline constexpr int kVersion = 10;
 inline constexpr int kOldestVersion = 1;
 
 // With `includeFiles`, the contents of every file a value refers to travel in

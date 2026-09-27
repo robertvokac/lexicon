@@ -475,6 +475,9 @@ void applyMigrations(const Connection &db) {
             " CHECK(current_progress = 0 OR current_progress BETWEEN first_unit AND last_unit)"
             ");",
             "CREATE INDEX idx_study_plan_dates ON study_plan(start_date, end_date);"
+        }},
+        {35, {
+            "ALTER TABLE study_plan ADD COLUMN \"group\" TEXT NOT NULL DEFAULT '';"
         }}
     };
 

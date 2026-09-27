@@ -206,8 +206,8 @@ void MainWindow::setupUi() {
     auto* quickAddButton = new QPushButton("Add", centralWidget);
     auto* inboxButton = new QPushButton("Inbox", centralWidget);
     inboxButton->setToolTip("Save an idea quickly: a title and plain text, in Default with the type Inbox (Ctrl+I)");
-    auto* boardButton = new QPushButton("Board", centralWidget);
-    boardButton->setToolTip("Read or edit the shared Markdown Board");
+    auto* boardButton = new QPushButton("Boards", centralWidget);
+    boardButton->setToolTip("Choose, read or edit a Markdown Board");
     auto* addButton = new QPushButton("Add ...", centralWidget);
     auto* editButton = new QPushButton("Edit", centralWidget);
     auto* deleteButton = new QPushButton("Delete", centralWidget);
@@ -405,7 +405,7 @@ void MainWindow::setupMenus() {
     auto* inboxAction = fileMenu->addAction("Inbox...");
     inboxAction->setShortcut(QKeySequence("Ctrl+I"));
     connect(inboxAction, &QAction::triggered, this, &MainWindow::openInbox);
-    auto* boardAction = fileMenu->addAction("Board...");
+    auto* boardAction = fileMenu->addAction("Boards...");
     connect(boardAction, &QAction::triggered, this, &MainWindow::openBoard);
     fileMenu->addSeparator();
     auto* exportAction = fileMenu->addAction("Export...");

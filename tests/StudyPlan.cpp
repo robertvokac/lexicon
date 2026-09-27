@@ -147,26 +147,33 @@ void storageAndExport() {
   sqlite3_open(path.c_str(), &raw);
   sqlite3_stmt* query = nullptr;
   sqlite3_prepare_v2(raw, "SELECT version FROM db_version;", -1, &query, nullptr);
-  check(sqlite3_step(query) == SQLITE_ROW && sqlite3_column_int(query, 0) == 34, "fresh schema 34");
+  check(sqlite3_step(query) == SQLITE_ROW && sqlite3_column_int(query, 0) == 35, "fresh schema 35");
   sqlite3_finalize(query);
   auto p = plan("2026-09-27", "2026-11-30", 1, 334);
   p.item = "Žluťoučký kůň";
+  p.group = "Programming";
   auto saved = app.studyPlans.save(p);
   check(saved.has_value() && saved->id > 0, "create UTF-8 plan");
   if (!saved) { sqlite3_close(raw); return; }
-  check(app.studyPlans.loadAll()->size() == 1 && app.studyPlans.load(saved->id)->item == p.item, "list and get");
+  check(app.studyPlans.loadAll()->size() == 1 && app.studyPlans.load(saved->id)->item == p.item &&
+        app.studyPlans.load(saved->id)->group == "Programming", "list and get preserve group");
   saved->currentProgress = 50;
+  saved->group = "Advanced C++";
   auto updated = app.studyPlans.save(*saved);
-  check(updated.has_value() && updated->currentProgress == 50, "update progress");
+  check(updated.has_value() && updated->currentProgress == 50 && updated->group == "Advanced C++", "update progress and group");
   auto exported = lexicon::exchange::exportDocument(app, false);
   check(exported && exported->find("studyPlans") != std::string::npos, "export carries Study Plans");
+  auto legacyJson = lexicon::http::toJson(*updated);
+  legacyJson.erase("group");
+  check(lexicon::http::studyPlanFromJson(legacyJson).group.empty(), "older Study Plan JSON defaults group to empty");
   const auto otherPath = (directory / "other.db").string();
   SqliteRepository other;
   check(other.open(otherPath).has_value(), "open import database");
   lexicon::LexiconApplication target(other);
   auto imported = lexicon::exchange::importDocument(target, *exported);
   check(imported && imported->studyPlansCreated == 1, "import creates Study Plan");
-  check(target.studyPlans.loadAll()->at(0).currentProgress == 50, "import retains progress");
+  check(target.studyPlans.loadAll()->at(0).currentProgress == 50 &&
+        target.studyPlans.loadAll()->at(0).group == "Advanced C++", "import retains progress and group");
   auto oldExport = nlohmann::json::parse(*exported);
   oldExport["version"] = 8;
   oldExport.erase("studyPlans");
@@ -179,6 +186,17 @@ void storageAndExport() {
   auto changedImport = lexicon::exchange::importDocument(target, changedExport.dump());
   check(changedImport && changedImport->studyPlansCreated == 1 && target.studyPlans.loadAll()->size() == 2,
         "a different imported progress is not silently discarded");
+  changedExport["studyPlans"][0]["currentProgress"] = 50;
+  changedExport["studyPlans"][0]["group"] = "Other group";
+  auto changedGroupImport = lexicon::exchange::importDocument(target, changedExport.dump());
+  check(changedGroupImport && changedGroupImport->studyPlansCreated == 1 && target.studyPlans.loadAll()->size() == 3,
+        "a different imported group is not silently discarded");
+  auto version9Export = nlohmann::json::parse(*exported);
+  version9Export["version"] = 9;
+  version9Export["studyPlans"][0].erase("group");
+  auto importedOlderPlan = lexicon::exchange::importDocument(target, version9Export.dump());
+  check(importedOlderPlan && importedOlderPlan->studyPlansCreated == 1 &&
+        target.studyPlans.loadAll()->at(3).group.empty(), "version 9 plan imports with empty group");
   auto invalid = *saved;
   invalid.id = -1;
   invalid.item = "  ";
@@ -231,6 +249,29 @@ void storageAndExport() {
     lexicon::LexiconApplication upgraded(after);
     check(upgraded.search.findItemId("Preserved item").has_value(), "version 33 item survives migration");
     check(upgraded.studyPlans.loadAll()->empty(), "migration 34 creates empty plan table");
+  }
+  const auto v34Path = (directory / "version34.db").string();
+  int oldId = -1;
+  {
+    SqliteRepository before;
+    check(before.open(v34Path).has_value(), "create version 34 fixture");
+    lexicon::LexiconApplication old(before);
+    auto oldPlan = old.studyPlans.save(plan("2026-09-27", "2026-11-30", 1, 10));
+    check(oldPlan.has_value(), "write plan before version 34 downgrade");
+    if (oldPlan) oldId = oldPlan->id;
+  }
+  sqlite3* v34Raw = nullptr;
+  sqlite3_open(v34Path.c_str(), &v34Raw);
+  check(sqlite3_exec(v34Raw, "ALTER TABLE study_plan DROP COLUMN \"group\"; UPDATE db_version SET version = 34;",
+                     nullptr, nullptr, nullptr) == SQLITE_OK, "downgrade fixture to version 34 schema");
+  sqlite3_close(v34Raw);
+  {
+    SqliteRepository after;
+    check(after.open(v34Path).has_value(), "migrate version 34 database");
+    lexicon::LexiconApplication upgraded(after);
+    auto plans = upgraded.studyPlans.loadAll();
+    check(plans && plans->size() == 1 && plans->at(0).id == oldId && plans->at(0).group.empty(),
+          "migration 35 preserves plan and defaults group to empty");
   }
 }
 } // namespace

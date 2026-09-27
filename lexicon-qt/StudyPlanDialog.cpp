@@ -94,9 +94,9 @@ StudyPlanDialog::StudyPlanDialog(QWidget* parent) : QDialog(parent) {
     m_filter->setObjectName("studyPlanFilter");
     heading->addWidget(m_filter);
     root->addLayout(heading);
-    m_table = new QTableWidget(0, 9, this);
+    m_table = new QTableWidget(0, 10, this);
     m_table->setObjectName("studyPlanTable");
-    m_table->setHorizontalHeaderLabels({"Item", "Type", "Completed", "Units", "Start", "End", "Planned/day", "Required now", "Status"});
+    m_table->setHorizontalHeaderLabels({"Item", "Group", "Type", "Completed", "Units", "Start", "End", "Planned/day", "Required now", "Status"});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -175,8 +175,11 @@ void StudyPlanDialog::reload() {
         const auto& p = value.plan;
         auto* box = new QGroupBox(qtbridge::toQt(p.item), this);
         auto* layout = new QVBoxLayout(box);
-        layout->addWidget(new QLabel(QString("%1 · %2 · %3 – %4").arg(typeName(p.type), unitName(p),
-            qtbridge::toQt(p.startDate), qtbridge::toQt(p.endDate)), box));
+        auto* summary = new QLabel(QString("%1%2 · %3 · %4 – %5")
+            .arg(p.group.empty() ? QString() : qtbridge::toQt(p.group) + " · ", typeName(p.type), unitName(p),
+            qtbridge::toQt(p.startDate), qtbridge::toQt(p.endDate)), box);
+        summary->setTextFormat(Qt::PlainText);
+        layout->addWidget(summary);
         layout->addWidget(new QLabel(QString("Current progress: %1").arg(p.currentProgress ? QString("%1 %2").arg(unitName(p, 1)).arg(p.currentProgress) : "0"), box));
         layout->addWidget(new QLabel(QString("Expected progress: %1").arg(value.expectedProgress ? QString("%1 %2").arg(unitName(p, 1)).arg(value.expectedProgress) : "0"), box));
         layout->addWidget(new QLabel(difference(value), box));
@@ -222,7 +225,7 @@ void StudyPlanDialog::reload() {
     for (int row = 0; row < m_table->rowCount(); ++row) {
         const auto& value = visible[static_cast<std::size_t>(row)];
         const auto& p = value.plan;
-        const QStringList cells{qtbridge::toQt(p.item), typeName(p.type),
+        const QStringList cells{qtbridge::toQt(p.item), qtbridge::toQt(p.group), typeName(p.type),
             QString("%1 / %2").arg(value.completedUnits).arg(value.totalUnits),
             unitName(p), qtbridge::toQt(p.startDate), qtbridge::toQt(p.endDate),
             pace(value.plannedUnitsPerStudyDay), value.requiredUnitsPerRemainingStudyDay
@@ -230,7 +233,7 @@ void StudyPlanDialog::reload() {
         for (int col = 0; col < cells.size(); ++col) {
             auto* cell = new QTableWidgetItem(cells[col]);
             if (col == 0) cell->setData(Qt::UserRole, p.id);
-            if (col == 7) cell->setToolTip(requiredPace(value, p));
+            if (col == 8) cell->setToolTip(requiredPace(value, p));
             m_table->setItem(row, col, cell);
         }
         if (p.id == previous) m_table->selectRow(row);
@@ -276,6 +279,8 @@ void StudyPlanDialog::editPlan(lexicon::StudyPlanRecord plan) {
     auto* form = new QFormLayout;
     auto* item = new QLineEdit(qtbridge::toQt(plan.item), &dialog);
     item->setObjectName("studyPlanItem");
+    auto* group = new QLineEdit(qtbridge::toQt(plan.group), &dialog);
+    group->setObjectName("studyPlanGroup");
     auto* type = new QComboBox(&dialog);
     for (int i = 0; i <= static_cast<int>(lexicon::StudyPlanType::Other); ++i)
         type->addItem(typeName(static_cast<lexicon::StudyPlanType>(i)), i);
@@ -317,7 +322,7 @@ void StudyPlanDialog::editPlan(lexicon::StudyPlanRecord plan) {
         checks.push_back(check); days->addWidget(check);
     }
     auto* note = new QPlainTextEdit(qtbridge::toQt(plan.note), &dialog);
-    form->addRow("Item:", item); form->addRow("Type:", type); form->addRow("Unit:", unit);
+    form->addRow("Item:", item); form->addRow("Group:", group); form->addRow("Type:", type); form->addRow("Unit:", unit);
     form->addRow("Custom unit:", custom); form->addRow("First unit:", first); form->addRow("Last unit:", last);
     form->addRow("Last completed (0 = none):", progress); form->addRow("Start:", start); form->addRow("End:", end);
     form->addRow("Study days:", daysWidget); form->addRow("Note:", note);
@@ -328,6 +333,7 @@ void StudyPlanDialog::editPlan(lexicon::StudyPlanRecord plan) {
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&, this] {
         plan.item = qtbridge::toCore(item->text().trimmed());
+        plan.group = qtbridge::toCore(group->text().trimmed());
         plan.type = static_cast<lexicon::StudyPlanType>(type->currentIndex());
         plan.unitType = static_cast<lexicon::StudyUnitType>(unit->currentIndex());
         plan.customUnit = qtbridge::toCore(custom->text().trimmed());

@@ -155,9 +155,9 @@ export class MainView {
             class: 'secondary',
             title: 'Save an idea quickly: a title and plain text, in Default with the type Inbox',
         });
-        this.boardButton = button('Board', {
+        this.boardButton = button('Boards', {
             class: 'secondary',
-            title: 'Read or edit the shared Markdown Board',
+            title: 'Choose, read or edit a Markdown Board',
         });
         this.addButton = button('Add ...', {
             class: 'secondary',

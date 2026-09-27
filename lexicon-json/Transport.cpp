@@ -348,7 +348,7 @@ Json toJson(const AlarmRecord &alarm) {
 
 Json toJson(const StudyPlanRecord &plan) {
   return Json{{"id", plan.id > 0 ? Json(plan.id) : Json(nullptr)},
-              {"item", plan.item}, {"type", name(plan.type)},
+              {"item", plan.item}, {"group", plan.group}, {"type", name(plan.type)},
               {"unitType", name(plan.unitType)}, {"currentProgress", plan.currentProgress},
               {"startDate", plan.startDate}, {"endDate", plan.endDate},
               {"note", plan.note}, {"firstUnit", plan.firstUnit},
@@ -383,6 +383,7 @@ StudyPlanRecord studyPlanFromJson(const Json &json) {
   StudyPlanRecord plan;
   plan.id = optionalId(json, "id");
   plan.item = requiredString(json, "item");
+  plan.group = optionalString(json, "group");
   plan.type = requiredEnum(json, "type", studyPlanTypeFromName, "Study Plan type");
   plan.unitType = requiredEnum(json, "unitType", studyUnitTypeFromName, "Study Plan unit type");
   plan.currentProgress = optionalInt(json, "currentProgress", 0);

@@ -385,7 +385,7 @@ class LexiconFlowsTest {
             revision = 3,
         )
         login()
-        openDrawer("Board")
+        openDrawer("Boards")
         compose.waitForText("Team Board")
         compose.onNode(hasText("Edit") and hasClickAction()).performClick()
         compose.onNode(hasSetTextAction()).performTextReplacement("# Team Board\n\n- Ship it")
@@ -678,12 +678,13 @@ class LexiconFlowsTest {
     @Test
     fun aStudyPlanShowsTodayAndRequiresDeleteConfirmation() {
         val today = LocalDate.now().toString()
-        fake.studyPlans += StudyPlan(id = 901, item = "Effective Modern C++", type = StudyPlanType.Book,
+        fake.studyPlans += StudyPlan(id = 901, item = "Effective Modern C++", group = "Programming", type = StudyPlanType.Book,
             unitType = StudyUnitType.Page, currentProgress = 50, startDate = today,
             endDate = LocalDate.now().plusDays(10).toString(), lastUnit = 334)
         login()
         openDrawer("Study Plan")
         compose.waitForText("Effective Modern C++")
+        compose.onNodeWithText("Programming · Book", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Expected progress: page", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Expected unit range today: pages", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Delete", substring = false).performClick()

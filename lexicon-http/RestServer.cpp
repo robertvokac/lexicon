@@ -1790,7 +1790,16 @@ void RestServer::Impl::registerRoutes() {
     if (!body) return;
     auto plan = studyPlanFromJson(*body);
     plan.id = *id;
-    auto saved = guarded.with([&](LexiconApplication &app) { return app.studyPlans.save(plan); });
+    auto saved = guarded.with([&](LexiconApplication &app) -> Result<StudyPlanRecord> {
+      // Clients predating Group omit it when changing progress. Keep the
+      // stored value; an explicit empty string still clears it.
+      if (!body->contains("group")) {
+        auto existing = app.studyPlans.load(*id);
+        if (!existing) return std::unexpected(existing.error());
+        plan.group = existing->group;
+      }
+      return app.studyPlans.save(plan);
+    });
     if (!saved) { respondError(response, saved.error(), "updateStudyPlan"); return; }
     respondJson(response, 200, Json{{"studyPlan", toJson(*saved)}});
   });

@@ -51,22 +51,28 @@ void checkStudyPlans(Checks &checks) {
   Session session(harness, checks);
   auto &client = session.client();
   checks.expect(parse(client.get("/api/v1/study-plans")).at("studyPlans").empty(), "Study Plans start empty");
-  Json plan{{"item", "Effective Modern C++"}, {"type", "Book"}, {"unitType", "Page"},
+  Json plan{{"item", "Effective Modern C++"}, {"group", "Programming"}, {"type", "Book"}, {"unitType", "Page"},
             {"firstUnit", 101}, {"lastUnit", 300}, {"currentProgress", 145},
             {"startDate", "2026-09-28"}, {"endDate", "2026-10-04"},
             {"studyDaysMask", 31}, {"note", "Practice carefully"}};
   const auto created = client.post("/api/v1/study-plans", plan.dump());
   checks.expectEqual(created.status, 201, "create Study Plan");
+  checks.expectEqual(parse(created).at("studyPlan").value("group", std::string{}), std::string("Programming"),
+                     "created Study Plan returns group");
   const int id = parse(created).at("studyPlan").value("id", 0);
   checks.expect(id > 0, "created plan ID");
   const std::string path = "/api/v1/study-plans/" + std::to_string(id);
   checks.expectEqual(client.get(path).status, 200, "get Study Plan");
+  checks.expectEqual(parse(client.get(path)).at("studyPlan").value("group", std::string{}), std::string("Programming"),
+                     "Study Plan get preserves group");
   checks.expectEqual(static_cast<long long>(parse(client.get("/api/v1/study-plans")).at("studyPlans").size()), 1,
                      "list Study Plans");
   const auto saturday = parse(client.get("/api/v1/study-plans/overview?date=2026-10-03"));
   checks.expectEqual(saturday.at("plans").at(0).value("totalStudyDays", 0), 5,
                      "weekend does not count on a weekday plan");
   checks.expect(!saturday.at("plans").at(0).value("studyDay", true), "Saturday has no target");
+  checks.expectEqual(saturday.at("plans").at(0).at("plan").value("group", std::string{}),
+                     std::string("Programming"), "overview preserves group");
   const auto saturdayPlan = saturday.at("plans").at(0);
   checks.expect(saturdayPlan.at("expectedUnitStart").is_null() && saturdayPlan.at("expectedUnitEnd").is_null() &&
                     saturdayPlan.at("requiredUnitsPerRemainingStudyDay").is_null(),
@@ -82,9 +88,18 @@ void checkStudyPlans(Checks &checks) {
   checks.expectEqual(client.get("/api/v1/study-plans/overview?date=2026-02-30").status, 400,
                      "invalid overview date");
   plan["currentProgress"] = 200;
+  plan["group"] = "Advanced C++";
   const auto changed = client.put(path, plan.dump());
   checks.expectEqual(changed.status, 200, "update Study Plan");
   checks.expectEqual(parse(changed).at("studyPlan").value("currentProgress", 0), 200, "progress round trips");
+  checks.expectEqual(parse(changed).at("studyPlan").value("group", std::string{}), std::string("Advanced C++"),
+                     "updated group round trips");
+  plan.erase("group");
+  const auto legacyChanged = client.put(path, plan.dump());
+  checks.expectEqual(legacyChanged.status, 200, "older client can update Study Plan");
+  checks.expectEqual(parse(legacyChanged).at("studyPlan").value("group", std::string{}),
+                     std::string("Advanced C++"), "older client update retains group");
+  plan["group"] = "Advanced C++";
   auto overview = parse(client.get("/api/v1/study-plans/overview?date=2026-09-30")).at("plans").at(0);
   checks.expectEqual(overview.value("expectedCompletedUnits", -1), 120, "REST cumulative count");
   checks.expectEqual(overview.value("expectedProgress", -1), 220, "REST absolute expected progress");
@@ -1341,7 +1356,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
-  checks.expectEqual(document.value("version", 0), 9, "of format version 9");
+  checks.expectEqual(document.value("version", 0), 10, "of format version 10");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");
@@ -1363,9 +1378,9 @@ void checkExportImport(Checks &checks) {
 
   checks.expectEqual(other.client().post("/api/v1/import", exported.body, "text/plain").status, 415,
                      "an import must be JSON");
-  const auto damaged = other.client().post("/api/v1/import", R"({"format":"lexicon-export","version":10})");
+  const auto damaged = other.client().post("/api/v1/import", R"({"format":"lexicon-export","version":11})");
   checks.expectEqual(damaged.status, 400, "a newer export version is refused");
-  checks.expect(parse(damaged).at("error").value("message", std::string{}).find("version 10") != std::string::npos,
+  checks.expect(parse(damaged).at("error").value("message", std::string{}).find("version 11") != std::string::npos,
                 "and the refusal names the version");
 }
 

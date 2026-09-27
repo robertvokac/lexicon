@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canMarkToday, differenceText, expectedRangeText, localStudyDate, pace, requiredPaceText, studyRange, unitLabel } from '../js/studyplans.js';
+import { canMarkToday, differenceText, expectedRangeText, localStudyDate, pace, requiredPaceText, studyRange, unitLabel, validStudyDate } from '../js/studyplans.js';
 
 test('local date uses local calendar components across a timezone boundary', () => {
     const late = new Date('2026-09-27T23:30:00-05:00');
     const expected = `${late.getFullYear()}-${String(late.getMonth() + 1).padStart(2, '0')}-${String(late.getDate()).padStart(2, '0')}`;
     assert.equal(localStudyDate(late), expected);
+});
+test('Study Plan dates use the ISO calendar format', () => {
+    assert.equal(validStudyDate('2024-02-29'), true);
+    assert.equal(validStudyDate('2026-09-27'), true);
+    for (const value of ['27.09.2026', '2026-9-27', '2026-02-29', '2026-13-01', '2026-04-31', '']) {
+        assert.equal(validStudyDate(value), false, value);
+    }
 });
 test('overview presents absolute progress, daily range and unavailable pace', () => {
     const plan = { unitType: 'Page', firstUnit: 101, lastUnit: 300, currentProgress: 187 };

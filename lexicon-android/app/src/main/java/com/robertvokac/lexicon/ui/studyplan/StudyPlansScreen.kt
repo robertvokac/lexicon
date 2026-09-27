@@ -209,7 +209,7 @@ private fun StudyCard(value: StudyPlanOverview, busy: Boolean, onEdit: (StudyPla
     Card(Modifier.widthIn(max = 800.dp).fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(plan.item, style = MaterialTheme.typography.titleMedium)
-            Text("${plan.type} · ${plan.unitLabel(2)} · ${plan.startDate} – ${plan.endDate}", style = MaterialTheme.typography.bodySmall)
+            Text("${if (plan.group.isNotBlank()) "${plan.group} · " else ""}${plan.type} · ${plan.unitLabel(2)} · ${plan.startDate} – ${plan.endDate}", style = MaterialTheme.typography.bodySmall)
             Text("Current progress: ${if (plan.currentProgress == 0) "0" else "${plan.unitLabel(1)} ${plan.currentProgress}"}")
             Text("Expected progress: ${if (value.expectedProgress == 0) "0" else "${plan.unitLabel(1)} ${value.expectedProgress}"}")
             Text(value.differenceText())
@@ -265,6 +265,7 @@ private fun <T> EnumPicker(label: String, value: T, options: List<T>, onChoose: 
 private fun StudyPlanEditor(initial: StudyPlan?, busy: Boolean, serverError: String?, onDismiss: () -> Unit, onSave: (StudyPlan) -> Unit) {
     val today = LocalDate.now().toString()
     var item by remember(initial?.id) { mutableStateOf(initial?.item.orEmpty()) }
+    var group by remember(initial?.id) { mutableStateOf(initial?.group.orEmpty()) }
     var type by remember(initial?.id) { mutableStateOf(initial?.type ?: StudyPlanType.Book) }
     var unit by remember(initial?.id) { mutableStateOf(initial?.unitType ?: StudyUnitType.Page) }
     var custom by remember(initial?.id) { mutableStateOf(initial?.customUnit.orEmpty()) }
@@ -281,6 +282,7 @@ private fun StudyPlanEditor(initial: StudyPlan?, busy: Boolean, serverError: Str
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text(if (initial == null) "Add Study Plan" else "Edit Study Plan") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(item, { item = it; error = null }, label = { Text("Item") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(group, { group = it }, label = { Text("Group") }, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 EnumPicker("Type", type, StudyPlanType.entries, { type = it })
                 EnumPicker("Unit", unit, StudyUnitType.entries, { unit = it })
@@ -321,7 +323,7 @@ private fun StudyPlanEditor(initial: StudyPlan?, busy: Boolean, serverError: Str
                 unit == StudyUnitType.Other && custom.isBlank() -> "Enter a custom unit."
                 else -> null
             }
-            if (error == null) onSave(StudyPlan(id = initial?.id, item = item.trim(), type = type, unitType = unit,
+            if (error == null) onSave(StudyPlan(id = initial?.id, item = item.trim(), group = group.trim(), type = type, unitType = unit,
                 customUnit = custom.trim(), firstUnit = firstNumber!!, lastUnit = lastNumber!!,
                 currentProgress = progressNumber!!, startDate = start, endDate = end, studyDaysMask = mask, note = note))
         }) { Text("Save") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })

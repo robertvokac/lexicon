@@ -133,6 +133,7 @@
       <tr><td>32</td><td>Adds Boolean <code>alarm.asap</code> and optional text <code>alarm.group</code></td></tr>
       <tr><td>33</td><td>Rebuilds <code>item_field</code> for <code>ForeignKey</code> (11) and adds <code>target_item_type_id</code></td></tr>
       <tr><td>34</td><td>Creates <code>study_plan</code> and its date-range index</td></tr>
+      <tr><td>35</td><td>Adds optional text <code>study_plan.group</code>, defaulting existing plans to an empty string</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -267,10 +268,11 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
   last_unit INTEGER NOT NULL CHECK(last_unit &gt;= first_unit),
   study_days_mask INTEGER NOT NULL DEFAULT 127 CHECK(study_days_mask BETWEEN 1 AND 127),
   custom_unit TEXT NOT NULL DEFAULT '',
+  "group" TEXT NOT NULL DEFAULT '',
   CHECK(current_progress = 0 OR current_progress BETWEEN first_unit AND last_unit)
 );
 CREATE INDEX idx_study_plan_dates ON study_plan(start_date, end_date);</code></pre>
-    <p>Additional checks require nonblank item text, ISO date shapes, end date on or after start, and a nonblank custom unit for Other. Application validation checks actual calendar dates and that a selected weekday occurs in the inclusive range. The item is plain UTF-8 text and has no relationship to the <code>item</code> table. Progress is the last completed absolute unit, or 0. Monday is bit 1 through Sunday bit 64. There is no redundant unit count; it is <code>last_unit - first_unit + 1</code>.</p>
+    <p>Migration 35 appends <code>"group"</code> to the original table; the definition above shows the current columns. Additional checks require nonblank item text, ISO date shapes, end date on or after start, and a nonblank custom unit for Other. Application validation checks actual calendar dates and that a selected weekday occurs in the inclusive range. The item and Group are plain UTF-8 text with no relationship to the <code>item</code> or item-group tables. Progress is the last completed absolute unit, or 0. Monday is bit 1 through Sunday bit 64. There is no redundant unit count; it is <code>last_unit - first_unit + 1</code>.</p>
 
     <h3><code>alarm</code></h3>
     <pre><code>CREATE TABLE alarm (

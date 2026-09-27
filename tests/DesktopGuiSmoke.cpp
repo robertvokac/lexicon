@@ -904,6 +904,7 @@ void checkAlarmDuringModalDialog(lexicon::LexiconApplication &application) {
 void checkStudyPlans(lexicon::LexiconApplication &application) {
   lexicon::StudyPlanRecord plan;
   plan.item = "Effective Modern C++";
+  plan.group = "Programming";
   plan.startDate = qtbridge::toCore(QDate::currentDate().toString("yyyy-MM-dd"));
   plan.endDate = qtbridge::toCore(QDate::currentDate().addDays(5).toString("yyyy-MM-dd"));
   plan.firstUnit = 101;
@@ -920,6 +921,8 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
   if (!table || !remove) return;
   check(table->rowCount() == 1 && table->item(0, 0)->text() == "Effective Modern C++",
         "desktop Study Plan shows the saved item");
+  check(table->horizontalHeaderItem(1)->text() == "Group" && table->item(0, 1)->text() == "Programming" &&
+        table->horizontalHeaderItem(2)->text() == "Type", "desktop Study Plan shows Group before Type");
   auto labels = dialog.findChildren<QLabel*>();
   check(std::any_of(labels.begin(), labels.end(), [](QLabel* label) { return label->text().startsWith("Expected progress: page "); }),
         "desktop dashboard shows absolute expected progress");
@@ -927,9 +930,11 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
         "desktop dashboard shows both endpoints of expected range");
   table->selectRow(0);
   whenOpened<QDialog>([](QDialog& opened) {
+    auto* group = child<QLineEdit>(opened, "studyPlanGroup");
     auto* first = child<QSpinBox>(opened, "studyPlanEditorFirst");
     auto* last = child<QSpinBox>(opened, "studyPlanEditorLast");
     auto* progress = child<QSpinBox>(opened, "studyPlanEditorProgress");
+    check(group && group->text() == "Programming", "edit form loads Study Plan group");
     check(first && last && progress && progress->minimum() == 100 && progress->maximum() == 300,
           "edit progress starts at zero sentinel and stops at last unit");
     if (first && last && progress) {
@@ -956,7 +961,7 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
     });
     updateProgress->click();
   }
-  const QString requiredBefore = table->item(0, 7)->text();
+  const QString requiredBefore = table->item(0, 8)->text();
   QPushButton* markToday = nullptr;
   for (auto* button : dialog.findChildren<QPushButton*>())
     if (button->text() == "Mark today complete") markToday = button;
@@ -965,7 +970,7 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
     check(markToday->isEnabled(), "scheduled target can advance the plan");
     markToday->click();
     check(application.studyPlans.load(saved->id)->currentProgress >= 101, "quick action advances progress to absolute unit");
-    check(table->item(0, 7)->text() != requiredBefore, "required pace refreshes after progress changes");
+    check(table->item(0, 8)->text() != requiredBefore, "required pace refreshes after progress changes");
   }
   table->selectRow(0);
   whenOpened<QMessageBox>([](QMessageBox &box) {

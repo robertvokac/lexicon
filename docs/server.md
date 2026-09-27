@@ -676,11 +676,12 @@ the same scrypt derivation as a wrong password.
 
 ## Study Plans
 
-Migration 34 adds the independent `study_plan` table. Qt uses the shared
+Migration 34 adds the independent `study_plan` table; migration 35 adds its
+optional text `group` column. Qt uses the shared
 `StudyPlanService` directly; web and Android use `/api/v1/study-plans` and
 `/api/v1/study-plans/overview?date=YYYY-MM-DD`. The overview date must be the
 client's local calendar date. The server calculates targets, required pace and
-risk in the C++ application layer. Version 9 dictionary exports include plans;
+risk in the C++ application layer. Version 10 dictionary exports include Group on plans;
 SQLite snapshots include the table automatically.
 The overview derives expected cumulative progress, the original daily unit
 range, and required pace availability. These values are not stored in

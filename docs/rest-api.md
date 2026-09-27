@@ -677,14 +677,16 @@ A request body for create or update:
 
 ```json
 {
-  "item": "Effective Modern C++", "type": "Book", "unitType": "Page",
+  "item": "Effective Modern C++", "group": "Programming", "type": "Book", "unitType": "Page",
   "firstUnit": 1, "lastUnit": 334, "currentProgress": 50,
   "startDate": "2026-09-27", "endDate": "2026-11-30",
   "studyDaysMask": 127, "customUnit": "", "note": "Study carefully"
 }
 ```
 
-`type`: `Book`, `Course`, `Lesson`, `Documentation`, `Article`, `Video`,
+`group` is optional plain text, independent of Lexicon item groups; it defaults
+to an empty string on creation. An update that omits `group` keeps the saved
+value, while `"group": ""` clears it. `type`: `Book`, `Course`, `Lesson`, `Documentation`, `Article`, `Video`,
 `Practice`, `Other`. `unitType`: `Page`, `Lesson`, `Chapter`, `Section`,
 `Module`, `Video`, `Exercise`, `Minute`, `Other`. With unit `Other`, supply
 `customUnit` such as `kata`. `currentProgress` is the **last completed

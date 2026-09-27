@@ -834,7 +834,7 @@ Result<ImportReport> ExchangeService::importDictionary(
       // Only an identical plan is skipped. A changed progress or note is
       // distinct user data and must not disappear during import.
       const bool present = std::any_of(existing->begin(), existing->end(), [&](const auto &plan) {
-        return plan.item == trim(source.item) && plan.type == source.type &&
+        return plan.item == trim(source.item) && plan.group == trim(source.group) && plan.type == source.type &&
                plan.unitType == source.unitType && plan.startDate == source.startDate &&
                plan.endDate == source.endDate && plan.firstUnit == source.firstUnit &&
                plan.lastUnit == source.lastUnit && plan.currentProgress == source.currentProgress &&

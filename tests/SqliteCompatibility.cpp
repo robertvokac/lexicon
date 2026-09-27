@@ -109,9 +109,9 @@ int main() {
         !expect(rawQuery("SELECT COUNT(*) FROM temp.sqlite_master;") == "0" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'migration_%';") == "0",
                 "The rebuild left a working table")) return 1;
-    if (!expect(rawQuery("SELECT version FROM db_version;") == "34" &&
+    if (!expect(rawQuery("SELECT version FROM db_version;") == "35" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'card';") == "1",
-                "The Qt v20 database did not reach version 34 with its card table")) return 1;
+                "The Qt v20 database did not reach version 35 with its card table")) return 1;
     auto found = app.search.findItemId("Příliš žluťoučký kůň", "česky");
     if (!success(found, "Find Qt UTF-8 item")) return 1;
     auto item = app.items.loadItem(*found);
@@ -297,7 +297,7 @@ int main() {
     SqliteRepository repository;
     if (!success(repository.open(v25.string()), "Migrate a version 25 database")) return 1;
     lexicon::LexiconApplication app(repository);
-    if (!expect(query("SELECT version FROM db_version;") == "34", "Migrations 26–34 did not run") ||
+    if (!expect(query("SELECT version FROM db_version;") == "35", "Migrations 26–35 did not run") ||
         !expect(query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "2",
                 "Migration 26 did not add the card table and its index") ||
         !expect(query("SELECT COUNT(*) FROM pragma_table_info('item_field') WHERE name = 'description';") == "1",
@@ -328,7 +328,7 @@ int main() {
     }
     sqlite3 *raw = nullptr;
     const bool bumped = sqlite3_open(future.string().c_str(), &raw) == SQLITE_OK &&
-                        sqlite3_exec(raw, "UPDATE db_version SET version = 35;", nullptr, nullptr, nullptr) == SQLITE_OK;
+                        sqlite3_exec(raw, "UPDATE db_version SET version = 36;", nullptr, nullptr, nullptr) == SQLITE_OK;
     sqlite3_close(raw);
     if (!expect(bumped, "Could not mark fixture as a newer schema")) return 1;
     SqliteRepository repository;

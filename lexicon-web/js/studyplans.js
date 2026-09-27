@@ -9,6 +9,17 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export function localStudyDate(now = new Date()) {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
+export function validStudyDate(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12) return false;
+    const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return day >= 1 && day <= daysInMonth[month - 1];
+}
 export function pace(value) { return Number(value).toFixed(2); }
 export function unitLabel(plan, count) {
     const singular = plan.unitType === 'Other' ? plan.customUnit.trim() : plan.unitType.toLowerCase();
@@ -50,6 +61,7 @@ function numberInput(value, min = 0) {
 }
 async function editPlan(plan = {}) {
     const item = el('input', { type: 'text', value: plan.item || '', required: true });
+    const group = el('input', { type: 'text', value: plan.group || '' });
     const type = select(TYPES, plan.type || 'Book');
     const unitType = select(UNITS, plan.unitType || 'Page');
     const customUnit = el('input', { type: 'text', value: plan.customUnit || '', placeholder: 'e.g. kata' });
@@ -60,8 +72,12 @@ async function editPlan(plan = {}) {
     const firstUnit = numberInput(plan.firstUnit ?? 1, 1);
     const lastUnit = numberInput(plan.lastUnit ?? 1, 1);
     const currentProgress = numberInput(plan.currentProgress ?? 0, 0);
-    const startDate = el('input', { type: 'date', value: plan.startDate || localStudyDate() });
-    const endDate = el('input', { type: 'date', value: plan.endDate || localStudyDate() });
+    const dateInput = (value) => el('input', {
+        type: 'text', placeholder: 'YYYY-MM-DD',
+        value: value || localStudyDate(), autocomplete: 'off',
+    });
+    const startDate = dateInput(plan.startDate);
+    const endDate = dateInput(plan.endDate);
     const dayChecks = DAYS.map((day, index) => el('label', { class: 'study-day' }, [
         el('input', { type: 'checkbox', checked: Boolean((plan.studyDaysMask ?? 127) & (1 << index)) }), day,
     ]));
@@ -70,7 +86,7 @@ async function editPlan(plan = {}) {
     return openDialog({
         title: plan.id ? 'Edit Study Plan' : 'Add Study Plan', wide: true, initialFocus: item,
         body: el('div', { class: 'study-editor' }, [
-            field('Item:', item), field('Type:', type), field('Unit:', unitType), customRow,
+            field('Item:', item), field('Group:', group), field('Type:', type), field('Unit:', unitType), customRow,
             field('First unit:', firstUnit), field('Last unit:', lastUnit),
             field('Last completed unit (0 = not started):', currentProgress),
             field('Start date:', startDate), field('End date:', endDate),
@@ -79,12 +95,16 @@ async function editPlan(plan = {}) {
         ]),
         onAccept: async ({ fail }) => {
             const mask = dayChecks.reduce((sum, label, index) => sum + (label.querySelector('input').checked ? (1 << index) : 0), 0);
-            const values = { item: item.value.trim(), type: type.value, unitType: unitType.value,
+            const values = { item: item.value.trim(), group: group.value.trim(), type: type.value, unitType: unitType.value,
                 customUnit: customUnit.value.trim(), firstUnit: Number(firstUnit.value), lastUnit: Number(lastUnit.value),
                 currentProgress: Number(currentProgress.value), startDate: startDate.value,
                 endDate: endDate.value, studyDaysMask: mask, note: note.value };
             if (!values.item || !mask || (values.unitType === 'Other' && !values.customUnit)) {
                 fail('Enter an item, at least one study day, and a custom label for Other.'); return undefined;
+            }
+            if (!validStudyDate(values.startDate) || !validStudyDate(values.endDate) ||
+                values.startDate > values.endDate) {
+                fail('Enter valid dates as YYYY-MM-DD, with the end on or after the start.'); return undefined;
             }
             if (!Number.isInteger(values.currentProgress) ||
                 (values.currentProgress !== 0 && (values.currentProgress < values.firstUnit || values.currentProgress > values.lastUnit))) {
@@ -135,7 +155,7 @@ export async function openStudyPlans() {
         const warning = value.status === 'At risk' || value.status === 'Behind' || value.status === 'Overdue';
         const lines = [
             el('h3', { text: p.item }),
-            el('p', { class: 'hint', text: `${p.type} · ${unitLabel(p, 2)} · ${p.startDate} – ${p.endDate}` }),
+            el('p', { class: 'hint', text: `${p.group ? `${p.group} · ` : ''}${p.type} · ${unitLabel(p, 2)} · ${p.startDate} – ${p.endDate}` }),
             el('p', { text: `Current progress: ${p.currentProgress ? `${unitLabel(p, 1)} ${p.currentProgress}` : '0'}` }),
             el('p', { text: `Expected progress: ${value.expectedProgress ? `${unitLabel(p, 1)} ${value.expectedProgress}` : '0'}` }),
             el('p', { text: differenceText(value) }),

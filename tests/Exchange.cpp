@@ -137,9 +137,9 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
-  // Version 9: an older reader would drop Study Plans without a
+  // Version 10: an older reader would drop Study Plan Group text without a
   // word, so it refuses the document instead.
-  check(exported.value("version", 0) == 9, "the export is format version 9");
+  check(exported.value("version", 0) == 10, "the export is format version 10");
   check(exported.contains("boards") && exported.at("boards").size() == 2,
         "the export holds every named Board");
   check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&

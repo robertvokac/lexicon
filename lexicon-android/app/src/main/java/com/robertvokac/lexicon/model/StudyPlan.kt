@@ -13,6 +13,7 @@ enum class StudyUnitType { Page, Lesson, Chapter, Section, Module, Video, Exerci
 data class StudyPlan(
     val id: Int? = null,
     val item: String,
+    val group: String = "",
     val type: StudyPlanType,
     val unitType: StudyUnitType,
     val currentProgress: Int = 0,

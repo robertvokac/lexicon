@@ -55,6 +55,7 @@ enum class StudyUnitType { Page, Lesson, Chapter, Section, Module, Video, Exerci
 struct StudyPlanRecord {
   int id = -1;
   std::string item;
+  std::string group;
   StudyPlanType type = StudyPlanType::Book;
   StudyUnitType unitType = StudyUnitType::Page;
   int currentProgress = 0;

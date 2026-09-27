@@ -314,7 +314,7 @@ private fun androidx.compose.ui.graphics.Color.luminanceIsDark(): Boolean =
 
 private enum class Destination(val label: String) {
     Items("Items"),
-    Board("Board"),
+    Board("Boards"),
     Review("Review"),
     Groups("Groups"),
     Types("Types"),

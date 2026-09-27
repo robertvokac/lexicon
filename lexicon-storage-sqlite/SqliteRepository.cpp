@@ -2046,22 +2046,23 @@ SqliteRepository::Result<bool> SqliteRepository::fileHasHash(const std::string &
 
 namespace {
 const char *kStudyPlanColumns =
-    "SELECT id, item, type, unit_type, current_progress, start_date, end_date, note, "
+    "SELECT id, item, \"group\", type, unit_type, current_progress, start_date, end_date, note, "
     "first_unit, last_unit, study_days_mask, custom_unit FROM study_plan ";
 lexicon::StudyPlanRecord readStudyPlan(Statement &row) {
   lexicon::StudyPlanRecord plan;
   plan.id = row.integer(0);
   plan.item = row.text(1);
-  plan.type = static_cast<lexicon::StudyPlanType>(row.integer(2));
-  plan.unitType = static_cast<lexicon::StudyUnitType>(row.integer(3));
-  plan.currentProgress = row.integer(4);
-  plan.startDate = row.text(5);
-  plan.endDate = row.text(6);
-  plan.note = row.text(7);
-  plan.firstUnit = row.integer(8);
-  plan.lastUnit = row.integer(9);
-  plan.studyDaysMask = row.integer(10);
-  plan.customUnit = row.text(11);
+  plan.group = row.text(2);
+  plan.type = static_cast<lexicon::StudyPlanType>(row.integer(3));
+  plan.unitType = static_cast<lexicon::StudyUnitType>(row.integer(4));
+  plan.currentProgress = row.integer(5);
+  plan.startDate = row.text(6);
+  plan.endDate = row.text(7);
+  plan.note = row.text(8);
+  plan.firstUnit = row.integer(9);
+  plan.lastUnit = row.integer(10);
+  plan.studyDaysMask = row.integer(11);
+  plan.customUnit = row.text(12);
   return plan;
 }
 } // namespace
@@ -2088,18 +2089,18 @@ SqliteRepository::Result<int> SqliteRepository::saveStudyPlan(const lexicon::Stu
     Transaction tx(impl_->db, "lexicon_write");
     int id = plan.id;
     if (id < 0) {
-      Statement(impl_->db, "INSERT INTO study_plan(item, type, unit_type, current_progress, start_date, end_date, "
-                           "note, first_unit, last_unit, study_days_mask, custom_unit) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")
-          .bind(lexicon::trim(plan.item)).bind(static_cast<int>(plan.type))
+      Statement(impl_->db, "INSERT INTO study_plan(item, \"group\", type, unit_type, current_progress, start_date, end_date, "
+                           "note, first_unit, last_unit, study_days_mask, custom_unit) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")
+          .bind(lexicon::trim(plan.item)).bind(lexicon::trim(plan.group)).bind(static_cast<int>(plan.type))
           .bind(static_cast<int>(plan.unitType)).bind(plan.currentProgress)
           .bind(plan.startDate).bind(plan.endDate).bind(plan.note)
           .bind(plan.firstUnit).bind(plan.lastUnit).bind(plan.studyDaysMask)
           .bind(lexicon::trim(plan.customUnit)).run();
       id = impl_->db.lastId();
     } else {
-      Statement(impl_->db, "UPDATE study_plan SET item=?, type=?, unit_type=?, current_progress=?, start_date=?, "
+      Statement(impl_->db, "UPDATE study_plan SET item=?, \"group\"=?, type=?, unit_type=?, current_progress=?, start_date=?, "
                            "end_date=?, note=?, first_unit=?, last_unit=?, study_days_mask=?, custom_unit=? WHERE id=?;")
-          .bind(lexicon::trim(plan.item)).bind(static_cast<int>(plan.type))
+          .bind(lexicon::trim(plan.item)).bind(lexicon::trim(plan.group)).bind(static_cast<int>(plan.type))
           .bind(static_cast<int>(plan.unitType)).bind(plan.currentProgress)
           .bind(plan.startDate).bind(plan.endDate).bind(plan.note)
           .bind(plan.firstUnit).bind(plan.lastUnit).bind(plan.studyDaysMask)

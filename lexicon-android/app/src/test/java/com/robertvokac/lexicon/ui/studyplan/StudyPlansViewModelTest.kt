@@ -49,12 +49,13 @@ class StudyPlansViewModelTest {
         assertTrue(awaitState(viewModel) { !it.loading }.plans.isEmpty())
         val firstRequest = fake.requestsTo("GET", "/api/v1/study-plans/overview").first()
         assertEquals(LocalDate.now().toString(), firstRequest.url.queryParameter("date"))
-        val plan = StudyPlan(item = "Katas", type = StudyPlanType.Practice, unitType = StudyUnitType.Other,
+        val plan = StudyPlan(item = "Katas", group = "Practice", type = StudyPlanType.Practice, unitType = StudyUnitType.Other,
             customUnit = "kata", firstUnit = 101, lastUnit = 200,
             startDate = LocalDate.now().toString(), endDate = LocalDate.now().plusDays(7).toString())
         viewModel.save(plan)
         val created = awaitState(viewModel) { !it.busy && it.plans.size == 1 }.plans.single().plan
         assertEquals("Katas", created.item)
+        assertEquals("Practice", created.group)
         viewModel.save(created.copy(currentProgress = 145))
         val updated = awaitState(viewModel) { !it.busy && it.plans.singleOrNull()?.plan?.currentProgress == 145 }
         assertEquals(45, updated.plans.single().completedUnits)

@@ -283,7 +283,7 @@ def run(browser, web, server):
 
     @step("protect unsaved Board changes")
     def _():
-        click("button", "Board")
+        click("button", "Boards")
         b.wait(dialog_open("Choose a Board"), "the Board picker")
         click("dialog[open] button", "Open")
         b.wait(dialog_open("Board — Main"), "the Board viewer")
@@ -739,20 +739,48 @@ def run(browser, web, server):
         today = b.js("(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()")
         end = b.js("(() => { const d = new Date(); d.setDate(d.getDate()+9); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()")
         created = api["client"].call("POST", "/study-plans", {
-            "item": "Effective Modern C++", "type": "Book", "unitType": "Page",
+            "item": "Effective Modern C++", "group": "Programming", "type": "Book", "unitType": "Page",
             "firstUnit": 101, "lastUnit": 300, "currentProgress": 101,
             "startDate": today, "endDate": end, "studyDaysMask": 127,
         })["studyPlan"]
         menu("Manage", "Study Plan...")
         b.wait(dialog_open("Study Plan"), "the Study Plan dialog")
+        click("dialog[open] button", "Add Study Plan")
+        b.wait("!!document.querySelector('dialog[open] .study-editor')", "the Study Plan editor")
+        dates = b.js("""[...document.querySelectorAll('dialog[open] .study-editor input[placeholder="YYYY-MM-DD"]')]
+            .map(input => ({type: input.type, value: input.value}))""")
+        if dates != [{"type": "text", "value": today}, {"type": "text", "value": today}]:
+            raise Failure(f"Study Plan dates do not use YYYY-MM-DD text fields: {dates!r}")
+        fields = b.js("""[...document.querySelectorAll('dialog[open] .study-editor .form-row label')]
+            .map(label => label.textContent)""")
+        if fields[:3] != ["Item:", "Group:", "Type:"]:
+            raise Failure(f"Study Plan form field order is wrong: {fields!r}")
+        type_into("dialog[open] .study-editor .form-row:first-child input", "Example")
+        type_into('dialog[open] .study-editor input[placeholder="YYYY-MM-DD"]', "27.09.2026")
+        click("dialog[open]:has(.study-editor) button", "Save")
+        b.wait("[...document.querySelectorAll('dialog[open]')].some(d => d.querySelector('.study-editor') && d.querySelector('.dialog-error')?.textContent.includes('YYYY-MM-DD'))",
+               "the date format validation")
+        click("dialog[open]:has(.study-editor) button", "Cancel")
+        b.wait("!document.querySelector('.study-editor')", "the Study Plan editor to close")
         b.wait("!!document.querySelector('.study-card')", "the Study Plan card")
         expected = api["client"].call("GET", "/study-plans/overview?date=" + today)["plans"][0]
         card = b.js("document.querySelector('.study-card').textContent")
-        for label in (f"Current progress: page 101", f"Expected progress: page {expected['expectedProgress']}",
+        for label in ("Programming · Book", f"Current progress: page 101", f"Expected progress: page {expected['expectedProgress']}",
                       f"Expected unit range today: pages {expected['expectedUnitStart']}–{expected['expectedUnitEnd']}",
                       "Behind by:", "Recommended today:", "Planned pace:", "Required now:", "Status:"):
             if label not in card:
                 raise Failure(f"Study Plan card omits {label!r}: {card}")
+        click(".study-card button", "Edit")
+        b.wait("!!document.querySelector('dialog[open] .study-editor')", "the saved Study Plan editor")
+        saved_group = b.js("document.querySelector('dialog[open] .study-editor .form-row:nth-child(2) input').value")
+        if saved_group != "Programming":
+            raise Failure(f"Study Plan editor lost its group: {saved_group!r}")
+        type_into("dialog[open] .study-editor .form-row:nth-child(2) input", "Advanced C++")
+        click("dialog[open]:has(.study-editor) button", "Save")
+        b.wait("!document.querySelector('.study-editor')", "the saved Study Plan editor to close")
+        saved_group = api["client"].call("GET", "/study-plans/" + str(created["id"]))["studyPlan"]["group"]
+        if saved_group != "Advanced C++":
+            raise Failure(f"Study Plan form did not save its group: {saved_group!r}")
         if os.environ.get("LEXICON_STUDY_SHOT"):
             b.screenshot(os.environ["LEXICON_STUDY_SHOT"])
         click(".study-card button", "Mark plan complete")
