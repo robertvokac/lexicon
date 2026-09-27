@@ -79,7 +79,7 @@
       <tr><td><code>Understanding</code></td><td>How well <em>you</em> understand the concept — see the scale below.</td></tr>
       <tr><td><code>Pinned</code></td><td>Marks important items so you can filter for them instantly.</td></tr>
     </table>
-    <p>Use <code>Manage → Types...</code> to create or edit types, their descriptions, and their fields. Descriptions appear as tooltips in the type manager.</p>
+    <p>Use <code>Manage → Types...</code> to create or edit types and their fields. Both types and fields have descriptions: a field description appears with its value editor and as a tooltip or supporting text where space is tighter.</p>
     <p>When a type has custom field values, changing it asks for confirmation before discarding those values. Deleting a type also clears its assignment and custom values on every affected item, with a confirmation showing the affected item count.</p>
 
     <h3>The understanding scale</h3>
@@ -133,7 +133,7 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
     <p>Write <code>[[Title]]</code> to point at another item; in the preview it opens that item, and Lexicon offers to create it when there is none. See <a href="links-and-relationships.html#wiki">Links &amp; relationships</a>.</p>
 
     <h2 id="values">Values tab — custom fields</h2>
-    <p>When an item has a type, its Values tab shows that type's fields in position order. Fields can use integer, float, text, date, time, timestamp, boolean, enum, blob, or other values. Date/time values use ISO format; enum fields show their configured choices. The tab is disabled when the item has no type.</p>
+    <p>When an item has a type, its Values tab shows that type's fields and descriptions in position order. Fields can use integer, float, text, date, time, timestamp, boolean, enum, blob, image, or other values. Date/time values use ISO format; enum fields show their configured choices. The tab is disabled when the item has no type.</p>
     <p>For a blob field, enter a file path or choose one with <code>Browse...</code>. Click <code>Import</code> to see its SHA-256 hash immediately, or save the item to import the entered path. This replaces that item's previous blob value. The bytes are stored under <code>blobs</code> next to <code>lexicon.db</code>; <code>Save as...</code> exports the current file.</p>
 
     <figure class="screenshot">

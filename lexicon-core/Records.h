@@ -66,6 +66,7 @@ struct ItemFieldRecord {
   FieldDataType dataType = FieldDataType::Text;
   int position = 0;
   std::vector<std::string> enumOptions;
+  std::string description;
 };
 struct ItemValueFilter {
   int fieldId = -1;

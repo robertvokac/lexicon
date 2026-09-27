@@ -137,6 +137,7 @@ void checkTypesAndFields(Checks &checks) {
   int position = 0;
   for (const auto &dataType : dataTypes) {
     Json field{{"name", dataType + " field"},
+               {"description", "Description of " + dataType},
                {"dataType", dataType},
                {"position", position++}};
     if (dataType == "Enum")
@@ -148,6 +149,9 @@ void checkTypesAndFields(Checks &checks) {
     const auto stored = parse(created).at("field");
     checks.expectEqual(stored.value("dataType", std::string{}), dataType,
                        "field " + dataType + " keeps its data type");
+    checks.expectEqual(stored.value("description", std::string{}),
+                       "Description of " + dataType,
+                       "field " + dataType + " keeps its description");
     fieldIds.push_back(stored.value("id", 0));
   }
   checks.expectEqual(
@@ -183,6 +187,7 @@ void checkTypesAndFields(Checks &checks) {
   const auto renamed =
       client.put("/api/v1/fields/" + std::to_string(fieldIds.front()),
                  Json{{"name", "Renamed integer"},
+                      {"description", "A whole number"},
                       {"dataType", "Integer"},
                       {"itemTypeId", typeId},
                       {"position", 0}}
@@ -190,6 +195,8 @@ void checkTypesAndFields(Checks &checks) {
   checks.expectEqual(renamed.status, 200, "a field can be updated");
   checks.expectEqual(parse(renamed).at("field").value("name", std::string{}),
                      "Renamed integer", "the field keeps its new name");
+  checks.expectEqual(parse(renamed).at("field").value("description", std::string{}),
+                     "A whole number", "the field keeps its new description");
   checks.expectEqual(
       client
           .put("/api/v1/fields/" + std::to_string(fieldIds.front()),
@@ -1168,7 +1175,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
-  checks.expectEqual(document.value("version", 0), 4, "of format version 4");
+  checks.expectEqual(document.value("version", 0), 5, "of format version 5");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");

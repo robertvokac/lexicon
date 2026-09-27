@@ -109,9 +109,9 @@ int main() {
         !expect(rawQuery("SELECT COUNT(*) FROM temp.sqlite_master;") == "0" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'migration_%';") == "0",
                 "The rebuild left a working table")) return 1;
-    if (!expect(rawQuery("SELECT version FROM db_version;") == "28" &&
+    if (!expect(rawQuery("SELECT version FROM db_version;") == "30" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'card';") == "1",
-                "The Qt v20 database did not reach version 28 with its card table")) return 1;
+                "The Qt v20 database did not reach version 30 with its card table")) return 1;
     auto found = app.search.findItemId("Příliš žluťoučký kůň", "česky");
     if (!success(found, "Find Qt UTF-8 item")) return 1;
     auto item = app.items.loadItem(*found);
@@ -122,7 +122,8 @@ int main() {
     if (!success(fields, "Load Qt enum options") ||
         !expect(fields->size() == 2 && fields->at(1).enumOptions ==
                   std::vector<std::string>({"A", "École", "quote \""}) &&
-                  item->fieldValues.at(2) == "École", "Qt JSON enum options changed")) return 1;
+                  fields->at(1).description.empty() && item->fieldValues.at(2) == "École",
+                "Qt JSON enum options or migrated description changed")) return 1;
     auto links = app.links.loadLinks(1);
     if (!success(links, "Load Qt links") ||
         !expect(links->size() == 1 && links->front().toItemId == 2, "Qt link changed")) return 1;
@@ -279,22 +280,26 @@ int main() {
       sqlite3_close(raw);
       return result;
     };
-    // Remove the structures introduced by migrations 26–28 to reconstruct
-    // the last database version without cards, history or recurring alarms.
+    // Remove the structures introduced by migrations 26–30 to reconstruct
+    // the last database version without cards, history, recurring alarms,
+    // the Board or item-field descriptions.
     if (!expect(run("DROP INDEX idx_alarm_item_id; "
                     "ALTER TABLE alarm DROP COLUMN anchor_at; "
                     "ALTER TABLE alarm DROP COLUMN item_id; "
                     "ALTER TABLE alarm DROP COLUMN repeat_days; "
-                    "DROP TABLE item_history; DROP TABLE card; "
+                    "DROP TABLE item_history; DROP TABLE card; DROP TABLE board; "
+                    "ALTER TABLE item_field DROP COLUMN description; "
                     "UPDATE db_version SET version = 25;") &&
                     query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "0",
                 "Could not take the database back to version 25")) return 1;
     SqliteRepository repository;
     if (!success(repository.open(v25.string()), "Migrate a version 25 database")) return 1;
     lexicon::LexiconApplication app(repository);
-    if (!expect(query("SELECT version FROM db_version;") == "28", "Migrations 26–28 did not run") ||
+    if (!expect(query("SELECT version FROM db_version;") == "30", "Migrations 26–30 did not run") ||
         !expect(query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "2",
-                "Migration 26 did not add the card table and its index")) return 1;
+                "Migration 26 did not add the card table and its index") ||
+        !expect(query("SELECT COUNT(*) FROM pragma_table_info('item_field') WHERE name = 'description';") == "1",
+                "Migration 30 did not add the field description column")) return 1;
     auto item = app.items.loadItem(kept);
     if (!success(item, "Load the item written at version 25") ||
         !expect(item->title == "Před kartami" && item->content == "Written at version 25.",
@@ -314,7 +319,7 @@ int main() {
     }
     sqlite3 *raw = nullptr;
     const bool bumped = sqlite3_open(future.string().c_str(), &raw) == SQLITE_OK &&
-                        sqlite3_exec(raw, "UPDATE db_version SET version = 29;", nullptr, nullptr, nullptr) == SQLITE_OK;
+                        sqlite3_exec(raw, "UPDATE db_version SET version = 31;", nullptr, nullptr, nullptr) == SQLITE_OK;
     sqlite3_close(raw);
     if (!expect(bumped, "Could not mark fixture as a newer schema")) return 1;
     SqliteRepository repository;

@@ -170,9 +170,13 @@ clears the field values of every item using it, and changing a field's data
 type or enum options clears its stored values.
 
 ```json
-{ "id": 4, "itemTypeId": 2, "name": "Difficulty", "dataType": "Enum",
+{ "id": 4, "itemTypeId": 2, "name": "Difficulty",
+  "description": "How difficult this concept is.", "dataType": "Enum",
   "position": 0, "enumOptions": ["easy", "hard"] }
 ```
+
+`description` is optional when a field is created or updated and defaults to
+an empty string. All field responses include it.
 
 ## Items
 

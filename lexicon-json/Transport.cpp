@@ -249,6 +249,7 @@ Json toJson(const ItemFieldRecord &field) {
       {"itemTypeId",
        field.itemTypeId > 0 ? Json(field.itemTypeId) : Json(nullptr)},
       {"name", field.name},
+      {"description", field.description},
       {"dataType", name(field.dataType)},
       {"position", field.position},
       {"enumOptions", field.enumOptions}};
@@ -416,6 +417,7 @@ ItemFieldRecord fieldFromJson(const Json &json) {
   field.id = optionalId(json, "id");
   field.itemTypeId = optionalId(json, "itemTypeId");
   field.name = requiredString(json, "name");
+  field.description = optionalString(json, "description");
   field.dataType =
       requiredEnum<FieldDataType>(json, "dataType", fieldDataTypeFromName,
                                   "field data type");

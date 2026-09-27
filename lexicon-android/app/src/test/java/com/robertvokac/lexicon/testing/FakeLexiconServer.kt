@@ -347,6 +347,7 @@ class FakeLexiconServer : Dispatcher() {
                     FieldDataType.valueOf(body["dataType"]!!.jsonPrimitive.content),
                     body["position"]?.jsonPrimitive?.intOrNull ?: 0,
                     body["enumOptions"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    body["description"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 )
                 fields += field
                 json(buildJsonObject { put("field", encode(field)) }, 201)
@@ -361,6 +362,7 @@ class FakeLexiconServer : Dispatcher() {
                     dataType = FieldDataType.valueOf(body["dataType"]!!.jsonPrimitive.content),
                     position = body["position"]?.jsonPrimitive?.intOrNull ?: 0,
                     enumOptions = body["enumOptions"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
+                    description = body["description"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 )
                 if (fields[index].dataType != old.dataType || fields[index].enumOptions != old.enumOptions) {
                     items.replaceAll { _, item -> item.copy(fieldValues = item.fieldValues - id.toString()) }

@@ -71,7 +71,8 @@ int main() {
     if (type.name == "Concept") conceptType = type.id;
     if (type.name == "Note") note = type.id;
   }
-  check(app.types.upsertItemField({-1, conceptType, "Difficulty", lexicon::FieldDataType::Enum, 0, {"easy", "hard"}}).has_value(), "Difficulty");
+  check(app.types.upsertItemField({-1, conceptType, "Difficulty", lexicon::FieldDataType::Enum, 0,
+                                   {"easy", "hard"}, "How difficult the concept is."}).has_value(), "Difficulty");
   check(app.types.upsertItemField({-1, conceptType, "Diagram", lexicon::FieldDataType::Blob, 1, {}}).has_value(), "Diagram");
   check(app.types.upsertItemField({-1, note, "Page", lexicon::FieldDataType::Integer, 0, {}}).has_value(), "Page");
   const auto conceptFields = value(app.types.loadItemFields(conceptType), "Concept fields");
@@ -127,9 +128,9 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
-  // Version 3: an older reader would drop the alarm's recurrence and item
-  // link without a word, so it refuses the document instead.
-  check(exported.value("version", 0) == 4, "the export is format version 4");
+  // Version 5: an older reader would drop field descriptions without a
+  // word, so it refuses the document instead.
+  check(exported.value("version", 0) == 5, "the export is format version 5");
   check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&
             exported.at("alarms").at(0).value("itemId", 0) == monoidId,
         "recurrence and linked item are exported");
@@ -164,6 +165,8 @@ int main() {
             restored.properties.size() == 1 && restored.properties[0].value == "folklore",
         "every part of the item survives");
   const auto copiedFields = value(copy.app.types.loadItemFields(restored.itemTypeId), "copied fields");
+  check(copiedFields[0].description == "How difficult the concept is.",
+        "an item field keeps its description through export and import");
   check(restored.fieldValues.size() == 2 && restored.fieldValues.at(copiedFields[0].id) == "hard" &&
             restored.fieldValues.at(copiedFields[1].id) == hash,
         "values follow their fields");
@@ -273,7 +276,7 @@ int main() {
   };
   refused("not json", "text that is not JSON");
   refused(R"({"format":"something-else","version":1})", "another format");
-  refused(R"({"format":"lexicon-export","version":4,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":6,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
   refused(R"({"format":"lexicon-export","version":0,"groups":[],"types":[],"items":[],"links":[]})", "version 0");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[{"id":1}],"links":[]})",
           "an item without a title");

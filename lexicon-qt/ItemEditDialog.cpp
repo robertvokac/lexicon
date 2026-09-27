@@ -450,6 +450,8 @@ void ItemEditDialog::refreshFields() {
     }
     for (const auto& field : m_currentFields) {
         const QString saved = m_pendingFieldValues.value(field.id);
+        const QString label = field.description.isEmpty()
+            ? field.name + ":" : field.name + ":\n" + field.description;
         QWidget* editor = nullptr;
         if (field.dataType == FieldDataType::Boolean || field.dataType == FieldDataType::Enum) {
             auto* combo = new QComboBox(m_fieldsBox);
@@ -465,7 +467,7 @@ void ItemEditDialog::refreshFields() {
             const int index = combo->findData(saved);
             if (index >= 0) combo->setCurrentIndex(index);
             editor = combo;
-            m_fieldsLayout->addRow(field.name + ":", combo);
+            m_fieldsLayout->addRow(label, combo);
         } else if (field.dataType == FieldDataType::Blob) {
             auto* wrapper = new QWidget(m_fieldsBox);
             auto* wrapperLayout = new QVBoxLayout(wrapper);
@@ -521,7 +523,7 @@ void ItemEditDialog::refreshFields() {
             });
             editor = valueEdit;
             m_blobPathEditors.insert(field.id, pathEdit);
-            m_fieldsLayout->addRow(field.name + ":", wrapper);
+            m_fieldsLayout->addRow(label, wrapper);
         } else if (field.dataType == FieldDataType::Image) {
             // The value stays in a hidden line edit, like a Blob's hash; the
             // person sees the picture and what kind of image it is.
@@ -600,7 +602,7 @@ void ItemEditDialog::refreshFields() {
             });
             connect(clearButton, &QPushButton::clicked, valueEdit, &QLineEdit::clear);
             editor = valueEdit;
-            m_fieldsLayout->addRow(field.name + ":", wrapper);
+            m_fieldsLayout->addRow(label, wrapper);
         } else {
             auto* line = new QLineEdit(saved, m_fieldsBox);
             if (field.dataType == FieldDataType::Integer) {
@@ -617,7 +619,7 @@ void ItemEditDialog::refreshFields() {
                 line->setPlaceholderText("YYYY-MM-DDTHH:MM:SS");
             }
             editor = line;
-            m_fieldsLayout->addRow(field.name + ":", line);
+            m_fieldsLayout->addRow(label, line);
         }
         m_fieldEditors.insert(field.id, editor);
         if (auto* line = qobject_cast<QLineEdit*>(editor))

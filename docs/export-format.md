@@ -34,7 +34,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 4,
+  "version": 5,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -44,7 +44,8 @@ and keep the files as files, shared between backups.
     {
       "id": 3, "groupId": 2, "groupName": "Maths", "name": "Concept", "description": "",
       "fields": [
-        { "id": 4, "itemTypeId": 3, "name": "Difficulty", "dataType": "Enum",
+        { "id": 4, "itemTypeId": 3, "name": "Difficulty",
+          "description": "How difficult this concept is.", "dataType": "Enum",
           "position": 0, "enumOptions": ["easy", "hard"] }
       ]
     }
@@ -72,7 +73,7 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 4.
+  before anything is written. This document describes version 5.
 - **Versions.** The version goes up whenever a reader of the previous one
   would import a new document by leaving part of it out - silently losing
   data - rather than refusing it:
@@ -83,6 +84,7 @@ and keep the files as files, shared between backups.
   | 2 | Lexicon with cards | `cards` |
   | 3 | Lexicon with recurring alarms | `repeatDays` and linked `itemId` on alarms |
   | 4 | Lexicon with the Board | singleton Markdown `board` |
+  | 5 | Lexicon with described fields | `description` on item fields |
 
   A reader takes every version up to its own and refuses a newer one: an
   older Lexicon says it does not know version 3 instead of importing it

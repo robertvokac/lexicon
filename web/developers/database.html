@@ -93,7 +93,7 @@
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–29</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–30</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
       <li>A migration that rebuilds a table — SQLite cannot change a <code>CHECK</code> constraint in place — runs with foreign keys switched off around its transaction, so dropping the old table cannot cascade into the rows that refer to it, and must pass <code>PRAGMA foreign_key_check</code> before it commits.</li>
     </ol>
     <table>
@@ -127,6 +127,7 @@
       <tr><td>27</td><td>Creates <code>item_history</code> for previous versions and Trash</td></tr>
       <tr><td>28</td><td>Adds <code>alarm.repeat_days</code>, linked <code>item_id</code> and recurrence anchor</td></tr>
       <tr><td>29</td><td>Creates the singleton <code>board</code> table with Markdown content and a revision</td></tr>
+      <tr><td>30</td><td>Adds <code>item_field.description</code></td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -183,13 +184,14 @@ CREATE TABLE item_field (
   data_type    INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 10),
   position     INTEGER NOT NULL DEFAULT 0,
   enum_options TEXT NOT NULL DEFAULT '[]', -- JSON array
+  description  TEXT NOT NULL DEFAULT '',   -- migration 30
   FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX item_field_type_name_unique
   ON item_field(item_type_id, name COLLATE NOCASE);
 CREATE INDEX idx_item_field_type_position
   ON item_field(item_type_id, position);</code></pre>
-    <p>Fields are displayed by <code>position</code>, then name and ID. <code>data_type</code> uses the stable <code>FieldDataType</code> integer enum. A type may be assigned only to items in its group, unless <code>group_id</code> is null; triggers enforce this.</p>
+    <p>Fields are displayed by <code>position</code>, then name and ID. Their optional descriptions are shown by all three clients. <code>data_type</code> uses the stable <code>FieldDataType</code> integer enum. A type may be assigned only to items in its group, unless <code>group_id</code> is null; triggers enforce this.</p>
 
     <h3><code>item_value</code> and <code>property</code></h3>
     <pre><code>CREATE TABLE item_value (

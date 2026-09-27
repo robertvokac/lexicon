@@ -38,6 +38,8 @@ async function typeDialog(title, type, groups) {
 
 async function fieldDialog(title, fieldRecord) {
     const name = el('input', { type: 'text', value: fieldRecord.name || '', required: true });
+    const description = el('textarea', { rows: '3' });
+    description.value = fieldRecord.description || '';
     const dataType = el('select', {});
     fillSelect(dataType, FIELD_DATA_TYPES, fieldRecord.dataType || 'Text');
     const position = el('input', { type: 'number', step: '1', value: String(fieldRecord.position ?? 0) });
@@ -52,6 +54,7 @@ async function fieldDialog(title, fieldRecord) {
         title,
         body: el('div', {}, [
             field('Name:', name),
+            field('Description:', description),
             field('Data type:', dataType),
             field('Position:', position),
             field('Enum options:', options),
@@ -71,6 +74,7 @@ async function fieldDialog(title, fieldRecord) {
             }
             return {
                 name: name.value.trim(),
+                description: description.value.trim(),
                 dataType: dataType.value,
                 position: Number.parseInt(position.value, 10) || 0,
                 enumOptions,
@@ -165,6 +169,7 @@ export async function openTypeManager() {
     fieldEditor = listEditor({
         title: 'Fields of the selected type',
         renderItem: (record) => `${record.position}  ${record.name} — ${record.dataType}`,
+        itemTitle: (record) => record.description,
         onAdd: async () => {
             if (selectedTypeIndex < 0) return;
             const last = fields.length ? fields[fields.length - 1].position : -1;

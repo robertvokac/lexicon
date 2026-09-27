@@ -62,6 +62,7 @@ struct ItemFieldRecord {
   FieldDataType dataType = FieldDataType::Text;
   int position = 0;
   QStringList enumOptions;
+  QString description;
 };
 struct ItemValueFilter {
   int fieldId = -1;

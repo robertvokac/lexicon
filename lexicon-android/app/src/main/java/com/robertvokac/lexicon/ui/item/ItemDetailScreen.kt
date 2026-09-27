@@ -326,6 +326,9 @@ private fun LazyListScope.values(
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(field.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (field.description.isNotBlank()) {
+                    Text(field.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 when {
                     value.isEmpty() -> Muted("Not set")
                     field.dataType == FieldDataType.Image && ImageValues.parse(value) != null -> Column {

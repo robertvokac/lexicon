@@ -315,6 +315,7 @@ export class MainView {
         const cell = el('th', {
             class: 'sortable',
             scope: 'col',
+            title: column.field?.description,
             tabindex: '0',
             role: 'columnheader',
             onclick: () => this.toggleSort(index),
@@ -469,6 +470,7 @@ export class MainView {
         if (fieldRecord.dataType === 'Boolean' || fieldRecord.dataType === 'Enum') {
             const select = el('select', {
                 class: 'column-filter',
+                title: fieldRecord.description,
                 'aria-label': `${fieldRecord.name} filter`,
             });
             const options = fieldRecord.dataType === 'Boolean'
@@ -485,6 +487,7 @@ export class MainView {
         const input = el('input', {
             type: 'text',
             class: 'column-filter',
+            title: fieldRecord.description,
             placeholder: `Filter ${fieldRecord.name}...`,
             'aria-label': `${fieldRecord.name} filter`,
             value: previous,

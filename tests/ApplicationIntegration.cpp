@@ -104,11 +104,13 @@ int main() {
   lexicon::ItemFieldRecord field;
   field.itemTypeId = termType->id;
   field.name = "Meaning";
+  field.description = "What the term means.";
   if (!check(application.types.upsertItemField(field), "Create field"))
     return 1;
   auto fields = application.types.loadItemFields(termType->id);
   if (!check(fields, "Load fields") ||
-      !condition(fields->size() == 1, "Created field missing"))
+      !condition(fields->size() == 1 && fields->front().description == field.description,
+                 "Created field or its description missing"))
     return 1;
 
   lexicon::ItemRecord localized;

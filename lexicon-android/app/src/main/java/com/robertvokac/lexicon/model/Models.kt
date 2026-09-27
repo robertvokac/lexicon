@@ -75,6 +75,7 @@ data class ItemField(
     val dataType: FieldDataType,
     val position: Int = 0,
     val enumOptions: List<String> = emptyList(),
+    val description: String = "",
 )
 
 @Serializable
@@ -261,6 +262,7 @@ data class FieldWrite(
     val enumOptions: List<String> = emptyList(),
     /** Required by PUT /fields/{id}; ignored by POST /types/{id}/fields. */
     val itemTypeId: Int? = null,
+    val description: String = "",
 )
 
 /** What POST /import did: created, skipped and why. */

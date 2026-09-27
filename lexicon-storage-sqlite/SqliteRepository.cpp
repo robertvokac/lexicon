@@ -107,7 +107,7 @@ std::string toJsonArray(const Connection &db, const std::vector<std::string> &va
   return json + ']';
 }
 std::vector<lexicon::ItemFieldRecord> fieldsFor(const Connection &db, int typeId) {
-  Statement stmt(db, "SELECT id, item_type_id, name, data_type, position, enum_options "
+  Statement stmt(db, "SELECT id, item_type_id, name, data_type, position, enum_options, description "
                      "FROM item_field WHERE item_type_id = ? ORDER BY position, name COLLATE NOCASE, id;");
   stmt.bind(typeId);
   std::vector<lexicon::ItemFieldRecord> fields;
@@ -116,6 +116,7 @@ std::vector<lexicon::ItemFieldRecord> fieldsFor(const Connection &db, int typeId
     field.id = stmt.integer(0); field.itemTypeId = stmt.integer(1); field.name = stmt.text(2);
     field.dataType = static_cast<lexicon::FieldDataType>(stmt.integer(3));
     field.position = stmt.integer(4); field.enumOptions = jsonArray(db, stmt.text(5));
+    field.description = stmt.text(6);
     fields.push_back(std::move(field));
   }
   return fields;
@@ -293,13 +294,14 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemField
         bumpRevisions(impl_->db, "id IN (SELECT item_id FROM item_value WHERE item_field_id = ?)", id);
         Statement(impl_->db, "DELETE FROM item_value WHERE item_field_id = ?;").bind(id).run();
       }
-      Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ? WHERE id = ?;")
-          .bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType)).bind(field.position).bind(json).bind(id).run();
+      Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ?, description = ? WHERE id = ?;")
+          .bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType)).bind(field.position)
+          .bind(json).bind(lexicon::trim(field.description)).bind(id).run();
       requireChanged(impl_->db, "Field");
     } else {
-      Statement(impl_->db, "INSERT INTO item_field(item_type_id, name, data_type, position, enum_options) VALUES(?, ?, ?, ?, ?);")
+      Statement(impl_->db, "INSERT INTO item_field(item_type_id, name, data_type, position, enum_options, description) VALUES(?, ?, ?, ?, ?, ?);")
           .bind(field.itemTypeId).bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType))
-          .bind(field.position).bind(json).run();
+          .bind(field.position).bind(json).bind(lexicon::trim(field.description)).run();
       id = impl_->db.lastId();
     }
     logOperation(impl_->db, "item_field", id, field.id < 0 ? 1 : 2); tx.commit();

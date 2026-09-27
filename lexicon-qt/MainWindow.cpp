@@ -687,6 +687,7 @@ void MainWindow::refreshValueFilters() {
             editor = line;
         }
         editor->setObjectName(QString("valueColumnFilter_%1").arg(field.id));
+        editor->setToolTip(field.description);
         m_filterHeader->setFilterWidget(11 + index, editor);
         m_valueFilterEditors.insert(field.id, editor);
     }
@@ -813,6 +814,10 @@ void MainWindow::refreshItems() {
     const bool searching = !m_searchEdit->text().trimmed().isEmpty();
     m_model->setColumnCount(headers.size());
     m_model->setHorizontalHeaderLabels(headers);
+    for (int index = 0; index < m_selectedTypeFields.size(); ++index) {
+        if (auto* header = m_model->horizontalHeaderItem(11 + index))
+            header->setToolTip(m_selectedTypeFields.at(index).description);
+    }
     int rowToSelect = -1;
     for (int i = 0; i < items.size(); ++i) {
         const auto& item = items[i];

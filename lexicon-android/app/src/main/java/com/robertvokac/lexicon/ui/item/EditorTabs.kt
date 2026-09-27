@@ -296,7 +296,8 @@ private fun FieldEditor(
     onClearBlob: () -> Unit,
 ) {
     val problem = FieldValues.problem(field, value)
-    when (field.dataType) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+        when (field.dataType) {
         FieldDataType.Boolean -> Column {
             Text(field.name, style = MaterialTheme.typography.labelLarge)
             val options = listOf("" to "Not set", "false" to "False", "true" to "True")
@@ -372,6 +373,14 @@ private fun FieldEditor(
             keyboardOptions = LiteralTextKeyboard,
             modifier = Modifier.fillMaxWidth(),
         )
+        }
+        if (field.description.isNotBlank()) {
+            Text(
+                field.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

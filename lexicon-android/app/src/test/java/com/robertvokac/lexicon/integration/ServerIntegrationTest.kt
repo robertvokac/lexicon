@@ -134,7 +134,17 @@ class ServerIntegrationTest {
             val group = api.createGroup(GroupWrite("C++", "Notes on C++", 1))
             val type = api.createType(TypeWrite("Term", "", groupId = null))
             val typeId = checkNotNull(type.id)
-            val difficulty = api.createField(typeId, FieldWrite("Difficulty", FieldDataType.Enum, 0, listOf("easy", "hard")))
+            val difficulty = api.createField(
+                typeId,
+                FieldWrite(
+                    "Difficulty",
+                    FieldDataType.Enum,
+                    0,
+                    listOf("easy", "hard"),
+                    description = "How difficult the term is",
+                ),
+            )
+            assertEquals("How difficult the term is", difficulty.description)
             val attachment = api.createField(typeId, FieldWrite("Attachment", FieldDataType.Blob, 1))
             val year = api.createField(typeId, FieldWrite("Year", FieldDataType.Integer, 2))
             val difficultyId = checkNotNull(difficulty.id)

@@ -394,6 +394,9 @@ void applyMigrations(const Connection &db) {
             " revision INTEGER NOT NULL DEFAULT 1"
             ");",
             "INSERT INTO board(id, content, revision) VALUES(1, '', 1);"
+        }},
+        {30, {
+            "ALTER TABLE item_field ADD COLUMN description TEXT NOT NULL DEFAULT '';"
         }}
     };
 

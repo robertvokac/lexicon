@@ -637,10 +637,11 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
                 if (value === '') delete pendingValues[String(fieldRecord.id)];
                 else pendingValues[String(fieldRecord.id)] = value;
             });
+            const typeHint = fieldRecord.dataType === 'Enum'
+                ? `Enum: ${fieldRecord.enumOptions.join(', ')}` : fieldRecord.dataType;
             grid.appendChild(field(`${fieldRecord.name}:`, editor.node,
-                fieldRecord.dataType === 'Enum'
-                    ? `Enum: ${fieldRecord.enumOptions.join(', ')}`
-                    : fieldRecord.dataType));
+                fieldRecord.description
+                    ? `${fieldRecord.description} · ${typeHint}` : typeHint));
             fieldReaders.set(String(fieldRecord.id), editor.read);
         }
         valuesPanel.appendChild(grid);

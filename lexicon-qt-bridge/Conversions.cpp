@@ -44,12 +44,12 @@ ItemTypeRecord toQt(const lexicon::ItemTypeRecord &v) {
 lexicon::ItemFieldRecord toCore(const ItemFieldRecord &v) {
   return {v.id,           v.itemTypeId,
           toCore(v.name), static_cast<lexicon::FieldDataType>(v.dataType),
-          v.position,     toCore(v.enumOptions)};
+          v.position,     toCore(v.enumOptions), toCore(v.description)};
 }
 ItemFieldRecord toQt(const lexicon::ItemFieldRecord &v) {
   return {v.id,         v.itemTypeId,
           toQt(v.name), static_cast<FieldDataType>(v.dataType),
-          v.position,   toQt(v.enumOptions)};
+          v.position,   toQt(v.enumOptions), toQt(v.description)};
 }
 lexicon::ItemValueFilter toCore(const ItemValueFilter &v) {
   return {v.fieldId, toCore(v.value), v.exact};

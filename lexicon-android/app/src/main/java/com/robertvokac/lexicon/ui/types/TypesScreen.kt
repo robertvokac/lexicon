@@ -290,6 +290,13 @@ private fun FieldsPane(state: TypesState, viewModel: TypesViewModel, showAdd: Bo
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (field.description.isNotBlank()) {
+                        Text(
+                            field.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 IconButton(onClick = { viewModel.requestDeleteField(field) }, enabled = !state.busy) {
                     Icon(Icons.Filled.Delete, contentDescription = "Delete field ${field.name}")
@@ -411,6 +418,7 @@ private fun FieldDialog(
     onDismiss: () -> Unit,
 ) {
     var name by rememberSaveable { mutableStateOf(initial?.name.orEmpty()) }
+    var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
     var dataType by rememberSaveable { mutableStateOf(initial?.dataType ?: FieldDataType.Text) }
     var position by rememberSaveable { mutableStateOf((initial?.position ?: nextPosition).toString()) }
     var options by rememberSaveable { mutableStateOf(initial?.enumOptions.orEmpty().joinToString("\n")) }
@@ -428,6 +436,13 @@ private fun FieldDialog(
                     },
                     label = "Name",
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SyncedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = "Description",
+                    minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 ChoiceField(
@@ -475,7 +490,17 @@ private fun FieldDialog(
                     dataType == FieldDataType.Enum && enumOptions.isEmpty() -> "Enum fields need at least one option."
                     else -> null
                 }
-                if (error == null) onConfirm(FieldWrite(name.trim(), dataType, position.toIntOrNull() ?: 0, enumOptions))
+                if (error == null) {
+                    onConfirm(
+                        FieldWrite(
+                            name = name.trim(),
+                            dataType = dataType,
+                            position = position.toIntOrNull() ?: 0,
+                            enumOptions = enumOptions,
+                            description = description.trim(),
+                        ),
+                    )
+                }
             }) { Text(if (busy) "Saving…" else "Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } },

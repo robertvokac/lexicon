@@ -729,6 +729,7 @@ class LexiconFlowsTest {
         compose.waitForText("This type has no fields yet.")
         compose.onNodeWithContentDescription("Add field").performClick()
         field("Name").performTextInput("Difficulty")
+        field("Description").performTextInput("How difficult the term is")
         compose.onNode(hasText("Text") and hasAnyAncestor(isDialog())).performClick()
         inPopup("Enum").performClick()
         field("Enum options").performTextInput("easy\nhard")
@@ -737,6 +738,8 @@ class LexiconFlowsTest {
         val field = fake.fields.single()
         assertEquals(FieldDataType.Enum, field.dataType)
         assertEquals(listOf("easy", "hard"), field.enumOptions)
+        assertEquals("How difficult the term is", field.description)
+        compose.waitForText("How difficult the term is")
 
         fake.addItem(Item(title = "Uses the type", itemTypeId = fake.types.single().id, fieldValues = mapOf(field.id.toString() to "hard")))
         compose.onNodeWithContentDescription("Delete field Difficulty").performClick()

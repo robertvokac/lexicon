@@ -130,6 +130,7 @@ void ItemTypeManagerDialog::loadFields() {
         auto* item = new QListWidgetItem(QString("%1  %2 — %3")
             .arg(field.position).arg(field.name, dataTypeName(field.dataType)), m_fieldList);
         item->setData(Qt::UserRole, field.id);
+        item->setToolTip(field.description);
     }
     fieldSelectionChanged();
 }
@@ -255,6 +256,9 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     auto* layout = new QVBoxLayout(&dialog);
     auto* form = new QFormLayout();
     auto* nameEdit = new QLineEdit(field.name, &dialog);
+    auto* descriptionEdit = new QPlainTextEdit(&dialog);
+    descriptionEdit->setPlainText(field.description);
+    descriptionEdit->setMaximumHeight(100);
     auto* dataTypeCombo = new QComboBox(&dialog);
     for (int value = 0; value <= static_cast<int>(FieldDataType::Image); ++value) {
         dataTypeCombo->addItem(dataTypeName(static_cast<FieldDataType>(value)), value);
@@ -272,6 +276,7 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
         optionsEdit->setEnabled(dataTypeCombo->currentData().toInt() == static_cast<int>(FieldDataType::Enum));
     });
     form->addRow("Name:", nameEdit);
+    form->addRow("Description:", descriptionEdit);
     form->addRow("Data type:", dataTypeCombo);
     form->addRow("Position:", positionEdit);
     form->addRow("Enum options:", optionsEdit);
@@ -288,6 +293,7 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
         return false;
     }
     field.name = nameEdit->text().trimmed();
+    field.description = descriptionEdit->toPlainText().trimmed();
     field.dataType = static_cast<FieldDataType>(dataTypeCombo->currentData().toInt());
     field.position = positionEdit->value();
     field.enumOptions = field.dataType == FieldDataType::Enum

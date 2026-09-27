@@ -111,7 +111,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <li><code>File → Export...</code> writes the whole dictionary as <strong>one documented JSON file</strong>, optionally with the files its blob and image values refer to.</li>
       <li><code>File → Import...</code> merges such a file into the open dictionary: groups, types and fields are matched by name, and items that are already there are left untouched.</li>
       <li>The web client and the Android app offer the same two actions, and <code>LexiconServer export</code> and <code>LexiconServer import</code> do it from the command line.</li>
-      <li>Alarms, including recurrence and linked items, review dates, links, metadata, <a href="cards.html">cards and their quiz counts</a>, and the <a href="board.html">Board</a> all travel with it. Export format version 4 adds the Board so older Lexicon releases refuse it rather than silently dropping it. See <a href="https://github.com/robertvokac/lexicon/blob/develop/docs/export-format.md" target="_blank" rel="noopener">the export format</a>.</li>
+      <li>Alarms, including recurrence and linked items, review dates, links, metadata, <a href="cards.html">cards and their quiz counts</a>, the <a href="board.html">Board</a>, and item-field descriptions all travel with it. Export format version 5 adds field descriptions so older Lexicon releases refuse it rather than silently dropping them. See <a href="https://github.com/robertvokac/lexicon/blob/develop/docs/export-format.md" target="_blank" rel="noopener">the export format</a>.</li>
       <li>Exports contain current data. To preserve earlier item versions and Trash, keep the database and Blob files in a full backup.</li>
     </ul>
 
