@@ -466,8 +466,9 @@ void checkAlarms(lexicon::LexiconApplication &application) {
   check(list.alarmCount() == 2 && table->rowCount() == 2, "the list shows every alarm");
   check(table->item(0, 1)->text() == "Old call" && table->item(1, 1)->text() == "Renew the passport",
         "the soonest first");
-  check(table->item(1, 2)->text() == "Yes" && table->item(1, 3)->text() == "Personal",
-        "with ASAP and Group in the list");
+  check(table->item(1, 2)->text() == "Once" && table->item(1, 3)->text() == "Yes" &&
+            table->item(1, 4)->text() == "Personal",
+        "with Repeats before ASAP and Group in the list");
   check(table->item(1, 6)->text() == "Photos first.", "with its description");
   check(table->item(0, 0)->toolTip() == "Ringing" && table->item(0, 0)->font().bold(),
         "one gone off and not dismissed is marked as ringing");

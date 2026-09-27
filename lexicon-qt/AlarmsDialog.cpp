@@ -57,8 +57,6 @@ AlarmEditDialog::AlarmEditDialog(const lexicon::AlarmRecord& alarm, QWidget* par
     m_description->setObjectName("alarmDescription");
     m_description->setTabChangesFocus(true);
     form->addRow("Title:", m_title);
-    form->addRow("ASAP:", m_asap);
-    form->addRow("Group:", m_group);
     form->addRow("Goes off:", m_firesAt);
     m_repeatDays = new QSpinBox(this);
     m_repeatDays->setRange(0, 365);
@@ -66,6 +64,8 @@ AlarmEditDialog::AlarmEditDialog(const lexicon::AlarmRecord& alarm, QWidget* par
     m_repeatDays->setSuffix(" days");
     m_repeatDays->setValue(alarm.repeatDays);
     form->addRow("Repeat every:", m_repeatDays);
+    form->addRow("ASAP:", m_asap);
+    form->addRow("Group:", m_group);
     m_item = new QComboBox(this);
     m_item->addItem("No linked item", -1);
     auto items = services().core.items.loadItems(-1, -1, {}, {}, {}, {}, {}, {}, -1, -1, -1,
@@ -133,7 +133,7 @@ AlarmsDialog::AlarmsDialog(QWidget* parent) : QDialog(parent) {
     m_table = new QTableWidget(0, 7, this);
     m_table->setObjectName("alarmTable");
     m_table->setHorizontalHeaderLabels(
-        {"Goes off", "Title", "ASAP", "Group", "Repeats", "Item", "Description"});
+        {"Goes off", "Title", "Repeats", "ASAP", "Group", "Item", "Description"});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -195,11 +195,11 @@ void AlarmsDialog::reload(int selectId) {
         }
         const QStringList cells{
             QLocale().toString(when, "ddd yyyy-MM-dd HH:mm"),
-            qtbridge::toQt(alarm.title), alarm.asap ? "Yes" : "No",
-            qtbridge::toQt(alarm.group),
+            qtbridge::toQt(alarm.title),
             alarm.repeatDays > 0
                 ? QString("Every %1 day(s)").arg(alarm.repeatDays)
                 : QString("Once"),
+            alarm.asap ? "Yes" : "No", qtbridge::toQt(alarm.group),
             itemTitle, description.section('\n', 0, 0)};
         for (int column = 0; column < cells.size(); ++column) {
             auto* cell = new QTableWidgetItem(cells[column]);

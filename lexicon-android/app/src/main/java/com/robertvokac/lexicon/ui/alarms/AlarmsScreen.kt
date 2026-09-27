@@ -393,9 +393,9 @@ private fun AlarmRow(
             if (alarm.asap || alarm.group.isNotBlank() || alarm.repeatDays > 0 || alarm.itemId != null) {
                 Text(
                     listOfNotNull(
+                        alarm.repeatDays.takeIf { it > 0 }?.let { "Every $it day(s)" },
                         "ASAP".takeIf { alarm.asap },
                         alarm.group.takeIf { it.isNotBlank() }?.let { "Group: $it" },
-                        alarm.repeatDays.takeIf { it > 0 }?.let { "Every $it day(s)" },
                         alarm.itemId?.let { "Item #$it" },
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
@@ -459,18 +459,6 @@ private fun AlarmDialog(
                     supportingText = titleError,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = asap, onCheckedChange = { asap = it; onEdited() })
-                    Text("ASAP — as soon as possible")
-                }
-                SyncedTextField(
-                    value = group,
-                    onValueChange = { group = it; onEdited() },
-                    label = "Group",
-                    singleLine = true,
-                    supportingText = "Optional text used to group alarms.",
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 SyncedTextField(
                     value = date,
                     onValueChange = {
@@ -502,13 +490,6 @@ private fun AlarmDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 SyncedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = "Description",
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                SyncedTextField(
                     value = repeatDays,
                     onValueChange = { repeatDays = it; repeatError = null },
                     label = "Repeat every (days)",
@@ -518,11 +499,30 @@ private fun AlarmDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = asap, onCheckedChange = { asap = it; onEdited() })
+                    Text("ASAP — as soon as possible")
+                }
+                SyncedTextField(
+                    value = group,
+                    onValueChange = { group = it; onEdited() },
+                    label = "Group",
+                    singleLine = true,
+                    supportingText = "Optional text used to group alarms.",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(onClick = { pickingItem = true }) {
                         Text(if (itemId == null) "Link an item" else itemLabel)
                     }
                     if (itemId != null) TextButton(onClick = { itemId = null; itemLabel = "" }) { Text("Clear") }
                 }
+                SyncedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = "Description",
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 if (serverError != null) {
                     Text(serverError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }

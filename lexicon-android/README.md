@@ -267,8 +267,8 @@ accept it; install a proper certificate instead.
 - **Alarms.** Every alarm, the soonest first, with the date and time it goes
   off in the phone's time zone; those already gone off are marked. **+** adds
   one, a tap edits it: a title, a date and a time (typed, or chosen with the
-  date and time pickers), a description, repeat days, an optional linked
-  item, an **ASAP** marker and optional free-text **Group**. ASAP and Group
+  date and time pickers), repeat days, an **ASAP** marker, optional free-text
+  **Group**, an optional linked item and a description. ASAP and Group
   organize the reminder without changing its schedule. The server stores the
   time in UTC.
   An alarm that has gone off shows **Dismiss** and **Snooze 10 min** until
