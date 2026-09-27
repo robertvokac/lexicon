@@ -641,6 +641,7 @@ server terminates TLS itself it adds `Strict-Transport-Security`.
 
 - **Configuration.** The desktop keeps UI preferences in the database; the web
   client keeps its own in the browser, so neither overwrites the other.
-- **Blob maintenance.** Scanning and garbage collecting the blob directory is
-  local file system maintenance and stays with the desktop client and the
-  server machine.
+- **Blob maintenance.** Scanning, full verification and garbage collection are
+  local file system operations, not REST endpoints. Use the desktop client or
+  run `LexiconServer blobs scan|verify|collect --database /path/lexicon.db` on
+  the server machine.

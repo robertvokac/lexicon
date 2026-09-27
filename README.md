@@ -485,6 +485,11 @@ are relative to the current working directory unless absolute.
 For `export`, `--output FILE` writes to a file instead of standard output and
 `--with-files` includes referenced files. For `import`, `--input FILE` is
 required. `backup` requires `--backup-dir DIR` and accepts `--backup-keep N`.
+Blob storage can be inspected and maintained locally with
+`LexiconServer blobs scan --database PATH`, `blobs verify` and `blobs collect`;
+these operations are not REST endpoints. `scan` checks paths and references,
+`verify` also recalculates every SHA-256, and `collect` verifies before safely
+removing only still-unreferenced canonical files.
 These command-specific options and the commands above are the complete CLI;
 `./build/LexiconServer --help` prints the same list. See
 [server documentation](docs/server.md) for TLS, reverse proxies and backups.
@@ -832,8 +837,11 @@ Clearing a Blob value or deleting an Item, Field, or Type removes database refer
 but deliberately retains the physical file. An **orphan** is a canonical Blob file
 with no current Blob Field value referencing its hash. This permits recovery from
 accidental edits and protects shared files. Only **Tools → Blob maintenance… →
-Delete unused blobs…**, after an explicit scan and confirmation, removes orphans.
-There is no scheduled or automatic Blob garbage collection.
+Delete unused blobs…**, after an explicit scan and confirmation, or the local
+`LexiconServer blobs collect --database PATH` command removes orphans. The server
+also provides read-only `blobs scan` and `blobs verify` commands. There is no
+scheduled or automatic Blob garbage collection and no Blob-maintenance REST
+endpoint.
 
 The **Scan** action checks current database references, canonical paths, sizes,
 missing files, and unused files without reading every Blob's contents. **Full

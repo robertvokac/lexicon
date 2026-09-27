@@ -176,6 +176,9 @@ Usage:
   LexiconServer import --input FILE [options]
   LexiconServer backup --backup-dir DIR [--backup-keep N] [options]
   LexiconServer verify-backup --path DIR
+  LexiconServer blobs scan [--database PATH]
+  LexiconServer blobs verify [--database PATH]
+  LexiconServer blobs collect [--database PATH]
   LexiconServer --help | --version
 
 The server exposes JSON under /api/v1. With --web-dir it also serves that
@@ -265,6 +268,19 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
     } else if (command == "verify-backup") {
       ++index;
       parsed.command = Command::VerifyBackup;
+    } else if (command == "blobs") {
+      ++index;
+      if (index >= arguments.size())
+        return invalid("blobs needs a subcommand: scan, verify or collect.");
+      const auto &subcommand = arguments[index++];
+      if (subcommand == "scan")
+        parsed.command = Command::BlobScan;
+      else if (subcommand == "verify")
+        parsed.command = Command::BlobVerify;
+      else if (subcommand == "collect")
+        parsed.command = Command::BlobCollect;
+      else
+        return invalid("Unknown blobs subcommand '" + subcommand + "'.");
     } else {
       return invalid("Unknown command '" + command + "'.");
     }

@@ -466,6 +466,41 @@ Both work while the server runs. An import merges; see
 [export-format.md](export-format.md) for what it matches and what it leaves
 alone.
 
+## Blob maintenance from the command line
+
+Blob maintenance is a local operation on the database and its adjacent
+`blobs/` directory. It is available both in the desktop client and through
+`LexiconServer`; it is deliberately not exposed over REST:
+
+```sh
+LexiconServer blobs scan --database /path/lexicon.db
+LexiconServer blobs verify --database /path/lexicon.db
+LexiconServer blobs collect --database /path/lexicon.db
+```
+
+- `scan` performs the fast structural check. It compares current and historical
+  database references with canonical Blob paths and reports unused, missing,
+  invalid and unexpected entries without reading every file's contents.
+- `verify` performs the same checks and recalculates SHA-256 for every canonical
+  Blob, so it also finds changed or corrupted content.
+- `collect` first performs a full verification, then removes only canonical
+  files which have no current or historical reference. It refreshes references
+  under a database write lock and hashes every candidate again immediately
+  before deletion. A file that acquired a reference is skipped.
+
+All three commands print counts and individual findings. An unused Blob alone
+is not an error, so the command exits with status 0. Missing or corrupted
+Blobs, invalid references, unexpected entries, scan failures and failed
+deletions produce status 1; command-line errors produce status 2.
+
+`scan` and `verify` are read-only and may run while the server is serving
+requests. `collect` is destructive. Make a complete backup first and preferably
+stop writes while it runs: SQLite protects the reference recheck, but an upload
+which has not yet been attached to an Item may legitimately be collected and
+that Item save will then fail safely. Shared files remain present while any
+current Item or retained Item history refers to their hash. There is no
+scheduled or automatic Blob garbage collection.
+
 ## Paths and text encoding
 
 Every path inside Lexicon is a UTF-8 `std::string`. Conversion between those
@@ -634,7 +669,7 @@ the same scrypt derivation as a wrong password.
   mode handling are not. NTFS ACL semantics are likewise not something Wine
   proves. Both want a real Windows machine, which is the one validation this
   document still owes.
-- Blob storage maintenance (scan, verify, garbage collect) stays in the desktop
-  client and on the server machine. It is local file system maintenance, so it
-  is deliberately not reachable over HTTP.
+- Blob storage maintenance is available in the desktop client and locally as
+  `LexiconServer blobs scan|verify|collect`. It deliberately remains
+  unreachable over HTTP.
 - No WebSockets, no push, no offline sync. The web client refreshes on demand.

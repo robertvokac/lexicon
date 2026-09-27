@@ -313,9 +313,9 @@ Deliberate differences, all of them because a browser is not a desktop:
   rather than in the database, so the web client and the desktop client never
   overwrite each other's settings.
 - **Tools > Blob maintenance is not exposed.** Scanning, verifying and garbage
-  collecting the blob directory is local file system maintenance; it stays with
-  the desktop client and the server machine, and is deliberately not reachable
-  over HTTP.
+  collecting the blob directory is local file system maintenance. Use the
+  desktop client or `LexiconServer blobs scan|verify|collect --database PATH`
+  on the server machine; it is deliberately not reachable over HTTP.
 
 ## Requirements
 

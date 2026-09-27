@@ -60,7 +60,20 @@ Result<void> validateBackupDirectory(const ServerConfig &config);
 // is served to anyone who can reach the port.
 Result<void> validateWebDirectory(const ServerConfig &config);
 
-enum class Command { Serve, AuthSetUser, AuthShow, Export, Import, Backup, VerifyBackup, Help, Version };
+enum class Command {
+  Serve,
+  AuthSetUser,
+  AuthShow,
+  Export,
+  Import,
+  Backup,
+  VerifyBackup,
+  BlobScan,
+  BlobVerify,
+  BlobCollect,
+  Help,
+  Version
+};
 
 struct CommandLine {
   Command command = Command::Serve;

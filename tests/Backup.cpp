@@ -374,6 +374,18 @@ void checkCommandLine() {
         "the server takes a directory and an interval");
   check(!parseCommandLine({"--backup-interval", "0"}), "the interval is at least an hour");
   check(!parseCommandLine({"--backup-keep", "0"}), "at least one backup is kept");
+  auto blobScan = parseCommandLine({"blobs", "scan", "--database", "/srv/lexicon/lexicon.db"});
+  check(blobScan && blobScan->command == lexicon::http::Command::BlobScan &&
+            blobScan->config.databasePath == "/srv/lexicon/lexicon.db",
+        "blob scan takes a database path");
+  auto blobVerify = parseCommandLine({"blobs", "verify"});
+  check(blobVerify && blobVerify->command == lexicon::http::Command::BlobVerify,
+        "blob verify parses");
+  auto blobCollect = parseCommandLine({"blobs", "collect"});
+  check(blobCollect && blobCollect->command == lexicon::http::Command::BlobCollect,
+        "blob collect parses");
+  check(!parseCommandLine({"blobs"}), "blobs needs a subcommand");
+  check(!parseCommandLine({"blobs", "unknown"}), "unknown blob command is rejected");
   lexicon::http::ServerConfig config;
   config.databasePath = "/srv/lexicon/lexicon.db";
   config.backupDirectory = "/srv/lexicon/blobs/backups";

@@ -10,6 +10,7 @@
 #include "SqliteRepository.h"
 #include "TempFile.h"
 
+#include <algorithm>
 #include <atomic>
 #include <csignal>
 #include <fstream>
@@ -264,6 +265,104 @@ int backupNow(const ServerConfig &config) {
   return 0;
 }
 
+const char *blobIssueName(lexicon::BlobIssueType type) {
+  switch (type) {
+  case lexicon::BlobIssueType::Healthy:
+    return "Healthy";
+  case lexicon::BlobIssueType::Orphaned:
+    return "Unused";
+  case lexicon::BlobIssueType::Missing:
+    return "Missing";
+  case lexicon::BlobIssueType::HashMismatch:
+    return "Hash mismatch";
+  case lexicon::BlobIssueType::InvalidReference:
+    return "Invalid reference";
+  case lexicon::BlobIssueType::UnexpectedFile:
+    return "Unexpected entry";
+  }
+  return "Unknown";
+}
+
+bool hasBlobIntegrityProblem(const lexicon::BlobMaintenanceReport &report) {
+  return std::any_of(report.issues.begin(), report.issues.end(),
+                     [](const lexicon::BlobIssue &issue) {
+                       return issue.type != lexicon::BlobIssueType::Healthy &&
+                              issue.type != lexicon::BlobIssueType::Orphaned;
+                     });
+}
+
+void printBlobIssue(const lexicon::BlobIssue &issue) {
+  std::cout << "- " << blobIssueName(issue.type);
+  if (!issue.hash.empty())
+    std::cout << ' ' << issue.hash;
+  if (!issue.relativePath.empty())
+    std::cout << " [" << issue.relativePath << ']';
+  if (issue.size != 0)
+    std::cout << " (" << issue.size << " bytes)";
+  if (!issue.detail.empty())
+    std::cout << ": " << issue.detail;
+  std::cout << '\n';
+}
+
+void printBlobReport(const lexicon::BlobMaintenanceReport &report,
+                     const ServerConfig &config) {
+  std::cout << "Blob scan: "
+            << (report.depth == lexicon::BlobScanDepth::FullIntegrity
+                    ? "full integrity"
+                    : "structural")
+            << '\n'
+            << "Database: " << config.databasePath << '\n'
+            << "References: " << report.referenceCount << '\n'
+            << "Referenced blobs: " << report.referencedBlobCount << '\n'
+            << "Physical blobs: " << report.physicalBlobCount << '\n'
+            << "Unused blobs: " << report.orphanedBlobCount << " ("
+            << report.orphanedBytes << " bytes)\n"
+            << "Missing blobs: " << report.missingBlobCount << '\n';
+  if (report.depth == lexicon::BlobScanDepth::FullIntegrity)
+    std::cout << "Corrupted blobs: " << report.corruptedBlobCount << '\n';
+  else
+    std::cout << "Corrupted blobs: not checked\n";
+  std::cout << "Total bytes: " << report.totalBytes << '\n';
+  if (!report.issues.empty()) {
+    std::cout << "Issues:\n";
+    for (const auto &issue : report.issues)
+      printBlobIssue(issue);
+  }
+}
+
+int blobs(const ServerConfig &config, lexicon::BlobScanDepth depth,
+          bool collect) {
+  SqliteRepository repository;
+  if (auto opened = repository.open(config.databasePath); !opened) {
+    std::cerr << "Cannot open the database: " << opened.error().message << '\n';
+    return 1;
+  }
+  lexicon::LexiconApplication application(repository);
+  auto report = application.blobs.scanStorage(depth);
+  if (!report) {
+    std::cerr << "Cannot scan Blob storage: " << report.error().message << '\n';
+    return 1;
+  }
+  printBlobReport(*report, config);
+  const bool damaged = hasBlobIntegrityProblem(*report);
+  if (!collect)
+    return damaged ? 1 : 0;
+
+  auto result = application.blobs.collectUnusedBlobs(*report);
+  if (!result) {
+    std::cerr << "Cannot collect unused blobs: " << result.error().message
+              << '\n';
+    return 1;
+  }
+  std::cout << "Collection: " << result->candidates << " candidates, "
+            << result->deleted << " deleted (" << result->deletedBytes
+            << " bytes), " << result->skipped << " skipped, "
+            << result->failed << " failed.\n";
+  for (const auto &issue : result->issues)
+    printBlobIssue(issue);
+  return damaged || result->failed != 0 || !result->issues.empty() ? 1 : 0;
+}
+
 int serve(const ServerConfig &config) {
   if (auto valid = lexicon::http::validate(config); !valid) {
     std::cerr << valid.error().message << '\n';
@@ -413,6 +512,12 @@ int main(int argc, char *argv[]) {
               << *verified << " referenced files).\n";
     return 0;
   }
+  case Command::BlobScan:
+    return blobs(parsed->config, lexicon::BlobScanDepth::Structural, false);
+  case Command::BlobVerify:
+    return blobs(parsed->config, lexicon::BlobScanDepth::FullIntegrity, false);
+  case Command::BlobCollect:
+    return blobs(parsed->config, lexicon::BlobScanDepth::FullIntegrity, true);
   case Command::Serve:
     break;
   }
