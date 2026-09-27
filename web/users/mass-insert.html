@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mass Insert — Lexicon User Guide</title>
+<meta name="description" content="Create many Lexicon items in a desktop or web worksheet, including metadata and optional Type values, with a continuously backed-up resumable draft.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="mass-insert.html" class="active">Mass Insert</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="cards.html">Cards &amp; quiz</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="board.html">Board</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul>
+        <li><a href="#start">Choose Group and Type</a></li>
+        <li><a href="#worksheet">Fill the worksheet</a></li>
+        <li><a href="#values">Type value columns</a></li>
+        <li><a href="#recovery">Draft recovery</a></li>
+        <li><a href="#availability">Client availability</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Mass Insert</p>
+    <h1>Mass Insert</h1>
+    <p class="lead">Create a whole set of items in one worksheet instead of opening the full editor again and again. Mass Insert carries one required Group, one optional Type and a safe local draft until every row has been accepted.</p>
+
+    <h2 id="start">Choose Group and Type</h2>
+    <p>Open <code>Manage → Mass Insert...</code> in the desktop or web client. First choose the <strong>Group</strong> shared by every row in this batch. Group is required. <strong>Type</strong> is optional and lists the global Types plus those available in the selected Group.</p>
+    <div class="callout callout-tip">
+      <span class="callout-icon">💡</span>
+      <p><strong>Use one worksheet per shape.</strong> If the next items belong to another Group or need another Type, finish this worksheet and open a new one. This keeps every row predictable.</p>
+    </div>
+
+    <h2 id="worksheet">Fill the worksheet</h2>
+    <p>The first column is always <strong>Title</strong>. The remaining standard columns cover the same item attributes you use most often:</p>
+    <table>
+      <tr><th>Column</th><th>How to fill it</th></tr>
+      <tr><td><strong>Title</strong></td><td>Required for every non-empty row.</td></tr>
+      <tr><td>Disambiguation</td><td>An optional qualifier for otherwise identical titles.</td></tr>
+      <tr><td>Aliases, Tags, Flags</td><td>Comma-separated lists; duplicates and surrounding spaces are cleaned up.</td></tr>
+      <tr><td>Status, Understanding, Pinned</td><td>Select the same state values used by the normal item editor.</td></tr>
+      <tr><td>Content</td><td>Markdown source for the item.</td></tr>
+      <tr><td>Properties</td><td><code>key=value</code> entries separated by semicolons or new lines.</td></tr>
+    </table>
+    <p>Choose <strong>Add row</strong> whenever you need another item. Each row has its own <strong>Remove</strong> action, and completely empty rows are ignored. Choose <strong>Insert items</strong> when the worksheet is ready.</p>
+
+    <h2 id="values">Type value columns</h2>
+    <p>When you selected a Type, the worksheet appends one column for every field of that Type, in field position order. Boolean values appear as <strong>Not set / Yes / No</strong>, enums use their configured options, and numbers, dates, times, timestamps and text receive appropriate editors. Leaving a value blank leaves that field unset.</p>
+    <p>Without a Type there are no value columns, only Title and the standard item attributes. Every inserted item receives exactly the Group and optional Type shown above the worksheet.</p>
+
+    <h2 id="recovery">Draft recovery and partial failures</h2>
+    <p>Every edit is backed up locally as you work. The desktop client keeps the worksheet in its application settings; the web client keeps it in this browser, separated by signed-in user and server. Closing Mass Insert, closing the tab or cancelling the resume prompt does not erase it. The next time you open Mass Insert, choose <strong>Resume</strong>, <strong>Start over</strong> or <strong>Cancel</strong>.</p>
+    <p>Insertion proceeds row by row. As soon as a row is accepted by the database or server, it is removed from the draft. If a later row fails validation or conflicts with an existing item, the successful items stay inserted and the worksheet keeps only the rows still waiting. Fix the reported row and try again.</p>
+    <div class="callout">
+      <span class="callout-icon">🛟</span>
+      <p><strong>Nothing is discarded implicitly.</strong> Use <strong>Discard draft</strong> and confirm only when you deliberately want to erase all unfinished rows. Completing the whole batch clears the draft automatically.</p>
+    </div>
+
+    <h2 id="availability">Client availability</h2>
+    <table>
+      <tr><th>Client</th><th>Mass Insert</th><th>Draft location</th></tr>
+      <tr><td>Qt desktop</td><td>Yes — <code>Manage → Mass Insert...</code></td><td>Local application settings</td></tr>
+      <tr><td>Web client</td><td>Yes — <code>Manage → Mass Insert...</code></td><td>Browser <code>localStorage</code>, per user and server</td></tr>
+      <tr><td>Android</td><td>No</td><td>—</td></tr>
+    </table>
+
+    <div class="page-nav">
+      <a class="prev" href="editing-items.html"><span class="dir">← Previous</span>Editing items</a>
+      <a class="next" href="links-and-relationships.html"><span class="dir">Next →</span>Links &amp; relationships</a>
+    </div>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

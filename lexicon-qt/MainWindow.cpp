@@ -2,6 +2,7 @@
 
 #include "GroupManagerDialog.h"
 #include "ItemTypeManagerDialog.h"
+#include "MassInsertDialog.h"
 #include "ItemEditDialog.h"
 #include "ValueListDialog.h"
 #include "FilterHeaderView.h"
@@ -420,6 +421,8 @@ void MainWindow::setupMenus() {
     auto* typesAction = manageMenu->addAction("Types...");
     connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
     connect(typesAction, &QAction::triggered, this, &MainWindow::openTypeManager);
+    auto* massInsertAction = manageMenu->addAction("Mass Insert...");
+    connect(massInsertAction, &QAction::triggered, this, &MainWindow::openMassInsert);
     manageMenu->addSeparator();
     auto* alarmsAction = manageMenu->addAction("Alarms...");
     connect(alarmsAction, &QAction::triggered, this, [this] {
@@ -1284,6 +1287,10 @@ void MainWindow::openTypeManager() {
     connect(&dialog, &ItemTypeManagerDialog::typesChanged, this, &MainWindow::refreshAll);
     dialog.exec();
     refreshAll();
+}
+
+void MainWindow::openMassInsert() {
+    if (MassInsertDialog::open(this)) refreshAll();
 }
 
 void MainWindow::showTagsOverview() {

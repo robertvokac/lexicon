@@ -948,6 +948,24 @@ svg.graph { flex: none; margin: auto; }
 /* Inbox */
 .inbox-content { width: 100%; font-family: var(--font-ui); resize: vertical; }
 
+/* Mass Insert: a deliberately wide worksheet kept inside the dialog. */
+.dialog-mass-insert { width: min(98vw, 1600px); max-width: 98vw; }
+.mass-insert { min-width: 0; }
+.mass-insert-scroll { max-height: 65vh; overflow: auto; border: 1px solid var(--border); }
+.mass-insert-table { width: max-content; min-width: 100%; margin: 0; }
+.mass-insert-table thead { position: sticky; top: 0; z-index: 1; background: var(--surface-alt); }
+.mass-insert-table th:first-child, .mass-insert-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.mass-insert-table thead th:first-child { z-index: 2; background: var(--surface-alt); }
+.mass-insert-table input[type="text"], .mass-insert-table input[type="number"],
+.mass-insert-table input[type="date"], .mass-insert-table input[type="time"],
+.mass-insert-table input[type="datetime-local"], .mass-insert-table select,
+.mass-insert-table textarea { min-width: 150px; width: 100%; }
+.mass-insert-table textarea { min-height: 3.2rem; resize: both; }
+.mass-insert-table td.mass-insert-check { text-align: center; }
+.mass-insert-table td.mass-insert-check input { min-width: auto; width: auto; }
+.mass-insert-tools { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.mass-insert-backup { margin-left: auto; }
+
 /* Cards: plain text with its line breaks, never markup */
 .cards { display: flex; flex-direction: column; gap: 6px; }
 .cards-item-title { margin: 0; font-size: 1.2em; overflow-wrap: anywhere; }

@@ -13,6 +13,7 @@ import { openReview } from './review.js';
 import { openTypeManager } from './types.js';
 import { AlarmBell } from './alarmbell.js';
 import { openAlarms } from './alarms.js';
+import { openMassInsert } from './massInsert.js';
 import { button, clear, el, readLocal, readSession, writeLocal, writeSession } from './utils.js';
 
 const STORAGE = {
@@ -240,6 +241,12 @@ class Application {
                         label: 'Types...',
                         action: async () => {
                             if (await openTypeManager()) await this.view.refreshAll();
+                        },
+                    },
+                    {
+                        label: 'Mass Insert...',
+                        action: async () => {
+                            if (await openMassInsert()) await this.view.refreshAll();
                         },
                     },
                     { separator: true },

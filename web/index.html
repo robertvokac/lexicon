@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lexicon — Knowledge Dictionary for Desktop, Web and Android</title>
-<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for desktop, web and Android: linked items, cards, quizzes, review, alarms, an Inbox and named Markdown Boards over one SQLite database.">
+<meta name="description" content="Lexicon is a free, open-source knowledge dictionary for desktop, web and Android: linked items, Mass Insert, cards, review, alarms, an Inbox and named Markdown Boards over one SQLite database.">
 <link rel="icon" type="image/png" href="assets/img/appicon.png">
 <link rel="stylesheet" href="css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -76,6 +76,11 @@
           <span class="card-emoji">🏷️</span>
           <h3>Rich metadata</h3>
           <p>Every item carries aliases, tags, flags, properties, a status, an understanding level and a pinned state — so you always know where you stand.</p>
+        </div>
+        <div class="card">
+          <span class="card-emoji">🧾</span>
+          <h3>Mass Insert</h3>
+          <p>Create many items in one desktop or web worksheet, with metadata and optional Type values. Every edit is backed up locally and unfinished rows can be resumed. <a href="users/mass-insert.html">Learn about Mass Insert</a>.</p>
         </div>
         <div class="card">
           <span class="card-emoji">🔗</span>
@@ -167,10 +172,10 @@
           <p>Everything you need to install Lexicon and organize your knowledge like a pro.</p>
           <ul>
             <li>Installation and first launch</li>
-            <li>Creating groups and items</li>
+            <li>Creating groups, individual items and Mass Insert batches</li>
             <li>The Markdown content editor</li>
             <li>Tags, flags, aliases, links &amp; backlinks</li>
-            <li>Review, cards, alarms, the Inbox and Boards</li>
+            <li>Mass Insert, review, cards, alarms, the Inbox and Boards</li>
             <li>The server, the web client and the Android app</li>
             <li>Search, filtering, backup, and troubleshooting</li>
           </ul>
@@ -244,7 +249,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build --
       <p class="section-lead">The same dictionary, wherever you are:</p>
       <div class="grid grid-3">
         <div class="card"><h3>🖧 LexiconServer</h3><p>A Qt-free REST server next to your database. It serves your other devices and backs the dictionary up by itself.</p></div>
-        <div class="card"><h3>🌐 Web client</h3><p>Static HTML, CSS and JavaScript — no build step. Everything the desktop does, in a browser, down to a phone-sized screen.</p></div>
+        <div class="card"><h3>🌐 Web client</h3><p>Static HTML, CSS and JavaScript — no build step. The desktop workflows, including recoverable Mass Insert worksheets, in a browser down to a phone-sized screen.</p></div>
         <div class="card"><h3>📱 Android app</h3><p>Kotlin and Jetpack Compose: search, edit, review, named shared Boards, alarms that ring when the app is closed, encrypted offline reading of loaded pages, and an Inbox that works offline.</p></div>
       </div>
       <div class="grid grid-2" style="margin-top:1.5rem">

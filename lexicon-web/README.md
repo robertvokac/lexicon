@@ -33,6 +33,7 @@ lexicon-web/
 │   ├── highlight.js      C++ highlighting for code blocks
 │   ├── itemEdit.js       item editor with its six tabs
 │   ├── items.js          main window: table, filters, pagination, preview
+│   ├── massInsert.js     resumable spreadsheet-style batch item creation
 │   ├── markdown.js       Markdown rendering and sanitization
 │   ├── overviews.js      tag/flag/alias overviews, property and column dialogs
 │   ├── types.js          type and field manager
@@ -187,7 +188,7 @@ The first runs the unit tests of the modules that need no browser: wiki
 links, the graph layout, alarm times, image values, the card quiz session. Name the files: Node 22
 reads a directory argument as a module. The second drives the whole client
 in headless Chrome or Chromium against a fresh `LexiconServer` - sign in,
-Inbox, edit and save, search, groups, types, review, cards and their quiz
+Inbox, edit and save, search, groups, types, Mass Insert draft recovery, review, cards and their quiz
 (one item, and a neighbourhood from the graph), alarms, sign out - and
 checks each step through the REST API; any uncaught JavaScript error fails
 it. It needs only Python and the browser, and CI runs both on every push.
@@ -207,6 +208,7 @@ it. It needs only Python and the browser, and CI runs both on every push.
 | `lexicon.web.tableHeight` | `localStorage` | Where you put the splitter |
 | `lexicon.web.codeLanguage` | `localStorage` | Language of the last code block, offered for the next |
 | `lexicon.web.drafts` | `localStorage` | Item edits not yet saved, per user and server |
+| `lexicon.web.massInsertDrafts` | `localStorage` | Uninserted Mass Insert rows, per user and server |
 
 The token lives in `sessionStorage` on purpose: a browser restart requires a
 new sign-in. There is no long-lived "remember me" token.
@@ -219,6 +221,12 @@ next sign-in offers the latest draft (Continue editing, Discard, Later), and
 opening an item that has one asks first. Saving or cancelling removes it; a
 cancel forced by an expired session keeps it for the next sign-in. Logout
 removes every draft, so signing out leaves no item text behind.
+
+Mass Insert writes its whole worksheet after every edit. Each successfully
+created row is immediately removed from that local draft; if a later row fails,
+only the uninserted remainder is offered on the next visit. Closing the dialog
+keeps it, **Discard draft** removes it, and logout clears it with the item-editor
+drafts.
 
 These preferences are per browser. They never touch the desktop client's
 settings, so switching the web theme does not change the Qt theme, and hiding a
@@ -242,6 +250,7 @@ Everything below behaves the same way in both:
 | **Inbox**: a title and plain text saved to Default with the type Inbox | the same button, in the overflow menu on a phone |
 | **Boards**: named shared rendered Markdown documents with create, rename, delete and an editor | the same button beside Inbox, in the overflow menu on a phone |
 | `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
+| `Manage -> Mass Insert...`: required Group, optional Type, editable rows and local recovery | the same worksheet and per-user/server resumable draft (`js/massInsert.js`) |
 | Image values: thumbnail, **Choose image...**, **View...**, **Save as...**, **Clear**, pictures in the preview | the same, pictures fetched with the session and shown from `blob:` URLs (`js/images.js`, `js/imagevalue.js`) |
 | `Manage -> Alarms...`: the alarms in a table, add, edit, delete | the same table and form, including ASAP and optional Group, with the time in the browser's time zone (`js/alarms.js`, `js/alarmtime.js`) |
 | The **Alarm** window with Dismiss and Snooze, and a tray notification, while the client runs | a panel over the page and a browser notification while the page is open, asked for every 30 seconds and when the tab comes back (`js/alarmbell.js`) |

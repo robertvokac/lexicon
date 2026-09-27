@@ -4,8 +4,8 @@
 Starts a LexiconServer on a fresh database, serves lexicon-web, and drives
 Chrome or Chromium through what a person does: sign in, catch an idea in the
 Inbox, edit and save it, search, add a group and a type, review, add cards
-and quiz them - one item and its neighbourhood - set an alarm and dismiss it
-when it rings, and sign out. Every step is also checked on the
+and quiz them - one item and its neighbourhood - resume a Mass Insert draft,
+set an alarm and dismiss it when it rings, and sign out. Every step is also checked on the
 server through the REST API, and any uncaught JavaScript error fails the run.
 
 Usage:
@@ -399,8 +399,90 @@ def run(browser, web, server):
         click("dialog[open] button", "Save")
         b.wait("[...document.querySelectorAll('dialog[open] li')].some(e => e.textContent.includes('Term'))", "the new type")
         click("dialog[open] button", "Close")
-        if "Term" not in [kind["name"] for kind in api["client"].call("GET", "/types")["types"]]:
+        kinds = api["client"].call("GET", "/types")["types"]
+        if "Term" not in [kind["name"] for kind in kinds]:
             raise Failure("The server has no type Term.")
+        term = next(kind for kind in kinds if kind["name"] == "Term")
+        priority = api["client"].call("POST", f"/types/{term['id']}/fields", {
+            "name": "Priority", "description": "Batch priority", "dataType": "Enum",
+            "position": 0, "enumOptions": ["Low", "High"],
+        })["field"]
+        api["mass_field_id"] = priority["id"]
+
+    @step("resume and finish a Mass Insert worksheet")
+    def _():
+        menu("Manage", "Mass Insert...")
+        b.wait(dialog_open("Choosing one adds a column"), "the Mass Insert scope")
+        selected = b.js("""(() => {
+            const select = document.querySelector('dialog[open] select');
+            const option = [...select.options].find(entry => entry.textContent === 'Default');
+            if (!option) return false;
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            return true;
+        })()""")
+        if not selected:
+            raise Failure("Mass Insert offered no Default group.")
+        b.wait("[...[...document.querySelectorAll('dialog[open] select')][1].options]"
+               ".some(entry => entry.textContent.startsWith('Term'))", "the optional Type choice")
+        chose_type = b.js("""(() => {
+            const select = [...document.querySelectorAll('dialog[open] select')][1];
+            const option = [...select.options].find(entry => entry.textContent.startsWith('Term'));
+            if (!option) return false;
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            return true;
+        })()""")
+        if not chose_type:
+            raise Failure("Mass Insert offered no Term type.")
+        click("dialog[open] button", "Continue")
+        b.wait("!!document.querySelector('dialog[open] .mass-insert-table')", "the Mass Insert worksheet")
+        b.wait("[...document.querySelectorAll('dialog[open] th')].some(entry => entry.textContent === 'Priority')",
+               "the Type value column")
+        type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(1) input", "Bulk web one")
+        type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(3) input", "Web alias, Batch alias")
+        type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(4) input", "batch, web")
+        type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(9) textarea", "# Bulk web one")
+        type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(10) textarea", "source=Mass Insert")
+        type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(11) select", "High")
+        click("dialog[open] button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the backed-up worksheet to close")
+        b.wait("!!localStorage.getItem('lexicon.web.massInsertDrafts')", "the local Mass Insert backup")
+
+        menu("Manage", "Mass Insert...")
+        b.wait(dialog_open("locally backed-up row"), "the resume choice")
+        b.call("Input.dispatchKeyEvent", session=b.session, type="keyDown", key="Escape", code="Escape",
+               windowsVirtualKeyCode=27)
+        b.call("Input.dispatchKeyEvent", session=b.session, type="keyUp", key="Escape", code="Escape",
+               windowsVirtualKeyCode=27)
+        b.wait("!document.querySelector('dialog[open]')", "the resume choice to cancel")
+        if not b.js("!!localStorage.getItem('lexicon.web.massInsertDrafts')"):
+            raise Failure("Cancelling the resume choice discarded the Mass Insert draft.")
+        menu("Manage", "Mass Insert...")
+        b.wait(dialog_open("locally backed-up row"), "the unchanged resume choice")
+        click("dialog[open] button", "Resume")
+        b.wait("document.querySelector('dialog[open] .mass-insert-table tbody tr td input')?.value === 'Bulk web one'",
+               "the restored Mass Insert row")
+        click("dialog[open] button", "Add row")
+        type_into("dialog[open] tbody tr:nth-child(2) td:nth-child(1) input", "Bulk web two")
+        click("dialog[open] button", "Add row")
+        b.js("[...document.querySelectorAll('dialog[open] tbody button')].at(-1).click(); true")
+        b.wait("document.querySelectorAll('dialog[open] .mass-insert-table tbody tr').length === 2",
+               "a Mass Insert row to be removed")
+        click("dialog[open] button", "Insert items")
+        b.wait("!document.querySelector('dialog[open]')", "Mass Insert to finish")
+        first = api["client"].item("Bulk web one")
+        second = api["client"].item("Bulk web two")
+        if not first or not second:
+            raise Failure("The server did not receive both Mass Insert rows.")
+        if first["itemTypeName"] != "Term" \
+                or first["fieldValues"].get(str(api["mass_field_id"])) != "High" \
+                or first["aliases"] != ["Batch alias", "Web alias"] or first["tags"] != ["batch", "web"] \
+                or first["content"] != "# Bulk web one" \
+                or first["properties"] != [{"key": "source", "value": "Mass Insert"}]:
+            raise Failure(f"The first Mass Insert item is incomplete: {first!r}.")
+        if b.js("!!localStorage.getItem('lexicon.web.massInsertDrafts')"):
+            raise Failure("The completed Mass Insert draft was not cleared.")
 
     @step("review")
     def _():

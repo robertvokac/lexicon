@@ -38,6 +38,7 @@
         <li><a href="installation.html">Installation</a></li>
         <li><a href="getting-started.html">Getting started</a></li>
         <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="mass-insert.html">Mass Insert</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="review.html">Review</a></li>
@@ -87,7 +88,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <pre><code>LexiconServer --database ~/lexicon/lexicon.db --web-dir /path/to/lexicon-web</code></pre>
     <p>Open <code>http://127.0.0.1:8628/</code> and you are on the client: it is served read-only under <code>/web</code> on the same port, it finds the API by itself because it is the same address, and <code>--allowed-origin</code> is not needed at all. One process is then the whole installation.</p>
     <p>You can also copy the directory to any web server instead — GitHub Pages, nginx, a Raspberry Pi. Then tell the server that address with <code>--allowed-origin</code>, and sign in with the server's address, your user name and your password.</p>
-    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a>, the <a href="inbox.html">Inbox</a> and the <a href="board.html">Board</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
+    <p>It does everything the desktop client does: search and filters, the item editor with its tabs, recoverable <a href="mass-insert.html">Mass Insert</a> worksheets, Markdown with a live preview, images, links and the <a href="links-and-relationships.html#graph">relationship graph</a>, <a href="review.html">review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a>, the <a href="inbox.html">Inbox</a> and the <a href="board.html">Board</a>, export and import. On a narrow screen it turns into a phone layout, and <code>View → Light mode</code> or <code>Dark mode</code> switches its theme.</p>
 
     <div class="phone-shots">
       <figure>
@@ -102,6 +103,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
 
     <h2 id="android">3. The Android app</h2>
     <p>The native app (Kotlin and Jetpack Compose) is built from <code>lexicon-android/</code> with Gradle and installed as an APK. On first start it asks for the server address, a user name and a password. <strong>Remember this phone</strong> lets the app renew an expired session without another password prompt; you can turn it off on a shared phone. For a phone and server on the same test network, a debug APK can sign in to a <code>http://</code> address when you check <strong>Allow HTTP for testing</strong> on that screen and start the server with <code>--listen 0.0.0.0 --allow-http</code>. Release APKs require HTTPS.</p>
+    <p>Mass Insert is the deliberate exception: batch worksheets are available on desktop and web, not in the Android app.</p>
     <ul>
       <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
       <li>The editor with the same tabs, including image values.</li>

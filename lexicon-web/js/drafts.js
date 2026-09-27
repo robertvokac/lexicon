@@ -5,6 +5,7 @@
 import { readLocal, removeLocal, writeLocal } from './utils.js';
 
 const KEY = 'lexicon.web.drafts';
+const MASS_KEY = 'lexicon.web.massInsertDrafts';
 
 // Drafts belong to one user on one server, so a shared browser never offers
 // one account's notes to another.
@@ -62,6 +63,47 @@ export function clearDraft(itemId) {
 
 export function clearAllDrafts() {
     removeLocal(KEY);
+    removeLocal(MASS_KEY);
+}
+
+// Mass Insert has one resumable worksheet per user and server. Unlike an item
+// editor draft, its rows have not reached the server yet; keep them until all
+// rows were inserted or the user explicitly discards the worksheet.
+export function readMassInsertDraft() {
+    if (!owner) return null;
+    try {
+        const drafts = JSON.parse(readLocal(MASS_KEY, '{}'));
+        return drafts && typeof drafts === 'object' ? drafts[owner] || null : null;
+    } catch (error) {
+        return null;
+    }
+}
+
+export function writeMassInsertDraft(draft) {
+    if (!owner) return false;
+    let drafts = {};
+    try {
+        const parsed = JSON.parse(readLocal(MASS_KEY, '{}'));
+        if (parsed && typeof parsed === 'object') drafts = parsed;
+    } catch (error) {
+        drafts = {};
+    }
+    drafts[owner] = { ...draft, savedAt: Date.now() };
+    return writeLocal(MASS_KEY, JSON.stringify(drafts));
+}
+
+export function clearMassInsertDraft() {
+    if (!owner) return;
+    let drafts = {};
+    try {
+        const parsed = JSON.parse(readLocal(MASS_KEY, '{}'));
+        if (parsed && typeof parsed === 'object') drafts = parsed;
+    } catch (error) {
+        drafts = {};
+    }
+    delete drafts[owner];
+    if (Object.keys(drafts).length) writeLocal(MASS_KEY, JSON.stringify(drafts));
+    else removeLocal(MASS_KEY);
 }
 
 // Writes the editor's state whenever it changes, checked every second and

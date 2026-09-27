@@ -27,6 +27,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 
 - SQLite-backed local dictionary with content-addressed blob files
 - Full CRUD for groups and items
+- Spreadsheet-style Mass Insert on desktop and web, with resumable local drafts
 - Custom group order using a numeric position
 - Optional item types shared across groups or scoped to one group, with ordered typed fields
 - Rich item metadata:
@@ -611,6 +612,21 @@ Recommended workflow:
    - `Pinned`
 4. If a type is selected, fill its fields on the `Values` tab. Fill other tabs as needed.
 5. Click `Save`.
+
+For a larger batch, the desktop and web clients provide `Manage -> Mass Insert...`.
+Choose the required Group and, optionally, a Type. The worksheet always starts
+with Title and includes Disambiguation, Aliases, Tags, Flags, Status,
+Understanding, Pinned, Content and Properties; choosing a Type appends a column
+for every field of that Type. Add or remove rows, then use **Insert items**.
+Aliases, tags and flags are comma-separated, while properties use
+`key=value` entries separated by semicolons or new lines.
+
+The unfinished worksheet is backed up locally after every edit (in desktop
+settings or the browser's `localStorage`) and is offered the next time Mass
+Insert opens. Rows are inserted one at a time and removed from the draft only
+after the server or database accepts them, so an error halfway through leaves
+the uninserted remainder ready to resume. Use **Discard draft** to remove it
+deliberately. Mass Insert is not available in the Android client.
 
 ### 6) Edit item content with Markdown
 

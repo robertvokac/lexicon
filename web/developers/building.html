@@ -101,7 +101,7 @@ QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
 node --test lexicon-web/tests/*.test.mjs
 python3 tools/web-e2e.py --server build/LexiconServer
 cd lexicon-android &amp;&amp; LEXICON_SERVER_BINARY=../build/LexiconServer ./gradlew test lint</code></pre>
-    <p>The C++ suites cover the backend, the REST server over real sockets, backups, old databases, and the desktop dialogs offscreen. <code>tools/web-e2e.py</code> drives the web client in headless Chrome against a fresh server. The Android tests run the Compose screens under Robolectric, some of them against a real <code>LexiconServer</code>. GitHub Actions runs all of it on every push.</p>
+    <p>The C++ suites cover the backend, the REST server over real sockets, backups, old databases, and the desktop dialogs offscreen, including Mass Insert recovery after a partial failure. <code>tools/web-e2e.py</code> drives the web client in headless Chrome against a fresh server and checks a resumable typed Mass Insert worksheet. The Android tests run the Compose screens under Robolectric, some of them against a real <code>LexiconServer</code>. GitHub Actions runs all of it on every push.</p>
 
     <h2 id="configs">Build configurations</h2>
     <table>

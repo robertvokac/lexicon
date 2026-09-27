@@ -10,18 +10,21 @@
 #include "ImageValueView.h"
 #include "InboxDialog.h"
 #include "ItemEditDialog.h"
+#include "MassInsertDialog.h"
 #include "MarkdownConverter.h"
 #include "ReviewDialog.h"
 #include "SqliteRepository.h"
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QFile>
 #include <QFrame>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QImage>
+#include <QJsonDocument>
 #include <QPainter>
 #include <QDateTimeEdit>
 #include <QDialog>
@@ -32,6 +35,7 @@
 #include <QPlainTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSettings>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTextBrowser>
@@ -428,6 +432,115 @@ void checkInbox(lexicon::LexiconApplication &application) {
             child<QLabel>(twin, "inboxError")->text().contains("already exists"),
         "a title already in Default is refused with the reason");
 }
+void checkMassInsert(lexicon::LexiconApplication &application, int group) {
+  lexicon::ItemTypeRecord type;
+  type.groupId = group;
+  type.name = "Mass type";
+  check(application.types.upsertItemType(type).has_value(), "create a Mass Insert type");
+  int typeId = -1;
+  for (const auto &entry : application.types.loadItemTypes(group).value_or(std::vector<lexicon::ItemTypeRecord>{}))
+    if (entry.name == type.name) typeId = entry.id;
+  if (typeId <= 0) return;
+  lexicon::ItemFieldRecord priority;
+  priority.itemTypeId = typeId;
+  priority.name = "Priority";
+  priority.dataType = lexicon::FieldDataType::Enum;
+  priority.enumOptions = {"Low", "High"};
+  check(application.types.upsertItemField(priority).has_value(), "create a Mass Insert value field");
+  const auto coreFields = application.types.loadItemFields(typeId);
+  if (!coreFields || coreFields->empty()) return;
+  const auto fields = qtbridge::toQt(*coreFields);
+
+  MassInsertDialog dialog(group, typeId, fields);
+  dialog.show();
+  auto *table = child<QTableWidget>(dialog, "massInsertTable");
+  auto *add = child<QPushButton>(dialog, "massInsertAddRow");
+  auto *save = child<QPushButton>(dialog, "massInsertSave");
+  if (!table || !add || !save) return;
+  check(table->columnCount() == 12 && table->horizontalHeaderItem(0)->text() == "Title" &&
+            table->horizontalHeaderItem(10)->text() == "Priority",
+        "Mass Insert starts with Title and adds Type value columns");
+  qobject_cast<QLineEdit *>(table->cellWidget(0, 0))->setText("Bulk one");
+  qobject_cast<QLineEdit *>(table->cellWidget(0, 2))->setText("First alias, Another alias");
+  qobject_cast<QLineEdit *>(table->cellWidget(0, 3))->setText("batch, test");
+  qobject_cast<QPlainTextEdit *>(table->cellWidget(0, 8))->setPlainText("# Bulk one");
+  qobject_cast<QPlainTextEdit *>(table->cellWidget(0, 9))->setPlainText("source=Mass Insert");
+  auto *priorityValue = qobject_cast<QComboBox *>(table->cellWidget(0, 10));
+  priorityValue->setCurrentIndex(priorityValue->findData("High"));
+  check(priorityValue->currentData().toString() == "High",
+        "the Mass Insert Enum editor selects a value");
+  QMetaObject::invokeMethod(&dialog, "persistDraft", Qt::DirectConnection);
+  check(QSettings().contains("massInsert/draftV1"), "unfinished Mass Insert rows are backed up");
+  const auto draft = QJsonDocument::fromJson(
+      QSettings().value("massInsert/draftV1").toByteArray()).object();
+  check(draft.value("rows").toArray().at(0).toObject().value("fieldValues").toObject()
+                .value(QString::number(coreFields->front().id)).toString() == "High",
+        "the Mass Insert draft preserves Type values");
+
+  add->click();
+  check(table->rowCount() == 2, "a Mass Insert row can be added");
+  qobject_cast<QLineEdit *>(table->cellWidget(1, 0))->setText("Bulk two");
+  shot(dialog, "mass-insert");
+  save->click();
+  check(dialog.result() == QDialog::Accepted && dialog.insertedCount() == 2,
+        "Mass Insert creates every completed row");
+  check(!QSettings().contains("massInsert/draftV1"), "a completed Mass Insert clears its draft");
+  const auto firstId = application.search.findItemId("Bulk one");
+  const auto secondId = application.search.findItemId("Bulk two");
+  check(firstId && secondId, "both Mass Insert titles are stored");
+  if (firstId) {
+    const auto item = application.items.loadItem(*firstId);
+    check(item.has_value(), "load the first Mass Insert item");
+    if (item) {
+      check(item->groupId == group && item->itemTypeId == typeId,
+            "Mass Insert stores Group and Type");
+      check(item->aliases.size() == 2 && item->tags.size() == 2,
+            "Mass Insert stores aliases and tags");
+      check(item->content == "# Bulk one", "Mass Insert stores content");
+      check(item->properties.size() == 1 && item->properties.front().key == "source" &&
+                item->properties.front().value == "Mass Insert",
+            "Mass Insert stores properties");
+      check(item->fieldValues.contains(coreFields->front().id) &&
+                item->fieldValues.at(coreFields->front().id) == "High",
+            "Mass Insert stores Type values");
+    }
+  }
+
+  MassInsertDialog partial(group, -1, {});
+  partial.show();
+  auto *partialTable = child<QTableWidget>(partial, "massInsertTable");
+  auto *partialAdd = child<QPushButton>(partial, "massInsertAddRow");
+  auto *partialSave = child<QPushButton>(partial, "massInsertSave");
+  if (!partialTable || !partialAdd || !partialSave) return;
+  qobject_cast<QLineEdit *>(partialTable->cellWidget(0, 0))->setText("Inserted before failure");
+  partialAdd->click();
+  qobject_cast<QLineEdit *>(partialTable->cellWidget(1, 0))->setText("Bulk one");
+  partialSave->click();
+  check(partial.result() != QDialog::Accepted && partial.insertedCount() == 1,
+        "Mass Insert stops after a server-side failure");
+  check(partialTable->rowCount() == 1 &&
+            qobject_cast<QLineEdit *>(partialTable->cellWidget(0, 0))->text() == "Bulk one",
+        "only the uninserted Mass Insert rows remain after a partial failure");
+  const auto remainingDraft = QJsonDocument::fromJson(
+      QSettings().value("massInsert/draftV1").toByteArray()).object();
+  check(remainingDraft.value("rows").toArray().size() == 1 &&
+            remainingDraft.value("rows").toArray().at(0).toObject().value("title") == "Bulk one",
+        "the Mass Insert backup contains only the uninserted remainder");
+  partial.reject();
+  QSettings().remove("massInsert/draftV1");
+
+  MassInsertDialog closeBackup(group, -1, {});
+  auto *closeTable = child<QTableWidget>(closeBackup, "massInsertTable");
+  if (!closeTable) return;
+  qobject_cast<QLineEdit *>(closeTable->cellWidget(0, 0))->setText("Closed immediately");
+  closeBackup.reject();
+  const auto closedDraft = QJsonDocument::fromJson(
+      QSettings().value("massInsert/draftV1").toByteArray()).object();
+  check(closedDraft.value("rows").toArray().at(0).toObject().value("title") ==
+            "Closed immediately",
+        "closing Mass Insert immediately backs up the latest edit");
+  QSettings().remove("massInsert/draftV1");
+}
 void checkAlarms(lexicon::LexiconApplication &application) {
   AlarmEditDialog editor(lexicon::AlarmRecord{});
   editor.show();
@@ -659,6 +772,11 @@ int main(int argc, char **argv) {
   const auto directory = fs::temp_directory_path() /
       ("lexicon-desktop-gui-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
   fs::create_directories(directory);
+  QCoreApplication::setOrganizationName("LexiconTests");
+  QCoreApplication::setApplicationName("DesktopGuiSmoke");
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+                     QString::fromStdString(directory.string()));
   struct Cleanup { fs::path path; ~Cleanup() { std::error_code ignored; fs::remove_all(path, ignored); } } cleanup{directory};
   SqliteRepository repository;
   if (!repository.open((directory / "lexicon.db").string())) return 1;
@@ -672,6 +790,7 @@ int main(int argc, char **argv) {
   checkGraph(application, group);
   checkCards(application, group);
   checkInbox(application);
+  checkMassInsert(application, group);
   checkAlarms(application);
   checkAlarmNotifier(application);
   checkAlarmDuringModalDialog(application);

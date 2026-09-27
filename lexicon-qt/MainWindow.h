@@ -164,6 +164,7 @@ private slots:
 
     void openGroupManager();
     void openTypeManager();
+    void openMassInsert();
     void showTagsOverview();
     void showFlagsOverview();
     void showAliasesOverview();

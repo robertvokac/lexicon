@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>User Guide — Lexicon</title>
-<meta name="description" content="Lexicon User Guide for desktop, web and Android: create items and cards, use named Markdown Boards, review what is due, manage alarms and back up your dictionary.">
+<meta name="description" content="Lexicon User Guide for desktop, web and Android: create items, use Mass Insert on desktop and web, work with cards and Boards, review what is due and back up your dictionary.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -38,6 +38,7 @@
         <li><a href="installation.html">Installation</a></li>
         <li><a href="getting-started.html">Getting started</a></li>
         <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="mass-insert.html">Mass Insert</a></li>
         <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
         <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
         <li><a href="review.html">Review</a></li>
@@ -71,7 +72,7 @@
     <h2 id="what">What is Lexicon?</h2>
     <p>Lexicon is a free, open-source application for <strong>structured learning and technical note-taking</strong>. Instead of a folder full of loose notes, you build a personal dictionary of <em>items</em>, organized into <em>groups</em>, enriched with metadata, and connected by <em>typed links</em> that form a concept graph.</p>
     <p>Data is stored locally in a SQLite file, with optional attachments in an adjacent directory — no account, no cloud, no telemetry. You own your knowledge.</p>
-    <p>There are <strong>three clients over one dictionary</strong>: the Qt desktop application, which opens the database file directly, and a web client and a native Android app, which talk to <code>LexiconServer</code> next to that same file. What you write in one shows up in the others — including <a href="review.html">reviews</a>, <a href="cards.html">cards</a>, <a href="alarms.html">alarms</a>, the <a href="inbox.html">Inbox</a> and the shared <a href="board.html">Board</a>.</p>
+    <p>There are <strong>three clients over one dictionary</strong>: the Qt desktop application, which opens the database file directly, and a web client and a native Android app, which talk to <code>LexiconServer</code> next to that same file. What you write in one shows up in the others — including <a href="review.html">reviews</a>, <a href="cards.html">cards</a>, <a href="alarms.html">alarms</a>, the <a href="inbox.html">Inbox</a> and the shared <a href="board.html">Board</a>. Desktop and web additionally provide <a href="mass-insert.html">Mass Insert</a> for creating a batch in one recoverable worksheet.</p>
 
     <figure class="screenshot">
       <img src="../assets/img/desktop-main.png" alt="Lexicon main window with filters, item table, and rendered content" loading="lazy">
@@ -95,6 +96,7 @@
       <li><strong><a href="installation.html">Install and launch Lexicon</a>.</strong> The database file is created automatically on first start.</li>
       <li><strong><a href="getting-started.html">Organize your groups</a></strong> via <code>Manage → Groups...</code>. A <code>Default</code> group is ready when you start.</li>
       <li><strong>Add a few items</strong> with the <code>Add</code> button and fill in their titles.</li>
+      <li><strong><a href="mass-insert.html">Use Mass Insert for a batch</a></strong> — choose one Group, an optional Type and fill several rows safely.</li>
       <li><strong><a href="editing-items.html">Write content in Markdown</a></strong> in the Content tab and watch the live preview.</li>
       <li><strong><a href="links-and-relationships.html">Connect related items</a></strong> with typed links to grow your concept graph.</li>
       <li><strong><a href="review.html">Review what you wrote</a></strong> — the items due now, one card at a time.</li>
@@ -114,7 +116,11 @@
       </a>
       <a class="card card-link" href="editing-items.html">
         <h3>✍️ Editing items</h3>
-        <p>The item editor in depth: General fields, the Markdown editor, and metadata management.</p>
+        <p>The item editor in depth: General fields, Markdown content, Type values and metadata.</p>
+      </a>
+      <a class="card card-link" href="mass-insert.html">
+        <h3>🧾 Mass Insert</h3>
+        <p>Create many items in a desktop or web worksheet with optional Type values and a resumable local draft.</p>
       </a>
       <a class="card card-link" href="links-and-relationships.html">
         <h3>🔗 Links &amp; relationships</h3>

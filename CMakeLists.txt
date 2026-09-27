@@ -257,6 +257,8 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/GroupManagerDialog.cpp
         lexicon-qt/ItemTypeManagerDialog.h
         lexicon-qt/ItemTypeManagerDialog.cpp
+        lexicon-qt/MassInsertDialog.h
+        lexicon-qt/MassInsertDialog.cpp
         lexicon-qt/BlobMaintenanceDialog.h
         lexicon-qt/BlobMaintenanceDialog.cpp
         lexicon-qt/ValueListDialog.h
@@ -317,6 +319,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/ReviewDialog.cpp
             lexicon-qt/ItemEditDialog.h
             lexicon-qt/ItemEditDialog.cpp
+            lexicon-qt/MassInsertDialog.h
+            lexicon-qt/MassInsertDialog.cpp
             lexicon-qt/GraphLayout.h
             lexicon-qt/GraphDialog.h
             lexicon-qt/GraphDialog.cpp

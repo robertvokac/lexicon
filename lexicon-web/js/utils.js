@@ -162,8 +162,10 @@ export function readLocal(key, fallback) {
 export function writeLocal(key, value) {
     try {
         window.localStorage.setItem(key, value);
+        return true;
     } catch (error) {
         // Private browsing modes may refuse storage; preferences are optional.
+        return false;
     }
 }
 
