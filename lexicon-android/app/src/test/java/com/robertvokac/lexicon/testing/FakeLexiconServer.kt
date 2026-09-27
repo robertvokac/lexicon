@@ -2,6 +2,8 @@ package com.robertvokac.lexicon.testing
 
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.Alarm
+import com.robertvokac.lexicon.model.StudyPlan
+import com.robertvokac.lexicon.model.StudyPlanOverview
 import com.robertvokac.lexicon.model.Card
 import com.robertvokac.lexicon.model.Board
 import com.robertvokac.lexicon.model.FieldDataType
@@ -73,6 +75,19 @@ class FakeLexiconServer : Dispatcher() {
     val imports = mutableListOf<ByteArray>()
     val reviews = mutableListOf<Pair<Int, ReviewRating>>()
     val alarms = mutableListOf<Alarm>()
+    val studyPlans = mutableListOf<StudyPlan>()
+
+    private fun studyOverview(plan: StudyPlan, date: String): StudyPlanOverview {
+        val total = plan.lastUnit - plan.firstUnit + 1
+        val completed = if (plan.currentProgress == 0) 0 else plan.currentProgress - plan.firstUnit + 1
+        return StudyPlanOverview(plan, date, if (completed == total) "Completed" else "On track",
+            upcoming = false, active = true, ended = false, complete = completed == total, studyDay = true,
+            totalUnits = total, completedUnits = completed, remainingUnits = total - completed,
+            totalStudyDays = 1, elapsedStudyDays = 1, remainingStudyDays = 1,
+            plannedUnitsPerStudyDay = total.toDouble(), requiredUnitsPerRemainingStudyDay = (total - completed).toDouble(),
+            expectedUnits = total, deficitUnits = total - completed, todayFirst = plan.firstUnit,
+            todayLast = plan.lastUnit, recommendedFirst = 0, recommendedLast = 0)
+    }
 
     /** Every item's cards, in the order they were added. */
     val cards = mutableListOf<Card>()
@@ -269,6 +284,29 @@ class FakeLexiconServer : Dispatcher() {
                 noContent()
             }
             path == "/alarms" && method == "GET" -> json(buildJsonObject { put("alarms", encode(alarms.sortedWith(compareBy({ it.firesAt }, { it.id })))) })
+            path == "/study-plans" && method == "GET" -> json(buildJsonObject { put("studyPlans", encode(studyPlans)) })
+            path == "/study-plans/overview" && method == "GET" -> {
+                val date = request.url.queryParameter("date").orEmpty()
+                json(buildJsonObject { put("date", date); put("plans", encode(studyPlans.map { studyOverview(it, date) })) })
+            }
+            path == "/study-plans" && method == "POST" -> {
+                val plan = LexiconJson.decodeFromJsonElement(StudyPlan.serializer(), bodyObject(request)).copy(id = nextId++)
+                studyPlans += plan
+                json(buildJsonObject { put("studyPlan", encode(plan)) }, 201)
+            }
+            segments.size == 2 && segments[0] == "study-plans" && method == "PUT" -> {
+                val id = segments[1].toIntOrNull() ?: return notFound()
+                val index = studyPlans.indexOfFirst { it.id == id }
+                if (index < 0) return notFound()
+                val plan = LexiconJson.decodeFromJsonElement(StudyPlan.serializer(), bodyObject(request)).copy(id = id)
+                studyPlans[index] = plan
+                json(buildJsonObject { put("studyPlan", encode(plan)) })
+            }
+            segments.size == 2 && segments[0] == "study-plans" && method == "DELETE" -> {
+                val id = segments[1].toIntOrNull() ?: return notFound()
+                if (!studyPlans.removeIf { it.id == id }) return notFound()
+                noContent()
+            }
             path == "/alarms" && method == "POST" -> {
                 val alarm = alarmFrom(bodyObject(request), nextId++) ?: return error(400, "validation", "An alarm needs a title and a UTC time.")
                 alarms += alarm

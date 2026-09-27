@@ -78,6 +78,10 @@ public:
   Result<int> createBoard(const lexicon::BoardRecord &board) override;
   Result<void> saveBoard(const lexicon::BoardRecord &board) override;
   Result<void> deleteBoard(int boardId) override;
+  Result<std::vector<lexicon::StudyPlanRecord>> loadStudyPlans() override;
+  Result<lexicon::StudyPlanRecord> loadStudyPlan(int id) override;
+  Result<int> saveStudyPlan(const lexicon::StudyPlanRecord &plan) override;
+  Result<void> deleteStudyPlan(int id) override;
   Result<std::vector<LinkRecord>> loadLinks(int itemId) override;
   Result<std::vector<LinkRecord>> loadBacklinks(int itemId) override;
   Result<void> saveLink(const LinkRecord &link) override;

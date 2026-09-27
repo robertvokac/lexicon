@@ -1,6 +1,7 @@
 #pragma once
 #include "Repository.h"
 #include "Review.h"
+#include "StudyPlan.h"
 #include "Validation.h"
 
 #include <optional>
@@ -364,6 +365,7 @@ struct DictionaryExport {
   // With their statistics.
   std::vector<CardRecord> cards;
   std::vector<BoardRecord> boards;
+  std::vector<StudyPlanRecord> studyPlans;
 };
 struct ImportReport {
   int groupsCreated = 0;
@@ -377,6 +379,7 @@ struct ImportReport {
   int alarmsCreated = 0;
   int cardsCreated = 0;
   int boardsImported = 0;
+  int studyPlansCreated = 0;
   // What could not be imported as it was, in words.
   std::vector<std::string> warnings;
 };
@@ -409,7 +412,7 @@ public:
         links(repository), search(repository), configuration(repository),
         blobs(repository), exchange(repository), review(repository),
         alarms(repository), cards(repository, links), inbox(repository),
-        board(repository) {}
+        board(repository), studyPlans(repository) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -424,5 +427,6 @@ public:
   CardService cards;
   InboxService inbox;
   BoardService board;
+  StudyPlanService studyPlans;
 };
 } // namespace lexicon

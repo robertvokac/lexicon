@@ -137,9 +137,9 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
-  // Version 8: an older reader would drop foreign-key metadata without a
+  // Version 9: an older reader would drop Study Plans without a
   // word, so it refuses the document instead.
-  check(exported.value("version", 0) == 8, "the export is format version 8");
+  check(exported.value("version", 0) == 9, "the export is format version 9");
   check(exported.contains("boards") && exported.at("boards").size() == 2,
         "the export holds every named Board");
   check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&
@@ -309,7 +309,7 @@ int main() {
   };
   refused("not json", "text that is not JSON");
   refused(R"({"format":"something-else","version":1})", "another format");
-  refused(R"({"format":"lexicon-export","version":9,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":10,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
   refused(R"({"format":"lexicon-export","version":0,"groups":[],"types":[],"items":[],"links":[]})", "version 0");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[{"id":1}],"links":[]})",
           "an item without a title");

@@ -256,6 +256,7 @@ accept it; install a proper certificate instead.
   If another client saved the item after the editor opened it, the server
   refuses the save (409) and the app names what differs, then offers
   **Overwrite**, **Reload** or **Keep editing**.
+- **Study Plan.** Manage → Study Plan opens active plans first, with today’s unit targets, planned and required pace, progress warnings and quick progress actions. Add or edit plans with type, unit, inclusive dates, weekdays and notes; deletion requires confirmation. The server calculates the schedule for the phone’s local date.
 - **Manage.** Groups (add, edit, delete, with the desktop's warning that the
   items go too) and types with their fields (the item and value counts come from
   the server before anything destructive happens).
@@ -451,6 +452,7 @@ the Qt and web clients, with an Android interaction model.
 | Links and backlinks, including Custom | Yes, with a server-side item search |
 | Blob upload and download | Yes, through the system document picker |
 | Groups, types and fields management | Yes, with the desktop's warnings and counts |
+| Study Plan dashboard and CRUD | Yes, with server-calculated targets, risk and quick progress actions |
 | Cards: list, add, edit, delete | Yes; the counts and last attempt are shown, never edited |
 | Item history and Trash | Yes, including restore |
 | Password change and session revocation | Yes, in Settings |

@@ -1,6 +1,11 @@
 package com.robertvokac.lexicon.api
 
 import com.robertvokac.lexicon.model.Alarm
+import com.robertvokac.lexicon.model.StudyPlan
+import com.robertvokac.lexicon.model.StudyPlanEnvelope
+import com.robertvokac.lexicon.model.StudyPlanOverview
+import com.robertvokac.lexicon.model.StudyPlanOverviewsEnvelope
+import com.robertvokac.lexicon.model.StudyPlansEnvelope
 import com.robertvokac.lexicon.model.AlarmEnvelope
 import com.robertvokac.lexicon.model.AlarmWrite
 import com.robertvokac.lexicon.model.AlarmsEnvelope
@@ -259,6 +264,20 @@ class LexiconApi(private val client: ApiClient) {
         client.get("items/$id/graph", ItemGraph.serializer(), query = mapOf("depth" to depth.toString(), "limit" to limit.toString()))
 
     // Alarms ------------------------------------------------------------------
+    suspend fun studyPlans(): List<StudyPlan> = client.get("study-plans", StudyPlansEnvelope.serializer()).studyPlans
+
+    /** [date] is the phone's local YYYY-MM-DD calendar date. */
+    suspend fun studyPlanOverview(date: String): List<StudyPlanOverview> =
+        client.get("study-plans/overview", StudyPlanOverviewsEnvelope.serializer(), query = mapOf("date" to date)).plans
+
+    suspend fun createStudyPlan(plan: StudyPlan): StudyPlan =
+        client.post("study-plans", plan.copy(id = null), StudyPlan.serializer(), StudyPlanEnvelope.serializer()).studyPlan
+
+    suspend fun updateStudyPlan(id: Int, plan: StudyPlan): StudyPlan =
+        client.put("study-plans/$id", plan, StudyPlan.serializer(), StudyPlanEnvelope.serializer()).studyPlan
+
+    suspend fun deleteStudyPlan(id: Int) = client.send("DELETE", "study-plans/$id")
+
 
     /** Every alarm, the soonest first. */
     suspend fun alarms(): List<Alarm> = client.get("alarms", AlarmsEnvelope.serializer()).alarms

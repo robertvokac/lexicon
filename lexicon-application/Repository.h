@@ -48,6 +48,10 @@ public:
   virtual Result<int> createBoard(const BoardRecord &board) = 0;
   virtual Result<void> saveBoard(const BoardRecord &board) = 0;
   virtual Result<void> deleteBoard(int boardId) = 0;
+  virtual Result<std::vector<StudyPlanRecord>> loadStudyPlans() = 0;
+  virtual Result<StudyPlanRecord> loadStudyPlan(int id) = 0;
+  virtual Result<int> saveStudyPlan(const StudyPlanRecord &plan) = 0;
+  virtual Result<void> deleteStudyPlan(int id) = 0;
   virtual Result<std::vector<LinkRecord>> loadLinks(int itemId) = 0;
   virtual Result<std::vector<LinkRecord>> loadBacklinks(int itemId) = 0;
   virtual Result<void> saveLink(const LinkRecord &link) = 0;

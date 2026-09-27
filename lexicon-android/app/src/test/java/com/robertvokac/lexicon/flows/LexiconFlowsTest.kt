@@ -38,6 +38,9 @@ import com.robertvokac.lexicon.AppContainer
 import com.robertvokac.lexicon.LexiconApplication
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.Alarm
+import com.robertvokac.lexicon.model.StudyPlan
+import com.robertvokac.lexicon.model.StudyPlanType
+import com.robertvokac.lexicon.model.StudyUnitType
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.LinkType
@@ -56,6 +59,7 @@ import com.robertvokac.lexicon.testing.waitUntilGone
 import com.robertvokac.lexicon.ui.alarms.AlarmTimes
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDateTime
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -669,6 +673,26 @@ class LexiconFlowsTest {
         compose.onNode(hasText("Save") and hasClickAction()).assertIsNotEnabled()
         compose.waitForText("slow.pdf (", substring = true)
         compose.onNode(hasText("Save") and hasClickAction()).assertIsEnabled()
+    }
+
+    @Test
+    fun aStudyPlanShowsTodayAndRequiresDeleteConfirmation() {
+        val today = LocalDate.now().toString()
+        fake.studyPlans += StudyPlan(id = 901, item = "Effective Modern C++", type = StudyPlanType.Book,
+            unitType = StudyUnitType.Page, currentProgress = 50, startDate = today,
+            endDate = LocalDate.now().plusDays(10).toString(), lastUnit = 334)
+        login()
+        openDrawer("Study Plan")
+        compose.waitForText("Effective Modern C++")
+        compose.onNodeWithText("Original plan today:", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Delete", substring = false).performClick()
+        compose.onNodeWithText("Delete study plan \"Effective Modern C++\"?").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        assertTrue(fake.requestsTo("DELETE", "/api/v1/study-plans/901").isEmpty())
+        compose.onNodeWithText("Delete", substring = false).performClick()
+        compose.onNode(hasText("Delete") and hasAnyAncestor(isDialog())).performClick()
+        compose.waitUntilGone(hasText("Effective Modern C++"))
+        assertEquals(1, fake.requestsTo("DELETE", "/api/v1/study-plans/901").size)
     }
 
     @Test

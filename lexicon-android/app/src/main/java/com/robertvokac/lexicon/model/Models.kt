@@ -290,6 +290,7 @@ data class ImportReport(
     val alarmsCreated: Int = 0,
     val cardsCreated: Int = 0,
     val boardsImported: Int = 0,
+    val studyPlansCreated: Int = 0,
     val warnings: List<String> = emptyList(),
 ) {
     val summary: String

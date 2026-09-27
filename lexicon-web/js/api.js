@@ -273,6 +273,12 @@ export class LexiconApi {
     }
 
     // Alarms -----------------------------------------------------------------
+    async studyPlans() { return (await this.get('/study-plans')).studyPlans; }
+    async studyPlanOverview(date) { return (await this.get(`/study-plans/overview?date=${encodeURIComponent(date)}`)).plans; }
+    async createStudyPlan(plan) { return (await this.post('/study-plans', plan)).studyPlan; }
+    async updateStudyPlan(id, plan) { return (await this.put(`/study-plans/${id}`, plan)).studyPlan; }
+    deleteStudyPlan(id) { return this.delete(`/study-plans/${id}`); }
+
     // The soonest first. Times are UTC "YYYY-MM-DDTHH:MM:SSZ".
     async alarms() { return (await this.get('/alarms')).alarms; }
     async createAlarm(alarm) { return (await this.post('/alarms', alarm)).alarm; }

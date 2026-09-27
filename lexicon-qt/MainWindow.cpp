@@ -15,6 +15,7 @@
 #include "InboxDialog.h"
 #include "BoardDialog.h"
 #include "AlarmsDialog.h"
+#include "StudyPlanDialog.h"
 #include "AlarmNotifier.h"
 #include "ImageValueView.h"
 #include "CsvExport.h"
@@ -437,6 +438,8 @@ void MainWindow::setupMenus() {
     auto* typesAction = manageMenu->addAction("Types...");
     connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
     connect(typesAction, &QAction::triggered, this, &MainWindow::openTypeManager);
+    auto* studyAction = manageMenu->addAction("Study Plan...");
+    connect(studyAction, &QAction::triggered, this, [this] { StudyPlanDialog dialog(this); dialog.exec(); });
     auto* massInsertAction = manageMenu->addAction("Mass Insert...");
     connect(massInsertAction, &QAction::triggered, this, &MainWindow::openMassInsert);
     manageMenu->addSeparator();

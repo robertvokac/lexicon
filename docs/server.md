@@ -673,3 +673,12 @@ the same scrypt derivation as a wrong password.
   `LexiconServer blobs scan|verify|collect`. It deliberately remains
   unreachable over HTTP.
 - No WebSockets, no push, no offline sync. The web client refreshes on demand.
+
+## Study Plans
+
+Migration 34 adds the independent `study_plan` table. Qt uses the shared
+`StudyPlanService` directly; web and Android use `/api/v1/study-plans` and
+`/api/v1/study-plans/overview?date=YYYY-MM-DD`. The overview date must be the
+client's local calendar date. The server calculates targets, required pace and
+risk in the C++ application layer. Version 9 dictionary exports include plans;
+SQLite snapshots include the table automatically.

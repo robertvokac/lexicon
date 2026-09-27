@@ -47,6 +47,26 @@ enum class FieldDataType {
   ForeignKey = 11
 };
 
+enum class StudyPlanType { Book, Course, Lesson, Documentation, Article, Video, Practice, Other };
+enum class StudyUnitType { Page, Lesson, Chapter, Section, Module, Video, Exercise, Minute, Other };
+
+// currentProgress is the last completed absolute unit, or zero when none is complete.
+// Weekday bits are Monday=1 through Sunday=64; 127 means every day.
+struct StudyPlanRecord {
+  int id = -1;
+  std::string item;
+  StudyPlanType type = StudyPlanType::Book;
+  StudyUnitType unitType = StudyUnitType::Page;
+  int currentProgress = 0;
+  std::string startDate;
+  std::string endDate;
+  std::string note;
+  int firstUnit = 1;
+  int lastUnit = 1;
+  int studyDaysMask = 127;
+  std::string customUnit;
+};
+
 struct GroupRecord {
   int id = -1;
   std::string name;

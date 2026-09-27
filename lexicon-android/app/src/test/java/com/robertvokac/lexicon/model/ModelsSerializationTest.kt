@@ -75,7 +75,7 @@ class ModelsSerializationTest {
             LinkType.entries.map { it.name },
         )
         assertEquals(
-            listOf("Integer", "Float", "Text", "Date", "Time", "Timestamp", "Boolean", "Enum", "Blob", "Other", "Image"),
+            listOf("Integer", "Float", "Text", "Date", "Time", "Timestamp", "Boolean", "Enum", "Blob", "Other", "Image", "ForeignKey"),
             FieldDataType.entries.map { it.name },
         )
         assertFalse(LinkType.None in LinkType.persistable)

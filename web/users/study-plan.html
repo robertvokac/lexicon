@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Plan — Lexicon</title>
+<meta name="description" content="Study Plan in Lexicon: calendar targets, progress, required pace and risk across desktop, web and Android.">
+<link rel="icon" type="image/png" href="../assets/img/appicon.png">
+<link rel="stylesheet" href="../css/style.css">
+<script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-wrap">
+    <a class="brand" href="../index.html"><img class="brand-icon" src="../assets/img/appicon.png" alt="Lexicon icon"><span>Lexicon</span></a>
+    <nav class="site-nav" id="siteNav">
+      <a href="../index.html">Home</a>
+      <a href="../screenshots.html">Screenshots</a>
+      <a href="index.html" class="active">Users</a>
+      <a href="../developers/index.html">Developers</a>
+      <a href="https://github.com/robertvokac/lexicon" target="_blank" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle theme">🌙</button>
+      <button class="icon-btn nav-burger" id="navBurger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="container docs-layout">
+
+  <aside class="docs-sidebar">
+    <nav>
+      <p class="sidebar-title">User Guide</p>
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="installation.html">Installation</a></li>
+        <li><a href="getting-started.html">Getting started</a></li>
+        <li><a href="editing-items.html">Editing items</a></li>
+        <li><a href="mass-insert.html">Mass Insert</a></li>
+        <li><a href="links-and-relationships.html">Links &amp; relationships</a></li>
+        <li><a href="search-and-navigation.html">Search &amp; navigation</a></li>
+        <li><a href="review.html">Review</a></li>
+        <li><a href="cards.html">Cards &amp; quiz</a></li>
+        <li><a href="alarms.html">Alarms</a></li>
+        <li><a href="study-plan.html" class="active">Study Plan</a></li>
+        <li><a href="inbox.html">Inbox</a></li>
+        <li><a href="board.html">Board</a></li>
+        <li><a href="server-and-clients.html">Server, web &amp; Android</a></li>
+        <li><a href="backup-and-troubleshooting.html">Backup &amp; troubleshooting</a></li>
+      </ul>
+      <p class="sidebar-title">On this page</p>
+      <ul><li><a href="#create">Create a plan</a></li><li><a href="#dashboard">Today’s dashboard</a></li><li><a href="#status">Progress states</a></li></ul>
+    </nav>
+  </aside>
+
+  <main class="docs-content">
+    <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Study Plan</p>
+    <h1>Study Plan</h1>
+    <p class="lead">Plan a book, course, video series or practice project by calendar date and unit. Opening Study Plan answers what to study today and what pace you need to finish on time.</p>
+    <h2 id="create">Create a plan</h2>
+    <p>Choose <code>Manage → Study Plan...</code> in desktop or web Lexicon, or <strong>Study Plan</strong> in Android’s <strong>Manage</strong> drawer section. Use <strong>Add</strong> to enter an item name, type, unit, first and last unit, start and end date, weekdays, and an optional note. The item name is free text; it need not be an existing Lexicon item. Both dates count as study days when their weekdays are selected.</p>
+    <p>Types are Book, Course, Lesson, Documentation, Article, Video, Practice and Other. Units are Page, Lesson, Chapter, Section, Module, Video, Exercise, Minute and Other. Choosing Other for the unit also asks for a label such as <em>kata</em>. The unit range includes both endpoints; pages 101–300 contain 200 units.</p>
+    <p>Tick the weekdays you intend to study. A Monday–Friday plan has five study days in a Monday–Sunday week, with no target on the weekend. Set <strong>Current progress</strong> to the last completed absolute unit number, or 0 when you have not started. For a range of pages 101–300, progress 145 means pages 101–145 are complete.</p>
+    <h2 id="dashboard">Today’s dashboard</h2>
+    <p>Active plans appear first, sorted by risk. Each shows the original unit range assigned to today, completed and remaining units, the original planned pace and the currently required pace. Paces are shown to two decimal places. When behind, a separate recommended range suggests how much to do today from your actual progress. The original range remains visible for comparison.</p>
+    <p>Use <strong>Update progress</strong> after studying. <strong>Mark today complete</strong> advances to at least today’s target and never moves progress backwards. <strong>Mark plan complete</strong> fills the remaining range. Upcoming and past plans remain available below the active plans, and deleting a plan asks for confirmation.</p>
+    <h2 id="status">Progress states</h2>
+    <ul>
+      <li><strong>On track:</strong> completed at least the original cumulative target through today.</li>
+      <li><strong>Behind:</strong> below today’s target, but the required daily pace is at most 125% of the original pace.</li>
+      <li><strong>At risk:</strong> below target and finishing now requires more than 125% of the original pace, or no study days remain.</li>
+      <li><strong>Completed:</strong> the last unit is complete, including after the end date.</li>
+      <li><strong>Overdue:</strong> the end date has passed and units remain.</li>
+    </ul>
+    <p>Study Plans travel with a whole-dictionary JSON export and are preserved by database backups.</p>
+  </main>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0; padding-top:0; border-top:none">
+      <p>Lexicon is released under the <a href="https://github.com/robertvokac/lexicon/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>. © 2026 Robert Vokac.</p>
+    </div>
+  </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

@@ -335,3 +335,5 @@ properties: Firefox 98+, Chrome/Edge 103+, Safari 15.4+.
 If the page is served over HTTPS and the API URL is plain `http://` on another
 host, the client refuses with a clear message instead of letting the browser
 block the request as mixed content.
+
+Study Plans are available from **Manage → Study Plan...**. The dashboard shows active plans first and uses the server overview for the browser’s local calendar date; editing, quick progress updates and confirmed deletion are available in the same dialog.

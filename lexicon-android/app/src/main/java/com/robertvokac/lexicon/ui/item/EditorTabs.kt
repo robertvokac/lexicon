@@ -452,7 +452,7 @@ private fun PickerTextField(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DateDialog(initial: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
+fun DateDialog(initial: String, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
     val pickerState = rememberDatePickerState(initialSelectedDateMillis = FieldValues.dateToPickerMillis(initial))
     DatePickerDialog(
         onDismissRequest = onDismiss,

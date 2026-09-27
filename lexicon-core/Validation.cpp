@@ -192,6 +192,41 @@ Result<void> validateAlarm(const AlarmRecord &alarm) {
     return invalid("An alarm's item must have a valid ID.");
   return {};
 }
+bool validCalendarDate(std::string_view text) { return dateValid(text); }
+
+Result<void> validateStudyPlan(const StudyPlanRecord &plan) {
+  if (trim(plan.item).empty()) return invalid("Study Plan item cannot be empty.");
+  if (static_cast<int>(plan.type) < 0 || static_cast<int>(plan.type) > static_cast<int>(StudyPlanType::Other))
+    return invalid("Study Plan type is invalid.");
+  if (static_cast<int>(plan.unitType) < 0 || static_cast<int>(plan.unitType) > static_cast<int>(StudyUnitType::Other))
+    return invalid("Study Plan unit type is invalid.");
+  if (plan.firstUnit < 1 || plan.lastUnit < plan.firstUnit)
+    return invalid("Study Plan unit range is invalid.");
+  if (plan.currentProgress != 0 &&
+      (plan.currentProgress < plan.firstUnit || plan.currentProgress > plan.lastUnit))
+    return invalid("Study Plan progress must be zero or a completed unit in its range.");
+  if (!dateValid(plan.startDate) || !dateValid(plan.endDate) || plan.startDate > plan.endDate)
+    return invalid("Study Plan needs valid YYYY-MM-DD dates with end on or after start.");
+  if (plan.studyDaysMask < 1 || plan.studyDaysMask > 127)
+    return invalid("Select at least one valid study weekday.");
+  if (plan.unitType == StudyUnitType::Other && trim(plan.customUnit).empty())
+    return invalid("Enter a custom unit label for Other.");
+  const auto parse = [](std::string_view text) {
+    return std::chrono::sys_days{
+        std::chrono::year{std::stoi(std::string(text.substr(0, 4)))} /
+        std::chrono::month{static_cast<unsigned>(std::stoi(std::string(text.substr(5, 2))))} /
+        std::chrono::day{static_cast<unsigned>(std::stoi(std::string(text.substr(8, 2))))}};
+  };
+  const auto start = parse(plan.startDate);
+  const auto end = parse(plan.endDate);
+  bool scheduled = false;
+  for (auto day = start; day <= end && day < start + std::chrono::days{7}; day += std::chrono::days{1}) {
+    const unsigned mondayZero = (std::chrono::weekday{day}.c_encoding() + 6) % 7;
+    if (plan.studyDaysMask & (1 << mondayZero)) scheduled = true;
+  }
+  if (!scheduled) return invalid("The date range contains no selected study day.");
+  return {};
+}
 Result<void> validateCardText(std::string_view question, std::string_view answer) {
   if (trim(question).empty())
     return invalid("A card needs a question.");

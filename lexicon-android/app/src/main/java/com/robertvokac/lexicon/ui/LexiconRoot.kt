@@ -121,6 +121,9 @@ import com.robertvokac.lexicon.ui.navigation.ReviewRoute
 import com.robertvokac.lexicon.ui.navigation.SettingsRoute
 import com.robertvokac.lexicon.ui.navigation.TypeRoute
 import com.robertvokac.lexicon.ui.navigation.TypesRoute
+import com.robertvokac.lexicon.ui.navigation.StudyPlansRoute
+import com.robertvokac.lexicon.ui.studyplan.StudyPlansScreen
+import com.robertvokac.lexicon.ui.studyplan.StudyPlansViewModel
 import com.robertvokac.lexicon.ui.overview.OverviewKind
 import com.robertvokac.lexicon.ui.overview.OverviewScreen
 import com.robertvokac.lexicon.ui.overview.OverviewViewModel
@@ -315,6 +318,7 @@ private enum class Destination(val label: String) {
     Review("Review"),
     Groups("Groups"),
     Types("Types"),
+    StudyPlans("Study Plan"),
     Alarms("Alarms"),
     Trash("Trash"),
     Tags("All tags"),
@@ -367,6 +371,7 @@ private fun MainScaffold(
             Destination.Review -> ReviewRoute
             Destination.Groups -> GroupsRoute
             Destination.Types -> TypesRoute
+            Destination.StudyPlans -> StudyPlansRoute
             Destination.Alarms -> AlarmsRoute
             Destination.Trash -> TrashRoute
             Destination.Tags -> OverviewRoute(OverviewKind.Tags.name)
@@ -403,6 +408,7 @@ private fun MainScaffold(
                     DrawerHeading("Manage")
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
                     DrawerEntry(Destination.Types, Icons.Filled.Category, ::go)
+                    DrawerEntry(Destination.StudyPlans, Icons.Filled.School, ::go)
                     DrawerEntry(Destination.Alarms, Icons.Filled.Alarm, ::go)
                     DrawerEntry(Destination.Trash, Icons.Filled.Delete, ::go)
                     DrawerHeading("Overview")
@@ -629,6 +635,9 @@ private fun LexiconNavHost(
         composable<AlarmsRoute> {
             val context = LocalContext.current.applicationContext
             AlarmsScreen(lexiconViewModel { app, _ -> AlarmsViewModel(app, AlarmRinger(context, app)) }, onBack = back)
+        }
+        composable<StudyPlansRoute> {
+            StudyPlansScreen(lexiconViewModel { app, _ -> StudyPlansViewModel(app) }, onBack = back)
         }
         composable<TrashRoute> {
             HistoryScreen(lexiconViewModel { app, _ -> HistoryViewModel(app, null) }, trash = true,

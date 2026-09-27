@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.robertvokac.lexicon.LexiconApplication
@@ -79,7 +80,7 @@ class TabletLayoutTest {
     fun theThemeIsAClientPreference() {
         compose.waitForText("Select an item to read it here.")
         compose.onNodeWithContentDescription("Open navigation").performClick()
-        compose.onNode(hasText("Settings") and hasClickAction()).performClick()
+        compose.onNode(hasText("Settings") and hasClickAction()).performScrollTo().performClick()
         compose.waitForText("Appearance")
         compose.onNode(hasText("Dark") and hasClickAction()).performClick()
         compose.waitForCondition { runBlocking { environment.settings.theme.first() } == ThemePreference.Dark }

@@ -88,7 +88,7 @@ int main() {
   };
 
   // Migration 26 made the table, with an index to load one item's cards.
-  check(scalar(path, "SELECT version FROM db_version;") == "33", "a fresh database is at version 33");
+  check(scalar(path, "SELECT version FROM db_version;") == "34", "a fresh database is at version 34");
   check(scalar(path, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_card_item_id' "
                      "AND sql LIKE '%card(item_id, id)%';") == "1",
         "cards are indexed by item");

@@ -13,6 +13,7 @@ import { openReview } from './review.js';
 import { openTypeManager } from './types.js';
 import { AlarmBell } from './alarmbell.js';
 import { openAlarms } from './alarms.js';
+import { openStudyPlans } from './studyplans.js';
 import { openMassInsert } from './massInsert.js';
 import { button, clear, el, readLocal, readSession, writeLocal, writeSession } from './utils.js';
 
@@ -290,6 +291,7 @@ class Application {
                         // A new or moved alarm may already be due.
                         action: () => openAlarms({ onChange: () => this.bell && this.bell.poll() }),
                     },
+                    { label: 'Study Plan...', action: () => openStudyPlans() },
                     { separator: true },
                     {
                         label: 'Cards of selected item...',

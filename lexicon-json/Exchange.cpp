@@ -112,7 +112,8 @@ Result<std::string> exportDocument(LexiconApplication &application, bool include
                 {"links", std::move(links)},
                 {"alarms", http::toJsonArray(dictionary->alarms)},
                 {"cards", http::toJsonArray(dictionary->cards)},
-                {"boards", http::toJsonArray(dictionary->boards)}};
+                {"boards", http::toJsonArray(dictionary->boards)},
+                {"studyPlans", http::toJsonArray(dictionary->studyPlans)}};
   if (includeFiles) {
     std::set<std::string> hashes;
     for (const auto &item : dictionary->items)
@@ -171,6 +172,11 @@ Result<ImportReport> importDocument(LexiconApplication &application, std::string
     if (document.contains("alarms"))
       for (const auto &alarm : requiredArray(document, "alarms"))
         dictionary.alarms.push_back(http::alarmFromJson(alarm));
+    if (document.contains("studyPlans"))
+      for (const auto &plan : requiredArray(document, "studyPlans"))
+        dictionary.studyPlans.push_back(http::studyPlanFromJson(plan));
+    else if (version->get<int>() >= 9)
+      http::badRequest("Field 'studyPlans' must be an array.");
     // Version 1 documents were written before cards and have none - except
     // those of development builds, whose cards are read all the same.
     if (document.contains("cards"))
@@ -214,6 +220,7 @@ Json toJson(const ImportReport &report) {
               {"alarmsCreated", report.alarmsCreated},
               {"cardsCreated", report.cardsCreated},
               {"boardsImported", report.boardsImported},
+              {"studyPlansCreated", report.studyPlansCreated},
               {"warnings", report.warnings}};
 }
 
@@ -225,6 +232,8 @@ std::string describe(const ImportReport &report) {
       report.itemsSkipped, report.groupsCreated, report.typesCreated, report.fieldsCreated);
   if (report.boardsImported)
     text += " Imported " + std::to_string(report.boardsImported) + " Board(s).";
+  if (report.studyPlansCreated)
+    text += " Imported " + std::to_string(report.studyPlansCreated) + " Study Plan(s).";
   for (const auto &warning : report.warnings)
     text += "\n- " + warning;
   return text;

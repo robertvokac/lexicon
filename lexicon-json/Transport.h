@@ -4,6 +4,7 @@
 #include "Records.h"
 #include "Result.h"
 #include "Review.h"
+#include "StudyPlan.h"
 
 #include <nlohmann/json.hpp>
 
@@ -44,11 +45,16 @@ std::string name(UnderstandingLevel value);
 std::string name(LinkType value);
 std::string name(FieldDataType value);
 std::string name(SortOrder value);
+std::string name(StudyPlanType value);
+std::string name(StudyUnitType value);
+std::string name(StudyPlanStatus value);
 std::optional<ItemStatus> itemStatusFromName(std::string_view name);
 std::optional<UnderstandingLevel> understandingFromName(std::string_view name);
 std::optional<LinkType> linkTypeFromName(std::string_view name);
 std::optional<FieldDataType> fieldDataTypeFromName(std::string_view name);
 std::optional<SortOrder> sortOrderFromName(std::string_view name);
+std::optional<StudyPlanType> studyPlanTypeFromName(std::string_view name);
+std::optional<StudyUnitType> studyUnitTypeFromName(std::string_view name);
 std::optional<ReviewRating> reviewRatingFromName(std::string_view name);
 
 // Records to JSON.
@@ -62,6 +68,8 @@ Json toJson(const BoardRecord &board);
 Json toJson(const UsageValueRecord &usage);
 Json toJson(const AlarmRecord &alarm);
 Json toJson(const CardRecord &card);
+Json toJson(const StudyPlanRecord &plan);
+Json toJson(const StudyPlanOverview &overview);
 // A card with the title of the item it asks about.
 Json toJson(const QuizCard &card);
 Json toJson(const CardQuizSet &quiz);
@@ -78,6 +86,7 @@ ItemTypeRecord typeFromJson(const Json &json);
 ItemFieldRecord fieldFromJson(const Json &json);
 LinkRecord linkFromJson(const Json &json);
 AlarmRecord alarmFromJson(const Json &json);
+StudyPlanRecord studyPlanFromJson(const Json &json);
 ItemRecord itemFromJson(const Json &json);
 BoardRecord boardFromJson(const Json &json);
 std::vector<LinkRecord> linksFromJson(const Json &json);

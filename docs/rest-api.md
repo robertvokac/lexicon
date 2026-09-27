@@ -657,3 +657,61 @@ server terminates TLS itself it adds `Strict-Transport-Security`.
   local file system operations, not REST endpoints. Use the desktop client or
   run `LexiconServer blobs scan|verify|collect --database /path/lexicon.db` on
   the server machine.
+
+## Study Plans
+
+Study Plans are calendar plans independent of Lexicon items. `item` is plain
+UTF-8 text, not an item ID. Clients send the person's local calendar date for
+an overview; the server never substitutes a UTC date.
+
+```http
+GET    /api/v1/study-plans                    → { "studyPlans": [ ... ] }
+GET    /api/v1/study-plans/{id}               → { "studyPlan": { ... } }
+POST   /api/v1/study-plans                    → 201 { "studyPlan": { ... } }
+PUT    /api/v1/study-plans/{id}               → 200 { "studyPlan": { ... } }
+DELETE /api/v1/study-plans/{id}               → 204
+GET    /api/v1/study-plans/overview?date=2026-09-27 → { "date": "2026-09-27", "plans": [ ... ] }
+```
+
+A request body for create or update:
+
+```json
+{
+  "item": "Effective Modern C++", "type": "Book", "unitType": "Page",
+  "firstUnit": 1, "lastUnit": 334, "currentProgress": 50,
+  "startDate": "2026-09-27", "endDate": "2026-11-30",
+  "studyDaysMask": 127, "customUnit": "", "note": "Study carefully"
+}
+```
+
+`type`: `Book`, `Course`, `Lesson`, `Documentation`, `Article`, `Video`,
+`Practice`, `Other`. `unitType`: `Page`, `Lesson`, `Chapter`, `Section`,
+`Module`, `Video`, `Exercise`, `Minute`, `Other`. With unit `Other`, supply
+`customUnit` such as `kata`. `currentProgress` is the **last completed
+absolute unit**, or 0 before starting. It must be in `[firstUnit, lastUnit]`
+when nonzero. There is no stored unit count: `lastUnit - firstUnit + 1` is
+the total. Dates are real `YYYY-MM-DD` calendar dates with both ends included.
+
+`studyDaysMask` selects Monday=1, Tuesday=2, Wednesday=4, Thursday=8,
+Friday=16, Saturday=32, Sunday=64. It must select at least one weekday that
+occurs in the date range. 127 selects every day. A Monday–Friday week has
+five scheduled days, and no target is assigned on Saturday or Sunday.
+
+Each overview entry contains `plan` plus `upcoming`, `active`, `ended`,
+`complete`, `studyDay`, `totalUnits`, `completedUnits`, `remainingUnits`,
+`totalStudyDays`, `elapsedStudyDays`, `remainingStudyDays`,
+`plannedUnitsPerStudyDay`, `requiredUnitsPerRemainingStudyDay`,
+`expectedUnits`, `deficitUnits`, `todayFirst`, `todayLast`,
+`recommendedFirst`, `recommendedLast`, and `status`. A zero range endpoint
+means no units are scheduled for that day. Clients display pace to two
+decimal places, without rounding server calculations first.
+
+The original daily range uses cumulative integer division across selected
+study days, covering each unit exactly once. The recommended range appears
+when behind and uses the current progress and remaining pace; it does not
+replace the original target. `status` is `Upcoming`, `On track`, `Behind`,
+`At risk`, `Completed`, or `Overdue`. An active plan is behind if completed
+units fall below the original cumulative target through the requested day;
+it is at risk when finishing now needs more than 125% of the original daily
+pace, or no scheduled days remain. A finished plan is `Completed` even after
+its end date. An unfinished plan after its end date is `Overdue`.

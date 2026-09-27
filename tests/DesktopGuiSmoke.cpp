@@ -2,6 +2,7 @@
 // against a real database: each check clicks what a person would click.
 #include "AlarmNotifier.h"
 #include "AlarmsDialog.h"
+#include "StudyPlanDialog.h"
 #include "ApplicationContext.h"
 #include "BoardDialog.h"
 #include "CardQuizDialog.h"
@@ -897,6 +898,46 @@ void checkAlarmDuringModalDialog(lexicon::LexiconApplication &application) {
 }
 } // namespace
 
+void checkStudyPlans(lexicon::LexiconApplication &application) {
+  lexicon::StudyPlanRecord plan;
+  plan.item = "Effective Modern C++";
+  plan.startDate = qtbridge::toCore(QDate::currentDate().toString("yyyy-MM-dd"));
+  plan.endDate = qtbridge::toCore(QDate::currentDate().addDays(5).toString("yyyy-MM-dd"));
+  plan.lastUnit = 334;
+  auto saved = application.studyPlans.save(plan);
+  check(saved.has_value(), "create Study Plan for desktop dialog");
+  if (!saved) return;
+  StudyPlanDialog dialog;
+  dialog.show();
+  QApplication::processEvents();
+  shot(dialog, "study-plan");
+  auto* table = child<QTableWidget>(dialog, "studyPlanTable");
+  auto* remove = child<QPushButton>(dialog, "studyPlanDelete");
+  if (!table || !remove) return;
+  check(table->rowCount() == 1 && table->item(0, 0)->text() == "Effective Modern C++",
+        "desktop Study Plan shows the saved item");
+  const QString requiredBefore = table->item(0, 7)->text();
+  QPushButton* markToday = nullptr;
+  for (auto* button : dialog.findChildren<QPushButton*>())
+    if (button->text() == "Mark today complete") markToday = button;
+  check(markToday != nullptr, "active dashboard has quick target action");
+  if (markToday) {
+    markToday->click();
+    check(application.studyPlans.load(saved->id)->currentProgress > 0, "quick action advances progress");
+    check(table->item(0, 7)->text() != requiredBefore, "required pace refreshes after progress changes");
+  }
+  table->selectRow(0);
+  whenOpened<QMessageBox>([](QMessageBox &box) {
+    check(box.text().contains("Effective Modern C++"), "delete confirmation names the plan");
+    box.button(QMessageBox::No)->click();
+  });
+  remove->click();
+  check(application.studyPlans.load(saved->id).has_value(), "cancel leaves the plan intact");
+  whenOpened<QMessageBox>([](QMessageBox &box) { box.button(QMessageBox::Yes)->click(); });
+  remove->click();
+  check(!application.studyPlans.load(saved->id), "confirmed delete removes the plan");
+}
+
 int main(int argc, char **argv) {
   QApplication qt(argc, argv);
   const auto directory = fs::temp_directory_path() /
@@ -925,6 +966,7 @@ int main(int argc, char **argv) {
   checkMassInsert(application, group, directory);
   checkForeignKeySuggestions(application, group);
   checkAlarms(application);
+  checkStudyPlans(application);
   checkAlarmNotifier(application);
   checkAlarmDuringModalDialog(application);
   checkImages(application, group, directory);

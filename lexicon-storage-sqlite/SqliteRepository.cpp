@@ -2043,3 +2043,80 @@ SqliteRepository::Result<bool> SqliteRepository::fileHasHash(const std::string &
     return hashFile(file) == hash;
   });
 }
+
+namespace {
+const char *kStudyPlanColumns =
+    "SELECT id, item, type, unit_type, current_progress, start_date, end_date, note, "
+    "first_unit, last_unit, study_days_mask, custom_unit FROM study_plan ";
+lexicon::StudyPlanRecord readStudyPlan(Statement &row) {
+  lexicon::StudyPlanRecord plan;
+  plan.id = row.integer(0);
+  plan.item = row.text(1);
+  plan.type = static_cast<lexicon::StudyPlanType>(row.integer(2));
+  plan.unitType = static_cast<lexicon::StudyUnitType>(row.integer(3));
+  plan.currentProgress = row.integer(4);
+  plan.startDate = row.text(5);
+  plan.endDate = row.text(6);
+  plan.note = row.text(7);
+  plan.firstUnit = row.integer(8);
+  plan.lastUnit = row.integer(9);
+  plan.studyDaysMask = row.integer(10);
+  plan.customUnit = row.text(11);
+  return plan;
+}
+} // namespace
+
+SqliteRepository::Result<std::vector<lexicon::StudyPlanRecord>> SqliteRepository::loadStudyPlans() {
+  return guarded([&] {
+    Statement row(impl_->db, std::string(kStudyPlanColumns) + "ORDER BY start_date, id;");
+    std::vector<lexicon::StudyPlanRecord> plans;
+    while (row.step()) plans.push_back(readStudyPlan(row));
+    return plans;
+  });
+}
+SqliteRepository::Result<lexicon::StudyPlanRecord> SqliteRepository::loadStudyPlan(int id) {
+  return guarded([&] {
+    Statement row(impl_->db, std::string(kStudyPlanColumns) + "WHERE id = ?;");
+    row.bind(id);
+    require(row.step(), "Study Plan not found.", lexicon::Error::Code::NotFound);
+    return readStudyPlan(row);
+  });
+}
+SqliteRepository::Result<int> SqliteRepository::saveStudyPlan(const lexicon::StudyPlanRecord &plan) {
+  return guarded([&] {
+    valid(lexicon::validateStudyPlan(plan));
+    Transaction tx(impl_->db, "lexicon_write");
+    int id = plan.id;
+    if (id < 0) {
+      Statement(impl_->db, "INSERT INTO study_plan(item, type, unit_type, current_progress, start_date, end_date, "
+                           "note, first_unit, last_unit, study_days_mask, custom_unit) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);")
+          .bind(lexicon::trim(plan.item)).bind(static_cast<int>(plan.type))
+          .bind(static_cast<int>(plan.unitType)).bind(plan.currentProgress)
+          .bind(plan.startDate).bind(plan.endDate).bind(plan.note)
+          .bind(plan.firstUnit).bind(plan.lastUnit).bind(plan.studyDaysMask)
+          .bind(lexicon::trim(plan.customUnit)).run();
+      id = impl_->db.lastId();
+    } else {
+      Statement(impl_->db, "UPDATE study_plan SET item=?, type=?, unit_type=?, current_progress=?, start_date=?, "
+                           "end_date=?, note=?, first_unit=?, last_unit=?, study_days_mask=?, custom_unit=? WHERE id=?;")
+          .bind(lexicon::trim(plan.item)).bind(static_cast<int>(plan.type))
+          .bind(static_cast<int>(plan.unitType)).bind(plan.currentProgress)
+          .bind(plan.startDate).bind(plan.endDate).bind(plan.note)
+          .bind(plan.firstUnit).bind(plan.lastUnit).bind(plan.studyDaysMask)
+          .bind(lexicon::trim(plan.customUnit)).bind(id).run();
+      requireChanged(impl_->db, "Study Plan");
+    }
+    logOperation(impl_->db, "study_plan", id, plan.id < 0 ? 1 : 2);
+    tx.commit();
+    return id;
+  });
+}
+SqliteRepository::Result<void> SqliteRepository::deleteStudyPlan(int id) {
+  return guarded([&] {
+    Transaction tx(impl_->db, "lexicon_write");
+    Statement(impl_->db, "DELETE FROM study_plan WHERE id = ?;").bind(id).run();
+    requireChanged(impl_->db, "Study Plan");
+    logOperation(impl_->db, "study_plan", id, 3);
+    tx.commit();
+  });
+}

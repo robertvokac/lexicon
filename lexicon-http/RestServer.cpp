@@ -1755,6 +1755,53 @@ void RestServer::Impl::registerRoutes() {
               "loadAliasUsage");
   });
 
+  // Calendar Study Plans. Clients send their local date explicitly.
+  api.Get("/api/v1/study-plans", [this](const Request &, Response &response) {
+    auto plans = guarded.with([](LexiconApplication &app) { return app.studyPlans.loadAll(); });
+    if (!plans) { respondError(response, plans.error(), "loadStudyPlans"); return; }
+    respondJson(response, 200, Json{{"studyPlans", toJsonArray(*plans)}});
+  });
+  api.Get("/api/v1/study-plans/overview", [this](const Request &request, Response &response) {
+    const auto date = queryValue(request, "date");
+    auto values = guarded.with([&](LexiconApplication &app) { return app.studyPlans.overview(date); });
+    if (!values) { respondError(response, values.error(), "studyPlanOverview"); return; }
+    respondJson(response, 200, Json{{"date", date}, {"plans", toJsonArray(*values)}});
+  });
+  api.Get("/api/v1/study-plans/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id) return;
+    auto plan = guarded.with([&](LexiconApplication &app) { return app.studyPlans.load(*id); });
+    if (!plan) { respondError(response, plan.error(), "loadStudyPlan"); return; }
+    respondJson(response, 200, Json{{"studyPlan", toJson(*plan)}});
+  });
+  api.Post("/api/v1/study-plans", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body) return;
+    auto plan = studyPlanFromJson(*body);
+    if (plan.id > 0) { respondFailure(response, {400, "validation", "A new Study Plan must not carry an ID."}); return; }
+    auto saved = guarded.with([&](LexiconApplication &app) { return app.studyPlans.save(plan); });
+    if (!saved) { respondError(response, saved.error(), "createStudyPlan"); return; }
+    respondJson(response, 201, Json{{"studyPlan", toJson(*saved)}});
+  });
+  api.Put("/api/v1/study-plans/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id) return;
+    auto body = jsonBody(request, response);
+    if (!body) return;
+    auto plan = studyPlanFromJson(*body);
+    plan.id = *id;
+    auto saved = guarded.with([&](LexiconApplication &app) { return app.studyPlans.save(plan); });
+    if (!saved) { respondError(response, saved.error(), "updateStudyPlan"); return; }
+    respondJson(response, 200, Json{{"studyPlan", toJson(*saved)}});
+  });
+  api.Delete("/api/v1/study-plans/:id", [this](const Request &request, Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id) return;
+    auto removed = guarded.with([&](LexiconApplication &app) { return app.studyPlans.remove(*id); });
+    if (!removed) { respondError(response, removed.error(), "deleteStudyPlan"); return; }
+    respondNoContent(response);
+  });
+
   // Alarms -----------------------------------------------------------------
   api.Get("/api/v1/alarms", [this](const Request &, Response &response) {
     auto alarms = guarded.with([](LexiconApplication &application) { return application.alarms.loadAlarms(); });

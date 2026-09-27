@@ -457,7 +457,25 @@ void applyMigrations(const Connection &db) {
             "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
             "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
             "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;"
-        }, true}
+        }, true},
+        {34, {
+            "CREATE TABLE study_plan ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " item TEXT NOT NULL CHECK(TRIM(item, ' ' || char(9, 10, 11, 12, 13)) <> ''),"
+            " type INTEGER NOT NULL CHECK(type BETWEEN 0 AND 7),"
+            " unit_type INTEGER NOT NULL CHECK(unit_type BETWEEN 0 AND 8),"
+            " current_progress INTEGER NOT NULL DEFAULT 0,"
+            " start_date TEXT NOT NULL CHECK(start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),"
+            " end_date TEXT NOT NULL CHECK(end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND start_date <= end_date),"
+            " note TEXT NOT NULL DEFAULT '',"
+            " first_unit INTEGER NOT NULL DEFAULT 1 CHECK(first_unit >= 1),"
+            " last_unit INTEGER NOT NULL CHECK(last_unit >= first_unit),"
+            " study_days_mask INTEGER NOT NULL DEFAULT 127 CHECK(study_days_mask BETWEEN 1 AND 127),"
+            " custom_unit TEXT NOT NULL DEFAULT '' CHECK(unit_type <> 8 OR TRIM(custom_unit, ' ' || char(9, 10, 11, 12, 13)) <> ''),"
+            " CHECK(current_progress = 0 OR current_progress BETWEEN first_unit AND last_unit)"
+            ");",
+            "CREATE INDEX idx_study_plan_dates ON study_plan(start_date, end_date);"
+        }}
     };
 
   if (currentVersion > migrations.back().version)

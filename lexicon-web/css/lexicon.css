@@ -1024,3 +1024,22 @@ svg.graph { flex: none; margin: auto; }
 .history-entries { width: 100%; min-height: 12rem; }
 .history-preview { max-height: 18rem; overflow: auto; white-space: pre-wrap; }
 .session-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem 0; }
+
+/* Study Plan dashboard */
+.study-plans { max-height: min(72vh, 760px); overflow-y: auto; }
+.study-plans section { margin-top: 1.3rem; }
+.study-plans section h2 { margin-bottom: .55rem; }
+.study-card { border: 1px solid var(--border); border-radius: 8px; padding: .8rem 1rem; margin: .65rem 0; }
+.study-card h3 { margin: 0 0 .3rem; }
+.study-card p { margin: .35rem 0; }
+.study-card-warning { border-left: 5px solid #b3261e; }
+.study-warning { color: #b3261e; font-weight: 700; }
+.study-status { font-weight: 600; }
+.study-note { white-space: pre-wrap; }
+.study-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .7rem; }
+.study-weekdays { display: flex; flex-wrap: wrap; gap: .7rem; margin: .8rem 0; }
+.study-day { display: inline-flex; gap: .3rem; align-items: center; }
+@media (max-width: 600px) {
+    .study-plans { max-height: 70vh; }
+    .study-actions button { flex: 1 1 45%; }
+}

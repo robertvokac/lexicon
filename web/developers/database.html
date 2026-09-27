@@ -58,7 +58,7 @@
     <p class="lead">Lexicon stores structured data in <code>lexicon.db</code> and blob bytes in an adjacent <code>blobs</code> directory. The database is initialized at startup; the blob directory is created when a file is imported. This page documents the schema defined by <code>lexicon-storage-sqlite/Migrations.cpp</code>.</p>
 
     <h2 id="overview">Overview</h2>
-    <p>Fourteen domain tables, an optional full-text index, an operation log, one configuration table, and one bookkeeping table:</p>
+    <p>Fifteen domain tables, an optional full-text index, an operation log, one configuration table, and one bookkeeping table:</p>
     <table>
       <tr><th>Table</th><th>Purpose</th></tr>
       <tr><td><code>item_group</code></td><td>Top-level buckets for items</td></tr>
@@ -71,6 +71,7 @@
       <tr><td><code>tag</code></td><td>Classification labels per item</td></tr>
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
       <tr><td><code>link</code></td><td>Typed, directed relationships between items</td></tr>
+      <tr><td><code>study_plan</code></td><td>Independent calendar Study Plans with unit ranges and weekday schedules</td></tr>
       <tr><td><code>alarm</code></td><td>Reminders at a moment, with recurrence, ASAP and optional Group metadata</td></tr>
       <tr><td><code>item_history</code></td><td>Previous item versions and deleted items available for restoration</td></tr>
       <tr><td><code>card</code></td><td>Questions and answers about an item for a quiz, with how often they were known</td></tr>
@@ -131,6 +132,7 @@
       <tr><td>31</td><td>Rebuilds <code>board</code> for multiple uniquely named Boards and preserves the former Board as <code>Main</code></td></tr>
       <tr><td>32</td><td>Adds Boolean <code>alarm.asap</code> and optional text <code>alarm.group</code></td></tr>
       <tr><td>33</td><td>Rebuilds <code>item_field</code> for <code>ForeignKey</code> (11) and adds <code>target_item_type_id</code></td></tr>
+      <tr><td>34</td><td>Creates <code>study_plan</code> and its date-range index</td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -250,6 +252,25 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
 
     <h3><code>item_history</code></h3>
     <p>Before an item or its links change, Lexicon saves the previous item, links, cards and referenced file hashes as a JSON snapshot. A deletion adds a Trash entry independent of the live item. The latest 100 update snapshots per item are retained; deleted entries remain available for restoration. Referenced files stay protected from Blob cleanup. A raw database backup preserves the snapshots, while a portable export contains current data only.</p>
+
+    <h3><code>study_plan</code></h3>
+    <pre><code>CREATE TABLE study_plan (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item TEXT NOT NULL,
+  type INTEGER NOT NULL CHECK(type BETWEEN 0 AND 7),
+  unit_type INTEGER NOT NULL CHECK(unit_type BETWEEN 0 AND 8),
+  current_progress INTEGER NOT NULL DEFAULT 0,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  first_unit INTEGER NOT NULL DEFAULT 1 CHECK(first_unit &gt;= 1),
+  last_unit INTEGER NOT NULL CHECK(last_unit &gt;= first_unit),
+  study_days_mask INTEGER NOT NULL DEFAULT 127 CHECK(study_days_mask BETWEEN 1 AND 127),
+  custom_unit TEXT NOT NULL DEFAULT '',
+  CHECK(current_progress = 0 OR current_progress BETWEEN first_unit AND last_unit)
+);
+CREATE INDEX idx_study_plan_dates ON study_plan(start_date, end_date);</code></pre>
+    <p>Additional checks require nonblank item text, ISO date shapes, end date on or after start, and a nonblank custom unit for Other. Application validation checks actual calendar dates and that a selected weekday occurs in the inclusive range. The item is plain UTF-8 text and has no relationship to the <code>item</code> table. Progress is the last completed absolute unit, or 0. Monday is bit 1 through Sunday bit 64. There is no redundant unit count; it is <code>last_unit - first_unit + 1</code>.</p>
 
     <h3><code>alarm</code></h3>
     <pre><code>CREATE TABLE alarm (

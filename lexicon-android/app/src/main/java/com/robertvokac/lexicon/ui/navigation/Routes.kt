@@ -30,6 +30,9 @@ data object GroupsRoute
 data object TypesRoute
 
 @Serializable
+data object StudyPlansRoute
+
+@Serializable
 data class TypeRoute(val typeId: Int)
 
 @Serializable

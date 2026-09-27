@@ -82,6 +82,8 @@ add_library(lexicon-application STATIC
     lexicon-application/Repository.h
     lexicon-application/LexiconApplication.h
     lexicon-application/LexiconApplication.cpp
+    lexicon-application/StudyPlan.h
+    lexicon-application/StudyPlan.cpp
 )
 target_include_directories(lexicon-application PUBLIC lexicon-application)
 target_link_libraries(lexicon-application PUBLIC lexicon-core)
@@ -274,6 +276,8 @@ if (LEXICON_BUILD_DESKTOP)
         lexicon-qt/BoardDialog.cpp
         lexicon-qt/AlarmsDialog.h
         lexicon-qt/AlarmsDialog.cpp
+        lexicon-qt/StudyPlanDialog.h
+        lexicon-qt/StudyPlanDialog.cpp
         lexicon-qt/AlarmNotifier.h
         lexicon-qt/AlarmNotifier.cpp
         lexicon-qt/ImageValueView.h
@@ -330,6 +334,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/BoardDialog.cpp
             lexicon-qt/AlarmsDialog.h
             lexicon-qt/AlarmsDialog.cpp
+            lexicon-qt/StudyPlanDialog.h
+            lexicon-qt/StudyPlanDialog.cpp
             lexicon-qt/AlarmNotifier.h
             lexicon-qt/AlarmNotifier.cpp
             lexicon-qt/ImageValueView.h
@@ -354,6 +360,11 @@ if (BUILD_TESTING)
     target_link_libraries(lexicon-core-smoke PRIVATE lexicon-application)
     set_target_properties(lexicon-core-smoke PROPERTIES AUTOMOC OFF AUTORCC OFF)
     add_test(NAME core_smoke COMMAND lexicon-core-smoke)
+
+    add_executable(lexicon-study-plan tests/StudyPlan.cpp)
+    target_link_libraries(lexicon-study-plan PRIVATE lexicon-storage-sqlite lexicon-json SQLite::SQLite3)
+    set_target_properties(lexicon-study-plan PROPERTIES AUTOMOC OFF AUTORCC OFF)
+    add_test(NAME study_plan COMMAND lexicon-study-plan)
 
     add_executable(lexicon-wiki-links tests/WikiLinks.cpp)
     target_link_libraries(lexicon-wiki-links PRIVATE lexicon-core)

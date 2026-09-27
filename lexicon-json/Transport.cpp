@@ -71,6 +71,21 @@ constexpr std::array<std::pair<ReviewRating, const char *>, 4> kReviewRatingName
 constexpr std::array<std::pair<SortOrder, const char *>, 2> kSortOrderNames{
     {{SortOrder::Ascending, "Ascending"},
      {SortOrder::Descending, "Descending"}}};
+constexpr std::array<std::pair<StudyPlanType, const char *>, 8> kStudyPlanTypes{{
+    {StudyPlanType::Book, "Book"}, {StudyPlanType::Course, "Course"},
+    {StudyPlanType::Lesson, "Lesson"}, {StudyPlanType::Documentation, "Documentation"},
+    {StudyPlanType::Article, "Article"}, {StudyPlanType::Video, "Video"},
+    {StudyPlanType::Practice, "Practice"}, {StudyPlanType::Other, "Other"}}};
+constexpr std::array<std::pair<StudyUnitType, const char *>, 9> kStudyUnitTypes{{
+    {StudyUnitType::Page, "Page"}, {StudyUnitType::Lesson, "Lesson"},
+    {StudyUnitType::Chapter, "Chapter"}, {StudyUnitType::Section, "Section"},
+    {StudyUnitType::Module, "Module"}, {StudyUnitType::Video, "Video"},
+    {StudyUnitType::Exercise, "Exercise"}, {StudyUnitType::Minute, "Minute"},
+    {StudyUnitType::Other, "Other"}}};
+constexpr std::array<std::pair<StudyPlanStatus, const char *>, 6> kStudyPlanStatuses{{
+    {StudyPlanStatus::Upcoming, "Upcoming"}, {StudyPlanStatus::OnTrack, "On track"},
+    {StudyPlanStatus::Behind, "Behind"}, {StudyPlanStatus::AtRisk, "At risk"},
+    {StudyPlanStatus::Completed, "Completed"}, {StudyPlanStatus::Overdue, "Overdue"}}};
 
 const Json *member(const Json &json, const char *key) {
   if (!json.is_object())
@@ -128,6 +143,9 @@ std::string name(FieldDataType value) {
 std::string name(SortOrder value) {
   return lookupName(kSortOrderNames, value, "Ascending");
 }
+std::string name(StudyPlanType value) { return lookupName(kStudyPlanTypes, value, "Other"); }
+std::string name(StudyUnitType value) { return lookupName(kStudyUnitTypes, value, "Other"); }
+std::string name(StudyPlanStatus value) { return lookupName(kStudyPlanStatuses, value, "Upcoming"); }
 std::optional<ItemStatus> itemStatusFromName(std::string_view text) {
   return lookupValue(kStatusNames, text);
 }
@@ -143,6 +161,8 @@ std::optional<FieldDataType> fieldDataTypeFromName(std::string_view text) {
 std::optional<SortOrder> sortOrderFromName(std::string_view text) {
   return lookupValue(kSortOrderNames, text);
 }
+std::optional<StudyPlanType> studyPlanTypeFromName(std::string_view text) { return lookupValue(kStudyPlanTypes, text); }
+std::optional<StudyUnitType> studyUnitTypeFromName(std::string_view text) { return lookupValue(kStudyUnitTypes, text); }
 std::optional<ReviewRating> reviewRatingFromName(std::string_view text) {
   return lookupValue(kReviewRatingNames, text);
 }
@@ -324,6 +344,52 @@ Json toJson(const AlarmRecord &alarm) {
               {"repeatDays", alarm.repeatDays},
               {"itemId", alarm.itemId > 0 ? Json(alarm.itemId) : Json(nullptr)},
               {"dismissedAt", alarm.dismissedAt.empty() ? Json(nullptr) : Json(alarm.dismissedAt)}};
+}
+
+Json toJson(const StudyPlanRecord &plan) {
+  return Json{{"id", plan.id > 0 ? Json(plan.id) : Json(nullptr)},
+              {"item", plan.item}, {"type", name(plan.type)},
+              {"unitType", name(plan.unitType)}, {"currentProgress", plan.currentProgress},
+              {"startDate", plan.startDate}, {"endDate", plan.endDate},
+              {"note", plan.note}, {"firstUnit", plan.firstUnit},
+              {"lastUnit", plan.lastUnit}, {"studyDaysMask", plan.studyDaysMask},
+              {"customUnit", plan.customUnit}};
+}
+
+Json toJson(const StudyPlanOverview &value) {
+  return Json{{"plan", toJson(value.plan)}, {"date", value.date},
+              {"status", name(value.status)}, {"upcoming", value.upcoming},
+              {"active", value.active}, {"ended", value.ended},
+              {"complete", value.complete}, {"studyDay", value.studyDay},
+              {"totalUnits", value.totalUnits}, {"completedUnits", value.completedUnits},
+              {"remainingUnits", value.remainingUnits},
+              {"totalStudyDays", value.totalStudyDays},
+              {"elapsedStudyDays", value.elapsedStudyDays},
+              {"remainingStudyDays", value.remainingStudyDays},
+              {"plannedUnitsPerStudyDay", value.plannedUnitsPerStudyDay},
+              {"requiredUnitsPerRemainingStudyDay", value.requiredUnitsPerRemainingStudyDay},
+              {"expectedUnits", value.expectedUnits}, {"deficitUnits", value.deficitUnits},
+              {"todayFirst", value.todayFirst}, {"todayLast", value.todayLast},
+              {"recommendedFirst", value.recommendedFirst},
+              {"recommendedLast", value.recommendedLast}};
+}
+
+StudyPlanRecord studyPlanFromJson(const Json &json) {
+  requireObject(json, "Study Plan");
+  StudyPlanRecord plan;
+  plan.id = optionalId(json, "id");
+  plan.item = requiredString(json, "item");
+  plan.type = requiredEnum(json, "type", studyPlanTypeFromName, "Study Plan type");
+  plan.unitType = requiredEnum(json, "unitType", studyUnitTypeFromName, "Study Plan unit type");
+  plan.currentProgress = optionalInt(json, "currentProgress", 0);
+  plan.startDate = requiredString(json, "startDate");
+  plan.endDate = requiredString(json, "endDate");
+  plan.note = optionalString(json, "note");
+  plan.firstUnit = optionalInt(json, "firstUnit", 1);
+  plan.lastUnit = optionalInt(json, "lastUnit", 1);
+  plan.studyDaysMask = optionalInt(json, "studyDaysMask", 127);
+  plan.customUnit = optionalString(json, "customUnit");
+  return plan;
 }
 
 AlarmRecord alarmFromJson(const Json &json) {

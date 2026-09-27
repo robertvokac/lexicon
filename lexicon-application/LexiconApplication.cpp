@@ -427,6 +427,9 @@ Result<DictionaryExport> ExchangeService::exportDictionary() {
   if (!boards)
     return std::unexpected(boards.error());
   dictionary.boards = std::move(*boards);
+  auto plans = repository_.loadStudyPlans();
+  if (!plans) return std::unexpected(plans.error());
+  dictionary.studyPlans = std::move(*plans);
   return dictionary;
 }
 
@@ -821,6 +824,31 @@ Result<ImportReport> ExchangeService::importDictionary(
       if (auto saved = repository_.saveAlarm(alarm); !saved)
         return std::unexpected(Error{saved.error().code, "Alarm '" + source.title + "': " + saved.error().message});
       ++report.alarmsCreated;
+    }
+  }
+
+  if (!dictionary.studyPlans.empty()) {
+    auto existing = repository_.loadStudyPlans();
+    if (!existing) return std::unexpected(existing.error());
+    for (const auto &source : dictionary.studyPlans) {
+      // Only an identical plan is skipped. A changed progress or note is
+      // distinct user data and must not disappear during import.
+      const bool present = std::any_of(existing->begin(), existing->end(), [&](const auto &plan) {
+        return plan.item == trim(source.item) && plan.type == source.type &&
+               plan.unitType == source.unitType && plan.startDate == source.startDate &&
+               plan.endDate == source.endDate && plan.firstUnit == source.firstUnit &&
+               plan.lastUnit == source.lastUnit && plan.currentProgress == source.currentProgress &&
+               plan.studyDaysMask == source.studyDaysMask && plan.note == source.note &&
+               plan.customUnit == trim(source.customUnit);
+      });
+      if (present) continue;
+      auto plan = source;
+      plan.id = -1;
+      auto saved = repository_.saveStudyPlan(plan);
+      if (!saved)
+        return std::unexpected(Error{saved.error().code, "Study Plan '" + source.item + "': " + saved.error().message});
+      existing->push_back(std::move(plan));
+      ++report.studyPlansCreated;
     }
   }
 
