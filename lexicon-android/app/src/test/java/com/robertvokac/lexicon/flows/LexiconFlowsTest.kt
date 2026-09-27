@@ -8,6 +8,7 @@ import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -357,10 +358,12 @@ class LexiconFlowsTest {
         login()
         compose.onNodeWithContentDescription("Filters and sort").performClick()
         compose.waitForText("Filters and sort")
+        val doneButtons = compose.onAllNodes(hasText("Done") and hasClickAction())
+        doneButtons.assertCountEquals(2)
         compose.onNode(hasText("Tag") and hasText("All tags")).performScrollTo().performClick()
         inPopup("cpp").performClick()
         compose.waitForCondition { lastBody("POST", "/api/v1/items/query")["tagFilter"]?.jsonPrimitive?.content == "cpp" }
-        compose.onNode(hasText("Done") and hasClickAction()).performScrollTo().performClick()
+        doneButtons[1].performScrollTo().performClick()
         compose.waitUntilGone(hasText("Pointer provenance"))
         compose.onNodeWithContentDescription("Filter Tag: cpp. Remove").assertIsDisplayed()
         compose.onNodeWithContentDescription("Filters and sort, 1 active").performClick()

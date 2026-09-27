@@ -85,6 +85,7 @@ fun FilterSheet(state: ItemsUiState, viewModel: ItemsViewModel, onDismiss: () ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Filters and sort", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = viewModel::clearFilters, enabled = !filters.isEmpty) { Text("Clear filters") }
+                TextButton(onClick = onDismiss) { Text("Done") }
             }
 
             SectionHeader("Sort")
