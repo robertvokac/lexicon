@@ -926,6 +926,22 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
   check(std::any_of(labels.begin(), labels.end(), [](QLabel* label) { return label->text().startsWith("Expected unit range today: pages 101–"); }),
         "desktop dashboard shows both endpoints of expected range");
   table->selectRow(0);
+  whenOpened<QDialog>([](QDialog& opened) {
+    auto* first = child<QSpinBox>(opened, "studyPlanEditorFirst");
+    auto* last = child<QSpinBox>(opened, "studyPlanEditorLast");
+    auto* progress = child<QSpinBox>(opened, "studyPlanEditorProgress");
+    check(first && last && progress && progress->minimum() == 100 && progress->maximum() == 300,
+          "edit progress starts at zero sentinel and stops at last unit");
+    if (first && last && progress) {
+      last->setValue(250);
+      check(progress->maximum() == 250, "edit progress maximum follows last unit");
+      first->setValue(151);
+      check(progress->minimum() == 150 && progress->value() == 150,
+            "edit progress preserves not-started sentinel when first unit changes");
+    }
+    opened.reject();
+  });
+  child<QPushButton>(dialog, "studyPlanEdit")->click();
   auto* updateProgress = [&]() -> QPushButton* {
     for (auto* button : dialog.findChildren<QPushButton*>())
       if (button->text() == "Update progress..." && button->parent() == &dialog) return button;

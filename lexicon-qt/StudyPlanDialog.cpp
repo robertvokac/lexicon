@@ -288,17 +288,23 @@ void StudyPlanDialog::editPlan(lexicon::StudyPlanRecord plan) {
     auto showCustom = [unit, custom] { custom->setEnabled(unit->currentIndex() == static_cast<int>(lexicon::StudyUnitType::Other)); };
     QObject::connect(unit, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, showCustom);
     showCustom();
-    auto* first = new QSpinBox(&dialog); first->setRange(1, INT_MAX); first->setValue(plan.firstUnit);
-    auto* last = new QSpinBox(&dialog); last->setRange(1, INT_MAX); last->setValue(plan.lastUnit);
+    auto* first = new QSpinBox(&dialog); first->setObjectName("studyPlanEditorFirst");
+    first->setRange(1, INT_MAX); first->setValue(plan.firstUnit);
+    auto* last = new QSpinBox(&dialog); last->setObjectName("studyPlanEditorLast");
+    last->setRange(1, INT_MAX); last->setValue(plan.lastUnit);
     auto* progress = new QSpinBox(&dialog);
-    progress->setRange(plan.firstUnit - 1, INT_MAX);
+    progress->setObjectName("studyPlanEditorProgress");
+    progress->setRange(plan.firstUnit - 1, plan.lastUnit);
     progress->setSpecialValueText("Not started (0)");
     progress->setValue(plan.currentProgress == 0 ? plan.firstUnit - 1 : plan.currentProgress);
-    connect(first, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, [progress](int newFirst) {
+    const auto updateProgressRange = [first, last, progress] {
         const bool notStarted = progress->value() == progress->minimum();
-        progress->setMinimum(newFirst - 1);
-        if (notStarted) progress->setValue(newFirst - 1);
-    });
+        const int sentinel = first->value() - 1;
+        progress->setRange(sentinel, std::max(sentinel, last->value()));
+        if (notStarted) progress->setValue(sentinel);
+    };
+    connect(first, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, updateProgressRange);
+    connect(last, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, updateProgressRange);
     auto* start = new QDateEdit(&dialog); start->setCalendarPopup(true); start->setDisplayFormat("yyyy-MM-dd");
     start->setDate(plan.startDate.empty() ? QDate::currentDate() : QDate::fromString(qtbridge::toQt(plan.startDate), "yyyy-MM-dd"));
     auto* end = new QDateEdit(&dialog); end->setCalendarPopup(true); end->setDisplayFormat("yyyy-MM-dd");
