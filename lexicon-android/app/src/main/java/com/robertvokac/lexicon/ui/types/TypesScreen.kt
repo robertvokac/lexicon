@@ -438,13 +438,6 @@ private fun FieldDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                SyncedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = "Description",
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 ChoiceField(
                     label = "Data type",
                     choices = FieldDataType.entries.map { Choice(it, it.name) },
@@ -453,6 +446,13 @@ private fun FieldDialog(
                         dataType = it
                         error = null
                     },
+                )
+                SyncedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = "Description",
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 SyncedTextField(
                     value = position,

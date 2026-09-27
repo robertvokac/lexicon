@@ -276,8 +276,8 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
         optionsEdit->setEnabled(dataTypeCombo->currentData().toInt() == static_cast<int>(FieldDataType::Enum));
     });
     form->addRow("Name:", nameEdit);
-    form->addRow("Description:", descriptionEdit);
     form->addRow("Data type:", dataTypeCombo);
+    form->addRow("Description:", descriptionEdit);
     form->addRow("Position:", positionEdit);
     form->addRow("Enum options:", optionsEdit);
     layout->addLayout(form);

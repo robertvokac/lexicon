@@ -54,8 +54,8 @@ async function fieldDialog(title, fieldRecord) {
         title,
         body: el('div', {}, [
             field('Name:', name),
-            field('Description:', description),
             field('Data type:', dataType),
+            field('Description:', description),
             field('Position:', position),
             field('Enum options:', options),
         ]),
