@@ -180,12 +180,20 @@ data class SavedItem(val id: Int, val item: Item)
 @Serializable
 internal data class InboxIdea(val title: String, val content: String)
 
-/** The one shared Markdown Board. */
+/** One named shared Markdown Board. */
 @Serializable
-data class Board(val content: String = "", val revision: Int = 0)
+data class Board(
+    val id: Int = -1,
+    val name: String = "",
+    val content: String = "",
+    val revision: Int = 0,
+)
 
 @Serializable
 internal data class BoardEnvelope(val board: Board)
+
+@Serializable
+internal data class BoardsEnvelope(val boards: List<Board>)
 
 /** An outgoing link in a save request. fromItemId is filled in by the server. */
 @Serializable
@@ -277,14 +285,14 @@ data class ImportReport(
     val blobsImported: Int = 0,
     val alarmsCreated: Int = 0,
     val cardsCreated: Int = 0,
-    val boardImported: Boolean = false,
+    val boardsImported: Int = 0,
     val warnings: List<String> = emptyList(),
 ) {
     val summary: String
         get() = "Imported $itemsCreated item(s), $linksCreated link(s), $blobsImported file(s), $alarmsCreated alarm(s) " +
             "and $cardsCreated card(s); $itemsSkipped item(s) were already here. Created $groupsCreated group(s), " +
             "$typesCreated type(s) and $fieldsCreated field(s)." +
-            if (boardImported) " Imported the Board." else ""
+            if (boardsImported > 0) " Imported $boardsImported Board(s)." else ""
 }
 
 /** How well an item was remembered in a review (POST /items/{id}/review). */
@@ -354,6 +362,8 @@ data class Alarm(
     val dismissedAt: String? = null,
     val repeatDays: Int = 0,
     val itemId: Int? = null,
+    val asap: Boolean = false,
+    val group: String = "",
 )
 
 @Serializable
@@ -366,6 +376,8 @@ data class AlarmWrite(
     val firesAt: String,
     val repeatDays: Int = 0,
     val itemId: Int? = null,
+    val asap: Boolean = false,
+    val group: String = "",
 )
 
 @Serializable

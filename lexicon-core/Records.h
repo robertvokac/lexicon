@@ -136,10 +136,11 @@ struct ItemHistoryEntry {
   std::string happenedAt;
   ItemRecord item;
 };
-// The one shared Markdown document shown as the Board. Its single database
-// row is revised on every save so clients do not silently overwrite one
-// another.
+// A named shared Markdown document shown in Boards. Every Board is revised on
+// save so clients do not silently overwrite one another.
 struct BoardRecord {
+  int id = -1;
+  std::string name;
   std::string content;
   int revision = 0;
 };
@@ -156,6 +157,10 @@ struct AlarmRecord {
   // local/UTC instant; snoozing does not shift that schedule.
   int repeatDays = 0;
   ItemId itemId = -1;
+  // A person marked this reminder as needing attention as soon as possible.
+  bool asap = false;
+  // Optional free-form grouping label, independent of item groups.
+  std::string group;
 };
 // A question about an item and its answer, for active recall. It belongs to
 // exactly one item and goes when the item goes. The counts and the last

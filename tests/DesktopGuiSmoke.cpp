@@ -432,15 +432,19 @@ void checkAlarms(lexicon::LexiconApplication &application) {
   AlarmEditDialog editor(lexicon::AlarmRecord{});
   editor.show();
   auto *title = child<QLineEdit>(editor, "alarmTitle");
+  auto *asap = child<QCheckBox>(editor, "alarmAsap");
+  auto *group = child<QLineEdit>(editor, "alarmGroup");
   auto *when = child<QDateTimeEdit>(editor, "alarmFiresAt");
   auto *description = child<QPlainTextEdit>(editor, "alarmDescription");
   auto *save = child<QPushButton>(editor, "alarmSave");
   auto *error = child<QLabel>(editor, "alarmError");
-  if (!title || !when || !description || !save || !error) return;
+  if (!title || !asap || !group || !when || !description || !save || !error) return;
   check(when->dateTime() > QDateTime::currentDateTime(), "a new alarm starts in the future");
   save->click();
   check(editor.isVisible() && error->text() == "Enter a title.", "an alarm needs a title");
   title->setText("Renew the passport");
+  asap->setChecked(true);
+  group->setText("Personal");
   description->setPlainText("Photos first.");
   // Shown in local time, stored in UTC.
   when->setDateTime(QDateTime(QDate(2030, 1, 2), QTime(9, 15), QTimeZone::UTC).toLocalTime());
@@ -448,6 +452,8 @@ void checkAlarms(lexicon::LexiconApplication &application) {
   save->click();
   check(editor.result() == QDialog::Accepted && editor.alarm().id > 0, "the alarm is saved");
   check(editor.alarm().firesAt == "2030-01-02T09:15:00Z", "at the chosen moment, in UTC");
+  check(editor.alarm().asap && editor.alarm().group == "Personal",
+        "with its ASAP marker and optional group");
   check(alarmtime::fromUtcText(editor.alarm().firesAt) == when->dateTime(), "which reads back as shown");
 
   lexicon::AlarmRecord past{-1, "Old call", "", "2001-05-06T07:08:00Z"};
@@ -460,7 +466,9 @@ void checkAlarms(lexicon::LexiconApplication &application) {
   check(list.alarmCount() == 2 && table->rowCount() == 2, "the list shows every alarm");
   check(table->item(0, 1)->text() == "Old call" && table->item(1, 1)->text() == "Renew the passport",
         "the soonest first");
-  check(table->item(1, 4)->text() == "Photos first.", "with its description");
+  check(table->item(1, 2)->text() == "Yes" && table->item(1, 3)->text() == "Personal",
+        "with ASAP and Group in the list");
+  check(table->item(1, 6)->text() == "Photos first.", "with its description");
   check(table->item(0, 0)->toolTip() == "Ringing" && table->item(0, 0)->font().bold(),
         "one gone off and not dismissed is marked as ringing");
   check(summary->text() == "2 alarm(s), 1 still to go off", "the summary counts what is still to come");

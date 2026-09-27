@@ -326,6 +326,58 @@ Result<ItemRecord> InboxService::capture(const std::string &title, const std::st
   return repository_.loadItem(*id);
 }
 
+Result<void> BoardService::validateName(const BoardRecord &board) {
+  if (trim(board.name).empty())
+    return std::unexpected(
+        Error{Error::Code::Validation, "Board name cannot be empty."});
+  auto boards = repository_.loadBoards();
+  if (!boards)
+    return std::unexpected(boards.error());
+  const auto key = asciiFold(trim(board.name));
+  const auto duplicate = std::find_if(
+      boards->begin(), boards->end(), [&](const auto &candidate) {
+        return candidate.id != board.id && asciiFold(trim(candidate.name)) == key;
+      });
+  if (duplicate != boards->end())
+    return std::unexpected(Error{Error::Code::Validation,
+                                 "A Board with this name already exists."});
+  return {};
+}
+
+Result<BoardRecord> BoardService::create(BoardRecord board) {
+  board.id = -1;
+  board.name = trim(board.name);
+  board.revision = 0;
+  if (auto valid = validateName(board); !valid)
+    return std::unexpected(valid.error());
+  auto id = repository_.createBoard(board);
+  if (!id)
+    return std::unexpected(id.error());
+  return repository_.loadBoard(*id);
+}
+
+Result<BoardRecord> BoardService::save(BoardRecord board) {
+  if (board.id <= 0)
+    return std::unexpected(
+        Error{Error::Code::Validation, "A saved Board needs an ID."});
+  board.name = trim(board.name);
+  if (auto valid = validateName(board); !valid)
+    return std::unexpected(valid.error());
+  if (auto saved = repository_.saveBoard(board); !saved)
+    return std::unexpected(saved.error());
+  return repository_.loadBoard(board.id);
+}
+
+Result<void> BoardService::remove(int id) {
+  auto boards = repository_.loadBoards();
+  if (!boards)
+    return std::unexpected(boards.error());
+  if (boards->size() <= 1)
+    return std::unexpected(Error{Error::Code::Validation,
+                                 "At least one Board must remain."});
+  return repository_.deleteBoard(id);
+}
+
 Result<DictionaryExport> ExchangeService::exportDictionary() {
   // The write lock keeps another program from changing the dictionary half
   // way through; nothing is written, and the unit is rolled back.
@@ -370,10 +422,10 @@ Result<DictionaryExport> ExchangeService::exportDictionary() {
   if (!alarms)
     return std::unexpected(alarms.error());
   dictionary.alarms = std::move(*alarms);
-  auto board = repository_.loadBoard();
-  if (!board)
-    return std::unexpected(board.error());
-  dictionary.board = std::move(*board);
+  auto boards = repository_.loadBoards();
+  if (!boards)
+    return std::unexpected(boards.error());
+  dictionary.boards = std::move(*boards);
   return dictionary;
 }
 
@@ -392,19 +444,40 @@ Result<ImportReport> ExchangeService::importDictionary(
   if (auto begun = unit.begin(); !begun)
     return std::unexpected(begun.error());
 
-  if (dictionary.board) {
-    auto current = repository_.loadBoard();
-    if (!current)
-      return std::unexpected(current.error());
-    if (current->content.empty() && !dictionary.board->content.empty()) {
-      if (auto saved = repository_.saveBoard(
-              {dictionary.board->content, current->revision});
-          !saved)
-        return std::unexpected(saved.error());
-      report.boardImported = true;
-    } else if (!dictionary.board->content.empty() &&
-               current->content != dictionary.board->content) {
-      warn("The Board already has content; the imported Board was left out.");
+  if (!dictionary.boards.empty()) {
+    auto existing = repository_.loadBoards();
+    if (!existing)
+      return std::unexpected(existing.error());
+    for (auto imported : dictionary.boards) {
+      imported.name = trim(imported.name);
+      if (imported.name.empty())
+        imported.name = "Main";
+      const auto key = asciiFold(imported.name);
+      const auto found = std::find_if(
+          existing->begin(), existing->end(), [&](const auto &candidate) {
+            return asciiFold(trim(candidate.name)) == key;
+          });
+      if (found == existing->end()) {
+        imported.id = -1;
+        imported.revision = 0;
+        auto id = repository_.createBoard(imported);
+        if (!id)
+          return std::unexpected(id.error());
+        auto created = repository_.loadBoard(*id);
+        if (!created)
+          return std::unexpected(created.error());
+        existing->push_back(std::move(*created));
+        ++report.boardsImported;
+      } else if (found->content.empty() && !imported.content.empty()) {
+        auto changed = *found;
+        changed.content = imported.content;
+        if (auto saved = repository_.saveBoard(changed); !saved)
+          return std::unexpected(saved.error());
+        ++report.boardsImported;
+      } else if (!imported.content.empty() && found->content != imported.content) {
+        warn("Board '" + imported.name +
+             "' already has content; the imported Board was left out.");
+      }
     }
   }
 

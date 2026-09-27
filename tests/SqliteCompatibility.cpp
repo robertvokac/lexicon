@@ -109,9 +109,9 @@ int main() {
         !expect(rawQuery("SELECT COUNT(*) FROM temp.sqlite_master;") == "0" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'migration_%';") == "0",
                 "The rebuild left a working table")) return 1;
-    if (!expect(rawQuery("SELECT version FROM db_version;") == "30" &&
+    if (!expect(rawQuery("SELECT version FROM db_version;") == "32" &&
                     rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'card';") == "1",
-                "The Qt v20 database did not reach version 30 with its card table")) return 1;
+                "The Qt v20 database did not reach version 32 with its card table")) return 1;
     auto found = app.search.findItemId("Příliš žluťoučký kůň", "česky");
     if (!success(found, "Find Qt UTF-8 item")) return 1;
     auto item = app.items.loadItem(*found);
@@ -280,10 +280,12 @@ int main() {
       sqlite3_close(raw);
       return result;
     };
-    // Remove the structures introduced by migrations 26–30 to reconstruct
+    // Remove the structures introduced by migrations 26–32 to reconstruct
     // the last database version without cards, history, recurring alarms,
     // the Board or item-field descriptions.
     if (!expect(run("DROP INDEX idx_alarm_item_id; "
+                    "ALTER TABLE alarm DROP COLUMN \"group\"; "
+                    "ALTER TABLE alarm DROP COLUMN asap; "
                     "ALTER TABLE alarm DROP COLUMN anchor_at; "
                     "ALTER TABLE alarm DROP COLUMN item_id; "
                     "ALTER TABLE alarm DROP COLUMN repeat_days; "
@@ -295,11 +297,18 @@ int main() {
     SqliteRepository repository;
     if (!success(repository.open(v25.string()), "Migrate a version 25 database")) return 1;
     lexicon::LexiconApplication app(repository);
-    if (!expect(query("SELECT version FROM db_version;") == "30", "Migrations 26–30 did not run") ||
+    if (!expect(query("SELECT version FROM db_version;") == "32", "Migrations 26–32 did not run") ||
         !expect(query("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('card', 'idx_card_item_id');") == "2",
                 "Migration 26 did not add the card table and its index") ||
         !expect(query("SELECT COUNT(*) FROM pragma_table_info('item_field') WHERE name = 'description';") == "1",
-                "Migration 30 did not add the field description column")) return 1;
+                "Migration 30 did not add the field description column") ||
+        !expect(query("SELECT id || ':' || name FROM board;") == "1:Main",
+                "Migration 31 did not name the original Board Main") ||
+        !expect(run("INSERT INTO board(name, content) VALUES('Work', '# Work');") &&
+                    query("SELECT COUNT(*) FROM board;") == "2",
+                "Migration 31 did not allow multiple Boards") ||
+        !expect(query("SELECT COUNT(*) FROM pragma_table_info('alarm') WHERE name IN ('asap', 'group');") == "2",
+                "Migration 32 did not add alarm ASAP and Group")) return 1;
     auto item = app.items.loadItem(kept);
     if (!success(item, "Load the item written at version 25") ||
         !expect(item->title == "Před kartami" && item->content == "Written at version 25.",
@@ -319,7 +328,7 @@ int main() {
     }
     sqlite3 *raw = nullptr;
     const bool bumped = sqlite3_open(future.string().c_str(), &raw) == SQLITE_OK &&
-                        sqlite3_exec(raw, "UPDATE db_version SET version = 31;", nullptr, nullptr, nullptr) == SQLITE_OK;
+                        sqlite3_exec(raw, "UPDATE db_version SET version = 33;", nullptr, nullptr, nullptr) == SQLITE_OK;
     sqlite3_close(raw);
     if (!expect(bumped, "Could not mark fixture as a newer schema")) return 1;
     SqliteRepository repository;

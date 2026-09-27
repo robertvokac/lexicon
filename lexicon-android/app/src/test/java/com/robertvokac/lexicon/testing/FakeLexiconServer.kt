@@ -63,7 +63,10 @@ class FakeLexiconServer : Dispatcher() {
     val links = mutableListOf<Link>()
     val reads = CopyOnWriteArrayList<Int>()
     val blobs = mutableMapOf<String, ByteArray>()
-    var board = Board(revision = 1)
+    val boards = mutableListOf(Board(id = 1, name = "Main", revision = 1))
+    var board: Board
+        get() = boards.first()
+        set(value) { boards[0] = value.copy(id = 1, name = value.name.ifBlank { "Main" }) }
 
     /** What GET /export answers, and the bodies POST /import received. */
     var exportDocument = """{"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[]}"""
@@ -391,19 +394,50 @@ class FakeLexiconServer : Dispatcher() {
             }
             path == "/items" && method == "POST" -> saveItem(request, null)
             path == "/inbox" && method == "POST" -> captureIdea(request)
-            path == "/board" && method == "GET" ->
-                json(buildJsonObject { put("board", encode(board)) })
-            path == "/board" && method == "PUT" -> {
+            path == "/boards" && method == "GET" ->
+                json(buildJsonObject { put("boards", encode(boards)) })
+            path == "/boards" && method == "POST" -> {
+                val body = bodyObject(request)
+                val name = body["name"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+                if (name.isEmpty()) return error(400, "validation", "Board name cannot be empty.")
+                if (boards.any { it.name.equals(name, ignoreCase = true) }) {
+                    return error(400, "validation", "A Board with this name already exists.")
+                }
+                val created = Board(
+                    id = nextId++,
+                    name = name,
+                    content = body["content"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    revision = 1,
+                )
+                boards += created
+                json(buildJsonObject { put("board", encode(created)) }, 201)
+            }
+            segments.size == 2 && segments[0] == "boards" && method == "PUT" -> {
+                val id = segments[1].toInt()
+                val index = boards.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return notFound()
                 val body = bodyObject(request)
                 val revision = body["revision"]?.jsonPrimitive?.intOrNull ?: 0
-                if (revision > 0 && revision != board.revision) {
+                if (revision > 0 && revision != boards[index].revision) {
                     return error(409, "conflict", "The Board was changed elsewhere after you opened it.")
                 }
-                board = Board(
+                val name = body["name"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
+                if (name.isEmpty()) return error(400, "validation", "Board name cannot be empty.")
+                if (boards.any { it.id != id && it.name.equals(name, ignoreCase = true) }) {
+                    return error(400, "validation", "A Board with this name already exists.")
+                }
+                boards[index] = Board(
+                    id = id,
+                    name = name,
                     content = body["content"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-                    revision = board.revision + 1,
+                    revision = boards[index].revision + 1,
                 )
-                json(buildJsonObject { put("board", encode(board)) })
+                json(buildJsonObject { put("board", encode(boards[index])) })
+            }
+            segments.size == 2 && segments[0] == "boards" && method == "DELETE" -> {
+                if (boards.size <= 1) return error(400, "validation", "At least one Board must remain.")
+                val id = segments[1].toInt()
+                if (!boards.removeIf { it.id == id }) return notFound()
+                noContent()
             }
             segments.size == 2 && segments[0] == "items" && method == "GET" -> {
                 val id = segments[1].toIntOrNull() ?: return notFound()
@@ -756,7 +790,16 @@ class FakeLexiconServer : Dispatcher() {
         val title = body["title"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         val firesAt = body["firesAt"]?.jsonPrimitive?.contentOrNull?.takeIf { it.length == 20 && it.endsWith("Z") } ?: return null
         runCatching { java.time.Instant.parse(firesAt) }.getOrNull() ?: return null
-        return Alarm(id, title, body["description"]?.jsonPrimitive?.contentOrNull.orEmpty(), firesAt)
+        return Alarm(
+            id = id,
+            title = title,
+            description = body["description"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            firesAt = firesAt,
+            repeatDays = body["repeatDays"]?.jsonPrimitive?.intOrNull ?: 0,
+            itemId = body["itemId"]?.jsonPrimitive?.intOrNull,
+            asap = body["asap"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() ?: false,
+            group = body["group"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+        )
     }
 
     private fun bodyObject(request: RecordedRequest): JsonObject =

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Server, web &amp; Android — Lexicon</title>
-<meta name="description" content="Use one Lexicon dictionary from every device: LexiconServer over REST, the static web client in any browser, and the native Android app - with the same items, reviews, alarms and Markdown Board.">
+<meta name="description" content="Use one Lexicon dictionary from every device: LexiconServer over REST, the static web client in any browser, and the native Android app - with the same items, reviews, alarms and named Markdown Boards.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -62,7 +62,7 @@
 
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Server, web &amp; Android</p>
     <h1>Server, web &amp; Android</h1>
-    <p class="lead">The desktop client opens the SQLite file directly. Run <code>LexiconServer</code> next to that same file and the dictionary is also available in a browser and on your phone — the same items, reviews, alarms and shared Board.</p>
+    <p class="lead">The desktop client opens the SQLite file directly. Run <code>LexiconServer</code> next to that same file and the dictionary is also available in a browser and on your phone — the same items, reviews, alarms and shared Boards.</p>
 
     <figure class="screenshot">
       <img src="../assets/img/web-main.png" alt="The web client: search, the item table and the rendered content of an item" loading="lazy">
@@ -105,7 +105,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <ul>
       <li>Items list with server-side search, filters and sorting, and the item page with its values, images and rendered Markdown.</li>
       <li>The editor with the same tabs, including image values.</li>
-      <li><a href="review.html">Review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, the <a href="inbox.html">Inbox</a> that also works offline, and the shared <a href="board.html">Board</a>.</li>
+      <li><a href="review.html">Review</a>, <a href="cards.html">cards and their quiz</a>, <a href="alarms.html">alarms</a> that ring even when the app is closed, the <a href="inbox.html">Inbox</a> that also works offline, and named shared <a href="board.html">Boards</a>.</li>
       <li>Previously loaded pages can be read from an encrypted cache when the server is unreachable. Other edits still need the server; Inbox ideas can wait and sync later.</li>
       <li>Settings can change the password and revoke signed-in sessions or remembered phones. A password change signs every device out.</li>
       <li>The <a href="links-and-relationships.html#graph">relationship graph</a>, with pinch to zoom and a full-screen mode.</li>
@@ -129,7 +129,7 @@ LexiconServer --database ~/lexicon/lexicon.db \
     <h2 id="together">Working on the same dictionary</h2>
     <ul>
       <li><strong>One database.</strong> The desktop client and the server open the same SQLite file; the web client and the Android app hold no data of their own.</li>
-      <li><strong>No silent overwrites.</strong> Every item and the Board carry revisions. If another client saves first, an older save is refused instead of replacing the newer text.</li>
+      <li><strong>No silent overwrites.</strong> Every item and Board carries a revision. If another client saves first, an older save is refused instead of replacing the newer text.</li>
       <li><strong>Sessions survive a restart</strong> of the server, so an upgrade does not sign your phone out.</li>
     </ul>
 

@@ -4,12 +4,14 @@
 #include "MarkdownConverter.h"
 
 #include <QAction>
+#include <QComboBox>
 #include <QDesktopServices>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QTextBrowser>
@@ -24,6 +26,18 @@ BoardDialog::BoardDialog(QWidget *parent) : QDialog(parent) {
   resize(1000, 700);
 
   auto *layout = new QVBoxLayout(this);
+  auto *boards = new QHBoxLayout();
+  boardBox_ = new QComboBox(this);
+  boardBox_->setObjectName("boardSelector");
+  boardBox_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  newButton_ = new QPushButton("New", this);
+  renameButton_ = new QPushButton("Rename", this);
+  deleteButton_ = new QPushButton("Delete", this);
+  boards->addWidget(boardBox_, 1);
+  boards->addWidget(newButton_);
+  boards->addWidget(renameButton_);
+  boards->addWidget(deleteButton_);
+  layout->addLayout(boards);
   pages_ = new QStackedWidget(this);
 
   view_ = new QTextBrowser(pages_);
@@ -122,6 +136,13 @@ BoardDialog::BoardDialog(QWidget *parent) : QDialog(parent) {
   connect(saveButton_, &QPushButton::clicked, this, &BoardDialog::save);
   connect(cancelButton_, &QPushButton::clicked, this, &BoardDialog::cancelEdit);
   connect(close, &QPushButton::clicked, this, &QDialog::accept);
+  connect(boardBox_, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          &BoardDialog::selectBoard);
+  connect(newButton_, &QPushButton::clicked, this, &BoardDialog::addBoard);
+  connect(renameButton_, &QPushButton::clicked, this,
+          &BoardDialog::renameBoard);
+  connect(deleteButton_, &QPushButton::clicked, this,
+          &BoardDialog::deleteBoard);
 
   auto *timer = new QTimer(this);
   timer->setSingleShot(true);
@@ -132,18 +153,98 @@ BoardDialog::BoardDialog(QWidget *parent) : QDialog(parent) {
   load();
 }
 
-void BoardDialog::load() {
-  auto loaded = services().core.board.load();
+void BoardDialog::load(int preferredId) {
+  auto loaded = services().core.board.loadAll();
   if (!loaded) {
     QMessageBox::critical(this, "Board",
                           qtbridge::toQt(loaded.error().message));
     return;
   }
-  board_ = std::move(*loaded);
+  if (loaded->empty()) {
+    auto created = services().core.board.create({-1, "Main", {}, 0});
+    if (!created) {
+      QMessageBox::critical(this, "Board",
+                            qtbridge::toQt(created.error().message));
+      return;
+    }
+    loaded->push_back(std::move(*created));
+  }
+  boards_ = std::move(*loaded);
+  const QSignalBlocker blocker(boardBox_);
+  boardBox_->clear();
+  int selected = 0;
+  for (int index = 0; index < static_cast<int>(boards_.size()); ++index) {
+    boardBox_->addItem(qtbridge::toQt(boards_[index].name), boards_[index].id);
+    if (boards_[index].id == preferredId)
+      selected = index;
+  }
+  boardBox_->setCurrentIndex(selected);
+  selectBoard(selected);
+}
+
+void BoardDialog::selectBoard(int index) {
+  if (index < 0 || index >= static_cast<int>(boards_.size()))
+    return;
+  board_ = boards_[index];
   showBoard();
 }
 
+void BoardDialog::addBoard() {
+  bool accepted = false;
+  const QString suggested = boards_.empty() ? "Main" : "New Board";
+  const QString name = QInputDialog::getText(
+      this, "New Board", "Name:", QLineEdit::Normal, suggested, &accepted);
+  if (!accepted)
+    return;
+  auto created = services().core.board.create(
+      {-1, qtbridge::toCore(name), {}, 0});
+  if (!created) {
+    QMessageBox::critical(this, "Board",
+                          qtbridge::toQt(created.error().message));
+    return;
+  }
+  load(created->id);
+}
+
+void BoardDialog::renameBoard() {
+  bool accepted = false;
+  const QString name = QInputDialog::getText(
+      this, "Rename Board", "Name:", QLineEdit::Normal,
+      qtbridge::toQt(board_.name), &accepted);
+  if (!accepted)
+    return;
+  auto changed = board_;
+  changed.name = qtbridge::toCore(name);
+  auto stored = services().core.board.save(changed);
+  if (!stored) {
+    QMessageBox::critical(this, "Board",
+                          qtbridge::toQt(stored.error().message));
+    return;
+  }
+  load(stored->id);
+}
+
+void BoardDialog::deleteBoard() {
+  if (boards_.size() <= 1) {
+    QMessageBox::information(this, "Board", "At least one Board must remain.");
+    return;
+  }
+  if (QMessageBox::question(
+          this, "Delete Board",
+          QString("Delete Board '%1'? Its Markdown content cannot be restored.")
+              .arg(qtbridge::toQt(board_.name))) != QMessageBox::Yes)
+    return;
+  auto removed = services().core.board.remove(board_.id);
+  if (!removed) {
+    QMessageBox::critical(this, "Board",
+                          qtbridge::toQt(removed.error().message));
+    return;
+  }
+  load();
+}
+
 void BoardDialog::showBoard() {
+  setWindowTitle("Board — " + qtbridge::toQt(board_.name));
   view_->setHtml(board_.content.empty()
                      ? QString("<p><i>The Board is empty.</i></p>")
                      : MarkdownConverter::toHtml(qtbridge::toQt(board_.content)));
@@ -151,6 +252,10 @@ void BoardDialog::showBoard() {
   editButton_->show();
   saveButton_->hide();
   cancelButton_->hide();
+  boardBox_->setEnabled(true);
+  newButton_->setEnabled(true);
+  renameButton_->setEnabled(true);
+  deleteButton_->setEnabled(boards_.size() > 1);
 }
 
 void BoardDialog::beginEdit() {
@@ -160,14 +265,18 @@ void BoardDialog::beginEdit() {
   editButton_->hide();
   saveButton_->show();
   cancelButton_->show();
+  boardBox_->setEnabled(false);
+  newButton_->setEnabled(false);
+  renameButton_->setEnabled(false);
+  deleteButton_->setEnabled(false);
   source_->setFocus();
 }
 
 void BoardDialog::cancelEdit() { showBoard(); }
 
 void BoardDialog::save() {
-  lexicon::BoardRecord changed{qtbridge::toCore(source_->toPlainText()),
-                               board_.revision};
+  auto changed = board_;
+  changed.content = qtbridge::toCore(source_->toPlainText());
   auto stored = services().core.board.save(changed);
   if (!stored && stored.error().code == lexicon::Error::Code::Conflict) {
     QMessageBox conflict(this);
@@ -180,7 +289,7 @@ void BoardDialog::save() {
     conflict.addButton("Keep editing", QMessageBox::RejectRole);
     conflict.exec();
     if (conflict.clickedButton() == reload) {
-      load();
+      load(board_.id);
       return;
     }
     if (conflict.clickedButton() == overwrite) {
@@ -196,6 +305,9 @@ void BoardDialog::save() {
     return;
   }
   board_ = std::move(*stored);
+  for (auto &candidate : boards_)
+    if (candidate.id == board_.id)
+      candidate = board_;
   showBoard();
 }
 

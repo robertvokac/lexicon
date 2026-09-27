@@ -218,9 +218,11 @@ accept it; install a proper certificate instead.
 - **Inbox.** The tray button above the list catches an idea: a title and plain
   text, saved to `Default` with the type `Inbox` - which the server creates the
   first time - whatever the filters show.
-- **Board.** The navigation drawer opens the shared Markdown Board in reading
-  mode. **Edit** uses the item Content editor's formatting toolbar and
-  source/preview layout; concurrent saves offer reload or overwrite.
+- **Boards.** The navigation drawer opens the named shared Markdown Boards.
+  Choose, create, rename or delete one, then read it or use **Edit** with the
+  item Content editor's formatting toolbar and source/preview layout;
+  concurrent saves offer reload or overwrite. A fresh dictionary starts with
+  `Main` and the final Board cannot be deleted.
 - **Offline Inbox.** An idea never waits for the network. When the server
   cannot be reached - no signal, the server or a proxy down, the session
   expired - the idea is kept on the phone and a banner above the list says how
@@ -265,8 +267,10 @@ accept it; install a proper certificate instead.
 - **Alarms.** Every alarm, the soonest first, with the date and time it goes
   off in the phone's time zone; those already gone off are marked. **+** adds
   one, a tap edits it: a title, a date and a time (typed, or chosen with the
-  date and time pickers), a description, repeat days and an optional linked
-  item. The server stores the time in UTC.
+  date and time pickers), a description, repeat days, an optional linked
+  item, an **ASAP** marker and optional free-text **Group**. ASAP and Group
+  organize the reminder without changing its schedule. The server stores the
+  time in UTC.
   An alarm that has gone off shows **Dismiss** and **Snooze 10 min** until
   someone deals with it, here or in another client.
 - **Alarm notifications.** Alarms ring even when the app is closed. The app

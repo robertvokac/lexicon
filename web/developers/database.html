@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Database schema — Lexicon Developer Docs</title>
-<meta name="description" content="Lexicon SQLite schema reference: items, types, fields, relationships, cards, alarms, the singleton Markdown Board, indexes and migrations.">
+<meta name="description" content="Lexicon SQLite schema reference: items, types, fields, relationships, cards, alarms, named Markdown Boards, indexes and migrations.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -71,10 +71,10 @@
       <tr><td><code>tag</code></td><td>Classification labels per item</td></tr>
       <tr><td><code>flag</code></td><td>Workflow markers per item</td></tr>
       <tr><td><code>link</code></td><td>Typed, directed relationships between items</td></tr>
-      <tr><td><code>alarm</code></td><td>Reminders at a moment, and whether they were dismissed</td></tr>
+      <tr><td><code>alarm</code></td><td>Reminders at a moment, with recurrence, ASAP and optional Group metadata</td></tr>
       <tr><td><code>item_history</code></td><td>Previous item versions and deleted items available for restoration</td></tr>
       <tr><td><code>card</code></td><td>Questions and answers about an item for a quiz, with how often they were known</td></tr>
-      <tr><td><code>board</code></td><td>The singleton shared Markdown Board and its revision</td></tr>
+      <tr><td><code>board</code></td><td>Named shared Markdown Boards and their revisions</td></tr>
       <tr><td><code>item_search</code></td><td>FTS5 full-text index of items, where SQLite has FTS5; rebuilt from the other tables</td></tr>
       <tr><td><code>log</code></td><td>Operation log (create/update/delete/read events)</td></tr>
       <tr><td><code>configuration</code></td><td>Persistent application settings</td></tr>
@@ -93,7 +93,7 @@
     <ol class="steps">
       <li>Opens (or creates) <code>lexicon.db</code> and executes <code>PRAGMA foreign_keys = ON</code>.</li>
       <li>Ensures the bookkeeping table exists: <code>CREATE TABLE IF NOT EXISTS db_version (version INTEGER PRIMARY KEY)</code>.</li>
-      <li>Walks an ordered list of migrations (currently versions <strong>1–30</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
+      <li>Walks an ordered list of migrations (currently versions <strong>1–32</strong>) and applies every version greater than the current one, <strong>each inside a transaction</strong>. The version row is written in the same transaction, so a failed migration rolls back completely.</li>
       <li>A migration that rebuilds a table — SQLite cannot change a <code>CHECK</code> constraint in place — runs with foreign keys switched off around its transaction, so dropping the old table cannot cascade into the rows that refer to it, and must pass <code>PRAGMA foreign_key_check</code> before it commits.</li>
     </ol>
     <table>
@@ -128,6 +128,8 @@
       <tr><td>28</td><td>Adds <code>alarm.repeat_days</code>, linked <code>item_id</code> and recurrence anchor</td></tr>
       <tr><td>29</td><td>Creates the singleton <code>board</code> table with Markdown content and a revision</td></tr>
       <tr><td>30</td><td>Adds <code>item_field.description</code></td></tr>
+      <tr><td>31</td><td>Rebuilds <code>board</code> for multiple uniquely named Boards and preserves the former Board as <code>Main</code></td></tr>
+      <tr><td>32</td><td>Adds Boolean <code>alarm.asap</code> and optional text <code>alarm.group</code></td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -256,10 +258,12 @@ CREATE INDEX idx_link_to_item_id   ON link(to_item_id);</code></pre>
   dismissed_at TEXT,           -- UTC; migration 25
   repeat_days  INTEGER NOT NULL DEFAULT 0 CHECK(repeat_days BETWEEN 0 AND 365),
   item_id      INTEGER REFERENCES item(id) ON DELETE SET NULL,
-  anchor_at    TEXT            -- original recurrence time
+  anchor_at    TEXT,           -- original recurrence time
+  asap         INTEGER NOT NULL DEFAULT 0 CHECK(asap IN (0, 1)),
+  "group"      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_alarm_fires_at ON alarm(fires_at);</code></pre>
-    <p>Times are UTC text of one fixed shape, so text order is time order. A one-time alarm whose <code>fires_at</code> has passed rings until <code>dismissed_at</code> is set. Dismissing a recurring alarm moves it to the next occurrence derived from <code>anchor_at</code>; snoozing does not shift that schedule.</p>
+    <p>Times are UTC text of one fixed shape, so text order is time order. A one-time alarm whose <code>fires_at</code> has passed rings until <code>dismissed_at</code> is set. Dismissing a recurring alarm moves it to the next occurrence derived from <code>anchor_at</code>; snoozing does not shift that schedule. <code>asap</code> marks work to handle as soon as possible, while <code>group</code> is an optional free-text grouping label; neither changes the alarm schedule.</p>
 
     <h3><code>card</code></h3>
     <pre><code>CREATE TABLE card (
@@ -277,11 +281,12 @@ CREATE INDEX idx_card_item_id ON card(item_id, id);  -- migration 26</code></pre
 
     <h3><code>board</code></h3>
     <pre><code>CREATE TABLE board (
-  id       INTEGER PRIMARY KEY CHECK(id = 1),
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  name     TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK(TRIM(name) &lt;&gt; ''),
   content  TEXT NOT NULL DEFAULT '',
   revision INTEGER NOT NULL DEFAULT 1
 );</code></pre>
-    <p>The table always has exactly the row with ID 1. Every save increments <code>revision</code>; clients send the revision they loaded so a concurrent change is refused instead of overwritten.</p>
+    <p>A new database starts with one empty Board named <code>Main</code>. Names are required and unique ignoring ASCII case, more Boards can be added, and the final Board cannot be deleted. Every save increments that Board's <code>revision</code>; clients send the revision they loaded so a concurrent change is refused instead of overwritten.</p>
 
     <h3><code>item_search</code></h3>
     <pre><code>CREATE VIRTUAL TABLE item_search USING fts5(

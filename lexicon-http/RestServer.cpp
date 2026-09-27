@@ -1192,11 +1192,44 @@ void RestServer::Impl::registerRoutes() {
     respondJson(response, 201, Json{{"id", item->id}, {"item", toJson(*item)}});
   });
 
-  // The one shared Markdown Board. A revision sent back on PUT protects a
-  // person's edits when another client saved after they opened it.
-  api.Get("/api/v1/board", [this](const Request &, Response &response) {
-    auto board = guarded.with([](LexiconApplication &application) {
-      return application.board.load();
+  // Named shared Markdown Boards. A revision sent back on PUT protects a
+  // person's edits when another client saved after they opened one.
+  api.Get("/api/v1/boards", [this](const Request &, Response &response) {
+    auto boards = guarded.with([](LexiconApplication &application) {
+      return application.board.loadAll();
+    });
+    if (!boards) {
+      respondError(response, boards.error(), "loadBoards");
+      return;
+    }
+    respondJson(response, 200, Json{{"boards", toJsonArray(*boards)}});
+  });
+
+  api.Post("/api/v1/boards", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto requested = boardFromJson(*body);
+    requested.id = -1;
+    requested.revision = 0;
+    auto board = guarded.with([requested = std::move(requested)](
+                                  LexiconApplication &application) mutable {
+      return application.board.create(std::move(requested));
+    });
+    if (!board) {
+      respondError(response, board.error(), "createBoard");
+      return;
+    }
+    respondJson(response, 201, Json{{"board", toJson(*board)}});
+  });
+
+  api.Get("/api/v1/boards/:id", [this](const Request &request,
+                                        Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto board = guarded.with([id](LexiconApplication &application) {
+      return application.board.load(*id);
     });
     if (!board) {
       respondError(response, board.error(), "loadBoard");
@@ -1205,13 +1238,76 @@ void RestServer::Impl::registerRoutes() {
     respondJson(response, 200, Json{{"board", toJson(*board)}});
   });
 
+  api.Put("/api/v1/boards/:id", [this](const Request &request,
+                                        Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    auto requested = boardFromJson(*body);
+    requested.id = *id;
+    auto board = guarded.with([requested = std::move(requested)](
+                                  LexiconApplication &application) mutable {
+      return application.board.save(std::move(requested));
+    });
+    if (!board) {
+      respondError(response, board.error(), "saveBoard");
+      return;
+    }
+    respondJson(response, 200, Json{{"board", toJson(*board)}});
+  });
+
+  api.Delete("/api/v1/boards/:id", [this](const Request &request,
+                                           Response &response) {
+    auto id = pathId(request, response, "id");
+    if (!id)
+      return;
+    auto removed = guarded.with([id](LexiconApplication &application) {
+      return application.board.remove(*id);
+    });
+    if (!removed) {
+      respondError(response, removed.error(), "deleteBoard");
+      return;
+    }
+    respondNoContent(response);
+  });
+
+  // Compatibility for clients from the singleton-Board release. It exposes
+  // the first named Board and preserves its name when saving.
+  api.Get("/api/v1/board", [this](const Request &, Response &response) {
+    auto boards = guarded.with([](LexiconApplication &application) {
+      return application.board.loadAll();
+    });
+    if (!boards) {
+      respondError(response, boards.error(), "loadBoards");
+      return;
+    }
+    if (boards->empty()) {
+      respondFailure(response, {404, "not_found", "Board not found."});
+      return;
+    }
+    respondJson(response, 200, Json{{"board", toJson(boards->front())}});
+  });
+
   api.Put("/api/v1/board", [this](const Request &request, Response &response) {
     auto body = jsonBody(request, response);
     if (!body)
       return;
-    const auto requested = boardFromJson(*body);
-    auto board = guarded.with([&](LexiconApplication &application) {
-      return application.board.save(requested);
+    const auto incoming = boardFromJson(*body);
+    auto board = guarded.with([&](LexiconApplication &application)
+                                  -> Result<BoardRecord> {
+      auto boards = application.board.loadAll();
+      if (!boards)
+        return std::unexpected(boards.error());
+      if (boards->empty())
+        return std::unexpected(
+            Error{Error::Code::NotFound, "Board not found."});
+      auto changed = boards->front();
+      changed.content = incoming.content;
+      changed.revision = incoming.revision;
+      return application.board.save(std::move(changed));
     });
     if (!board) {
       respondError(response, board.error(), "saveBoard");

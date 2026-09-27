@@ -36,6 +36,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.AfterClass
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -355,13 +356,28 @@ class ServerIntegrationTest {
             val (sessions, api) = newSessionManager(environment)
             assertEquals(SessionManager.LoginResult.Success, sessions.login(baseUrl, USER, PASSWORD))
             val title = "Dentist ${System.nanoTime()}"
-            val created = api.createAlarm(AlarmWrite(" $title ", "Bring the card.", "2030-01-02T09:15:00Z"))
+            val created = api.createAlarm(
+                AlarmWrite(
+                    title = " $title ",
+                    description = "Bring the card.",
+                    firesAt = "2030-01-02T09:15:00Z",
+                    asap = true,
+                    group = "Health",
+                ),
+            )
             val id = checkNotNull(created.id)
             assertEquals(title, created.title)
+            assertTrue(created.asap)
+            assertEquals("Health", created.group)
             assertTrue(api.alarms().any { it.id == id && it.firesAt == "2030-01-02T09:15:00Z" })
-            val moved = api.updateAlarm(id, AlarmWrite(title, "", "2030-01-03T08:00:00Z"))
+            val moved = api.updateAlarm(
+                id,
+                AlarmWrite(title = title, firesAt = "2030-01-03T08:00:00Z", group = "Appointments"),
+            )
             assertEquals("2030-01-03T08:00:00Z", moved.firesAt)
             assertEquals("", moved.description)
+            assertFalse(moved.asap)
+            assertEquals("Appointments", moved.group)
             try {
                 api.createAlarm(AlarmWrite("Never", "", "2030-02-30T08:00:00Z"))
                 fail("expected a refusal")

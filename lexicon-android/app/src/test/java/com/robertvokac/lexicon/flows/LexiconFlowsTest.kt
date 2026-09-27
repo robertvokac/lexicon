@@ -374,7 +374,12 @@ class LexiconFlowsTest {
 
     @Test
     fun boardCanBeReadAndEdited() {
-        fake.board = com.robertvokac.lexicon.model.Board("# Team Board\n\nBefore", 3)
+        fake.board = com.robertvokac.lexicon.model.Board(
+            id = 1,
+            name = "Main",
+            content = "# Team Board\n\nBefore",
+            revision = 3,
+        )
         login()
         openDrawer("Board")
         compose.waitForText("Team Board")
@@ -384,7 +389,7 @@ class LexiconFlowsTest {
         compose.waitForText("Ship it")
         assertEquals("# Team Board\n\n- Ship it", fake.board.content)
         assertEquals(4, fake.board.revision)
-        assertEquals(3, lastBody("PUT", "/api/v1/board")["revision"]!!.jsonPrimitive.int)
+        assertEquals(3, lastBody("PUT", "/api/v1/boards/1")["revision"]!!.jsonPrimitive.int)
     }
 
     @Test

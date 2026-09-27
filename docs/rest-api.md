@@ -277,22 +277,39 @@ optional plain text. A missing or blank title, or one already in `Default`, is
 refused with 400, and a refused idea leaves nothing behind, not even a new
 type.
 
-## Board
+## Boards
 
 ```http
-GET /api/v1/board
-→ { "board": { "content": "# Team Board\n\n- Ship it", "revision": 4 } }
+GET /api/v1/boards
+→ { "boards": [
+  { "id": 1, "name": "Main", "content": "# Team Board\n\n- Ship it", "revision": 4 }
+] }
 
-PUT /api/v1/board
-{ "content": "# Team Board\n\n- Ship it", "revision": 4 }
-→ { "board": { "content": "# Team Board\n\n- Ship it", "revision": 5 } }
+POST /api/v1/boards
+{ "name": "Work", "content": "# Work" }
+→ 201 { "board": { "id": 2, "name": "Work", "content": "# Work", "revision": 1 } }
+
+GET /api/v1/boards/2
+→ { "board": { "id": 2, "name": "Work", "content": "# Work", "revision": 1 } }
+
+PUT /api/v1/boards/2
+{ "name": "Projects", "content": "# Projects\n\n- Ship it", "revision": 1 }
+→ { "board": { "id": 2, "name": "Projects", "content": "# Projects\n\n- Ship it", "revision": 2 } }
+
+DELETE /api/v1/boards/2
+→ 204
 ```
 
-The Board is one shared Markdown document, not an item: it has no title,
-group, type or metadata. A new database starts with an empty Board. Send the
-revision returned by `GET` when saving; if another client saved meanwhile,
-`PUT` returns 409 instead of overwriting its work. A missing or zero revision
-requests an explicit unconditional overwrite.
+Boards are named shared Markdown documents, not items: they have no group,
+type or item metadata. A new database starts with an empty Board named `Main`.
+Names are required and unique ignoring ASCII case, and at least one Board must
+remain. Send the revision returned by `GET` when saving; if another client
+saved meanwhile, `PUT` returns 409 instead of overwriting its work. A missing
+or zero revision requests an explicit unconditional overwrite.
+
+`GET` and `PUT /api/v1/board` remain as compatibility endpoints for clients
+from the singleton-Board release. They read or update the first named Board,
+but new clients should use `/boards`.
 
 `resolve` is what a `[[Title]]` link in item content uses. The first of these
 that finds an item wins: the exact title (preferring an item without a
@@ -545,7 +562,7 @@ POST   /api/v1/alarms/{id}/snooze    → 200 { "alarm": { ... } }
 ```json
 { "id": 4, "title": "Dentist", "description": "Bring the card.",
   "firesAt": "2026-10-02T08:30:00Z", "dismissedAt": null,
-  "repeatDays": 7, "itemId": 19 }
+  "repeatDays": 7, "itemId": 19, "asap": true, "group": "Health" }
 ```
 
 An alarm is a reminder at a moment: a `title` (required, trimmed), a
@@ -570,7 +587,10 @@ only so that an imported alarm keeps its state.
 `itemId` is an optional linked item, returned as `null` when absent. Dismissing
 a repeating alarm schedules its next occurrence from the original time;
 snoozing does not shift that recurring schedule. Deleting the linked item
-leaves the alarm in place without a link.
+leaves the alarm in place without a link. `asap` is a Boolean marker meaning
+the alarm should be handled as soon as possible. `group` is an optional
+free-text label for grouping alarms; an ungrouped alarm returns an empty
+string. These two fields classify the alarm and do not change when it rings.
 
 ## Export and import
 

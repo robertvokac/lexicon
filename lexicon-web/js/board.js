@@ -1,7 +1,7 @@
-// The one shared Markdown Board: a rendered reading view and the same
-// source/preview editing experience as item content.
+// Named shared Markdown Boards: choose and manage one, then read or edit it
+// with the same source/preview experience as item content.
 import { api } from './api.js';
-import { openDialog, promptDialog } from './dialogs.js';
+import { confirmDialog, openDialog, promptDialog } from './dialogs.js';
 import { renderMarkdown } from './markdown.js';
 import { button, debounce, el, LITERAL_TEXT, readLocal, writeLocal } from './utils.js';
 
@@ -104,33 +104,109 @@ async function editor(board) {
     show('source');
 
     return openDialog({
-        title: 'Edit Board',
+        title: `Edit Board — ${board.name}`,
         body: panel,
         wide: true,
         acceptLabel: 'Save',
         clearErrorOn: [source],
         initialFocus: source,
-        onAccept: async () => api.saveBoard(source.value, board.revision),
+        onAccept: async () => api.saveBoard({ ...board, content: source.value }),
     });
 }
 
-export async function openBoard() {
-    let board = await api.board();
+async function boardPicker(boards) {
+    const select = el('select', {
+        size: String(Math.min(Math.max(boards.length, 3), 10)),
+        class: 'board-list',
+        'aria-label': 'Boards',
+    }, boards.map((board) => el('option', { value: String(board.id), text: board.name })));
+    if (boards.length) select.value = String(boards[0].id);
+    const selected = () => boards.find((board) => String(board.id) === select.value);
+    return openDialog({
+        title: 'Boards',
+        body: el('div', {}, [
+            select,
+            el('p', { class: 'hint', text: 'Choose a Board to read or edit.' }),
+        ]),
+        acceptLabel: 'Open',
+        cancelLabel: 'Close',
+        initialFocus: select,
+        extraActions: [
+            { label: 'New', onClick: ({ close }) => close({ action: 'new' }) },
+            { label: 'Rename', onClick: ({ close, fail }) => {
+                const board = selected();
+                if (board) close({ action: 'rename', board });
+                else fail('Choose a Board first.');
+            } },
+            { label: 'Delete', onClick: ({ close, fail }) => {
+                const board = selected();
+                if (!board) fail('Choose a Board first.');
+                else if (boards.length <= 1) fail('At least one Board must remain.');
+                else close({ action: 'delete', board });
+            } },
+        ],
+        onAccept: ({ fail }) => {
+            const board = selected();
+            if (!board) {
+                fail('Choose a Board first.');
+                return undefined;
+            }
+            return { action: 'open', board };
+        },
+    });
+}
+
+async function viewBoard(initial) {
+    let board = initial;
     while (true) {
         const rendered = el('div', { class: 'markdown-preview board-view' });
         if (board.content) renderMarkdown(rendered, board.content);
         else rendered.appendChild(el('p', { class: 'hint', text: 'The Board is empty.' }));
         const choice = await openDialog({
-            title: 'Board',
+            title: `Board — ${board.name}`,
             body: rendered,
             showAccept: false,
-            cancelLabel: 'Close',
+            cancelLabel: 'Boards',
             wide: true,
             extraActions: [{ label: 'Edit', class: 'primary', onClick: ({ close }) => close('edit') }],
         });
-        if (choice !== 'edit') return;
+        if (choice !== 'edit') return board;
         const saved = await editor(board);
-        if (!saved) return;
+        if (!saved) continue;
         board = saved;
+    }
+}
+
+export async function openBoard() {
+    let boards = await api.boards();
+    if (!boards.length) boards = [await api.createBoard('Main')];
+    while (true) {
+        const choice = await boardPicker(boards);
+        if (!choice) return;
+        if (choice.action === 'new') {
+            const name = await promptDialog('New Board', 'Name:', boards.length ? 'New Board' : 'Main');
+            if (!name) continue;
+            const created = await api.createBoard(name);
+            boards = await api.boards();
+            await viewBoard(created);
+            boards = await api.boards();
+        } else if (choice.action === 'rename') {
+            const name = await promptDialog('Rename Board', 'Name:', choice.board.name);
+            if (!name) continue;
+            await api.saveBoard({ ...choice.board, name });
+            boards = await api.boards();
+        } else if (choice.action === 'delete') {
+            const confirmed = await confirmDialog(
+                'Delete Board',
+                `Delete Board '${choice.board.name}'? Its Markdown content cannot be restored.`,
+                { acceptLabel: 'Delete', danger: true },
+            );
+            if (!confirmed) continue;
+            await api.deleteBoard(choice.board.id);
+            boards = await api.boards();
+        } else {
+            await viewBoard(choice.board);
+            boards = await api.boards();
+        }
     }
 }

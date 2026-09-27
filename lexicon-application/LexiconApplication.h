@@ -289,15 +289,15 @@ private:
 class BoardService {
 public:
   explicit BoardService(Repository &repository) : repository_(repository) {}
-  Result<BoardRecord> load() { return repository_.loadBoard(); }
+  Result<std::vector<BoardRecord>> loadAll() { return repository_.loadBoards(); }
+  Result<BoardRecord> load(int id) { return repository_.loadBoard(id); }
+  Result<BoardRecord> create(BoardRecord board);
   // Returns the saved record, including its new revision.
-  Result<BoardRecord> save(const BoardRecord &board) {
-    if (auto saved = repository_.saveBoard(board); !saved)
-      return std::unexpected(saved.error());
-    return repository_.loadBoard();
-  }
+  Result<BoardRecord> save(BoardRecord board);
+  Result<void> remove(int id);
 
 private:
+  Result<void> validateName(const BoardRecord &board);
   Repository &repository_;
 };
 
@@ -363,7 +363,7 @@ struct DictionaryExport {
   std::vector<AlarmRecord> alarms;
   // With their statistics.
   std::vector<CardRecord> cards;
-  std::optional<BoardRecord> board;
+  std::vector<BoardRecord> boards;
 };
 struct ImportReport {
   int groupsCreated = 0;
@@ -376,7 +376,7 @@ struct ImportReport {
   int blobsImported = 0;
   int alarmsCreated = 0;
   int cardsCreated = 0;
-  bool boardImported = false;
+  int boardsImported = 0;
   // What could not be imported as it was, in words.
   std::vector<std::string> warnings;
 };

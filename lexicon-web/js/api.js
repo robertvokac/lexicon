@@ -219,10 +219,16 @@ export class LexiconApi {
     // An Inbox idea: to Default with the type Inbox, which the server makes
     // the first time. { id, item }.
     captureIdea(title, content) { return this.post('/inbox', { title, content }); }
-    async board() { return (await this.get('/board')).board; }
-    async saveBoard(content, revision) {
-        return (await this.put('/board', { content, revision })).board;
+    async boards() { return (await this.get('/boards')).boards; }
+    async createBoard(name, content = '') {
+        return (await this.post('/boards', { name, content })).board;
     }
+    async saveBoard(board) {
+        return (await this.put(`/boards/${board.id}`, {
+            name: board.name, content: board.content, revision: board.revision,
+        })).board;
+    }
+    deleteBoard(id) { return this.delete(`/boards/${id}`); }
     updateItem(id, payload) { return this.put(`/items/${id}`, payload); }
     deleteItem(id) { return this.delete(`/items/${id}`); }
     async trash() { return (await this.get('/items/trash')).entries; }

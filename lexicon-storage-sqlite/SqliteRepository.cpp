@@ -607,11 +607,44 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
   return guarded([&] { return loadItemNative(impl_->db, itemId); });
 }
 
-SqliteRepository::Result<lexicon::BoardRecord> SqliteRepository::loadBoard() {
+SqliteRepository::Result<std::vector<lexicon::BoardRecord>>
+SqliteRepository::loadBoards() {
   return guarded([&] {
-    Statement row(impl_->db, "SELECT content, revision FROM board WHERE id = 1;");
+    Statement row(impl_->db,
+                  "SELECT id, name, content, revision FROM board "
+                  "ORDER BY name COLLATE NOCASE, id;");
+    std::vector<lexicon::BoardRecord> boards;
+    while (row.step())
+      boards.push_back(
+          {row.integer(0), row.text(1), row.text(2), row.integer(3)});
+    return boards;
+  });
+}
+
+SqliteRepository::Result<lexicon::BoardRecord>
+SqliteRepository::loadBoard(int boardId) {
+  return guarded([&] {
+    Statement row(impl_->db,
+                  "SELECT id, name, content, revision FROM board WHERE id = ?;");
+    row.bind(boardId);
     require(row.step(), "Board not found.", lexicon::Error::Code::NotFound);
-    return lexicon::BoardRecord{row.text(0), row.integer(1)};
+    return lexicon::BoardRecord{row.integer(0), row.text(1), row.text(2),
+                                row.integer(3)};
+  });
+}
+
+SqliteRepository::Result<int>
+SqliteRepository::createBoard(const lexicon::BoardRecord &board) {
+  return guarded([&] {
+    Transaction transaction(impl_->db, "lexicon_write");
+    Statement(impl_->db,
+              "INSERT INTO board(name, content, revision) VALUES(?, ?, 1);")
+        .bind(lexicon::trim(board.name))
+        .bind(board.content)
+        .run();
+    const int id = impl_->db.lastId();
+    transaction.commit();
+    return id;
   });
 }
 
@@ -619,15 +652,32 @@ SqliteRepository::Result<void>
 SqliteRepository::saveBoard(const lexicon::BoardRecord &board) {
   return guarded([&] {
     Transaction transaction(impl_->db, "lexicon_write");
-    Statement current(impl_->db, "SELECT revision FROM board WHERE id = 1;");
+    Statement current(impl_->db, "SELECT revision FROM board WHERE id = ?;");
+    current.bind(board.id);
     require(current.step(), "Board not found.", lexicon::Error::Code::NotFound);
     if (board.revision > 0 && current.integer(0) != board.revision)
       throw Failure("The Board was changed elsewhere after you opened it.",
                     lexicon::Error::Code::Conflict);
     Statement(impl_->db,
-              "UPDATE board SET content = ?, revision = revision + 1 WHERE id = 1;")
+              "UPDATE board SET name = ?, content = ?, revision = revision + 1 "
+              "WHERE id = ?;")
+        .bind(lexicon::trim(board.name))
         .bind(board.content)
+        .bind(board.id)
         .run();
+    requireChanged(impl_->db, "Board");
+    transaction.commit();
+  });
+}
+
+SqliteRepository::Result<void> SqliteRepository::deleteBoard(int boardId) {
+  return guarded([&] {
+    Transaction transaction(impl_->db, "lexicon_write");
+    Statement count(impl_->db, "SELECT COUNT(*) FROM board;");
+    require(count.step() && count.integer(0) > 1,
+            "At least one Board must remain.",
+            lexicon::Error::Code::Validation);
+    Statement(impl_->db, "DELETE FROM board WHERE id = ?;").bind(boardId).run();
     requireChanged(impl_->db, "Board");
     transaction.commit();
   });
@@ -1062,11 +1112,13 @@ SqliteRepository::Result<int> SqliteRepository::findItemId(const std::string &ti
 }
 namespace {
 const char *kAlarmColumns = "SELECT id, title, description, fires_at, COALESCE(dismissed_at, ''), "
-                            "repeat_days, item_id FROM alarm ";
+                            "repeat_days, item_id, asap, \"group\" FROM alarm ";
 lexicon::AlarmRecord readAlarm(Statement &stmt) {
   lexicon::AlarmRecord alarm{stmt.integer(0), stmt.text(1), stmt.text(2), stmt.text(3), stmt.text(4)};
   alarm.repeatDays = stmt.integer(5);
   alarm.itemId = stmt.isNull(6) ? -1 : stmt.integer(6);
+  alarm.asap = stmt.integer(7) != 0;
+  alarm.group = stmt.text(8);
   return alarm;
 }
 } // namespace
@@ -1096,22 +1148,24 @@ SqliteRepository::Result<int> SqliteRepository::saveAlarm(const lexicon::AlarmRe
       // A new alarm rings when its time comes, unless it arrives already
       // dismissed, as one from an export does.
       const auto dismissedAt = lexicon::normalizedUtcTime(alarm.dismissedAt);
-      Statement insert(impl_->db, "INSERT INTO alarm(title, description, fires_at, dismissed_at, repeat_days, item_id, anchor_at) "
-                                   "VALUES(?, ?, ?, ?, ?, ?, NULLIF(?, ''));");
+      Statement insert(impl_->db, "INSERT INTO alarm(title, description, fires_at, dismissed_at, repeat_days, item_id, anchor_at, asap, \"group\") "
+                                   "VALUES(?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?);");
       insert.bind(lexicon::trim(alarm.title)).bind(alarm.description).bind(firesAt);
       if (dismissedAt.empty() || alarm.repeatDays > 0) insert.null(); else insert.bind(dismissedAt);
       insert.bind(alarm.repeatDays).nullableId(alarm.itemId)
-          .bind(alarm.repeatDays > 0 ? firesAt : std::string{});
+          .bind(alarm.repeatDays > 0 ? firesAt : std::string{})
+          .bind(alarm.asap ? 1 : 0).bind(alarm.group);
       insert.run();
       id = impl_->db.lastId();
     } else {
       // A new time rings again; a changed title or description does not.
-      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, repeat_days = ?, item_id = ?, "
+      Statement(impl_->db, "UPDATE alarm SET title = ?, description = ?, repeat_days = ?, item_id = ?, asap = ?, \"group\" = ?, "
                            "anchor_at = CASE WHEN fires_at = ? AND repeat_days = ? THEN anchor_at "
                            "ELSE NULLIF(?, '') END, "
                            "dismissed_at = CASE WHEN fires_at = ? THEN dismissed_at END, fires_at = ? WHERE id = ?;")
           .bind(lexicon::trim(alarm.title)).bind(alarm.description)
           .bind(alarm.repeatDays).nullableId(alarm.itemId)
+          .bind(alarm.asap ? 1 : 0).bind(alarm.group)
           .bind(firesAt).bind(alarm.repeatDays).bind(alarm.repeatDays > 0 ? firesAt : std::string{})
           .bind(firesAt).bind(firesAt).bind(id).run();
       requireChanged(impl_->db, "Alarm");

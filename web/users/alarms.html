@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alarms — Lexicon</title>
-<meta name="description" content="Alarms in Lexicon: reminders with a title, a description and the time they go off, listed in every client and ringing until someone dismisses them - on the desktop, in the browser and on Android even when the app is closed.">
+<meta name="description" content="Alarms in Lexicon: one-time or recurring reminders with ASAP and optional Group metadata, listed in every client and ringing until someone dismisses them.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -64,9 +64,9 @@
     <p class="lead">A reminder that belongs with your knowledge base: read chapter 7 tonight, revisit the shader notes on Saturday, stand up and stretch. Alarms live in the dictionary, travel with it, and ring in whichever client you have in front of you.</p>
 
     <h2 id="list">The alarm list</h2>
-    <p>Open <code>Manage → Alarms...</code> on the desktop or in the web client, or <strong>Alarms</strong> in the Android drawer. Alarms are listed <strong>soonest first</strong>: when it goes off, the title, and the first line of the description.</p>
+    <p>Open <code>Manage → Alarms...</code> on the desktop or in the web client, or <strong>Alarms</strong> in the Android drawer. Alarms are listed <strong>soonest first</strong>: when it goes off, the title, whether it is ASAP, its optional Group, and the first line of the description.</p>
     <ul>
-      <li><strong>Add...</strong> and <strong>Edit...</strong> (or a double click) open a form for the title, date and time, plain-text description, repeat interval in days and an optional linked item.</li>
+      <li><strong>Add...</strong> and <strong>Edit...</strong> (or a double click) open a form for the title, date and time, plain-text description, repeat interval in days, an optional linked item, <strong>ASAP</strong> and an optional <strong>Group</strong>.</li>
       <li><strong>Delete</strong> asks first.</li>
       <li>An alarm that is <strong>still ringing</strong> is shown in bold; one that went off and was dealt with stays in the list, greyed out, until you delete it.</li>
     </ul>
@@ -81,6 +81,7 @@
       <p><strong>One moment, every time zone</strong> Times are entered and shown in your own time zone and stored in UTC. An alarm set on the desktop in Prague shows the same moment in a browser or on a phone anywhere else.</p>
     </div>
     <p>Set <strong>Repeat every</strong> to zero for a one-time alarm or 1–365 days for a recurring one. Dismissing a recurring alarm schedules the next occurrence from its original time; snoozing leaves that schedule unchanged. If you delete an item linked to an alarm, the alarm remains without the link.</p>
+    <p><strong>ASAP</strong> marks a reminder that should be handled as soon as possible. <strong>Group</strong> is free text such as <code>Health</code>, <code>Work</code> or <code>Calls</code>. Both are shared and exported with the alarm; they organize it but do not change its time or ringing behavior.</p>
 
     <h2 id="ringing">When one goes off</h2>
     <p>An alarm rings <strong>until someone deals with it</strong> — it does not disappear because nobody was looking.</p>

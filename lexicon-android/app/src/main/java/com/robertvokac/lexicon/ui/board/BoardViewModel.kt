@@ -21,13 +21,17 @@ import kotlinx.coroutines.launch
 data class BoardUiState(
     val loading: Boolean = true,
     val loadError: String? = null,
+    val boards: List<Board> = emptyList(),
+    val selectedId: Int = -1,
     val content: String = "",
     val revision: Int = 0,
     val editing: Boolean = false,
     val saving: Boolean = false,
     val saveError: String? = null,
     val conflict: Boolean = false,
-)
+) {
+    val selected: Board? get() = boards.firstOrNull { it.id == selectedId }
+}
 
 class BoardViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(BoardUiState())
@@ -38,19 +42,75 @@ class BoardViewModel(private val container: AppContainer) : ViewModel() {
         load()
     }
 
-    fun retry() = load()
+    fun retry() = load(_state.value.selectedId)
 
     @OptIn(ExperimentalFoundationApi::class)
-    private fun load() {
+    private fun load(preferredId: Int = _state.value.selectedId) {
         _state.update { it.copy(loading = true, loadError = null, conflict = false) }
         viewModelScope.launch {
             try {
-                val board = container.api.board()
-                editor.setTextAndPlaceCursorAtEnd(board.content)
-                editor.undoState.clearHistory()
-                _state.value = BoardUiState(content = board.content, revision = board.revision, loading = false)
+                refresh(preferredId)
             } catch (failure: ApiException) {
                 _state.update { it.copy(loading = false, loadError = failure.userMessage() ?: "Sign in to continue.") }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    private suspend fun refresh(preferredId: Int = -1) {
+        var boards = container.api.boards()
+        if (boards.isEmpty()) boards = listOf(container.api.createBoard("Main"))
+        val board = boards.firstOrNull { it.id == preferredId } ?: boards.first()
+        editor.setTextAndPlaceCursorAtEnd(board.content)
+        editor.undoState.clearHistory()
+        _state.value = BoardUiState(
+            boards = boards,
+            selectedId = board.id,
+            content = board.content,
+            revision = board.revision,
+            loading = false,
+        )
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    fun select(id: Int) {
+        if (_state.value.editing || _state.value.saving) return
+        val board = _state.value.boards.firstOrNull { it.id == id } ?: return
+        editor.setTextAndPlaceCursorAtEnd(board.content)
+        editor.undoState.clearHistory()
+        _state.update {
+            it.copy(selectedId = board.id, content = board.content, revision = board.revision, saveError = null)
+        }
+    }
+
+    fun create(name: String) = manage {
+        val created = container.api.createBoard(name.trim())
+        refresh(created.id)
+    }
+
+    fun rename(name: String) = manage {
+        val board = _state.value.selected ?: return@manage
+        val saved = container.api.saveBoard(board.copy(name = name.trim()))
+        refresh(saved.id)
+    }
+
+    fun deleteSelected() = manage {
+        val board = _state.value.selected ?: return@manage
+        container.api.deleteBoard(board.id)
+        refresh()
+    }
+
+    private fun manage(operation: suspend () -> Unit) {
+        if (_state.value.saving) return
+        _state.update { it.copy(saving = true, saveError = null) }
+        viewModelScope.launch {
+            try {
+                operation()
+                _state.update { it.copy(saving = false) }
+            } catch (failure: ApiException) {
+                _state.update {
+                    it.copy(saving = false, saveError = failure.userMessage() ?: "Sign in to continue.")
+                }
             }
         }
     }
@@ -73,7 +133,7 @@ class BoardViewModel(private val container: AppContainer) : ViewModel() {
         saveWithRevision(0)
     }
 
-    fun reloadAfterConflict() = load()
+    fun reloadAfterConflict() = load(_state.value.selectedId)
 
     fun keepEditingAfterConflict() = _state.update { it.copy(conflict = false) }
 
@@ -82,9 +142,16 @@ class BoardViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(saving = true, saveError = null) }
         viewModelScope.launch {
             try {
-                val saved = container.api.saveBoard(Board(editor.text.toString(), revision))
+                val current = _state.value.selected ?: run {
+                    _state.update { it.copy(saving = false, saveError = "Choose a Board first.") }
+                    return@launch
+                }
+                val saved = container.api.saveBoard(
+                    current.copy(content = editor.text.toString(), revision = revision),
+                )
                 _state.update {
                     it.copy(
+                        boards = it.boards.map { board -> if (board.id == saved.id) saved else board },
                         content = saved.content,
                         revision = saved.revision,
                         editing = false,

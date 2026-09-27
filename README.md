@@ -53,8 +53,8 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - An Inbox for ideas: a title and plain text, saved to `Default` with the type `Inbox` in one step; on Android also without a connection, sent when the server is back
-- A shared Markdown Board: one title-free document for current notes and tasks, with rendered reading and a full Markdown editor in every client
-- Alarms: one-time or recurring reminders, optionally linked to an item, listed and edited in every client
+- Named shared Markdown Boards for current notes and tasks, with rendered reading, management and a full Markdown editor in every client
+- Alarms: one-time or recurring reminders with ASAP, an optional text Group and an optional linked item, listed and edited in every client
 - Item history and Trash: restore an earlier version or a deleted item with its cards and links
 - Encrypted offline reading of previously loaded pages in Android
 - Review with spaced repetition: the items due now, the answer on request, and a rating that moves the understanding and sets the next review
@@ -334,7 +334,7 @@ instrumented tests on an emulator.
 | `lexicon-android/` | Native Android client in Kotlin and Jetpack Compose, a separate Gradle project outside the CMake build. No database of its own, no C++. Talks only REST. |
 | `web/` | The project website: the home page, the screenshot gallery, the [user guide](web/users/index.html) and the [developer documentation](web/developers/index.html). Static HTML and CSS; not part of any build. |
 
-Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. The schema grows only by appended migrations (30 so far, in `lexicon-storage-sqlite/Migrations.cpp`); a database written by any earlier Lexicon, including the former QtSql desktop client, is upgraded when opened, and version 10 and version 20 fixtures test that path. See [web/developers/database.html](web/developers/database.html) for the tables and the migration list.
+Text in core, application, and storage is UTF-8 `std::string`. Qt converts at the desktop boundary. Public operations return `std::expected<T, lexicon::Error>`. `Repository` is the application boundary; only the SQLite adapter owns `sqlite3` handles, statements, schema migrations, and transactions. RAII finalizes statements and rolls back incomplete savepoints. The application owns the item plus links *unit of work*: `ItemService::saveItemWithLinks` begins it, saves the item and links, then commits or rolls back. `createItem` uses the same path and accepts optional links. The repository also uses nested savepoints for each write. The schema grows only by appended migrations (32 so far, in `lexicon-storage-sqlite/Migrations.cpp`); a database written by any earlier Lexicon, including the former QtSql desktop client, is upgraded when opened, and version 10 and version 20 fixtures test that path. See [web/developers/database.html](web/developers/database.html) for the tables and the migration list.
 
 Case-insensitive searches, metadata deduplication, suggestions, and schema constraints using `NOCASE` fold ASCII letters only. UTF-8 bytes outside ASCII compare exactly. Exact lookups and constraints without `NOCASE` remain byte-exact. SQLite's `NOCASE`, `LOWER`, and default `LIKE` use the same ASCII case policy. The earlier QtSql adapter used Qt Unicode case folding while deduplicating some metadata; that was incidental to storage, inconsistent with core validation and SQLite indexes/search. After this cleanup, `É` and `é` are distinct everywhere. This is an intentional matching policy, not Unicode case folding. The one exception is the full-text search index (below), which folds case and diacritics in every script.
 
@@ -515,7 +515,7 @@ other apps. It keeps no Lexicon database; the server is the source of truth.
 
 ## Extensive user manual
 
-The [User Guide](web/users/index.html) has step-by-step chapters for all three clients, including [Cards and the card quiz](web/users/cards.html). The technical contracts are in [REST API](docs/rest-api.md) and [export format](docs/export-format.md); export format version 5 includes cards, recurring item-linked alarms, the Board and item-field descriptions.
+The [User Guide](web/users/index.html) has step-by-step chapters for all three clients, including [Cards and the card quiz](web/users/cards.html). The technical contracts are in [REST API](docs/rest-api.md) and [export format](docs/export-format.md); export format version 7 includes cards, recurring item-linked alarms with ASAP and Group metadata, named Boards and item-field descriptions.
 
 ### 1) First launch
 
@@ -594,7 +594,7 @@ You have three add options in the main toolbar, in this order:
 - `Add`: quick add path; title is prefilled from current search text
 - `Add ...`: full add dialog path
 - `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group with the type `Inbox`, whatever the filters show. The first idea creates the `Inbox` type, available in all groups, so an idea keeps it when you move it to its proper group; a type called `Inbox` that is already there - in all groups or in `Default` - is used instead
-- `Board` (`File -> Board...`): opens the one shared Markdown document in reading mode; **Edit** switches to the same source, formatting toolbar and live preview as item content. Saves use a revision check so another client's newer edit is not silently overwritten.
+- `Board` (`File -> Board...`): choose, create, rename or delete named shared Markdown documents, then read or edit one with the same source, formatting toolbar and live preview as item content. A fresh dictionary starts with `Main`, and saves use a revision check so another client's newer edit is not silently overwritten.
 
 Both actions use the selected Type filter for the new item. With `All groups` selected, a group-scoped type also determines the new item's group.
 
@@ -735,7 +735,7 @@ At the end the sitting says how many cards there were and how many you knew and 
 
 ### 13) Alarms
 
-`Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title and the first line of its description. One-time alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a form for the title, date and time, description, repeat interval in days, and optional linked item; **Delete** asks first. Dismissing a repeating alarm schedules its next occurrence from the original time. Snoozing does not move that schedule.
+`Manage -> Alarms...` lists every alarm, the soonest first: when it goes off, its title, ASAP marker, optional Group and the first line of its description. One-time alarms that have already gone off stay in the list, greyed out, until you delete them. **Add...** and **Edit...** (or a double click) open a form for the title, date and time, description, repeat interval in days, optional linked item, **ASAP** and optional free-text **Group**; **Delete** asks first. ASAP and Group organize a reminder without changing when it rings. Dismissing a repeating alarm schedules its next occurrence from the original time. Snoozing does not move that schedule.
 
 Times are entered and shown in your own time zone and stored in UTC, so an alarm set on the desktop in Prague shows the same moment in the web client or on a phone elsewhere. The web client has the same dialog under `Manage -> Alarms...`, and the Android app lists alarms under **Alarms** in the drawer, with date and time pickers. Alarms travel with export and import.
 

@@ -48,8 +48,10 @@ int main() {
 
   lexicon::AlarmRecord repeating{-1, "Repeat", "", "2020-01-01T10:00:00Z", ""};
   repeating.repeatDays = 1; repeating.itemId = *firstId;
+  repeating.asap = true; repeating.group = "Maintenance";
   auto alarm = app.alarms.saveAlarm(repeating);
-  if (!alarm || alarm->itemId != *firstId) return fail("linked alarm was not saved");
+  if (!alarm || alarm->itemId != *firstId || !alarm->asap || alarm->group != "Maintenance")
+    return fail("linked grouped ASAP alarm was not saved");
   auto next = app.alarms.dismissAlarm(alarm->id);
   if (!next || !next->dismissedAt.empty() || next->firesAt <= "2026-01-01T00:00:00Z")
     return fail("repeating alarm did not move to a future day");

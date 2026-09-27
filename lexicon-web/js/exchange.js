@@ -75,7 +75,7 @@ export async function importDictionary() {
         + `${report.itemsSkipped} item(s) were already here. `
         + `Created ${report.groupsCreated} group(s), ${report.typesCreated} type(s) and `
         + `${report.fieldsCreated} field(s).`
-        + (report.boardImported ? ' Imported the Board.' : '');
+        + (report.boardsImported ? ` Imported ${report.boardsImported} Board(s).` : '');
     const warnings = el('ul', { class: 'import-warnings' },
         report.warnings.map((warning) => el('li', { text: warning })));
     await openDialog({

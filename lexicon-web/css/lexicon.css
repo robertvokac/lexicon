@@ -683,6 +683,11 @@ body.resizing { cursor: row-resize; user-select: none; }
     resize: vertical;
 }
 
+.board-list {
+    width: 100%;
+    min-height: 9rem;
+}
+
 .content-split .markdown-preview {
     overflow: auto;
     padding: 8px 10px;

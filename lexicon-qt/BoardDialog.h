@@ -5,12 +5,13 @@
 #include <QDialog>
 
 class QPushButton;
+class QComboBox;
 class QStackedWidget;
 class QTextBrowser;
 class QTextEdit;
 
-// The singleton Markdown Board: read it first, switch to the same source and
-// live-preview editor used for item content, then save without silently
+// Named Markdown Boards: choose, add, rename or delete one, read it first,
+// then switch to the source/live-preview editor and save without silently
 // overwriting a newer edit.
 class BoardDialog : public QDialog {
   Q_OBJECT
@@ -19,7 +20,11 @@ public:
   explicit BoardDialog(QWidget *parent = nullptr);
 
 private:
-  void load();
+  void load(int preferredId = -1);
+  void selectBoard(int index);
+  void addBoard();
+  void renameBoard();
+  void deleteBoard();
   void beginEdit();
   void cancelEdit();
   void save();
@@ -29,6 +34,11 @@ private:
                       const QString &sample = {});
 
   lexicon::BoardRecord board_;
+  std::vector<lexicon::BoardRecord> boards_;
+  QComboBox *boardBox_ = nullptr;
+  QPushButton *newButton_ = nullptr;
+  QPushButton *renameButton_ = nullptr;
+  QPushButton *deleteButton_ = nullptr;
   QStackedWidget *pages_ = nullptr;
   QTextBrowser *view_ = nullptr;
   QTextEdit *source_ = nullptr;

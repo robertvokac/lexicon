@@ -2,7 +2,11 @@ package com.robertvokac.lexicon.ui.board
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,9 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.robertvokac.lexicon.ui.common.ConfirmDialog
+import com.robertvokac.lexicon.ui.common.Choice
+import com.robertvokac.lexicon.ui.common.ChoiceField
 import com.robertvokac.lexicon.ui.common.ErrorBanner
 import com.robertvokac.lexicon.ui.common.ErrorBox
 import com.robertvokac.lexicon.ui.common.LoadingBox
+import com.robertvokac.lexicon.ui.common.TextInputDialog
 import com.robertvokac.lexicon.ui.item.MarkdownEditor
 import com.robertvokac.lexicon.ui.markdown.Markdown
 import com.robertvokac.lexicon.ui.markdown.MarkdownBlocks
@@ -44,6 +51,9 @@ import kotlinx.coroutines.withContext
 fun BoardScreen(viewModel: BoardViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
+    var nameDialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    val selected = state.selected
     val close = {
         if (state.editing && viewModel.hasUnsavedChanges()) confirmDiscard = true else onBack()
     }
@@ -52,7 +62,12 @@ fun BoardScreen(viewModel: BoardViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.editing) "Edit Board" else "Board") },
+                title = {
+                    Text(
+                        if (state.editing) "Edit Board — ${selected?.name.orEmpty()}"
+                        else "Board — ${selected?.name.orEmpty()}",
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = close) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -83,9 +98,66 @@ fun BoardScreen(viewModel: BoardViewModel, onBack: () -> Unit) {
                         state.saveError?.let { ErrorBanner("Not saved: $it") }
                     }
                 }
-                else -> BoardView(state.content)
+                else -> Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    ChoiceField(
+                        label = "Board",
+                        choices = state.boards.map { Choice(it.id, it.name) },
+                        selected = state.selectedId,
+                        onSelected = viewModel::select,
+                        enabled = !state.saving,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        TextButton(onClick = { nameDialog = "new" }, enabled = !state.saving) { Text("New") }
+                        TextButton(onClick = { nameDialog = "rename" }, enabled = !state.saving) { Text("Rename") }
+                        TextButton(
+                            onClick = { confirmDelete = true },
+                            enabled = !state.saving && state.boards.size > 1,
+                        ) { Text("Delete") }
+                    }
+                    state.saveError?.let { ErrorBanner("Not saved: $it") }
+                    Box(Modifier.weight(1f).fillMaxWidth()) { BoardView(state.content) }
+                }
             }
         }
+    }
+
+    nameDialog?.let { action ->
+        TextInputDialog(
+            title = if (action == "new") "New Board" else "Rename Board",
+            label = "Name",
+            initial = if (action == "new") "New Board" else selected?.name.orEmpty(),
+            confirmLabel = if (action == "new") "Create" else "Rename",
+            onConfirm = { name ->
+                nameDialog = null
+                if (action == "new") viewModel.create(name) else viewModel.rename(name)
+            },
+            onDismiss = { nameDialog = null },
+            validate = { name ->
+                when {
+                    name.isBlank() -> "Board name cannot be empty."
+                    state.boards.any {
+                        it.id != (if (action == "rename") state.selectedId else -1) &&
+                            it.name.equals(name.trim(), ignoreCase = true)
+                    } -> "A Board with this name already exists."
+                    else -> null
+                }
+            },
+        )
+    }
+
+    if (confirmDelete && selected != null) {
+        ConfirmDialog(
+            title = "Delete Board",
+            message = "Delete Board '${selected.name}'? Its Markdown content cannot be restored.",
+            confirmLabel = "Delete",
+            onConfirm = { confirmDelete = false; viewModel.deleteSelected() },
+            onDismiss = { confirmDelete = false },
+            destructive = true,
+        )
     }
 
     if (confirmDiscard) {

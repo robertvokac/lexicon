@@ -15,9 +15,10 @@ inline constexpr const char *kFormat = "lexicon-export";
 // The version written. It goes up whenever a reader of the previous one would
 // import a new document by leaving part of it out: version 2 carries cards,
 // version 3 carries alarm recurrence and item links, and version 4 carries
-// the Board. Version 5 carries item-field descriptions. Every version from
-// 1 up is read.
-inline constexpr int kVersion = 5;
+// the original Board. Version 5 carries item-field descriptions, and version
+// 6 carries every named Board, and version 7 carries alarm ASAP and Group.
+// Every version from 1 up is read.
+inline constexpr int kVersion = 7;
 inline constexpr int kOldestVersion = 1;
 
 // With `includeFiles`, the contents of every file a value refers to travel in

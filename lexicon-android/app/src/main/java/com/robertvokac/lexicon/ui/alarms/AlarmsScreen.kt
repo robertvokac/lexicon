@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -389,9 +390,11 @@ private fun AlarmRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (alarm.repeatDays > 0 || alarm.itemId != null) {
+            if (alarm.asap || alarm.group.isNotBlank() || alarm.repeatDays > 0 || alarm.itemId != null) {
                 Text(
                     listOfNotNull(
+                        "ASAP".takeIf { alarm.asap },
+                        alarm.group.takeIf { it.isNotBlank() }?.let { "Group: $it" },
                         alarm.repeatDays.takeIf { it > 0 }?.let { "Every $it day(s)" },
                         alarm.itemId?.let { "Item #$it" },
                     ).joinToString(" · "),
@@ -424,6 +427,8 @@ private fun AlarmDialog(
 ) {
     val start = AlarmTimes.toLocal(initial?.firesAt ?: AlarmTimes.nextFullHour())
     var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
+    var asap by rememberSaveable { mutableStateOf(initial?.asap ?: false) }
+    var group by rememberSaveable { mutableStateOf(initial?.group.orEmpty()) }
     var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
     var date by rememberSaveable { mutableStateOf(start?.first.orEmpty()) }
     var time by rememberSaveable { mutableStateOf(start?.second.orEmpty()) }
@@ -452,6 +457,18 @@ private fun AlarmDialog(
                     singleLine = true,
                     isError = titleError != null,
                     supportingText = titleError,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = asap, onCheckedChange = { asap = it; onEdited() })
+                    Text("ASAP — as soon as possible")
+                }
+                SyncedTextField(
+                    value = group,
+                    onValueChange = { group = it; onEdited() },
+                    label = "Group",
+                    singleLine = true,
+                    supportingText = "Optional text used to group alarms.",
                     modifier = Modifier.fillMaxWidth(),
                 )
                 SyncedTextField(
@@ -521,7 +538,17 @@ private fun AlarmDialog(
                         title.isBlank() -> titleError = "Enter a title."
                         firesAt == null -> timeError = "Enter a date as YYYY-MM-DD and a time as HH:MM."
                         days == null || days !in 0..365 -> repeatError = "Repeat every 0 to 365 days."
-                        else -> onConfirm(AlarmWrite(title.trim(), description, firesAt, days, itemId))
+                        else -> onConfirm(
+                            AlarmWrite(
+                                title = title.trim(),
+                                description = description,
+                                firesAt = firesAt,
+                                repeatDays = days,
+                                itemId = itemId,
+                                asap = asap,
+                                group = group,
+                            ),
+                        )
                     }
                 },
             ) { Text(if (busy) "Saving…" else "Save") }

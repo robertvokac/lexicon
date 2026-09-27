@@ -8,6 +8,8 @@ import { button, clear, el } from './utils.js';
 
 async function alarmDialog(alarm) {
     const title = el('input', { type: 'text', value: alarm.title || '', required: true, id: 'alarm-title' });
+    const asap = el('input', { type: 'checkbox', checked: Boolean(alarm.asap), id: 'alarm-asap' });
+    const group = el('input', { type: 'text', value: alarm.group || '', id: 'alarm-group' });
     const firesAt = el('input', { type: 'datetime-local', id: 'alarm-fires-at',
         value: utcToLocalInput(alarm.firesAt || nextFullHour()) });
     const description = el('textarea', { rows: '5', id: 'alarm-description' });
@@ -31,6 +33,8 @@ async function alarmDialog(alarm) {
         title: alarm.id ? 'Edit alarm' : 'Add alarm',
         body: el('div', {}, [
             field('Title:', title),
+            field('ASAP:', asap, 'As soon as possible.'),
+            field('Group:', group, 'Optional text used to group alarms.'),
             field('Goes off:', firesAt, 'In your local time.'),
             field('Repeat every (days):', repeatDays, '0 means one time.'),
             field('Item:', item),
@@ -53,6 +57,7 @@ async function alarmDialog(alarm) {
                 return undefined;
             }
             const values = { title: title.value.trim(), description: description.value, firesAt: utc,
+                asap: asap.checked, group: group.value,
                 repeatDays: days, itemId: item.value ? Number(item.value) : null };
             // A refused save keeps the dialog open with the reason.
             return alarm.id ? api.updateAlarm(alarm.id, values) : api.createAlarm(values);
@@ -98,6 +103,8 @@ export async function openAlarms({ onChange } = {}) {
         el('thead', {}, [el('tr', {}, [
             el('th', { text: 'Goes off' }),
             el('th', { text: 'Title' }),
+            el('th', { text: 'ASAP' }),
+            el('th', { text: 'Group' }),
             el('th', { text: 'Repeats' }),
             el('th', { text: 'Item' }),
             el('th', { text: 'Description' }),
@@ -141,6 +148,8 @@ export async function openAlarms({ onChange } = {}) {
             }, [
                 el('td', { class: 'alarm-when', text: formatAlarmTime(alarm.firesAt) }),
                 el('td', { text: alarm.title }),
+                el('td', { text: alarm.asap ? 'Yes' : 'No' }),
+                el('td', { text: alarm.group || '' }),
                 el('td', { text: alarm.repeatDays ? `Every ${alarm.repeatDays} day(s)` : 'Once' }),
                 el('td', { text: alarm.itemId ? `#${alarm.itemId}` : '' }),
                 el('td', { class: 'alarm-description', text: alarm.description.split('\n')[0],
@@ -149,7 +158,7 @@ export async function openAlarms({ onChange } = {}) {
             body.appendChild(row);
         }
         if (!alarms.length) {
-            body.appendChild(el('tr', {}, [el('td', { colspan: '5', class: 'empty', text: 'No alarms yet.' })]));
+            body.appendChild(el('tr', {}, [el('td', { colspan: '7', class: 'empty', text: 'No alarms yet.' })]));
         }
         const upcoming = alarms.filter((alarm) => !hasGoneOff(alarm.firesAt, now)).length;
         summary.textContent = alarms.length ? `${alarms.length} alarm(s), ${upcoming} still to go off` : '';

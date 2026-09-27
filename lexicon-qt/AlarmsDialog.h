@@ -8,6 +8,7 @@
 #include <vector>
 
 class QDateTimeEdit;
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -37,6 +38,8 @@ private:
 
     lexicon::AlarmRecord m_alarm;
     QLineEdit* m_title = nullptr;
+    QCheckBox* m_asap = nullptr;
+    QLineEdit* m_group = nullptr;
     QPlainTextEdit* m_description = nullptr;
     QDateTimeEdit* m_firesAt = nullptr;
     QSpinBox* m_repeatDays = nullptr;

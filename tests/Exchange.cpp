@@ -110,7 +110,14 @@ int main() {
   lexicon::AlarmRecord reminder{-1, "Review Monoid", "", "2030-01-01T09:00:00Z", ""};
   reminder.repeatDays = 7;
   reminder.itemId = monoidId;
+  reminder.asap = true;
+  reminder.group = "Learning";
   check(app.alarms.saveAlarm(reminder).has_value(), "a recurring item-linked alarm");
+  auto mainBoard = value(app.board.loadAll(), "load Main Board").front();
+  mainBoard.content = "# Main\n\nShared overview.";
+  value(app.board.save(mainBoard), "write Main Board");
+  value(app.board.create({-1, "Work", "# Work\n\n- Ship it", 0}),
+        "create Work Board");
 
   // Cards travel with their item and keep their statistics. Two cards may
   // ask the same thing; neither is dropped.
@@ -128,12 +135,16 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
-  // Version 5: an older reader would drop field descriptions without a
+  // Version 7: an older reader would drop alarm ASAP and Group without a
   // word, so it refuses the document instead.
-  check(exported.value("version", 0) == 5, "the export is format version 5");
+  check(exported.value("version", 0) == 7, "the export is format version 7");
+  check(exported.contains("boards") && exported.at("boards").size() == 2,
+        "the export holds every named Board");
   check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&
-            exported.at("alarms").at(0).value("itemId", 0) == monoidId,
-        "recurrence and linked item are exported");
+            exported.at("alarms").at(0).value("itemId", 0) == monoidId &&
+            exported.at("alarms").at(0).value("asap", false) &&
+            exported.at("alarms").at(0).value("group", std::string{}) == "Learning",
+        "recurrence, linked item, ASAP and Group are exported");
   check(exported.contains("cards") && exported.at("cards").size() == 4, "the export holds every card");
   if (exported.contains("cards") && exported.at("cards").size() == 4) {
     const auto &card = exported.at("cards").at(0);
@@ -153,6 +164,12 @@ int main() {
   check(report.linksCreated == 2 && report.blobsImported == 1, "both links and the file arrive");
   check(report.groupsCreated == 1 && report.typesCreated == 2 && report.fieldsCreated == 3,
         "Maths, both types and their fields are created, Default is reused");
+  check(report.boardsImported == 2, "both Boards are imported");
+  const auto copiedBoards = value(copy.app.board.loadAll(), "copied Boards");
+  check(copiedBoards.size() == 2 && copiedBoards[0].name == "Main" &&
+            copiedBoards[0].content == "# Main\n\nShared overview." &&
+            copiedBoards[1].name == "Work",
+        "named Board content survives export and import");
   check(report.warnings.empty(), "nothing needed a warning");
   const int copied = copy.itemNamed("Monoid");
   const auto restored = value(copy.app.items.loadItem(copied), "load the imported Monoid");
@@ -190,8 +207,9 @@ int main() {
   check(value(copy.app.cards.loadCards(copy.itemNamed("Semigroup")), "the imported cards of Semigroup").size() == 1,
         "each card goes to its own item");
   const auto copiedAlarms = value(copy.app.alarms.loadAlarms(), "copied alarms");
-  check(copiedAlarms.size() == 1 && copiedAlarms[0].repeatDays == 7 && copiedAlarms[0].itemId == copied,
-        "the recurring alarm follows its imported item");
+  check(copiedAlarms.size() == 1 && copiedAlarms[0].repeatDays == 7 && copiedAlarms[0].itemId == copied &&
+            copiedAlarms[0].asap && copiedAlarms[0].group == "Learning",
+        "the recurring grouped ASAP alarm follows its imported item");
 
   // Again: nothing is duplicated.
   const auto again = value(lexicon::exchange::importDocument(copy.app, withFiles), "import a second time");
@@ -201,6 +219,7 @@ int main() {
   check(copy.itemCount() == 3, "still three items");
   check(again.cardsCreated == 0 && value(copy.app.cards.loadCards(copied), "cards after a second import").size() == 3,
         "and no card twice");
+  check(again.boardsImported == 0, "and no Board twice");
 
   // Into a database whose Concept is shaped differently.
   Database other(directory.path / "other");
@@ -250,6 +269,7 @@ int main() {
   auto legacy = nlohmann::json::parse(withoutFiles);
   legacy["version"] = 1;
   legacy.erase("cards");
+  legacy.erase("boards");
   Database old(directory.path / "legacy");
   const auto fromLegacy = value(lexicon::exchange::importDocument(old.app, legacy.dump()),
                                 "import an export without cards");
@@ -276,7 +296,7 @@ int main() {
   };
   refused("not json", "text that is not JSON");
   refused(R"({"format":"something-else","version":1})", "another format");
-  refused(R"({"format":"lexicon-export","version":6,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":8,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
   refused(R"({"format":"lexicon-export","version":0,"groups":[],"types":[],"items":[],"links":[]})", "version 0");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[{"id":1}],"links":[]})",
           "an item without a title");

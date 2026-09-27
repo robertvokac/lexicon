@@ -1057,13 +1057,15 @@ void checkAlarms(Checks &checks) {
   checks.expect(parse(client.get("/api/v1/alarms")).at("alarms").empty(), "there are no alarms at first");
 
   const auto created = client.post("/api/v1/alarms",
-                                   R"({"title":" Dentist ","description":"Bring the card.","firesAt":"2026-10-02T08:30Z"})");
+                                   R"({"title":" Dentist ","description":"Bring the card.","firesAt":"2026-10-02T08:30Z","asap":true,"group":"Health"})");
   checks.expectEqual(created.status, 201, "an alarm can be created");
   const auto alarm = parse(created).at("alarm");
   const int alarmId = alarm.value("id", 0);
   checks.expect(alarmId > 0, "and gets an ID");
   checks.expectEqual(alarm.value("title", std::string{}), "Dentist", "its title is trimmed");
   checks.expectEqual(alarm.value("firesAt", std::string{}), "2026-10-02T08:30:00Z", "its time gets seconds");
+  checks.expect(alarm.value("asap", false) && alarm.value("group", std::string{}) == "Health",
+                "its ASAP flag and Group round-trip");
   client.post("/api/v1/alarms", R"({"title":"Standup","firesAt":"2026-09-30T07:00:00Z"})");
 
   const auto list = parse(client.get("/api/v1/alarms")).at("alarms");
@@ -1072,10 +1074,14 @@ void checkAlarms(Checks &checks) {
   checks.expectEqual(list.at(1).value("description", std::string{}), "Bring the card.", "with its description");
 
   const auto path = "/api/v1/alarms/" + std::to_string(alarmId);
-  const auto updated = client.put(path, R"({"title":"Dentist","description":"","firesAt":"2026-10-03T09:00:00Z"})");
+  const auto updated = client.put(path, R"({"title":"Dentist","description":"","firesAt":"2026-10-03T09:00:00Z","asap":false,"group":"Personal"})");
   checks.expectEqual(updated.status, 200, "an alarm can be changed");
   checks.expectEqual(parse(client.get(path)).at("alarm").value("firesAt", std::string{}), "2026-10-03T09:00:00Z",
                      "and keeps the new time");
+  const auto changedAlarm = parse(client.get(path)).at("alarm");
+  checks.expect(!changedAlarm.value("asap", true) &&
+                    changedAlarm.value("group", std::string{}) == "Personal",
+                "ASAP and Group can be changed");
 
   checks.expectEqual(client.post("/api/v1/alarms", R"({"title":" ","firesAt":"2026-10-02T08:30:00Z"})").status, 400,
                      "an alarm needs a title");
@@ -1175,7 +1181,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
-  checks.expectEqual(document.value("version", 0), 5, "of format version 5");
+  checks.expectEqual(document.value("version", 0), 7, "of format version 7");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");
@@ -1372,17 +1378,23 @@ void checkBoard(Checks &checks) {
   ServerHarness harness;
   Session session(harness, checks);
   auto &client = session.client();
-  const auto initial = client.get("/api/v1/board");
-  checks.expectEqual(initial.status, 200, "the Board can be loaded");
-  const auto first = parse(initial).at("board");
+  const auto initial = client.get("/api/v1/boards");
+  checks.expectEqual(initial.status, 200, "Boards can be loaded");
+  const auto listed = parse(initial).at("boards");
+  checks.expectEqual(listed.size(), std::size_t{1}, "a fresh database has one Board");
+  const auto first = listed.at(0);
+  checks.expectEqual(first.value("name", std::string{}), "Main",
+                     "the initial Board is named Main");
   checks.expectEqual(first.value("content", std::string{}), "",
                      "a new Board is empty");
+  const int mainId = first.value("id", 0);
   const int revision = first.value("revision", 0);
-  checks.expect(revision > 0, "the Board has a revision");
+  checks.expect(mainId > 0 && revision > 0, "the Board has an ID and revision");
 
   const auto updated = client.put(
-      "/api/v1/board",
-      Json{{"content", "# Today\n\n- Finish the Board"},
+      "/api/v1/boards/" + std::to_string(mainId),
+      Json{{"name", "Main"},
+           {"content", "# Today\n\n- Finish the Board"},
            {"revision", revision}}
           .dump());
   checks.expectEqual(updated.status, 200, "the Board can be saved");
@@ -1394,15 +1406,36 @@ void checkBoard(Checks &checks) {
                      "saving advances the Board revision");
 
   const auto stale = client.put(
-      "/api/v1/board",
-      Json{{"content", "stale"}, {"revision", revision}}.dump());
+      "/api/v1/boards/" + std::to_string(mainId),
+      Json{{"name", "Main"}, {"content", "stale"}, {"revision", revision}}.dump());
   checks.expectEqual(stale.status, 409, "a stale Board save is refused");
   checks.expect(stale.body.find("changed elsewhere") != std::string::npos,
                 "the conflict explains why");
 
+  const auto created = client.post(
+      "/api/v1/boards",
+      Json{{"name", "Work"}, {"content", "# Work"}}.dump());
+  checks.expectEqual(created.status, 201, "a second Board can be created");
+  const auto work = parse(created).at("board");
+  const int workId = work.value("id", 0);
+  checks.expect(workId > 0 && work.value("name", std::string{}) == "Work" &&
+                    work.value("content", std::string{}) == "# Work",
+                "the named Board round-trips");
+  checks.expectEqual(client.get("/api/v1/boards/" + std::to_string(workId)).status,
+                     200, "one Board can be loaded by ID");
+  checks.expectEqual(client.post("/api/v1/boards", Json{{"name", " work "}}.dump()).status,
+                     400, "Board names are unique ignoring case");
+  checks.expectEqual(client.remove("/api/v1/boards/" + std::to_string(workId)).status,
+                     204, "a Board can be deleted");
+  checks.expectEqual(client.remove("/api/v1/boards/" + std::to_string(mainId)).status,
+                     400, "the last Board cannot be deleted");
+
+  checks.expectEqual(client.get("/api/v1/board").status, 200,
+                     "the singleton compatibility endpoint still loads Main");
+
   HttpTestClient anonymous("127.0.0.1", harness.port());
-  checks.expectEqual(anonymous.get("/api/v1/board").status, 401,
-                     "the Board needs a session");
+  checks.expectEqual(anonymous.get("/api/v1/boards").status, 401,
+                     "Boards need a session");
 }
 
 // The static client the server can serve itself: --web-dir in the config.

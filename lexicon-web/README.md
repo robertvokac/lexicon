@@ -23,7 +23,7 @@ lexicon-web/
 │   ├── api.js            the only module that speaks HTTP
 │   ├── account.js        password and session management
 │   ├── app.js            shell, login, menus, themes
-│   ├── alarms.js         recurring reminders and linked items
+│   ├── alarms.js         recurring reminders, linked items, ASAP and Group
 │   ├── cardquiz.js       one sitting of a card quiz, without the page
 │   ├── cards.js          an item's cards and the card quiz
 │   ├── dialogs.js        modal dialogs and list editors
@@ -240,10 +240,10 @@ Everything below behaves the same way in both:
 | Type change confirmation before field values are discarded | the same confirmation and counts |
 | Overwrite, Reload or Cancel when the item was saved elsewhere in the meantime | the same choice, also for a restored draft |
 | **Inbox**: a title and plain text saved to Default with the type Inbox | the same button, in the overflow menu on a phone |
-| **Board**: one shared rendered Markdown document with an editor | the same button beside Inbox, in the overflow menu on a phone |
+| **Boards**: named shared rendered Markdown documents with create, rename, delete and an editor | the same button beside Inbox, in the overflow menu on a phone |
 | `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
 | Image values: thumbnail, **Choose image...**, **View...**, **Save as...**, **Clear**, pictures in the preview | the same, pictures fetched with the session and shown from `blob:` URLs (`js/images.js`, `js/imagevalue.js`) |
-| `Manage -> Alarms...`: the alarms in a table, add, edit, delete | the same table and form, the time in the browser's time zone (`js/alarms.js`, `js/alarmtime.js`) |
+| `Manage -> Alarms...`: the alarms in a table, add, edit, delete | the same table and form, including ASAP and optional Group, with the time in the browser's time zone (`js/alarms.js`, `js/alarmtime.js`) |
 | The **Alarm** window with Dismiss and Snooze, and a tray notification, while the client runs | a panel over the page and a browser notification while the page is open, asked for every 30 seconds and when the tab comes back (`js/alarmbell.js`) |
 | `PropertyFilterDialog` (key exact, value contains, empty value matches any) | the same semantics with Add/Edit/Remove/Clear/Apply |
 | `ValueListDialog` for all tags, flags and aliases | the same value and usage count tables |

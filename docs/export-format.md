@@ -1,7 +1,7 @@
 # Lexicon export format
 
 A Lexicon export is the whole dictionary - groups, types with their fields,
-items, links, alarms, cards, the Board and, optionally, the files that values refer to -
+items, links, alarms, cards, Boards and, optionally, the files that values refer to -
 as one UTF-8 JSON document. Every client writes and reads the same format:
 
 | Where | Export | Import |
@@ -34,7 +34,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 5,
+  "version": 7,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -58,13 +58,16 @@ and keep the files as files, shared between backups.
   ],
   "alarms": [
     { "id": 4, "title": "Dentist", "description": "Bring the card.", "firesAt": "2026-10-02T08:30:00Z",
-      "dismissedAt": null, "repeatDays": 7, "itemId": 7 }
+      "dismissedAt": null, "repeatDays": 7, "itemId": 7, "asap": true, "group": "Health" }
   ],
   "cards": [
     { "id": 12, "itemId": 7, "question": "What is a monoid?", "answer": "A semigroup with a unit.",
       "successCount": 4, "failureCount": 2, "lastAttempt": "2026-09-24T14:00:00Z" }
   ],
-  "board": { "content": "# Team Board\n\n- Ship it", "revision": 5 },
+  "boards": [
+    { "id": 1, "name": "Main", "content": "# Team Board\n\n- Ship it", "revision": 5 },
+    { "id": 2, "name": "Work", "content": "# Work", "revision": 2 }
+  ],
   "blobs": [
     { "hash": "6c7dbba2...99d98ca", "data": "iVBORw0KGgo..." }
   ]
@@ -73,7 +76,7 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 5.
+  before anything is written. This document describes version 7.
 - **Versions.** The version goes up whenever a reader of the previous one
   would import a new document by leaving part of it out - silently losing
   data - rather than refusing it:
@@ -85,6 +88,8 @@ and keep the files as files, shared between backups.
   | 3 | Lexicon with recurring alarms | `repeatDays` and linked `itemId` on alarms |
   | 4 | Lexicon with the Board | singleton Markdown `board` |
   | 5 | Lexicon with described fields | `description` on item fields |
+  | 6 | Lexicon with named Boards | all named Markdown documents in `boards` |
+  | 7 | Lexicon with organized alarms | `asap` and `group` on alarms |
 
   A reader takes every version up to its own and refuses a newer one: an
   older Lexicon says it does not know version 3 instead of importing it
@@ -100,7 +105,9 @@ and keep the files as files, shared between backups.
 - `alarms` holds every alarm, with `firesAt` and `dismissedAt` in UTC, so an
   alarm that was dismissed does not ring again after an import. `repeatDays`
   is 0 for a one-time alarm or 1–365 for a recurring interval. An optional
-  `itemId` links to an exported item and is mapped to its imported ID.
+  `itemId` links to an exported item and is mapped to its imported ID. `asap`
+  marks an alarm as needing attention as soon as possible; `group` is an
+  optional free-text grouping label.
   Documents
   written before alarms existed have no `alarms`; they import as before.
 - `cards` holds every card with its `itemId`, `question`, `answer` and
@@ -147,9 +154,10 @@ part fails, nothing is written.
   blank question or answer, a negative count, a `lastAttempt` that is not a
   UTC time, or answers without a `lastAttempt` (or the other way round) fails
   the import.
-- **Board** content is imported when the destination Board is empty. The same
-  content is a no-op; different existing content is kept and reported as a
-  warning, so importing never destroys a Board already in use.
+- **Boards** are matched by name ignoring ASCII case. A missing named Board is
+  created; content fills an empty Board, while different existing content is
+  kept and reported as a warning. Import therefore never destroys a Board
+  already in use. A version 4 or 5 singleton `board` is imported as `Main`.
 
 Importing the same document twice therefore changes nothing the second time.
 The import answers with a report:
@@ -157,7 +165,7 @@ The import answers with a report:
 ```json
 { "groupsCreated": 1, "typesCreated": 2, "fieldsCreated": 3, "itemsCreated": 3,
   "itemsSkipped": 0, "linksCreated": 2, "blobsImported": 1, "alarmsCreated": 0,
-  "cardsCreated": 4, "warnings": [] }
+  "cardsCreated": 4, "boardsImported": 2, "warnings": [] }
 ```
 
 An import is a merge, not a restore: it never deletes, renames or edits what

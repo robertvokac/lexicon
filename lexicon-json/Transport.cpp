@@ -302,7 +302,10 @@ Json toJson(const ItemRecord &item) {
 }
 
 Json toJson(const BoardRecord &board) {
-  return Json{{"content", board.content}, {"revision", board.revision}};
+  return Json{{"id", board.id},
+              {"name", board.name},
+              {"content", board.content},
+              {"revision", board.revision}};
 }
 
 Json toJson(const AlarmRecord &alarm) {
@@ -310,6 +313,8 @@ Json toJson(const AlarmRecord &alarm) {
               {"title", alarm.title},
               {"description", alarm.description},
               {"firesAt", alarm.firesAt},
+              {"asap", alarm.asap},
+              {"group", alarm.group},
               {"repeatDays", alarm.repeatDays},
               {"itemId", alarm.itemId > 0 ? Json(alarm.itemId) : Json(nullptr)},
               {"dismissedAt", alarm.dismissedAt.empty() ? Json(nullptr) : Json(alarm.dismissedAt)}};
@@ -322,6 +327,8 @@ AlarmRecord alarmFromJson(const Json &json) {
   alarm.title = requiredString(json, "title");
   alarm.description = optionalString(json, "description");
   alarm.firesAt = requiredString(json, "firesAt");
+  alarm.asap = optionalBool(json, "asap", false);
+  alarm.group = optionalString(json, "group");
   alarm.repeatDays = optionalInt(json, "repeatDays", 0);
   alarm.itemId = optionalId(json, "itemId");
   // Read on creation only, so an imported alarm that was dismissed stays so.
@@ -504,6 +511,8 @@ ItemRecord itemFromJson(const Json &json) {
 BoardRecord boardFromJson(const Json &json) {
   requireObject(json, "Board");
   BoardRecord board;
+  board.id = optionalInt(json, "id", -1);
+  board.name = optionalString(json, "name");
   board.content = optionalString(json, "content");
   board.revision = std::max(0, optionalInt(json, "revision", 0));
   return board;

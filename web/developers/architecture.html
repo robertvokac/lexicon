@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Architecture — Lexicon Developer Docs</title>
-<meta name="description" content="Lexicon architecture: targets and dependencies, transactions and revisions, the singleton Markdown Board, search, files and images, the server and the clients.">
+<meta name="description" content="Lexicon architecture: targets and dependencies, transactions and revisions, named Markdown Boards, search, files and images, the server and the clients.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -64,7 +64,7 @@
     <h2 id="layers">Targets and dependencies</h2>
     <table>
       <tr><th>Target</th><th>Responsibility and dependencies</th></tr>
-      <tr><td><code>lexicon-core</code></td><td>Records, validation, comparison policy, review intervals, wiki link syntax, Image values and the singleton Board record. Standard C++ only.</td></tr>
+      <tr><td><code>lexicon-core</code></td><td>Records, validation, comparison policy, review intervals, wiki link syntax, Image values and Board records. Standard C++ only.</td></tr>
       <tr><td><code>lexicon-application</code></td><td>Services and the <code>Repository</code> interface. Depends on core only.</td></tr>
       <tr><td><code>lexicon-storage-sqlite</code></td><td>Native SQLite implementation of <code>Repository</code>: migrations, transactions, the search index, Blob files. Depends on application, SQLite C API, and OpenSSL Crypto. No Qt.</td></tr>
       <tr><td><code>lexicon-json</code></td><td>The JSON form of records, shared by the REST API and the export format; export and import. No Qt.</td></tr>
@@ -97,8 +97,8 @@
     <h2 id="cards">Cards and the quiz</h2>
     <p>A card is a question and an answer about one item, with two counts and the time of the last attempt. <code>CardService</code> adds, edits and deletes cards, records a Yes or a No, and gathers the cards of a quiz: those of one item, or of its relationship neighbourhood at 1 to 3 links, found by <code>LinkService::neighborhood</code> — the same breadth-first walk the graph draws, so a quiz covers exactly the items the graph shows. An answer is one <code>UPDATE</code> that increments the count and stamps the database clock, so concurrent answers are never lost. Cards stay out of the item's <code>revision</code>, its full-text index and its Review schedule: a quiz answer never changes <code>understanding</code>, <code>reviewedAt</code> or <code>reviewDueAt</code>, and every client manages cards in a dialog or screen of their own rather than in the item editor's Save.</p>
 
-    <h2 id="board">The singleton Board</h2>
-    <p><code>BoardService</code> exposes one <code>BoardRecord</code> with Markdown <code>content</code> and a <code>revision</code>. It is deliberately independent of items: there is no ID in the public model, title, group, type, field value, search index or Review state. The repository stores exactly row 1 in the <code>board</code> table, and compare-and-swap revision checks prevent two clients from silently replacing each other's text. REST exposes the same operation as <code>GET</code> and <code>PUT /api/v1/board</code>. Export format version 4 carries the Board; import fills an empty destination Board but preserves different existing content.</p>
+    <h2 id="board">Named Boards</h2>
+    <p><code>BoardService</code> exposes named <code>BoardRecord</code>s with an ID, Markdown <code>content</code> and a <code>revision</code>. They are deliberately independent of items: there is no item group, type, field value, search index or Review state. A new database starts with <code>Main</code>; clients can create, rename and delete Boards while the final one is protected. Per-Board compare-and-swap revision checks prevent clients from silently replacing each other's text. REST exposes CRUD at <code>/api/v1/boards</code>, while the old singular endpoint remains for compatibility. Export format version 6 introduced all named Boards; import matches them by name and preserves different existing content.</p>
 
     <h2 id="search">Search</h2>
     <p>Where SQLite has FTS5, item content, titles, aliases, tags and flags are indexed with <code>unicode61 remove_diacritics 2</code>, so a search folds case and diacritics in every script. The index keeps the revision it last saw of each item and catches up lazily before a search, so changes made by another program are found too. Without FTS5 the search falls back to substring matching. Results rank exact titles first, then aliases, prefixes and matches in the content.</p>
@@ -124,7 +124,7 @@
     <p><code>LexiconServer</code> is a single-user server: one account, created on the server machine with <code>auth set-user</code>, a scrypt password hash, and bearer-token sessions that survive a restart. It serves JSON under <code>/api/v1</code>, and web assets only when asked: <code>--web-dir</code> mounts one directory — a copy of <code>lexicon-web</code> — read-only under <code>/web</code>, where the client is same-origin and needs no CORS. Deployed anywhere else, a browser reaches the API only from the origins given with <code>--allowed-origin</code>. With <code>--backup-dir</code> it backs itself up. See <code>docs/rest-api.md</code> and <code>docs/server.md</code>.</p>
 
     <h2 id="clients">The clients</h2>
-    <p>The desktop, web and Android clients show and edit the same things — items, types, links, review, cards and their quiz, alarms, images and the shared Board — each in its own idiom. Alarms ring in every client, and the server keeps which ones were dismissed, so a dismissal anywhere stops them everywhere. The Android app keeps no copy of the dictionary; only Inbox ideas caught without a connection wait on the phone until the server takes them.</p>
+    <p>The desktop, web and Android clients show and edit the same things — items, types, links, review, cards and their quiz, alarms, images and named shared Boards — each in its own idiom. Alarms ring in every client, and the server keeps which ones were dismissed, their recurrence, ASAP marker and optional Group, so a dismissal anywhere stops them everywhere. The Android app keeps no copy of the dictionary; only Inbox ideas caught without a connection wait on the phone until the server takes them.</p>
 
     <div class="page-nav">
       <a class="prev" href="building.html"><span class="dir">← Previous</span>Building from source</a>

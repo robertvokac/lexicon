@@ -397,6 +397,26 @@ void applyMigrations(const Connection &db) {
         }},
         {30, {
             "ALTER TABLE item_field ADD COLUMN description TEXT NOT NULL DEFAULT '';"
+        }},
+        {31, {
+            // Boards are named Markdown documents now. Preserve the singleton
+            // as Main while removing the old id = 1 restriction.
+            "ALTER TABLE board RENAME TO board_singleton;",
+            "CREATE TABLE board ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " name TEXT NOT NULL COLLATE NOCASE UNIQUE "
+            "   CHECK(TRIM(name, ' ' || char(9, 10, 11, 12, 13)) <> ''),"
+            " content TEXT NOT NULL DEFAULT '',"
+            " revision INTEGER NOT NULL DEFAULT 1"
+            ");",
+            "INSERT INTO board(id, name, content, revision) "
+            "SELECT id, 'Main', content, revision FROM board_singleton;",
+            "DROP TABLE board_singleton;"
+        }},
+        {32, {
+            "ALTER TABLE alarm ADD COLUMN asap INTEGER NOT NULL DEFAULT 0 "
+            "CHECK(asap IN (0, 1));",
+            "ALTER TABLE alarm ADD COLUMN \"group\" TEXT NOT NULL DEFAULT '';"
         }}
     };
 

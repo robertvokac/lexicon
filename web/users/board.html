@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Board — Lexicon</title>
-<meta name="description" content="Use the Lexicon Board as one shared Markdown document across the desktop, web and Android clients, with rendered reading and source/preview editing modes.">
+<meta name="description" content="Use named Lexicon Boards as shared Markdown documents across the desktop, web and Android clients, with rendered reading and source/preview editing modes.">
 <link rel="icon" type="image/png" href="../assets/img/appicon.png">
 <link rel="stylesheet" href="../css/style.css">
 <script>(function(){var t;try{t=localStorage.getItem("lexicon-theme")}catch(e){}if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.setAttribute("data-theme",t)})();</script>
@@ -61,15 +61,15 @@
   <main class="docs-content">
     <p class="breadcrumbs"><a href="../index.html">Home</a> / <a href="index.html">Users</a> / Board</p>
     <h1>Board</h1>
-    <p class="lead">The Board is one shared Markdown document for information that should stay visible without becoming a collection of separate items — a dashboard, current priorities, a reading list, or whatever belongs on your front wall.</p>
+    <p class="lead">Boards are named shared Markdown documents for information that should stay visible without becoming separate dictionary items — dashboards, current priorities, reading lists, or whatever belongs on your front wall.</p>
 
-    <h2 id="one-document">One shared document</h2>
-    <p>There is exactly one Board for the whole dictionary. It has no title, group, type, fields or other item metadata. Open it from any client and you see the same content; save it in one client and the next client loads that change.</p>
-    <p>The Board starts empty. Markdown gives it structure: headings, emphasis, lists, quotes, links, code and tables all render into a clean reading view.</p>
+    <h2 id="one-document">Named shared documents</h2>
+    <p>A dictionary can contain any number of Boards. Each has a unique name but no group, type, fields or other item metadata. A new dictionary starts with an empty Board named <code>Main</code>; create, rename or delete additional Boards in any client, while the final Board is kept.</p>
+    <p>Open a Board from any client and you see the same content; save it in one client and the next client loads that change. Markdown gives every Board structure: headings, emphasis, lists, quotes, links, code and tables all render into a clean reading view.</p>
 
     <div class="callout callout-tip">
       <span class="callout-icon">💡</span>
-      <p><strong>Board or item?</strong> Use the Board for one living overview. Use an <a href="editing-items.html">item</a> when the note needs its own title, metadata, search result, relationships or review schedule.</p>
+      <p><strong>Board or item?</strong> Use Boards for living overviews. Use an <a href="editing-items.html">item</a> when the note needs item metadata, a search result, relationships or a review schedule.</p>
     </div>
 
     <h2 id="open">Open the Board</h2>
@@ -82,11 +82,11 @@
 
     <h2 id="edit">Read and edit</h2>
     <ol class="steps">
-      <li>Opening Board first shows the rendered document. An empty Board says so instead of showing a blank screen.</li>
+      <li>Opening Board shows the available names. Choose one, or create, rename or delete a Board. An empty Board says so instead of showing a blank screen.</li>
       <li>Choose <strong>Edit</strong>. The editor uses the same Markdown experience as the Content tab of an item, including the formatting toolbar and source/preview views.</li>
       <li>Choose <strong>Save</strong> to publish the new version. Cancel or go back to leave the stored Board unchanged; Android warns before discarding unsaved text.</li>
     </ol>
-    <p>Because it is a single document, headings make a useful permanent outline. A small example:</p>
+    <p>Within each document, headings make a useful permanent outline. A small example:</p>
     <pre><code># Board
 
 ## Now
@@ -99,7 +99,7 @@
 
     <h2 id="safety">Concurrent edits and backup</h2>
     <p>Every saved Board has a revision. If another client saves after you opened the editor, your older save is refused instead of silently overwriting the newer text. Reload to take the newer version, keep editing, or deliberately overwrite it where the client offers that choice.</p>
-    <p>The Board is stored inside <code>lexicon.db</code>. A full database backup includes it, and portable export format version 4 carries it too. Import fills an empty Board, but keeps a different Board that is already in use and reports a warning — it never replaces existing Board text silently.</p>
+    <p>Boards are stored inside <code>lexicon.db</code>. A full database backup includes all of them, and portable export format version 7 carries their names and content. Import matches Boards by name, creates missing ones and fills empty ones, but keeps different existing content and reports a warning — it never replaces Board text silently.</p>
 
     <div class="page-nav">
       <a class="prev" href="inbox.html"><span class="dir">← Previous</span>Inbox</a>

@@ -1,6 +1,7 @@
 #include "AlarmsDialog.h"
 
 #include <QDateTimeEdit>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -30,11 +31,17 @@ std::string toUtcText(const QDateTime& local) {
 AlarmEditDialog::AlarmEditDialog(const lexicon::AlarmRecord& alarm, QWidget* parent)
     : QDialog(parent), m_alarm(alarm) {
     setWindowTitle(alarm.id < 0 ? "Add alarm" : "Edit alarm");
-    resize(480, 340);
+    resize(480, 420);
     auto* root = new QVBoxLayout(this);
     auto* form = new QFormLayout();
     m_title = new QLineEdit(qtbridge::toQt(alarm.title), this);
     m_title->setObjectName("alarmTitle");
+    m_asap = new QCheckBox("As soon as possible", this);
+    m_asap->setObjectName("alarmAsap");
+    m_asap->setChecked(alarm.asap);
+    m_group = new QLineEdit(qtbridge::toQt(alarm.group), this);
+    m_group->setObjectName("alarmGroup");
+    m_group->setPlaceholderText("Optional group");
     m_firesAt = new QDateTimeEdit(this);
     m_firesAt->setObjectName("alarmFiresAt");
     m_firesAt->setCalendarPopup(true);
@@ -50,6 +57,8 @@ AlarmEditDialog::AlarmEditDialog(const lexicon::AlarmRecord& alarm, QWidget* par
     m_description->setObjectName("alarmDescription");
     m_description->setTabChangesFocus(true);
     form->addRow("Title:", m_title);
+    form->addRow("ASAP:", m_asap);
+    form->addRow("Group:", m_group);
     form->addRow("Goes off:", m_firesAt);
     m_repeatDays = new QSpinBox(this);
     m_repeatDays->setRange(0, 365);
@@ -96,6 +105,8 @@ void AlarmEditDialog::save() {
     alarm.title = qtbridge::toCore(m_title->text().trimmed());
     alarm.description = qtbridge::toCore(m_description->toPlainText());
     alarm.firesAt = alarmtime::toUtcText(m_firesAt->dateTime());
+    alarm.asap = m_asap->isChecked();
+    alarm.group = qtbridge::toCore(m_group->text());
     alarm.repeatDays = m_repeatDays->value();
     alarm.itemId = m_item->currentData().toInt();
     if (alarm.title.empty()) {
@@ -119,9 +130,10 @@ AlarmsDialog::AlarmsDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("Alarms");
     resize(760, 460);
     auto* root = new QVBoxLayout(this);
-    m_table = new QTableWidget(0, 5, this);
+    m_table = new QTableWidget(0, 7, this);
     m_table->setObjectName("alarmTable");
-    m_table->setHorizontalHeaderLabels({"Goes off", "Title", "Repeats", "Item", "Description"});
+    m_table->setHorizontalHeaderLabels(
+        {"Goes off", "Title", "ASAP", "Group", "Repeats", "Item", "Description"});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -181,9 +193,14 @@ void AlarmsDialog::reload(int selectId) {
             auto item = services().core.items.loadItem(alarm.itemId);
             itemTitle = item ? qtbridge::toQt(item->title) : QString("#%1").arg(alarm.itemId);
         }
-        const QStringList cells{QLocale().toString(when, "ddd yyyy-MM-dd HH:mm"), qtbridge::toQt(alarm.title),
-                                alarm.repeatDays > 0 ? QString("Every %1 day(s)").arg(alarm.repeatDays) : QString("Once"),
-                                itemTitle, description.section('\n', 0, 0)};
+        const QStringList cells{
+            QLocale().toString(when, "ddd yyyy-MM-dd HH:mm"),
+            qtbridge::toQt(alarm.title), alarm.asap ? "Yes" : "No",
+            qtbridge::toQt(alarm.group),
+            alarm.repeatDays > 0
+                ? QString("Every %1 day(s)").arg(alarm.repeatDays)
+                : QString("Once"),
+            itemTitle, description.section('\n', 0, 0)};
         for (int column = 0; column < cells.size(); ++column) {
             auto* cell = new QTableWidgetItem(cells[column]);
             cell->setData(Qt::UserRole, alarm.id);
@@ -196,7 +213,7 @@ void AlarmsDialog::reload(int selectId) {
             } else if (gone) {
                 cell->setForeground(past);
                 cell->setToolTip("Already gone off");
-            } else if (column == 4 && !description.isEmpty()) {
+            } else if (column == 6 && !description.isEmpty()) {
                 cell->setToolTip(description);
             }
             m_table->setItem(row, column, cell);

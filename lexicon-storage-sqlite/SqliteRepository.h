@@ -73,8 +73,11 @@ public:
   Result<std::vector<ItemHistoryEntry>> loadItemHistory(int itemId) override;
   Result<std::vector<ItemHistoryEntry>> loadTrash() override;
   Result<int> restoreItemHistory(int historyId) override;
-  Result<lexicon::BoardRecord> loadBoard() override;
+  Result<std::vector<lexicon::BoardRecord>> loadBoards() override;
+  Result<lexicon::BoardRecord> loadBoard(int boardId) override;
+  Result<int> createBoard(const lexicon::BoardRecord &board) override;
   Result<void> saveBoard(const lexicon::BoardRecord &board) override;
+  Result<void> deleteBoard(int boardId) override;
   Result<std::vector<LinkRecord>> loadLinks(int itemId) override;
   Result<std::vector<LinkRecord>> loadBacklinks(int itemId) override;
   Result<void> saveLink(const LinkRecord &link) override;

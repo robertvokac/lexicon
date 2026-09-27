@@ -143,23 +143,44 @@ int main() {
       !condition(*found == *localizedId, "UTF-8 lookup failed"))
     return 1;
 
-  auto board = application.board.load();
-  if (!check(board, "Load Board") ||
-      !condition(board->content.empty() && board->revision > 0,
-                 "A fresh Board is not empty"))
+  auto boards = application.board.loadAll();
+  if (!check(boards, "Load Boards") ||
+      !condition(boards->size() == 1 && boards->front().name == "Main" &&
+                     boards->front().content.empty() &&
+                     boards->front().revision > 0,
+                 "A fresh database did not contain an empty Main Board"))
     return 1;
-  const auto staleBoard = *board;
-  board->content = "# Plan\n\n- Ship the Board";
-  auto savedBoard = application.board.save(*board);
+  auto board = boards->front();
+  const auto staleBoard = board;
+  board.content = "# Plan\n\n- Ship the Board";
+  auto savedBoard = application.board.save(board);
   if (!check(savedBoard, "Save Board") ||
-      !condition(savedBoard->content == board->content &&
-                     savedBoard->revision == board->revision + 1,
+      !condition(savedBoard->content == board.content &&
+                     savedBoard->revision == board.revision + 1,
                  "The Board did not round-trip or advance its revision"))
     return 1;
   auto conflict = application.board.save(staleBoard);
   if (!condition(!conflict &&
                      conflict.error().code == lexicon::Error::Code::Conflict,
                  "A stale Board save was not refused"))
+    return 1;
+  auto createdBoard = application.board.create({-1, "Work", "# Work", 0});
+  if (!check(createdBoard, "Create second Board") ||
+      !condition(createdBoard->id > 0 && createdBoard->name == "Work" &&
+                     createdBoard->content == "# Work",
+                 "The second Board did not round-trip"))
+    return 1;
+  auto duplicateBoard = application.board.create({-1, " work ", {}, 0});
+  if (!condition(!duplicateBoard &&
+                     duplicateBoard.error().code == lexicon::Error::Code::Validation,
+                 "A duplicate Board name was accepted"))
+    return 1;
+  if (!check(application.board.remove(createdBoard->id), "Delete second Board"))
+    return 1;
+  auto lastBoard = application.board.remove(savedBoard->id);
+  if (!condition(!lastBoard &&
+                     lastBoard.error().code == lexicon::Error::Code::Validation,
+                 "The last Board could be deleted"))
     return 1;
 
   // The Inbox: an idea goes to Default with the type Inbox, which the first
