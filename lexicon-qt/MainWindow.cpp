@@ -438,8 +438,6 @@ void MainWindow::setupMenus() {
     auto* typesAction = manageMenu->addAction("Types...");
     connect(groupsAction, &QAction::triggered, this, &MainWindow::openGroupManager);
     connect(typesAction, &QAction::triggered, this, &MainWindow::openTypeManager);
-    auto* studyAction = manageMenu->addAction("Study Plan...");
-    connect(studyAction, &QAction::triggered, this, [this] { StudyPlanDialog dialog(this); dialog.exec(); });
     auto* massInsertAction = manageMenu->addAction("Mass Insert...");
     connect(massInsertAction, &QAction::triggered, this, &MainWindow::openMassInsert);
     manageMenu->addSeparator();
@@ -450,6 +448,8 @@ void MainWindow::setupMenus() {
         // A new or moved alarm may already be due.
         m_alarmNotifier->check();
     });
+    auto* studyAction = manageMenu->addAction("Study Plan...");
+    connect(studyAction, &QAction::triggered, this, [this] { StudyPlanDialog dialog(this); dialog.exec(); });
     manageMenu->addSeparator();
     auto* cardsAction = manageMenu->addAction("Cards of selected item...");
     cardsAction->setShortcut(QKeySequence("Ctrl+K"));
