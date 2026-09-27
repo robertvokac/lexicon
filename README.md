@@ -624,7 +624,10 @@ with Title and includes Disambiguation, Aliases, Tags, Flags, Status,
 Understanding, Pinned, Content and Properties; choosing a Type appends a column
 for every field of that Type. Add or remove rows, then use **Insert items**.
 Aliases, tags and flags are comma-separated, while properties use
-`key=value` entries separated by semicolons or new lines.
+`key=value` entries separated by semicolons or new lines. An Image value is
+chosen from a PNG, JPEG, GIF, WebP or BMP file in both desktop and web Mass
+Insert; the worksheet uploads/imports it and keeps the resulting reference in
+the draft instead of asking for a SHA-256 value.
 
 The unfinished worksheet is backed up locally after every edit (in desktop
 settings or the browser's `localStorage`) and is offered the next time Mass
@@ -667,7 +670,7 @@ In `Metadata` tab:
 
 Each list supports `Add`, `Edit`, `Remove`.
 
-Use `Manage` → `Types...` to create types with a name, description, and availability across all groups or within one group. Each type can have ordered fields with their own descriptions and integer, float, text, date, time, timestamp, boolean, enum, blob, image, or other values. Enum fields have an editable list of choices. A blob field stores a file's SHA-256 hash in SQLite and its bytes in the `blobs` directory. Deleting a type clears the Type and its custom field values on affected items; the dialog asks for confirmation.
+Use `Manage` → `Types...` to create types with a name, description, and availability across all groups or within one group. Each type can have ordered fields with their own descriptions and integer, float, text, date, time, timestamp, boolean, enum, blob, image, or other values. Enum fields have an editable list of choices. Existing enum values are preserved when choices are edited, and a choice cannot be removed while any item still uses it. A blob field stores a file's SHA-256 hash in SQLite and its bytes in the `blobs` directory. Deleting a type clears the Type and its custom field values on affected items; the dialog asks for confirmation.
 
 Tips:
 

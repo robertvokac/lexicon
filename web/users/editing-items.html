@@ -82,6 +82,7 @@
       <tr><td><code>Pinned</code></td><td>Marks important items so you can filter for them instantly.</td></tr>
     </table>
     <p>Use <code>Manage → Types...</code> to create or edit types and their fields. Both types and fields have descriptions: a field description appears with its value editor and as a tooltip or supporting text where space is tighter.</p>
+    <p>Editing an Enum field's choices does not discard existing values. You may add choices or remove unused ones. Lexicon refuses to remove or rename a choice while any item still uses it; change those items to another choice first.</p>
     <p>When a type has custom field values, changing it asks for confirmation before discarding those values. Deleting a type also clears its assignment and custom values on every affected item, with a confirmation showing the affected item count.</p>
 
     <h3>The understanding scale</h3>
@@ -182,7 +183,7 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
     </div>
 
     <h2 id="mass-insert">Mass Insert — create many items</h2>
-    <p>The desktop and web clients can create a batch without reopening the item editor: choose <code>Manage → Mass Insert...</code>, select the required <strong>Group</strong> and, optionally, a <strong>Type</strong>, then fill the worksheet. The first column is always <strong>Title</strong>. It is followed by Disambiguation, Aliases, Tags, Flags, Status, Understanding, Pinned, Markdown Content and Properties. When you choose a Type, one additional value column appears for each of its fields.</p>
+    <p>The desktop and web clients can create a batch without reopening the item editor: choose <code>Manage → Mass Insert...</code>, select the required <strong>Group</strong> and, optionally, a <strong>Type</strong>, then fill the worksheet. The first column is always <strong>Title</strong>. It is followed by Disambiguation, Aliases, Tags, Flags, Status, Understanding, Pinned, Markdown Content and Properties. When you choose a Type, one additional value column appears for each of its fields; Image columns choose and import or upload an image file rather than asking for its SHA-256.</p>
     <p>Use <strong>Add row</strong> for another item and <strong>Remove</strong> to drop a row. Aliases, tags and flags are comma-separated. Properties use <code>key=value</code>, with entries separated by semicolons or new lines. Empty rows are ignored, but every non-empty row needs a Title.</p>
     <div class="callout callout-tip">
       <span class="callout-icon">🛟</span>

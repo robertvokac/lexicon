@@ -963,6 +963,9 @@ svg.graph { flex: none; margin: auto; }
 .mass-insert-table textarea { min-height: 3.2rem; resize: both; }
 .mass-insert-table td.mass-insert-check { text-align: center; }
 .mass-insert-table td.mass-insert-check input { min-width: auto; width: auto; }
+.mass-insert-image { min-width: 190px; display: grid; gap: 5px; }
+.mass-insert-image-buttons { display: flex; gap: 5px; }
+.mass-insert-image-buttons button { white-space: nowrap; }
 .mass-insert-tools { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .mass-insert-backup { margin-left: auto; }
 

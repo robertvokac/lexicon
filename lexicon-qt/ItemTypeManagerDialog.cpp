@@ -327,14 +327,14 @@ void ItemTypeManagerDialog::editField() {
     ItemFieldRecord field = original;
     if (!promptForField(field, true)) return;
     QString error;
-    if (field.dataType != original.dataType || field.enumOptions != original.enumOptions) {
+    if (field.dataType != original.dataType) {
         const int affected = services().types.countFieldValues(field.id, &error);
         if (!error.isEmpty()) {
             QMessageBox::critical(this, "Database error", error);
             return;
         }
         if (affected > 0 && QMessageBox::question(this, "Change field data type",
-            QString("Changing the data type or enum options will clear %1 stored value(s). Continue?").arg(affected),
+            QString("Changing the data type will clear %1 stored value(s). Continue?").arg(affected),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
     }
     if (!services().types.upsertItemField(field, &error)) {

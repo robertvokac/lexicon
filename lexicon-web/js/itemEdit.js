@@ -188,7 +188,7 @@ function blobEditor(fieldRecord, initialHash, onChange) {
     ]);
 }
 
-function fieldEditor(fieldRecord, storedValue, onChange) {
+function fieldEditor(fieldRecord, storedValue, onChange, imageContext = {}) {
     const common = {
         class: 'field-editor', 'data-field-id': String(fieldRecord.id), ...LITERAL_TEXT,
     };
@@ -217,7 +217,7 @@ function fieldEditor(fieldRecord, storedValue, onChange) {
         const node = imageEditor(fieldRecord, current, (value) => {
             current = value;
             onChange(value);
-        });
+        }, imageContext);
         return { node, read: () => current };
     }
     case 'Blob': {
@@ -631,12 +631,15 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
             return;
         }
         const grid = el('div', { class: 'form-grid' });
+        const selectedTypeId = Number.parseInt(typeSelect.value, 10);
+        const selectedType = availableTypes.find((type) => type.id === selectedTypeId);
+        const imageContext = { typeName: selectedType?.name || '', itemId: record.id };
         for (const fieldRecord of currentFields) {
             const stored = pendingValues[String(fieldRecord.id)] ?? pendingValues[fieldRecord.id] ?? '';
             const editor = fieldEditor(fieldRecord, stored, (value) => {
                 if (value === '') delete pendingValues[String(fieldRecord.id)];
                 else pendingValues[String(fieldRecord.id)] = value;
-            });
+            }, imageContext);
             const typeHint = fieldRecord.dataType === 'Enum'
                 ? `Enum: ${fieldRecord.enumOptions.join(', ')}` : fieldRecord.dataType;
             grid.appendChild(field(`${fieldRecord.name}:`, editor.node,

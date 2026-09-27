@@ -432,7 +432,8 @@ void checkInbox(lexicon::LexiconApplication &application) {
             child<QLabel>(twin, "inboxError")->text().contains("already exists"),
         "a title already in Default is refused with the reason");
 }
-void checkMassInsert(lexicon::LexiconApplication &application, int group) {
+void checkMassInsert(lexicon::LexiconApplication &application, int group,
+                     const fs::path &directory) {
   lexicon::ItemTypeRecord type;
   type.groupId = group;
   type.name = "Mass type";
@@ -447,18 +448,43 @@ void checkMassInsert(lexicon::LexiconApplication &application, int group) {
   priority.dataType = lexicon::FieldDataType::Enum;
   priority.enumOptions = {"Low", "High"};
   check(application.types.upsertItemField(priority).has_value(), "create a Mass Insert value field");
+  lexicon::ItemFieldRecord picture;
+  picture.itemTypeId = typeId;
+  picture.name = "Picture";
+  picture.dataType = lexicon::FieldDataType::Image;
+  picture.position = 1;
+  check(application.types.upsertItemField(picture).has_value(),
+        "create a Mass Insert Image field");
   const auto coreFields = application.types.loadItemFields(typeId);
-  if (!coreFields || coreFields->empty()) return;
+  if (!coreFields || coreFields->size() != 2) return;
+  int priorityId = -1;
+  int pictureId = -1;
+  for (const auto &field : *coreFields) {
+    if (field.name == "Priority") priorityId = field.id;
+    if (field.name == "Picture") pictureId = field.id;
+  }
+  if (priorityId <= 0 || pictureId <= 0) return;
   const auto fields = qtbridge::toQt(*coreFields);
 
-  MassInsertDialog dialog(group, typeId, fields);
+  QImage pictureBytes(2, 2, QImage::Format_ARGB32);
+  pictureBytes.fill(QColor("#1a5fb4"));
+  const QString picturePath = QString::fromStdString((directory / "mass-insert-picture.png").string());
+  pictureBytes.save(picturePath, "PNG");
+  QString imageError;
+  const QString imageValue = imagevalues::importFile(picturePath, &imageError);
+  check(imageValue.startsWith("image/png:"), "prepare a Mass Insert image");
+  const QJsonObject initialValues{{QString::number(pictureId), imageValue}};
+  const QJsonArray initialRows{QJsonObject{{"fieldValues", initialValues}}};
+
+  MassInsertDialog dialog(group, typeId, fields, initialRows);
   dialog.show();
   auto *table = child<QTableWidget>(dialog, "massInsertTable");
   auto *add = child<QPushButton>(dialog, "massInsertAddRow");
   auto *save = child<QPushButton>(dialog, "massInsertSave");
   if (!table || !add || !save) return;
-  check(table->columnCount() == 12 && table->horizontalHeaderItem(0)->text() == "Title" &&
-            table->horizontalHeaderItem(10)->text() == "Priority",
+  check(table->columnCount() == 13 && table->horizontalHeaderItem(0)->text() == "Title" &&
+            table->horizontalHeaderItem(10)->text() == "Priority" &&
+            table->horizontalHeaderItem(11)->text() == "Picture",
         "Mass Insert starts with Title and adds Type value columns");
   qobject_cast<QLineEdit *>(table->cellWidget(0, 0))->setText("Bulk one");
   qobject_cast<QLineEdit *>(table->cellWidget(0, 2))->setText("First alias, Another alias");
@@ -469,13 +495,26 @@ void checkMassInsert(lexicon::LexiconApplication &application, int group) {
   priorityValue->setCurrentIndex(priorityValue->findData("High"));
   check(priorityValue->currentData().toString() == "High",
         "the Mass Insert Enum editor selects a value");
+  auto *imageEditor = table->cellWidget(0, 11);
+  check(imageEditor && imageEditor->findChild<QPushButton *>(
+                           QString("massInsertImageChoose_0_%1").arg(pictureId)) &&
+            imageEditor->findChild<QLineEdit *>() == nullptr,
+        "the Mass Insert Image editor chooses a file instead of asking for a hash");
+  auto *imageStatus = imageEditor ? imageEditor->findChild<QLabel *>(
+                                        QString("massInsertImageStatus_0_%1").arg(pictureId))
+                                  : nullptr;
+  check(imageStatus && imageStatus->text() == "PNG image",
+        "the Mass Insert Image editor restores an imported image");
   QMetaObject::invokeMethod(&dialog, "persistDraft", Qt::DirectConnection);
   check(QSettings().contains("massInsert/draftV1"), "unfinished Mass Insert rows are backed up");
   const auto draft = QJsonDocument::fromJson(
       QSettings().value("massInsert/draftV1").toByteArray()).object();
   check(draft.value("rows").toArray().at(0).toObject().value("fieldValues").toObject()
-                .value(QString::number(coreFields->front().id)).toString() == "High",
+                .value(QString::number(priorityId)).toString() == "High",
         "the Mass Insert draft preserves Type values");
+  check(draft.value("rows").toArray().at(0).toObject().value("fieldValues").toObject()
+                .value(QString::number(pictureId)).toString() == imageValue,
+        "the Mass Insert draft preserves an imported image");
 
   add->click();
   check(table->rowCount() == 2, "a Mass Insert row can be added");
@@ -500,9 +539,12 @@ void checkMassInsert(lexicon::LexiconApplication &application, int group) {
       check(item->properties.size() == 1 && item->properties.front().key == "source" &&
                 item->properties.front().value == "Mass Insert",
             "Mass Insert stores properties");
-      check(item->fieldValues.contains(coreFields->front().id) &&
-                item->fieldValues.at(coreFields->front().id) == "High",
+      check(item->fieldValues.contains(priorityId) &&
+                item->fieldValues.at(priorityId) == "High",
             "Mass Insert stores Type values");
+      check(item->fieldValues.contains(pictureId) &&
+                qtbridge::toQt(item->fieldValues.at(pictureId)) == imageValue,
+            "Mass Insert stores the imported image");
     }
   }
 
@@ -627,7 +669,12 @@ void checkImages(lexicon::LexiconApplication &application, int group, const fs::
   const QString value = imagevalues::importFile(pngPath, &error);
   check(value.startsWith("image/png:") && value.size() == 10 + 64, "a PNG is stored with its type");
   check(imagevalues::describe(value, imagevalues::load(value)) == "PNG image, 400 × 300", "and is described");
-  check(imagevalues::suggestedFileName("Diagram: v2", value) == "Diagram_ v2.png", "Save as suggests a file name");
+  check(imagevalues::suggestedFileName("Figure", 42, "Diagram: v2", value) ==
+            "Figure_42_Diagram_ v2_image.png",
+        "Save as identifies the type, item and field");
+  check(imagevalues::suggestedFileName("", -1, "", value) ==
+            "Type_new_field_image.png",
+        "Save as has stable fallbacks for a new item");
 
   lexicon::ItemRecord item;
   item.groupId = group;
@@ -790,7 +837,7 @@ int main(int argc, char **argv) {
   checkGraph(application, group);
   checkCards(application, group);
   checkInbox(application);
-  checkMassInsert(application, group);
+  checkMassInsert(application, group, directory);
   checkAlarms(application);
   checkAlarmNotifier(application);
   checkAlarmDuringModalDialog(application);

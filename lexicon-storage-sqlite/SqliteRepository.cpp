@@ -285,14 +285,30 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemField
     Transaction tx(impl_->db, "lexicon_write");
     int id = field.id;
     if (id >= 0) {
-      Statement old(impl_->db, "SELECT data_type, enum_options FROM item_field WHERE id = ?;");
+      Statement old(impl_->db, "SELECT data_type FROM item_field WHERE id = ?;");
       old.bind(id);
       require(old.step(), "Field not found.", lexicon::Error::Code::NotFound);
-      bool invalidated = old.integer(0) != static_cast<int>(field.dataType)
-                      || jsonArray(impl_->db, old.text(1)) != options;
-      if (invalidated) {
+      const auto oldType = static_cast<lexicon::FieldDataType>(old.integer(0));
+      if (oldType != field.dataType) {
         bumpRevisions(impl_->db, "id IN (SELECT item_id FROM item_value WHERE item_field_id = ?)", id);
         Statement(impl_->db, "DELETE FROM item_value WHERE item_field_id = ?;").bind(id).run();
+      } else if (field.dataType == lexicon::FieldDataType::Enum) {
+        Statement used(impl_->db,
+            "SELECT value, COUNT(*) FROM item_value WHERE item_field_id = ? "
+            "GROUP BY value ORDER BY value COLLATE NOCASE;");
+        used.bind(id);
+        std::string blocked;
+        while (used.step()) {
+          const auto value = used.text(0);
+          if (std::find(options.begin(), options.end(), value) != options.end()) continue;
+          if (!blocked.empty()) blocked += ", ";
+          const int count = used.integer(1);
+          blocked += "'" + value + "' (" + std::to_string(count)
+                  + (count == 1 ? " item)" : " items)");
+        }
+        require(blocked.empty(),
+            "Cannot remove enum options that are in use: " + blocked
+                + ". Change those items first.");
       }
       Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ?, description = ? WHERE id = ?;")
           .bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType)).bind(field.position)

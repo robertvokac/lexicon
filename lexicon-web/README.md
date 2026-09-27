@@ -226,7 +226,9 @@ Mass Insert writes its whole worksheet after every edit. Each successfully
 created row is immediately removed from that local draft; if a later row fails,
 only the uninserted remainder is offered on the next visit. Closing the dialog
 keeps it, **Discard draft** removes it, and logout clears it with the item-editor
-drafts.
+drafts. An Image cell uploads the selected PNG, JPEG, GIF, WebP or BMP at once
+and backs up its typed Blob reference, so resuming does not need renewed access
+to the local file.
 
 These preferences are per browser. They never touch the desktop client's
 settings, so switching the web theme does not change the Qt theme, and hiding a
@@ -246,11 +248,12 @@ Everything below behaves the same way in both:
 | `ItemEditDialog` General, Content, Values, Metadata, Links, Backlinks | the same six tabs, saved in one atomic request |
 | Markdown toolbar (B, I, H2-H4, lists, quote, rule, code, code block, link, table) | the same buttons with a live preview |
 | Type change confirmation before field values are discarded | the same confirmation and counts |
+| Enum option edits preserve values and reject removal of choices in use | the same server-enforced protection and validation message |
 | Overwrite, Reload or Cancel when the item was saved elsewhere in the meantime | the same choice, also for a restored draft |
 | **Inbox**: a title and plain text saved to Default with the type Inbox | the same button, in the overflow menu on a phone |
 | **Boards**: named shared rendered Markdown documents with create, rename, delete and an editor | the same button beside Inbox, in the overflow menu on a phone |
 | `GroupManagerDialog`, `ItemTypeManagerDialog` with their destructive warnings | the same dialogs, counts and wording |
-| `Manage -> Mass Insert...`: required Group, optional Type, editable rows and local recovery | the same worksheet and per-user/server resumable draft (`js/massInsert.js`) |
+| `Manage -> Mass Insert...`: required Group, optional Type, editable rows including Image file selection, and local recovery | the same worksheet, Image upload and per-user/server resumable draft (`js/massInsert.js`) |
 | Image values: thumbnail, **Choose image...**, **View...**, **Save as...**, **Clear**, pictures in the preview | the same, pictures fetched with the session and shown from `blob:` URLs (`js/images.js`, `js/imagevalue.js`) |
 | `Manage -> Alarms...`: the alarms in a table, add, edit, delete | the same table and form, including ASAP and optional Group, with the time in the browser's time zone (`js/alarms.js`, `js/alarmtime.js`) |
 | The **Alarm** window with Dismiss and Snooze, and a tray notification, while the client runs | a panel over the page and a browser notification while the page is open, asked for every 30 seconds and when the tab comes back (`js/alarmbell.js`) |

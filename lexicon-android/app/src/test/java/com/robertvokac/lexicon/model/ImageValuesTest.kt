@@ -42,7 +42,13 @@ class ImageValuesTest {
     fun anImageIsDescribedAndNamedForSaving() {
         assertEquals("JPEG image", ImageValues.describe("image/jpeg:$hash"))
         assertNull(ImageValues.describe("text"))
-        assertEquals("Diagram_ v2.jpg", ImageValues.fileName("Diagram: v2", "image/jpeg:$hash"))
-        assertEquals("image.webp", ImageValues.fileName("", "image/webp:$hash"))
+        assertEquals(
+            "Figure_42_Diagram_ v2_image.jpg",
+            ImageValues.fileName("Figure", 42, "Diagram: v2", "image/jpeg:$hash"),
+        )
+        assertEquals(
+            "Type_new_field_image.webp",
+            ImageValues.fileName("", null, "", "image/webp:$hash"),
+        )
     }
 }

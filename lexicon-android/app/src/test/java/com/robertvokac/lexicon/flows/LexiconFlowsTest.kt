@@ -747,6 +747,24 @@ class LexiconFlowsTest {
         compose.waitForText("How difficult the term is")
 
         fake.addItem(Item(title = "Uses the type", itemTypeId = fake.types.single().id, fieldValues = mapOf(field.id.toString() to "hard")))
+
+        compose.onNode(hasText("Difficulty") and hasClickAction()).performClick()
+        field("Enum options").performTextReplacement("easy\nhard\nmedium")
+        inDialog("Save").performClick()
+        compose.waitForText("Position 0 · Enum: easy, hard, medium")
+        assertEquals("hard", fake.items.values.single { it.title == "Uses the type" }.fieldValues[field.id.toString()])
+
+        compose.onNode(hasText("Difficulty") and hasClickAction()).performClick()
+        field("Enum options").performTextReplacement("easy\nmedium")
+        inDialog("Save").performClick()
+        compose.waitForCondition {
+            fake.requestsTo("PUT", "/api/v1/fields/${field.id}").size == 2
+        }
+        compose.waitForText("Edit field")
+        assertEquals(listOf("easy", "hard", "medium"), fake.fields.single().enumOptions)
+        assertEquals("hard", fake.items.values.single { it.title == "Uses the type" }.fieldValues[field.id.toString()])
+        inDialog("Cancel").performClick()
+
         compose.onNodeWithContentDescription("Delete field Difficulty").performClick()
         compose.waitForText("Delete field 'Difficulty'? This will remove its value from 1 item(s). Continue?")
         compose.onNode(hasText("Cancel") and hasClickAction()).performClick()

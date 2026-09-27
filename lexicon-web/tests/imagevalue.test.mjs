@@ -32,6 +32,8 @@ test('an image value names its type and its file', () => {
 test('an image is described and named for download', () => {
     assert.equal(describeImage(`image/jpeg:${hash}`), 'JPEG image');
     assert.equal(describeImage('text'), '');
-    assert.equal(imageFileName('Diagram: v2', `image/jpeg:${hash}`), 'Diagram_ v2.jpg');
-    assert.equal(imageFileName('', `image/webp:${hash}`), 'image.webp');
+    assert.equal(imageFileName('Figure', 42, 'Diagram: v2', `image/jpeg:${hash}`),
+        'Figure_42_Diagram_ v2_image.jpg');
+    assert.equal(imageFileName('', null, '', `image/webp:${hash}`),
+        'Type_new_field_image.webp');
 });

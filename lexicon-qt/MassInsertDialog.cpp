@@ -1,11 +1,14 @@
 #include "MassInsertDialog.h"
 
+#include "ImageValueView.h"
+
 #include <algorithm>
 #include <optional>
 
 #include <QComboBox>
 #include <QDateTime>
 #include <QDialogButtonBox>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -109,6 +112,8 @@ QLineEdit* lineEdit(const QString& value, QWidget* parent = nullptr) {
 }
 
 QString textOf(QWidget* widget) {
+    const QVariant massInsertValue = widget->property("massInsertValue");
+    if (massInsertValue.isValid()) return massInsertValue.toString();
     if (auto* line = qobject_cast<QLineEdit*>(widget)) return line->text();
     if (auto* text = qobject_cast<QPlainTextEdit*>(widget)) return text->toPlainText();
     return {};
@@ -418,11 +423,60 @@ void MassInsertDialog::appendRow(QJsonObject row) {
             edit->setTabChangesFocus(true);
             m_table->setCellWidget(index, column, edit);
             connect(edit, &QPlainTextEdit::textChanged, this, &MassInsertDialog::scheduleDraft);
+        } else if (field.dataType == FieldDataType::Image) {
+            auto* editor = new QWidget(m_table);
+            editor->setProperty("massInsertValue", value);
+            auto* layout = new QVBoxLayout(editor);
+            layout->setContentsMargins(2, 2, 2, 2);
+            layout->setSpacing(3);
+            auto* actions = new QHBoxLayout();
+            actions->setContentsMargins(0, 0, 0, 0);
+            auto* choose = new QPushButton(editor);
+            choose->setObjectName(QString("massInsertImageChoose_%1_%2").arg(index).arg(field.id));
+            auto* clear = new QPushButton("Clear", editor);
+            clear->setObjectName(QString("massInsertImageClear_%1_%2").arg(index).arg(field.id));
+            auto* status = new QLabel(editor);
+            status->setObjectName(QString("massInsertImageStatus_%1_%2").arg(index).arg(field.id));
+            status->setWordWrap(true);
+            actions->addWidget(choose);
+            actions->addWidget(clear);
+            layout->addLayout(actions);
+            layout->addWidget(status);
+            const auto refresh = [editor, choose, clear, status] {
+                const QString imageValue = editor->property("massInsertValue").toString();
+                const bool present = !imagevalues::describe(imageValue).isEmpty();
+                choose->setText(present ? "Replace image..." : "Choose image...");
+                clear->setEnabled(!imageValue.isEmpty());
+                status->setText(present ? imagevalues::describe(imageValue)
+                                        : imageValue.isEmpty() ? "No image"
+                                                               : "Invalid saved image value");
+            };
+            refresh();
+            connect(choose, &QPushButton::clicked, this,
+                    [this, editor, refresh] {
+                        const QString path = QFileDialog::getOpenFileName(
+                            this, "Choose image", {}, imagevalues::fileFilter());
+                        if (path.isEmpty()) return;
+                        QString error;
+                        const QString imageValue = imagevalues::importFile(path, &error);
+                        if (imageValue.isEmpty()) {
+                            QMessageBox::critical(this, "Image", error);
+                            return;
+                        }
+                        editor->setProperty("massInsertValue", imageValue);
+                        refresh();
+                        scheduleDraft();
+                    });
+            connect(clear, &QPushButton::clicked, this,
+                    [this, editor, refresh] {
+                        editor->setProperty("massInsertValue", QString());
+                        refresh();
+                        scheduleDraft();
+                    });
+            m_table->setCellWidget(index, column, editor);
         } else {
             auto* edit = lineEdit(value, m_table);
             if (field.dataType == FieldDataType::Blob) edit->setPlaceholderText("SHA-256");
-            if (field.dataType == FieldDataType::Image)
-                edit->setPlaceholderText("image/type:SHA-256");
             m_table->setCellWidget(index, column, edit);
             connect(edit, &QLineEdit::textChanged, this, &MassInsertDialog::scheduleDraft);
         }

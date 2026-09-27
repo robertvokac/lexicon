@@ -254,6 +254,7 @@ private fun CodeLanguageDialog(
 
 @Composable
 fun ValuesTab(state: EditorState, viewModel: ItemEditorViewModel) {
+    val typeName = state.types.firstOrNull { it.id == state.fields.typeId }?.name.orEmpty()
     Column(
         Modifier
             .fillMaxSize()
@@ -269,6 +270,8 @@ fun ValuesTab(state: EditorState, viewModel: ItemEditorViewModel) {
                 val id = field.id ?: return@forEach
                 FieldEditor(
                     field = field,
+                    typeName = typeName,
+                    itemId = state.itemId,
                     value = state.fields.values[id].orEmpty(),
                     blob = state.blobs[id],
                     onChange = { viewModel.setValue(id, it) },
@@ -287,6 +290,8 @@ fun ValuesTab(state: EditorState, viewModel: ItemEditorViewModel) {
 @Composable
 private fun FieldEditor(
     field: ItemField,
+    typeName: String,
+    itemId: Int?,
     value: String,
     blob: BlobStatus?,
     onChange: (String) -> Unit,
@@ -320,7 +325,9 @@ private fun FieldEditor(
             supportingText = problem,
         )
         FieldDataType.Blob -> BlobEditor(field, value, blob, onUpload, onDownload, onClearBlob)
-        FieldDataType.Image -> ImageEditor(field, value, blob, onUploadImage, onDownload, onClearBlob)
+        FieldDataType.Image -> ImageEditor(
+            field, typeName, itemId, value, blob, onUploadImage, onDownload, onClearBlob,
+        )
         FieldDataType.Date -> PickerTextField(field, value, problem, "YYYY-MM-DD", Icons.Filled.CalendarMonth, "Pick a date", onChange) { done ->
             DateDialog(initial = value, onPicked = { onChange(it); done() }, onDismiss = done)
         }
@@ -500,6 +507,8 @@ private fun BlobEditor(
 @Composable
 private fun ImageEditor(
     field: ItemField,
+    typeName: String,
+    itemId: Int?,
     value: String,
     blob: BlobStatus?,
     onPick: (android.net.Uri) -> Unit,
@@ -542,7 +551,7 @@ private fun ImageEditor(
             }
             OutlinedButton(onClick = { viewing = true }, enabled = image != null) { Text("View") }
             OutlinedButton(
-                onClick = { create.launch(ImageValues.fileName(field.name, value)) },
+                onClick = { create.launch(ImageValues.fileName(typeName, itemId, field.name, value)) },
                 enabled = !busy && image != null,
             ) { Text("Save as…") }
             TextButton(onClick = onClear, enabled = !busy && value.isNotEmpty()) { Text("Clear") }

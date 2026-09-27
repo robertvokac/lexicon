@@ -42,9 +42,16 @@ export function describeImage(value) {
     return image ? `${NAMES[image.mediaType]} image` : '';
 }
 
-// "<name>.<extension>" for Download, without characters file systems refuse.
-export function imageFileName(name, value) {
+// "<type>_<item id>_<field name>_image.<extension>" for Download, without
+// characters file systems refuse. A not-yet-saved item has the ID "new".
+export function imageFileName(typeName, itemId, fieldName, value) {
     const image = parseImageValue(value);
-    const base = (name || '').trim().replace(/[\\/:*?"<>|]/g, '_') || 'image';
+    const clean = (part, fallback) => {
+        const safe = String(part || '').trim().replace(/[\u0000-\u001f\\/:*?"<>|]/g, '_')
+            .replace(/[. ]+$/g, '');
+        return safe || fallback;
+    };
+    const id = Number.isInteger(itemId) && itemId > 0 ? String(itemId) : 'new';
+    const base = `${clean(typeName, 'Type')}_${id}_${clean(fieldName, 'field')}_image`;
     return image ? `${base}.${EXTENSIONS[image.mediaType]}` : base;
 }

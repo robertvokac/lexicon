@@ -63,11 +63,11 @@ export async function showImage(value, title) {
     });
 }
 
-async function download(value, name) {
+async function download(value, fileName) {
     const image = parseImageValue(value);
     if (!image) return;
     const url = await imageUrl(value);
-    const anchor = el('a', { href: url, download: imageFileName(name, value) });
+    const anchor = el('a', { href: url, download: fileName });
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -75,7 +75,7 @@ async function download(value, name) {
 
 // The editor for an Image field: a thumbnail, what the image is, and Choose,
 // View, Download and Clear.
-export function imageEditor(fieldRecord, initialValue, onChange) {
+export function imageEditor(fieldRecord, initialValue, onChange, { typeName = '', itemId = null } = {}) {
     let current = initialValue || '';
     const picker = el('input', { type: 'file', accept: IMAGE_MEDIA_TYPES.join(','), hidden: true });
     const thumbnail = el('button', {
@@ -86,7 +86,9 @@ export function imageEditor(fieldRecord, initialValue, onChange) {
     const view = button('View', { class: 'secondary', onclick: () => showImage(current, fieldRecord.name) });
     const save = button('Download', {
         class: 'secondary',
-        onclick: () => download(current, fieldRecord.name).catch((error) => errorDialog(error.message)),
+        onclick: () => download(current,
+            imageFileName(typeName, itemId, fieldRecord.name, current))
+            .catch((error) => errorDialog(error.message)),
     });
     const clearButton = button('Clear', { class: 'secondary', onclick: () => set('') });
 

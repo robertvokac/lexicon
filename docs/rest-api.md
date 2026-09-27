@@ -167,7 +167,11 @@ GET    /api/v1/fields/{id}/value-count → { "count": 4 }
 available in all groups. The two count endpoints exist so a client can warn
 before a destructive change, exactly as the desktop dialogs do: deleting a type
 clears the field values of every item using it, and changing a field's data
-type or enum options clears its stored values.
+type clears its stored values. Editing `enumOptions` never clears stored values.
+Adding or reordering options and removing unused options is allowed. Removing
+an option that is still stored by any item is rejected with an HTTP 400
+`validation` error;
+change those item values first, then update the field definition.
 
 ```json
 { "id": 4, "itemTypeId": 2, "name": "Difficulty",

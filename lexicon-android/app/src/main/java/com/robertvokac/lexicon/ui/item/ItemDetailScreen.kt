@@ -232,7 +232,11 @@ fun ItemDetailScreen(
                             // An image is saved under its own extension.
                             val image = ImageValues.parse(value)
                             pendingHash = image?.hash ?: value
-                            saveAs.launch(if (image != null) ImageValues.fileName(name, value) else BlobTransfer.suggestedName(name, value))
+                            saveAs.launch(if (image != null) {
+                                ImageValues.fileName(
+                                    bundle.item.itemTypeName, bundle.item.id, name, value,
+                                )
+                            } else BlobTransfer.suggestedName(name, value))
                         },
                         onViewImage = { name, value -> viewingImage = name to value },
                     )

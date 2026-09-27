@@ -328,6 +328,7 @@ void ItemEditDialog::refreshTypes() {
     for (const auto& type : types) {
         const QString scope = type.groupId < 0 ? "All groups" : type.groupName;
         m_typeCombo->addItem(QString("%1 (%2)").arg(type.name, scope), type.id);
+        m_typeCombo->setItemData(m_typeCombo->count() - 1, type.name, Qt::UserRole + 1);
     }
     const int index = m_typeCombo->findData(previousTypeId);
     if (index >= 0) {
@@ -594,7 +595,10 @@ void ItemEditDialog::refreshFields() {
                 const auto parsed = lexicon::parseImageValue(qtbridge::toCore(valueEdit->text()));
                 if (!parsed) return;
                 const QString path = QFileDialog::getSaveFileName(
-                    this, "Save image as", imagevalues::suggestedFileName(name, valueEdit->text()));
+                    this, "Save image as",
+                    imagevalues::suggestedFileName(
+                        m_typeCombo->currentData(Qt::UserRole + 1).toString(),
+                        m_itemId, name, valueEdit->text()));
                 if (path.isEmpty()) return;
                 QString error;
                 if (!services().blobs.exportFile(qtbridge::toQt(parsed->hash), path, &error))

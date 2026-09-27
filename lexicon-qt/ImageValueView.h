@@ -24,8 +24,10 @@ QString fileFilter();
 // Stores the image file at path and returns its Image value, or an empty
 // string with the reason when it is no PNG, JPEG, GIF, WebP or BMP image.
 QString importFile(const QString& path, QString* error);
-// The stored file's name for Save as: "<name>.<extension>".
-QString suggestedFileName(const QString& name, const QString& value);
+// The stored file's name for Save as:
+// "<type>_<item id>_<field name>_image.<extension>".
+QString suggestedFileName(const QString& typeName, int itemId,
+                          const QString& fieldName, const QString& value);
 } // namespace imagevalues
 
 // One image at full size, scrolled when it is larger than the window.

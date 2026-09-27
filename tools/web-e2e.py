@@ -407,7 +407,12 @@ def run(browser, web, server):
             "name": "Priority", "description": "Batch priority", "dataType": "Enum",
             "position": 0, "enumOptions": ["Low", "High"],
         })["field"]
+        picture = api["client"].call("POST", f"/types/{term['id']}/fields", {
+            "name": "Picture", "description": "Batch image", "dataType": "Image",
+            "position": 1, "enumOptions": [],
+        })["field"]
         api["mass_field_id"] = priority["id"]
+        api["mass_image_field_id"] = picture["id"]
 
     @step("resume and finish a Mass Insert worksheet")
     def _():
@@ -445,6 +450,22 @@ def run(browser, web, server):
         type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(9) textarea", "# Bulk web one")
         type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(10) textarea", "source=Mass Insert")
         type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(11) select", "High")
+        uploaded = b.js("""(() => {
+            const input = document.querySelector(
+                'dialog[open] tbody tr:nth-child(1) td:nth-child(12) input[type=file]');
+            if (!input) return false;
+            const encoded = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+            const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+            const transfer = new DataTransfer();
+            transfer.items.add(new File([bytes], 'bulk-picture.png', {type: 'image/png'}));
+            Object.defineProperty(input, 'files', {value: transfer.files, configurable: true});
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+            return true;
+        })()""")
+        if not uploaded:
+            raise Failure("Mass Insert offered no Image upload control.")
+        b.wait("document.querySelector('dialog[open] .mass-insert-image-status')?.textContent"
+               ".includes('PNG image')", "the Mass Insert image upload")
         click("dialog[open] button", "Close")
         b.wait("!document.querySelector('dialog[open]')", "the backed-up worksheet to close")
         b.wait("!!localStorage.getItem('lexicon.web.massInsertDrafts')", "the local Mass Insert backup")
@@ -463,6 +484,8 @@ def run(browser, web, server):
         click("dialog[open] button", "Resume")
         b.wait("document.querySelector('dialog[open] .mass-insert-table tbody tr td input')?.value === 'Bulk web one'",
                "the restored Mass Insert row")
+        b.wait("document.querySelector('dialog[open] .mass-insert-image-status')?.textContent"
+               ".includes('PNG image')", "the restored Mass Insert image")
         click("dialog[open] button", "Add row")
         type_into("dialog[open] tbody tr:nth-child(2) td:nth-child(1) input", "Bulk web two")
         click("dialog[open] button", "Add row")
@@ -477,6 +500,7 @@ def run(browser, web, server):
             raise Failure("The server did not receive both Mass Insert rows.")
         if first["itemTypeName"] != "Term" \
                 or first["fieldValues"].get(str(api["mass_field_id"])) != "High" \
+                or not first["fieldValues"].get(str(api["mass_image_field_id"]), "").startswith("image/png:") \
                 or first["aliases"] != ["Batch alias", "Web alias"] or first["tags"] != ["batch", "web"] \
                 or first["content"] != "# Bulk web one" \
                 or first["properties"] != [{"key": "source", "value": "Mass Insert"}]:

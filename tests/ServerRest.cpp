@@ -280,6 +280,47 @@ void checkItems(Checks &checks) {
       stored.at("fieldValues").value(std::to_string(dateFieldId), std::string{}),
       "2026-09-20", "date values keep the stored representation");
 
+  const Json enumFieldUpdate{{"name", "Difficulty"},
+                             {"dataType", "Enum"},
+                             {"itemTypeId", typeId},
+                             {"position", 0},
+                             {"enumOptions", Json::array({"easy", "hard", "medium"})}};
+  checks.expectEqual(
+      client.put("/api/v1/fields/" + std::to_string(enumFieldId),
+                 enumFieldUpdate.dump()).status,
+      200, "adding an enum option is allowed");
+  auto afterEnumAddition = client.get("/api/v1/items/" + std::to_string(itemId));
+  checks.expectEqual(
+      parse(afterEnumAddition).at("item").at("fieldValues").value(
+          std::to_string(enumFieldId), std::string{}),
+      "hard", "adding an enum option preserves stored values");
+
+  Json removingUsedEnum = enumFieldUpdate;
+  removingUsedEnum["enumOptions"] = Json::array({"easy", "medium"});
+  const auto refusedEnumUpdate = client.put(
+      "/api/v1/fields/" + std::to_string(enumFieldId), removingUsedEnum.dump());
+  checks.expectEqual(refusedEnumUpdate.status, 400,
+                     "removing an enum option in use is rejected");
+  checks.expect(
+      parse(refusedEnumUpdate).at("error").value("message", std::string{}).find("hard")
+          != std::string::npos,
+      "the enum rejection identifies the option in use");
+  const auto fieldsAfterRefusal = parse(client.get(
+      "/api/v1/types/" + std::to_string(typeId) + "/fields")).at("fields");
+  const auto enumAfterRefusal = std::find_if(
+      fieldsAfterRefusal.begin(), fieldsAfterRefusal.end(),
+      [enumFieldId](const auto &candidate) { return candidate.value("id", 0) == enumFieldId; });
+  checks.expect(enumAfterRefusal != fieldsAfterRefusal.end() &&
+                    std::find(enumAfterRefusal->at("enumOptions").begin(),
+                              enumAfterRefusal->at("enumOptions").end(), "hard")
+                        != enumAfterRefusal->at("enumOptions").end(),
+                "a rejected enum update keeps the field definition");
+  const auto afterEnumRefusal = client.get("/api/v1/items/" + std::to_string(itemId));
+  checks.expectEqual(
+      parse(afterEnumRefusal).at("item").at("fieldValues").value(
+          std::to_string(enumFieldId), std::string{}),
+      "hard", "a rejected enum update preserves stored values");
+
   checks.expectEqual(
       client
           .post("/api/v1/items",

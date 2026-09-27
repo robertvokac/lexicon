@@ -360,14 +360,25 @@ class FakeLexiconServer : Dispatcher() {
                 val body = bodyObject(request)
                 val index = fields.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return notFound()
                 val old = fields[index]
-                fields[index] = old.copy(
+                val updated = old.copy(
                     name = body["name"]!!.jsonPrimitive.content,
                     dataType = FieldDataType.valueOf(body["dataType"]!!.jsonPrimitive.content),
                     position = body["position"]?.jsonPrimitive?.intOrNull ?: 0,
                     enumOptions = body["enumOptions"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(),
                     description = body["description"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 )
-                if (fields[index].dataType != old.dataType || fields[index].enumOptions != old.enumOptions) {
+                if (old.dataType == FieldDataType.Enum && updated.dataType == FieldDataType.Enum) {
+                    val uses = items.values.mapNotNull { it.fieldValues[id.toString()] }
+                    val removedInUse = uses.filter { it !in updated.enumOptions }.groupingBy { it }.eachCount()
+                    if (removedInUse.isNotEmpty()) {
+                        val blocked = removedInUse.entries.joinToString { (value, count) ->
+                            "'$value' ($count ${if (count == 1) "item" else "items"})"
+                        }
+                        return error(400, "validation", "Cannot remove enum options that are in use: $blocked. Change those items first.")
+                    }
+                }
+                fields[index] = updated
+                if (updated.dataType != old.dataType) {
                     items.replaceAll { _, item -> item.copy(fieldValues = item.fieldValues - id.toString()) }
                 }
                 json(buildJsonObject { put("field", encode(fields[index])) })

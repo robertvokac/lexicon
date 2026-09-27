@@ -110,6 +110,64 @@ int main() {
         !success(app.types.upsertItemField(fields->front()),
                  "Update Field with identical values")) return 1;
 
+    lexicon::ItemFieldRecord enumField;
+    enumField.itemTypeId = storedType->id;
+    enumField.name = "Difficulty";
+    enumField.dataType = lexicon::FieldDataType::Enum;
+    enumField.position = 1;
+    enumField.enumOptions = {"easy", "hard"};
+    if (!success(app.types.upsertItemField(enumField), "Create Enum Field")) return 1;
+    fields = app.types.loadItemFields(storedType->id);
+    if (!success(fields, "Reload Fields with Enum")) return 1;
+    const auto storedEnum = std::find_if(fields->begin(), fields->end(),
+        [](const auto &candidate) { return candidate.name == "Difficulty"; });
+    if (!check(storedEnum != fields->end(), "Created Enum Field missing")) return 1;
+    enumField = *storedEnum;
+
+    lexicon::ItemRecord enumItem;
+    enumItem.groupId = defaultId;
+    enumItem.itemTypeId = storedType->id;
+    enumItem.title = "Uses hard difficulty";
+    enumItem.fieldValues[enumField.id] = "hard";
+    auto enumItemId = app.items.createItem(enumItem);
+    if (!success(enumItemId, "Create Item with Enum value")) return 1;
+
+    enumField.enumOptions = {"easy", "hard", "medium"};
+    if (!success(app.types.upsertItemField(enumField), "Add Enum option")) return 1;
+    auto preservedEnumItem = app.items.loadItem(*enumItemId);
+    if (!success(preservedEnumItem, "Reload Item after adding Enum option") ||
+        !check(preservedEnumItem->fieldValues[enumField.id] == "hard",
+               "Adding an Enum option cleared an existing value")) return 1;
+
+    enumField.enumOptions = {"easy", "hard"};
+    if (!success(app.types.upsertItemField(enumField), "Remove unused Enum option")) return 1;
+    enumField.enumOptions = {"easy"};
+    const auto removeUsedEnum = app.types.upsertItemField(enumField);
+    if (!check(!removeUsedEnum &&
+                   removeUsedEnum.error().code == lexicon::Error::Code::Validation &&
+                   removeUsedEnum.error().message.find("'hard' (1 item)") != std::string::npos,
+               "Removing an Enum option in use was not refused clearly")) return 1;
+    fields = app.types.loadItemFields(storedType->id);
+    preservedEnumItem = app.items.loadItem(*enumItemId);
+    if (!success(fields, "Reload Fields after refused Enum update") ||
+        !success(preservedEnumItem, "Reload Item after refused Enum update")) return 1;
+    const auto enumAfterRefusal = std::find_if(fields->begin(), fields->end(),
+        [id = enumField.id](const auto &candidate) { return candidate.id == id; });
+    if (!check(enumAfterRefusal != fields->end() &&
+                   std::find(enumAfterRefusal->enumOptions.begin(), enumAfterRefusal->enumOptions.end(),
+                             "hard") != enumAfterRefusal->enumOptions.end(),
+               "A refused Enum update changed the field definition") ||
+        !check(preservedEnumItem->fieldValues[enumField.id] == "hard",
+               "A refused Enum update cleared the stored value")) return 1;
+
+    preservedEnumItem->fieldValues[enumField.id] = "easy";
+    if (!success(app.items.saveItem(*preservedEnumItem), "Replace the used Enum value") ||
+        !success(app.types.upsertItemField(enumField), "Remove Enum option after replacing its uses")) return 1;
+    preservedEnumItem = app.items.loadItem(*enumItemId);
+    if (!success(preservedEnumItem, "Reload Item after removing unused Enum option") ||
+        !check(preservedEnumItem->fieldValues[enumField.id] == "easy",
+               "Removing an unused Enum option cleared another value")) return 1;
+
     lexicon::ItemRecord second;
     second.groupId = defaultId;
     second.title = "Link target";

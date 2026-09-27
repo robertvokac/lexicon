@@ -84,11 +84,18 @@ QString importFile(const QString& path, QString* error) {
     return qtbridge::toQt(lexicon::formatImageValue(type, qtbridge::toCore(hash)));
 }
 
-QString suggestedFileName(const QString& name, const QString& value) {
+QString suggestedFileName(const QString& typeName, int itemId,
+                          const QString& fieldName, const QString& value) {
     const auto parsed = lexicon::parseImageValue(qtbridge::toCore(value));
-    QString base = name.trimmed();
-    base.replace(QRegularExpression(R"([\\/:*?"<>|])"), "_");
-    if (base.isEmpty()) base = "image";
+    const auto clean = [](QString part, const QString& fallback) {
+        part = part.trimmed();
+        part.replace(QRegularExpression(R"([\x00-\x1f\\/:*?"<>|])"), "_");
+        part.remove(QRegularExpression(R"([. ]+$)"));
+        return part.isEmpty() ? fallback : part;
+    };
+    const QString base = QString("%1_%2_%3_image")
+        .arg(clean(typeName, "Type"), itemId > 0 ? QString::number(itemId) : "new",
+             clean(fieldName, "field"));
     return parsed ? base + "." + qtbridge::toQt(lexicon::imageExtension(parsed->mediaType)) : base;
 }
 } // namespace imagevalues

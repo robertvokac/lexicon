@@ -35,7 +35,7 @@ sealed interface TypesConfirmation {
 
     data class ChangeField(val field: ItemField, val write: FieldWrite, val count: Int) : TypesConfirmation {
         override val message: String
-            get() = "Changing the data type or enum options will clear $count stored value(s). Continue?"
+            get() = "Changing the data type will clear $count stored value(s). Continue?"
     }
 }
 
@@ -127,8 +127,9 @@ class TypesViewModel(private val container: AppContainer) : ViewModel() {
     fun requestDeleteField(field: ItemField) = count { TypesConfirmation.DeleteField(field, api.fieldValueCount(requireNotNull(field.id))) }
 
     /**
-     * Changing a field's data type or enum options clears its stored values,
-     * so the server's count decides whether to ask first.
+     * Changing a field's data type clears its stored values, so the server's
+     * count decides whether to ask first. Enum option changes preserve values;
+     * the server refuses removal of an option that is still in use.
      */
     fun saveField(existing: ItemField?, write: FieldWrite, onDone: () -> Unit) {
         val typeId = _state.value.selectedTypeId ?: return
@@ -140,7 +141,7 @@ class TypesViewModel(private val container: AppContainer) : ViewModel() {
             }
             return
         }
-        val destructive = write.dataType != existing.dataType || write.enumOptions != existing.enumOptions
+        val destructive = write.dataType != existing.dataType
         if (!destructive) {
             mutate(onDone) {
                 api.updateField(requireNotNull(existing.id), write.copy(itemTypeId = existing.itemTypeId))

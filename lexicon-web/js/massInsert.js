@@ -7,6 +7,9 @@ import {
     clearMassInsertDraft, readMassInsertDraft, writeMassInsertDraft,
 } from './drafts.js';
 import {
+    describeImage, formatImageValue, IMAGE_MEDIA_TYPES, parseImageValue, sniffImageType,
+} from './imagevalue.js';
+import {
     button, clear, el, fillSelect, ITEM_STATUSES, LITERAL_TEXT, typeDisplayName,
     UNDERSTANDING_LEVELS,
 } from './utils.js';
@@ -74,6 +77,72 @@ function textControl(value, { multiline = false, placeholder = '' } = {}) {
     return el('input', { type: 'text', value: value || '', placeholder, ...LITERAL_TEXT });
 }
 
+// An Image cell owns its upload. Only the resulting typed hash is kept in the
+// resumable worksheet; the browser cannot retain permission to a local file.
+function imageControl(value) {
+    let current = String(value || '');
+    const control = el('div', { class: 'mass-insert-image' });
+    const picker = el('input', {
+        type: 'file', accept: IMAGE_MEDIA_TYPES.join(','), hidden: true,
+    });
+    const status = el('span', { class: 'hint mass-insert-image-status' });
+    const choose = button('', { class: 'secondary', onclick: () => picker.click() });
+    const remove = button('Clear', {
+        class: 'secondary',
+        onclick: () => {
+            current = '';
+            render();
+            control.dispatchEvent(new Event('change', { bubbles: true }));
+        },
+    });
+    control.massInsertBusy = false;
+    Object.defineProperty(control, 'value', { get: () => current });
+
+    function render(fileName = '') {
+        const image = parseImageValue(current);
+        choose.textContent = image ? 'Replace image…' : 'Choose image…';
+        remove.disabled = !current || control.massInsertBusy;
+        choose.disabled = control.massInsertBusy;
+        status.textContent = control.massInsertBusy ? 'Uploading…'
+            : image ? `${fileName ? `${fileName} · ` : ''}${describeImage(current)}`
+                : current ? 'Invalid saved image value' : 'No image';
+    }
+
+    picker.addEventListener('change', async () => {
+        const file = picker.files && picker.files[0];
+        picker.value = '';
+        if (!file) return;
+        const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+        if (!sniffImageType(head)) {
+            await messageDialog('Image', 'Choose a PNG, JPEG, GIF, WebP or BMP image.');
+            return;
+        }
+        control.massInsertBusy = true;
+        render();
+        let uploadedName = '';
+        try {
+            const uploaded = await api.uploadBlobDetailed(file);
+            if (!uploaded.mediaType) throw new Error('The server does not see an image in this file.');
+            current = formatImageValue(uploaded.mediaType, uploaded.hash);
+            uploadedName = file.name;
+            control.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (error) {
+            render();
+            await messageDialog('Image upload failed', error.message);
+        } finally {
+            control.massInsertBusy = false;
+            render(uploadedName);
+        }
+    });
+    control.append(
+        el('div', { class: 'mass-insert-image-buttons' }, [choose, remove]),
+        status,
+        picker,
+    );
+    render();
+    return control;
+}
+
 function fieldControl(fieldRecord, value) {
     if (fieldRecord.dataType === 'Boolean') {
         const control = el('select');
@@ -101,9 +170,9 @@ function fieldControl(fieldRecord, value) {
         return el('input', { ...attributes, type: 'datetime-local', step: '1' });
     }
     if (fieldRecord.dataType === 'Text') return textControl(value, { multiline: true });
+    if (fieldRecord.dataType === 'Image') return imageControl(value);
     return textControl(value, {
-        placeholder: fieldRecord.dataType === 'Blob' ? 'SHA-256'
-            : fieldRecord.dataType === 'Image' ? 'image/type:SHA-256' : '',
+        placeholder: fieldRecord.dataType === 'Blob' ? 'SHA-256' : '',
     });
 }
 
@@ -224,6 +293,7 @@ async function worksheet({ groupId, typeId, groupName, typeName, fields, initial
                 },
             });
             controls.push({
+                busy: () => valueControls.some((control) => control.massInsertBusy),
                 read: () => ({
                     title: title.value,
                     disambiguation: disambiguation.value,
@@ -308,6 +378,10 @@ async function worksheet({ groupId, typeId, groupName, typeName, fields, initial
             },
         }],
         onAccept: async ({ fail }) => {
+            if (controls.some((row) => row.busy())) {
+                fail('Wait for every image upload to finish.');
+                return undefined;
+            }
             let remaining = readRows().filter(meaningful);
             if (!remaining.length) {
                 fail('Add at least one item.');

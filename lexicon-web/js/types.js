@@ -83,11 +83,6 @@ async function fieldDialog(title, fieldRecord) {
     });
 }
 
-function sameOptions(left, right) {
-    if (left.length !== right.length) return false;
-    return left.every((value, index) => value === right[index]);
-}
-
 export async function openTypeManager() {
     const groups = await api.groups();
     let types = await api.types();
@@ -187,8 +182,7 @@ export async function openTypeManager() {
             const original = fields[index];
             const values = await fieldDialog('Edit field', original);
             if (!values) return;
-            if (values.dataType !== original.dataType
-                || !sameOptions(values.enumOptions, original.enumOptions)) {
+            if (values.dataType !== original.dataType) {
                 let affected = 0;
                 try {
                     affected = await api.fieldValueCount(original.id);
@@ -198,7 +192,7 @@ export async function openTypeManager() {
                 }
                 if (affected > 0) {
                     const confirmed = await confirmDialog('Change field data type',
-                        `Changing the data type or enum options will clear ${affected} `
+                        `Changing the data type will clear ${affected} `
                         + 'stored value(s). Continue?', { danger: true });
                     if (!confirmed) return;
                 }

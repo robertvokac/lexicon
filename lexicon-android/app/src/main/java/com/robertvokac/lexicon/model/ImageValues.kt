@@ -40,9 +40,14 @@ object ImageValues {
     /** "PNG image", or null for a value that is no image value. */
     fun describe(value: String?): String? = parse(value)?.let { "${names.getValue(it.mediaType)} image" }
 
-    /** "<field name>.<extension>" for Save as. */
-    fun fileName(fieldName: String, value: String): String {
-        val base = fieldName.replace(Regex("[^A-Za-z0-9._ -]+"), "_").trim().ifEmpty { "image" }
+    /** "<type>_<item id>_<field name>_image.<extension>" for Save as. */
+    fun fileName(typeName: String, itemId: Int?, fieldName: String, value: String): String {
+        fun clean(part: String, fallback: String): String = part.trim()
+            .replace(Regex("""[\u0000-\u001f\\/:*?"<>|]"""), "_")
+            .trimEnd('.', ' ')
+            .ifEmpty { fallback }
+        val id = itemId?.takeIf { it > 0 }?.toString() ?: "new"
+        val base = "${clean(typeName, "Type")}_${id}_${clean(fieldName, "field")}_image"
         return parse(value)?.let { "$base.${extensions.getValue(it.mediaType)}" } ?: base
     }
 
