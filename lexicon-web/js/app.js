@@ -2,7 +2,7 @@
 // between the login screen and the main view.
 import { api, API_VERSION, ApiError } from './api.js';
 import { changePasswordDialog, openSessions } from './account.js';
-import { errorDialog, messageDialog } from './dialogs.js';
+import { confirmDialog, errorDialog, messageDialog } from './dialogs.js';
 import { clearAllDrafts, setDraftOwner } from './drafts.js';
 import { exportDictionary, importDictionary } from './exchange.js';
 import { openGroupManager } from './groups.js';
@@ -201,6 +201,15 @@ class Application {
         this.showLogin('You are signed out.');
     }
 
+    async requestLogout() {
+        const confirmed = await confirmDialog(
+            'Log out',
+            'Log out? Unsaved Item and Mass Insert drafts stored in this browser will be deleted.',
+            { acceptLabel: 'Log out', cancelLabel: 'Stay signed in', danger: true },
+        );
+        if (confirmed) await this.logout();
+    }
+
     stopBell() {
         if (this.bell) this.bell.destroy();
         this.bell = null;
@@ -214,6 +223,15 @@ class Application {
                 entries: [
                     { label: 'Refresh', action: () => this.view && this.view.refreshAll() },
                     { separator: true },
+                    {
+                        label: 'Download selected row as CSV...',
+                        action: () => this.view && this.view.exportCsv('selected'),
+                    },
+                    {
+                        label: 'Download current page as CSV...',
+                        action: () => this.view && this.view.exportCsv('page'),
+                    },
+                    { separator: true },
                     { label: 'Export...', action: () => exportDictionary() },
                     {
                         label: 'Import...',
@@ -225,7 +243,7 @@ class Application {
                     { label: 'Change password...', action: () => changePasswordDialog(() => this.logout()) },
                     { label: 'Signed-in sessions...', action: () => openSessions() },
                     { separator: true },
-                    { label: 'Logout', action: () => this.logout() },
+                    { label: 'Logout', action: () => this.requestLogout() },
                 ],
             },
             {
@@ -315,6 +333,10 @@ class Application {
                         label: 'Automatic view',
                         action: () => this.view && this.view.setViewPreference('auto'),
                     },
+                    {
+                        label: 'Table row height...',
+                        action: () => this.view && this.view.openTableRowHeightDialog(),
+                    },
                     { separator: true },
                     { label: 'Light mode', action: () => applyTheme('light') },
                     { label: 'Dark mode', action: () => applyTheme('dark') },
@@ -402,7 +424,7 @@ class Application {
             const open = this.menuBar.classList.toggle('menu-open');
             this.menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
-        this.logoutButton.addEventListener('click', () => this.logout());
+        this.logoutButton.addEventListener('click', () => this.requestLogout());
     }
 }
 

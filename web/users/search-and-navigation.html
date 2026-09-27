@@ -54,6 +54,7 @@
         <li><a href="#search">Free-text search</a></li>
         <li><a href="#filters">Filters</a></li>
         <li><a href="#sorting">Sorting &amp; pagination</a></li>
+        <li><a href="#csv">Export CSV</a></li>
         <li><a href="#overviews">Global overviews</a></li>
         <li><a href="#themes">Light &amp; dark mode</a></li>
       </ul>
@@ -112,7 +113,12 @@
 
     <h2 id="sorting">Sorting &amp; pagination</h2>
     <p>Click any <strong>column header</strong> in the item table to sort by that column; click again to reverse the order. Combined with the pagination bar (<code>&lt;&lt; First</code>, <code>&lt; Prev</code>, <code>Next &gt;</code>, <code>Last &gt;&gt;</code>, and a <code>Page size</code> selector), the table stays fast even with thousands of items.</p>
+    <p>Choose <code>View → Table row height...</code> in the desktop or web client to set the normal row height from 20 to 160 pixels. The choice is remembered locally by that client. A search result with a matching content excerpt still uses one additional line so the excerpt is not cut off.</p>
     <p><code>Hide attributes</code> hides the Disambiguation, Tags, Flags, Aliases, Status, Understanding, and Pinned columns; <code>Hide values</code> hides the value columns of the selected type. Both blocks are visible by default, each button turns into <code>Show ...</code> while its columns are hidden, and your choice is saved in the database. Hiding columns clears their filters.</p>
+
+    <h2 id="csv">Export CSV</h2>
+    <p>Save the selected row or every row on the current page as a UTF-8 CSV file for a spreadsheet. The desktop client provides <code>File → Save selected row as CSV...</code> and <code>Save current page as CSV...</code>; the web client names the same actions <code>Download ... as CSV...</code>. The file follows the current table: hidden attribute or value columns are omitted, and choosing a Type adds its visible field columns.</p>
+    <p>On Android, open <strong>Export CSV</strong> in the top bar to save the currently loaded page. A particular row's actions also contain <strong>Save this item as CSV…</strong>; on a tablet, the currently selected item is available from the top export menu too.</p>
 
     <h2 id="overviews">Global overviews</h2>
     <p>Three read-only overviews show your entire vocabulary with usage counts:</p>

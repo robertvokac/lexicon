@@ -214,6 +214,9 @@ def check_served_client(browser, binary, database, chrome_free_port=free_port):
         if browser.errors:
             raise Failure(f"JavaScript error: {browser.errors[0]}")
         browser.js("document.getElementById('logout-button').click(); true")
+        browser.wait("document.querySelector('dialog[open] .dialog-title')?.textContent === 'Log out'",
+                     "the logout confirmation")
+        browser.js("[...document.querySelectorAll('dialog[open] button')].find(e => e.textContent.trim() === 'Log out').click(); true")
         browser.wait("!document.getElementById('login-view').hidden", "the login form again")
     finally:
         process.terminate()
@@ -277,6 +280,32 @@ def run(browser, web, server):
         b.wait("document.getElementById('login-view').hidden", "the main view")
         api["client"] = Api(server)
 
+    @step("protect unsaved Board changes")
+    def _():
+        click("button", "Board")
+        b.wait(dialog_open("Choose a Board"), "the Board picker")
+        click("dialog[open] button", "Open")
+        b.wait(dialog_open("Board — Main"), "the Board viewer")
+        click("dialog[open] button", "Edit")
+        b.wait(dialog_open("Edit Board — Main"), "the Board editor")
+        type_into("dialog[open] .markdown-source", "Unsaved Board text")
+        click("dialog[open] button", "Cancel")
+        b.wait(dialog_open("Unsaved Board changes"), "the Board discard confirmation")
+        click("dialog[open] button", "Keep editing")
+        b.wait("![...document.querySelectorAll('dialog[open] .dialog-title')].some(e => e.textContent === 'Unsaved Board changes')",
+               "the discard confirmation to close")
+        b.js("new Promise(resolve => setTimeout(() => resolve(true), 100))")
+        b.wait(dialog_open("Edit Board — Main"), "the protected Board editor")
+        click("dialog[open] button", "Cancel")
+        b.wait(dialog_open("Unsaved Board changes"), "the second Board discard confirmation")
+        click("dialog[open] button", "Discard")
+        b.wait("[...document.querySelectorAll('dialog[open] .dialog-title')].some(e => e.textContent === 'Board — Main')",
+               "the Board viewer after discard")
+        click("dialog[open] button", "Boards")
+        b.wait(dialog_open("Choose a Board"), "the Board picker after discard")
+        click("dialog[open] button", "Close")
+        b.wait("!document.querySelector('dialog[open]')", "the Board dialogs to close")
+
     @step("catch an idea in the Inbox")
     def _():
         click("button", "Inbox")
@@ -332,6 +361,23 @@ def run(browser, web, server):
                "no snippet where the title is the answer")
         type_into(".search-input", "")
         b.wait("document.querySelectorAll('tbody tr').length >= 2", "the full list again")
+
+    @step("remember the table row height")
+    def _():
+        menu("View", "Table row height...")
+        b.wait(dialog_open("Normal row height in pixels"), "the row-height setting")
+        type_into("dialog[open] input[type=number]", "52")
+        click("dialog[open] button", "Apply")
+        b.wait("!document.querySelector('dialog[open]')", "the row-height setting to close")
+        expected = "document.querySelector('.item-table').style.getPropertyValue('--item-row-height') === '52px'"
+        b.wait(expected, "the new row height")
+        if b.js("localStorage.getItem('lexicon.web.rowHeight')") != "52":
+            raise Failure("The row height was not stored in this browser.")
+
+        b.navigate(web)
+        b.wait("document.readyState === 'complete' && document.getElementById('login-view').hidden",
+               "the restored main view")
+        b.wait(expected, "the restored row height")
 
     @step("zoom the relationship graph and fill the window with it")
     def _():
@@ -689,6 +735,8 @@ def run(browser, web, server):
     @step("sign out")
     def _():
         b.js("document.getElementById('logout-button').click(); true")
+        b.wait(dialog_open("Log out"), "the logout confirmation")
+        click("dialog[open] button", "Log out")
         b.wait("!document.getElementById('login-view').hidden", "the login form")
 
     passed = 0

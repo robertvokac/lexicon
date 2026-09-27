@@ -314,7 +314,7 @@ CREATE INDEX idx_card_item_id ON card(item_id, id);  -- migration 26</code></pre
     <h2 id="integrity">Integrity rules</h2>
     <ul>
       <li><strong>Foreign keys are enforced</strong> — <code>PRAGMA foreign_keys = ON</code> runs on every connection.</li>
-      <li><strong>Cascade deletes</strong> — deleting a group deletes its items and group-specific types; deleting an item deletes its aliases, tags, flags, properties, field values, links, and cards. Deleting a type sets affected <code>item_type_id</code> values to null and removes their field values.</li>
+      <li><strong>Cascade deletes</strong> — the schema has cascading foreign keys, but the repository refuses to delete a group that still has items or group-specific types. Deleting an item deletes its aliases, tags, flags, properties, field values, links, and cards. Deleting a type sets affected <code>item_type_id</code> values to null and removes their field values.</li>
       <li><strong>Uniqueness</strong> — group names are globally unique; <code>(group_id, title, disambiguation)</code> is unique per item; alias/tag/flag values and property keys are unique per item; type names are unique within their scope.</li>
       <li><strong>Enum stability</strong> — <code>status</code>, <code>understanding</code>, <code>link_type</code>, and <code>data_type</code> store raw enum integers; enum values must only ever be appended, never renumbered.</li>
     </ul>

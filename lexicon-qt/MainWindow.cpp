@@ -17,6 +17,7 @@
 #include "AlarmsDialog.h"
 #include "AlarmNotifier.h"
 #include "ImageValueView.h"
+#include "CsvExport.h"
 
 #include "Exchange.h"
 #include "MarkdownConverter.h"
@@ -30,6 +31,7 @@
 #include <QDialog>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QListWidget>
 #include <QLineEdit>
@@ -65,6 +67,9 @@ namespace {
 constexpr int kMatchSnippetRole = Qt::UserRole + 3;
 constexpr int kTitleColumn = 3;
 constexpr int kMatchWidthCap = 420;
+constexpr int kMinTableRowHeight = 20;
+constexpr int kMaxTableRowHeight = 160;
+const char kTableRowHeightKey[] = "appearance/tableRowHeight";
 
 QFont matchFont(QFont base) {
     base.setPointSizeF(base.pointSizeF() * 0.85);
@@ -258,7 +263,11 @@ void MainWindow::setupUi() {
     m_tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tableView->horizontalHeader()->setStretchLastSection(true);
     m_tableView->verticalHeader()->setVisible(false);
-    m_defaultRowHeight = m_tableView->verticalHeader()->defaultSectionSize();
+    const int naturalRowHeight = m_tableView->verticalHeader()->defaultSectionSize();
+    QSettings settings;
+    m_defaultRowHeight = qBound(kMinTableRowHeight,
+        settings.value(kTableRowHeightKey, naturalRowHeight).toInt(), kMaxTableRowHeight);
+    applyTableRowHeight();
     m_tableView->setItemDelegateForColumn(kTitleColumn, new TitleWithMatchDelegate(this));
     m_tableView->setSortingEnabled(true);
     m_tableView->horizontalHeader()->setSectionsClickable(true);
@@ -376,6 +385,8 @@ void MainWindow::setupUi() {
         connect(menu.addAction("Cards..."), &QAction::triggered, this, &MainWindow::openCards);
         connect(menu.addAction("Card quiz..."), &QAction::triggered, this, &MainWindow::openCardQuiz);
         connect(menu.addAction("Relationship graph..."), &QAction::triggered, this, &MainWindow::showGraph);
+        connect(menu.addAction("Save row as CSV..."), &QAction::triggered,
+                this, &MainWindow::exportSelectedRowCsv);
         menu.exec(m_tableView->viewport()->mapToGlobal(position));
     });
 
@@ -400,6 +411,11 @@ void MainWindow::setupMenus() {
     auto* importAction = fileMenu->addAction("Import...");
     connect(exportAction, &QAction::triggered, this, &MainWindow::exportDictionary);
     connect(importAction, &QAction::triggered, this, &MainWindow::importDictionary);
+    fileMenu->addSeparator();
+    auto* exportSelectedCsvAction = fileMenu->addAction("Save selected row as CSV...");
+    auto* exportPageCsvAction = fileMenu->addAction("Save current page as CSV...");
+    connect(exportSelectedCsvAction, &QAction::triggered, this, &MainWindow::exportSelectedRowCsv);
+    connect(exportPageCsvAction, &QAction::triggered, this, &MainWindow::exportCurrentPageCsv);
     fileMenu->addSeparator();
     auto* quitAction = fileMenu->addAction("Quit");
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
@@ -450,6 +466,9 @@ void MainWindow::setupMenus() {
         m_searchEdit->setFocus();
         m_searchEdit->selectAll();
     });
+    auto* rowHeightAction = viewMenu->addAction("Table row height...");
+    rowHeightAction->setObjectName("tableRowHeightAction");
+    connect(rowHeightAction, &QAction::triggered, this, &MainWindow::setTableRowHeight);
     viewMenu->addSeparator();
     auto* reviewAction = viewMenu->addAction("Review...");
     reviewAction->setShortcut(QKeySequence("Ctrl+R"));
@@ -814,7 +833,6 @@ void MainWindow::refreshItems() {
     if (typeId > 0) {
         for (const auto& field : m_selectedTypeFields) headers.push_back(field.name);
     }
-    const bool searching = !m_searchEdit->text().trimmed().isEmpty();
     m_model->setColumnCount(headers.size());
     m_model->setHorizontalHeaderLabels(headers);
     for (int index = 0; index < m_selectedTypeFields.size(); ++index) {
@@ -882,8 +900,7 @@ void MainWindow::refreshItems() {
     }
 
     // A searched list has two lines per row: the title and why it was found.
-    m_tableView->verticalHeader()->setDefaultSectionSize(
-        searching ? m_defaultRowHeight + QFontMetrics(matchFont(font())).height() : m_defaultRowHeight);
+    applyTableRowHeight();
     applyColumnVisibility();
     m_tableView->resizeColumnsToContents();
     for (int column = 0; column < m_model->columnCount(); ++column) {
@@ -1065,6 +1082,67 @@ void MainWindow::openInbox() {
 
 void MainWindow::openBoard() {
     BoardDialog(this).exec();
+}
+
+void MainWindow::saveRowsAsCsv(const QList<int>& rows, const QString& caption,
+                               const QString& suggestedName) {
+    if (rows.isEmpty()) {
+        QMessageBox::information(this, "Export CSV", "There are no rows to export.");
+        return;
+    }
+    QStringList headers;
+    QList<int> columns;
+    for (int column = 0; column < m_model->columnCount(); ++column) {
+        if (m_tableView->isColumnHidden(column)) continue;
+        columns.push_back(column);
+        headers.push_back(m_model->headerData(column, Qt::Horizontal, Qt::DisplayRole).toString());
+    }
+    QList<QStringList> data;
+    data.reserve(rows.size());
+    for (const int row : rows) {
+        QStringList cells;
+        cells.reserve(columns.size());
+        for (const int column : columns)
+            cells.push_back(m_model->data(m_model->index(row, column), Qt::DisplayRole).toString());
+        data.push_back(std::move(cells));
+    }
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, caption, suggestedName, "CSV files (*.csv);;All files (*)");
+    if (path.isEmpty()) return;
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        showError("Cannot open " + path + ": " + file.errorString());
+        return;
+    }
+    const QByteArray csv = csvexport::encode(headers, data);
+    if (file.write(csv) != csv.size() || !file.commit()) {
+        showError("Cannot save " + path + ": " + file.errorString());
+        return;
+    }
+    QMessageBox::information(this, "Export CSV", "The table rows were saved to " + path + ".");
+}
+
+void MainWindow::exportSelectedRowCsv() {
+    const auto selected = m_tableView->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        QMessageBox::information(this, "Export CSV", "Select an item first.");
+        return;
+    }
+    const int row = selected.first().row();
+    const int id = m_model->index(row, 0).data().toInt();
+    saveRowsAsCsv({row}, "Save selected row as CSV",
+                  QString("lexicon-item-%1-%2.csv").arg(id)
+                      .arg(QDate::currentDate().toString(Qt::ISODate)));
+}
+
+void MainWindow::exportCurrentPageCsv() {
+    QList<int> rows;
+    rows.reserve(m_model->rowCount());
+    for (int row = 0; row < m_model->rowCount(); ++row) rows.push_back(row);
+    saveRowsAsCsv(rows, "Save current page as CSV",
+                  QString("lexicon-page-%1-%2.csv").arg(m_currentPage + 1)
+                      .arg(QDate::currentDate().toString(Qt::ISODate)));
 }
 
 void MainWindow::exportDictionary() {
@@ -1627,6 +1705,26 @@ void MainWindow::setDarkTheme() {
     QSettings settings;
     settings.setValue("appearance/theme", "dark");
     applyTheme("dark");
+}
+
+void MainWindow::setTableRowHeight() {
+    bool accepted = false;
+    const int height = QInputDialog::getInt(this, "Table row height",
+        "Normal row height in pixels:\n(Search results with a match excerpt use one extra line.)",
+        m_defaultRowHeight, kMinTableRowHeight, kMaxTableRowHeight, 1, &accepted);
+    if (!accepted) return;
+
+    m_defaultRowHeight = height;
+    QSettings settings;
+    settings.setValue(kTableRowHeightKey, height);
+    applyTableRowHeight();
+}
+
+void MainWindow::applyTableRowHeight() {
+    if (!m_tableView) return;
+    const bool searching = m_searchEdit && !m_searchEdit->text().trimmed().isEmpty();
+    const int matchLineHeight = searching ? QFontMetrics(matchFont(font())).height() : 0;
+    m_tableView->verticalHeader()->setDefaultSectionSize(m_defaultRowHeight + matchLineHeight);
 }
 
 void MainWindow::showError(const QString& message) {

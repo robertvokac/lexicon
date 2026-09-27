@@ -8,6 +8,7 @@ import { openGraph } from './graph.js';
 import { openBoard } from './board.js';
 import { imageSection } from './images.js';
 import { describeImage } from './imagevalue.js';
+import { csvText, downloadCsv } from './csv.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
 import { bindItemLinks, renderMarkdown } from './markdown.js';
 import { openPropertyFilterDialog } from './overviews.js';
@@ -47,12 +48,16 @@ const BASE_COLUMNS = [
 const ATTRIBUTE_FILTERS = BASE_COLUMNS.filter((column) => column.configurable)
     .map((column) => column.filterKey);
 const PAGE_SIZES = [10, 20, 50, 100];
+const DEFAULT_ROW_HEIGHT = 28;
+const MIN_ROW_HEIGHT = 20;
+const MAX_ROW_HEIGHT = 160;
 const STORAGE = {
     pageSize: 'lexicon.web.pageSize',
     columns: 'lexicon.web.columns',
     lastItem: 'lexicon.web.lastItemId',
     viewMode: 'lexicon.web.viewMode',
     tableHeight: 'lexicon.web.tableHeight',
+    rowHeight: 'lexicon.web.rowHeight',
 };
 // Below this width the desktop table stops being the better way to read a
 // list, so the layout switches to cards unless the user insists otherwise.
@@ -92,6 +97,10 @@ export class MainView {
         this.pageSize = Number.parseInt(readLocal(STORAGE.pageSize, '20'), 10) || 20;
         this.sortColumn = 0;
         this.sortOrder = 'Ascending';
+        const storedRowHeight = Number.parseInt(readLocal(STORAGE.rowHeight, ''), 10);
+        this.rowHeight = Number.isFinite(storedRowHeight)
+            ? Math.min(MAX_ROW_HEIGHT, Math.max(MIN_ROW_HEIGHT, storedRowHeight))
+            : DEFAULT_ROW_HEIGHT;
         // 'auto' follows the screen width; 'table' and 'list' are explicit.
         this.viewPreference = readLocal(STORAGE.viewMode, 'auto');
         this.compactQuery = window.matchMedia(COMPACT_QUERY);
@@ -231,6 +240,7 @@ export class MainView {
             el('thead', {}, [this.headerRow, this.filterRow]),
             this.tableBody,
         ]);
+        this.applyTableRowHeight();
 
         this.pageLabel = el('span', { class: 'page-label', text: 'Page 1' });
         this.firstButton = button('<< First', { class: 'secondary', onclick: () => this.goToPage(0) });
@@ -518,6 +528,43 @@ export class MainView {
         writeLocal(STORAGE.viewMode, preference);
         this.applyLayout();
         this.renderRows();
+    }
+
+    applyTableRowHeight() {
+        if (this.table) {
+            this.table.style.setProperty('--item-row-height', `${this.rowHeight}px`);
+        }
+    }
+
+    openTableRowHeightDialog() {
+        const height = el('input', {
+            type: 'number',
+            min: String(MIN_ROW_HEIGHT),
+            max: String(MAX_ROW_HEIGHT),
+            step: '1',
+            value: String(this.rowHeight),
+            inputmode: 'numeric',
+        });
+        return openDialog({
+            title: 'Table row height',
+            body: field('Normal row height in pixels:', height,
+                'Stored in this browser. Search results with a match excerpt use one extra line.'),
+            acceptLabel: 'Apply',
+            initialFocus: height,
+            clearErrorOn: [height],
+            onAccept: ({ fail }) => {
+                const value = Number(height.value);
+                if (!Number.isInteger(value) || value < MIN_ROW_HEIGHT || value > MAX_ROW_HEIGHT) {
+                    fail(`Enter a whole number from ${MIN_ROW_HEIGHT} to ${MAX_ROW_HEIGHT}.`);
+                    height.focus();
+                    return undefined;
+                }
+                this.rowHeight = value;
+                writeLocal(STORAGE.rowHeight, String(value));
+                this.applyTableRowHeight();
+                return true;
+            },
+        });
     }
 
     // Moves the shared widgets between the table header and the stacked panel
@@ -1048,6 +1095,24 @@ export class MainView {
             && this.items.some((item) => item.id === this.selectedItemId);
         this.editButton.disabled = !hasSelection;
         this.deleteButton.disabled = !hasSelection;
+    }
+
+    async exportCsv(scope) {
+        const rows = scope === 'selected'
+            ? this.items.filter((item) => item.id === this.selectedItemId)
+            : this.items;
+        if (!rows.length) {
+            await messageDialog('Export CSV', scope === 'selected'
+                ? 'Select an item first.' : 'The current page has no rows to export.');
+            return;
+        }
+        const columns = this.columns.filter((column) => !this.isHidden(column));
+        const text = csvText(
+            columns.map((column) => column.label),
+            rows.map((item) => columns.map((column) => this.cellText(item, column))),
+        );
+        const suffix = scope === 'selected' ? `item-${rows[0].id}` : `page-${this.page + 1}`;
+        downloadCsv(text, `lexicon-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`);
     }
 
     async goToPage(page) {

@@ -69,7 +69,7 @@ export async function openGroupManager() {
         onRemove: async (index) => {
             const group = groups[index];
             const confirmed = await confirmDialog('Delete group',
-                `Delete group '${group.name}'? All items inside it will also be deleted.`,
+                `Delete empty group '${group.name}'? A group containing items or group-specific types cannot be deleted.`,
                 { danger: true });
             if (!confirmed) return;
             try {

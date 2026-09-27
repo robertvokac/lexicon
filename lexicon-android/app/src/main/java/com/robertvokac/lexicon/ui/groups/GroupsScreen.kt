@@ -159,7 +159,7 @@ fun GroupsScreen(viewModel: GroupsViewModel, onBack: () -> Unit) {
             else -> LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
                 item {
                     Text(
-                        "Lower positions appear first. Deleting a group also deletes every item in it.",
+                        "Lower positions appear first. Only a group without items or group-specific types can be deleted.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
@@ -213,7 +213,7 @@ fun GroupsScreen(viewModel: GroupsViewModel, onBack: () -> Unit) {
     deleting?.let { group ->
         ConfirmDialog(
             title = "Delete group",
-            message = "Delete group '${group.name}'? All items inside it will also be deleted.",
+            message = "Delete empty group '${group.name}'? A group containing items or group-specific types cannot be deleted.",
             confirmLabel = "Delete",
             onConfirm = {
                 deleting = null

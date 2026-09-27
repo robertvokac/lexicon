@@ -310,7 +310,10 @@ select.column-filter { min-width: 122px; }
     color: var(--selection-text);
 }
 
-.item-table tbody tr { cursor: default; }
+.item-table tbody tr {
+    height: var(--item-row-height, 28px);
+    cursor: default;
+}
 
 .pagination {
     display: flex;

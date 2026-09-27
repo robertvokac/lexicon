@@ -46,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -84,6 +85,7 @@ import com.robertvokac.lexicon.ui.cards.CardQuizViewModel
 import com.robertvokac.lexicon.ui.cards.CardsScreen
 import com.robertvokac.lexicon.ui.cards.CardsViewModel
 import com.robertvokac.lexicon.ui.common.LocalAppContainer
+import com.robertvokac.lexicon.ui.common.ConfirmDialog
 import com.robertvokac.lexicon.ui.common.lexiconViewModel
 import com.robertvokac.lexicon.ui.graph.GraphScreen
 import com.robertvokac.lexicon.ui.graph.GraphViewModel
@@ -332,6 +334,7 @@ private fun MainScaffold(
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var confirmLogout by rememberSaveable { mutableStateOf(false) }
     val widthClass = currentWindowAdaptiveInfoV2().windowSizeClass
     val wide = widthClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
 
@@ -414,7 +417,7 @@ private fun MainScaffold(
                         selected = false,
                         onClick = {
                             scope.launch { drawerState.close() }
-                            container.sessions.logout()
+                            confirmLogout = true
                         },
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
@@ -425,6 +428,20 @@ private fun MainScaffold(
         Surface(Modifier.fillMaxSize()) {
             LexiconNavHost(navController, wide, launchRequests, onOpenDrawer = { scope.launch { drawerState.open() } }, onShareFinished)
         }
+    }
+    if (confirmLogout) {
+        ConfirmDialog(
+            title = "Log out",
+            message = "Log out? Unsaved changes in open editors will be discarded.",
+            confirmLabel = "Log out",
+            dismissLabel = "Stay signed in",
+            onConfirm = {
+                confirmLogout = false
+                container.sessions.logout()
+            },
+            onDismiss = { confirmLogout = false },
+            destructive = true,
+        )
     }
 }
 

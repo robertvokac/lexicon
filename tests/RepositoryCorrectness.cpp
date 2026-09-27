@@ -255,15 +255,33 @@ int main() {
         !success(item, "Load Item after reopen") ||
         !check(*groupId == defaultId && item->groupName == "Default",
                "Default did not survive reopen")) return 1;
-    if (!success(app.groups.deleteGroup(*groupId), "Delete Default for recreation test")) return 1;
-    auto recreated = app.groups.defaultGroupId();
+    const auto refused = app.groups.deleteGroup(*groupId);
+    if (!check(!refused && refused.error().code == lexicon::Error::Code::Validation &&
+                   refused.error().message.find("Group is not empty") != std::string::npos,
+               "Deleting a Group with Items was not refused") ||
+        !success(app.items.loadItem(firstId), "Item survived refused Group deletion")) return 1;
+
+    if (!success(app.groups.upsertGroup({-1, "Protected", "", 10}), "Create protected Group")) return 1;
     auto groups = app.groups.loadGroups();
-    if (!success(recreated, "Recreate Default") ||
-        !success(groups, "Load recreated Default") ||
-        !check(std::any_of(groups->begin(), groups->end(),
-                           [&](const auto &group) {
-                             return group.id == *recreated && group.name == "Default";
-                           }), "defaultGroupId did not recreate Default")) return 1;
+    if (!success(groups, "Load Groups with protected Group")) return 1;
+    const auto protectedGroup = std::find_if(groups->begin(), groups->end(),
+        [](const auto &group) { return group.name == "Protected"; });
+    if (!check(protectedGroup != groups->end(), "Protected Group missing")) return 1;
+    lexicon::ItemTypeRecord protectedType;
+    protectedType.groupId = protectedGroup->id;
+    protectedType.name = "Protected Type";
+    if (!success(app.types.upsertItemType(protectedType), "Create group-specific Type")) return 1;
+    const auto typeProtected = app.groups.deleteGroup(protectedGroup->id);
+    if (!check(!typeProtected && typeProtected.error().code == lexicon::Error::Code::Validation &&
+                   typeProtected.error().message.find("1 group-specific type") != std::string::npos,
+               "Deleting a Group with its own Type was not refused")) return 1;
+    auto protectedTypes = app.types.loadItemTypes(protectedGroup->id);
+    if (!success(protectedTypes, "Load protected Type")) return 1;
+    const auto savedProtectedType = std::find_if(protectedTypes->begin(), protectedTypes->end(),
+        [id = protectedGroup->id](const auto &type) { return type.groupId == id; });
+    if (!check(savedProtectedType != protectedTypes->end(), "Protected Type missing") ||
+        !success(app.types.deleteItemType(savedProtectedType->id), "Delete protected Type") ||
+        !success(app.groups.deleteGroup(protectedGroup->id), "Delete empty protected Group")) return 1;
   }
   return 0;
 }

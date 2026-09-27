@@ -132,6 +132,7 @@ public:
 private slots:
     void setLightTheme();
     void setDarkTheme();
+    void setTableRowHeight();
 
     void refreshAll();
     void refreshGroups();
@@ -153,6 +154,8 @@ private slots:
     void openBoard();
     void exportDictionary();
     void importDictionary();
+    void exportSelectedRowCsv();
+    void exportCurrentPageCsv();
     void editSelectedItem();
     void deleteSelectedItem();
     void openItemHistory();
@@ -189,6 +192,7 @@ private:
     void loadColumnVisibility();
     void applyColumnVisibility();
     void updateColumnButtons();
+    void applyTableRowHeight();
 
     void updateMarkdownStyles();
     void updateLinksDisplay(int itemId);
@@ -200,6 +204,8 @@ private:
     QList<ItemValueFilter> valueFilters() const;
     ItemColumnFilters columnFilters() const;
     void showError(const QString& message);
+    void saveRowsAsCsv(const QList<int>& rows, const QString& caption,
+                       const QString& suggestedName);
     // Clears the filters, searches for the title and selects the item with
     // this ID, or the first result.
     void showItemTitled(const QString& title, int itemId = -1);

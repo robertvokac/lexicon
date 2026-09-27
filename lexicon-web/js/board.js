@@ -44,6 +44,7 @@ async function editor(board) {
         class: 'markdown-source', rows: '18', placeholder: 'Markdown content...', ...LITERAL_TEXT,
     });
     source.value = board.content || '';
+    const original = source.value;
     const preview = el('div', { class: 'markdown-preview', 'aria-live': 'polite' });
     const refresh = debounce(() => renderMarkdown(preview, source.value), 300);
     source.addEventListener('input', refresh);
@@ -103,15 +104,31 @@ async function editor(board) {
     );
     show('source');
 
-    return openDialog({
-        title: `Edit Board — ${board.name}`,
-        body: panel,
-        wide: true,
-        acceptLabel: 'Save',
-        clearErrorOn: [source],
-        initialFocus: source,
-        onAccept: async () => api.saveBoard({ ...board, content: source.value }),
-    });
+    const warnBeforeUnload = (event) => {
+        if (source.value === original) return;
+        event.preventDefault();
+        event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    try {
+        return await openDialog({
+            title: `Edit Board — ${board.name}`,
+            body: panel,
+            wide: true,
+            acceptLabel: 'Save',
+            clearErrorOn: [source],
+            initialFocus: source,
+            closeOnBackdrop: false,
+            onCancel: async () => source.value === original || await confirmDialog(
+                'Unsaved Board changes',
+                'Discard the unsaved changes to this Board?',
+                { acceptLabel: 'Discard', cancelLabel: 'Keep editing', danger: true },
+            ),
+            onAccept: async () => api.saveBoard({ ...board, content: source.value }),
+        });
+    } finally {
+        window.removeEventListener('beforeunload', warnBeforeUnload);
+    }
 }
 
 async function boardPicker(boards) {

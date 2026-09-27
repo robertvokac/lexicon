@@ -94,9 +94,19 @@ void checkGroups(Checks &checks) {
   checks.expectEqual(
       client.put("/api/v1/groups/999999", Json{{"name", "Ghost"}}.dump()).status,
       404, "updating a missing group is a not-found error");
+  const auto item = client.post(
+      "/api/v1/items",
+      Json{{"item", Json{{"groupId", groupId}, {"title", "Protected item"}}}}.dump());
+  checks.expectEqual(item.status, 201, "an item can be created in a deletable group");
+  const int itemId = parse(item).value("id", 0);
+  checks.expectEqual(
+      client.remove("/api/v1/groups/" + std::to_string(groupId)).status, 400,
+      "a group containing an item cannot be deleted");
+  checks.expectEqual(client.remove("/api/v1/items/" + std::to_string(itemId)).status, 204,
+                     "the protected item can be deleted first");
   checks.expectEqual(
       client.remove("/api/v1/groups/" + std::to_string(groupId)).status, 204,
-      "a group can be deleted");
+      "an empty group can be deleted");
   checks.expectEqual(client.remove("/api/v1/groups/" + std::to_string(groupId))
                          .status,
                      404, "deleting it twice is a not-found error");

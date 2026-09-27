@@ -153,7 +153,8 @@ void GroupManagerDialog::deleteGroup() {
     const auto answer = QMessageBox::question(
         this,
         "Delete group",
-        QString("Delete group '%1'? All items inside it will also be deleted.").arg(group.name));
+        QString("Delete empty group '%1'? A group containing items or group-specific types cannot be deleted.")
+            .arg(group.name));
     if (answer != QMessageBox::Yes) {
         return;
     }

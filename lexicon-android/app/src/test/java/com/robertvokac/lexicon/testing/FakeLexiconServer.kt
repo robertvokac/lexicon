@@ -262,9 +262,10 @@ class FakeLexiconServer : Dispatcher() {
             }
             segments.size == 2 && segments[0] == "groups" && method == "DELETE" -> {
                 val id = segments[1].toInt()
+                if (items.values.any { it.groupId == id } || types.any { it.groupId == id }) {
+                    return error(400, "validation", "Group is not empty.")
+                }
                 if (!groups.removeIf { it.id == id }) return notFound()
-                items.values.removeIf { it.groupId == id }
-                cards.removeIf { it.itemId !in items }
                 noContent()
             }
             path == "/alarms" && method == "GET" -> json(buildJsonObject { put("alarms", encode(alarms.sortedWith(compareBy({ it.firesAt }, { it.id })))) })

@@ -127,6 +127,10 @@ BoardDialog::BoardDialog(QWidget *parent) : QDialog(parent) {
   saveButton_ = new QPushButton("Save", this);
   cancelButton_ = new QPushButton("Cancel", this);
   auto *close = new QPushButton("Close", this);
+  editButton_->setObjectName("boardEdit");
+  saveButton_->setObjectName("boardSave");
+  cancelButton_->setObjectName("boardCancel");
+  close->setObjectName("boardClose");
   buttons->addWidget(editButton_);
   buttons->addWidget(saveButton_);
   buttons->addWidget(cancelButton_);
@@ -135,7 +139,7 @@ BoardDialog::BoardDialog(QWidget *parent) : QDialog(parent) {
   connect(editButton_, &QPushButton::clicked, this, &BoardDialog::beginEdit);
   connect(saveButton_, &QPushButton::clicked, this, &BoardDialog::save);
   connect(cancelButton_, &QPushButton::clicked, this, &BoardDialog::cancelEdit);
-  connect(close, &QPushButton::clicked, this, &QDialog::accept);
+  connect(close, &QPushButton::clicked, this, &BoardDialog::closeDialog);
   connect(boardBox_, qOverload<int>(&QComboBox::currentIndexChanged), this,
           &BoardDialog::selectBoard);
   connect(newButton_, &QPushButton::clicked, this, &BoardDialog::addBoard);
@@ -272,7 +276,31 @@ void BoardDialog::beginEdit() {
   source_->setFocus();
 }
 
-void BoardDialog::cancelEdit() { showBoard(); }
+bool BoardDialog::confirmDiscardChanges() {
+  if (pages_->currentIndex() != 1 ||
+      source_->toPlainText() == qtbridge::toQt(board_.content))
+    return true;
+  return QMessageBox::question(
+             this, "Unsaved Board changes",
+             "Discard the unsaved changes to this Board?",
+             QMessageBox::Discard | QMessageBox::Cancel,
+             QMessageBox::Cancel) == QMessageBox::Discard;
+}
+
+void BoardDialog::cancelEdit() {
+  if (confirmDiscardChanges())
+    showBoard();
+}
+
+void BoardDialog::closeDialog() {
+  if (confirmDiscardChanges())
+    accept();
+}
+
+void BoardDialog::reject() {
+  if (confirmDiscardChanges())
+    QDialog::reject();
+}
 
 void BoardDialog::save() {
   auto changed = board_;

@@ -504,6 +504,35 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun theCurrentPageAndOneChosenItemCanBeSavedAsCsv() {
+        val resolver = ApplicationProvider.getApplicationContext<LexiconApplication>().contentResolver
+        val pageTarget = Uri.parse("content://com.example.documents/lexicon-page.csv")
+        val pageCsv = ByteArrayOutputStream()
+        shadowOf(resolver).registerOutputStream(pageTarget, pageCsv)
+        val itemTarget = Uri.parse("content://com.example.documents/lexicon-item.csv")
+        val itemCsv = ByteArrayOutputStream()
+        shadowOf(resolver).registerOutputStream(itemTarget, itemCsv)
+
+        login()
+        nextUri = pageTarget
+        compose.onNodeWithContentDescription("Export CSV").performClick()
+        compose.onNode(hasText("Save current page as CSV…") and hasClickAction()).performClick()
+        compose.waitForCondition { pageCsv.size() > 0 }
+        val page = pageCsv.toString(Charsets.UTF_8)
+        assertTrue(page.startsWith("\uFEFF\"Id\",\"Group\",\"Type\",\"Title\""))
+        assertTrue(page.contains("\"RAII\""))
+        assertTrue(page.contains("\"Object lifetime\""))
+
+        nextUri = itemTarget
+        compose.onNodeWithContentDescription("Actions for RAII").performClick()
+        compose.onNode(hasText("Save this item as CSV…") and hasClickAction()).performClick()
+        compose.waitForCondition { itemCsv.size() > 0 }
+        val chosen = itemCsv.toString(Charsets.UTF_8)
+        assertTrue(chosen.contains("\"RAII\""))
+        assertTrue(!chosen.contains("\"Object lifetime\""))
+    }
+
+    @Test
     fun theDictionaryIsExportedToADocumentAndImportedFromOne() {
         val resolver = ApplicationProvider.getApplicationContext<LexiconApplication>().contentResolver
         val target = Uri.parse("content://com.example.documents/lexicon.json")
@@ -714,7 +743,7 @@ class LexiconFlowsTest {
         compose.waitFor(hasContentDescription("Delete group C++"))
         assertEquals("C++", lastBody("POST", "/api/v1/groups")["name"]!!.jsonPrimitive.content)
         compose.onNodeWithContentDescription("Delete group C++").performClick()
-        compose.waitForText("Delete group 'C++'? All items inside it will also be deleted.")
+        compose.waitForText("Delete empty group 'C++'? A group containing items or group-specific types cannot be deleted.")
         inDialog("Delete").performClick()
         compose.waitUntilGone(hasText("C++"))
         assertTrue(fake.groups.none { it.name == "C++" })
@@ -763,6 +792,9 @@ class LexiconFlowsTest {
         compose.waitForText("Edit field")
         assertEquals(listOf("easy", "hard", "medium"), fake.fields.single().enumOptions)
         assertEquals("hard", fake.items.values.single { it.title == "Uses the type" }.fieldValues[field.id.toString()])
+        compose.waitForCondition {
+            runCatching { inDialog("Save").assertIsEnabled(); true }.getOrDefault(false)
+        }
         inDialog("Cancel").performClick()
 
         compose.onNodeWithContentDescription("Delete field Difficulty").performClick()
@@ -789,6 +821,8 @@ class LexiconFlowsTest {
     fun logoutEndsTheSessionEverywhere() {
         login()
         openDrawer("Log out")
+        compose.waitForText("Unsaved changes in open editors will be discarded.", substring = true)
+        inDialog("Log out").performClick()
         compose.waitForText("Log in")
         compose.waitForCondition { fake.requestsTo("POST", "/api/v1/auth/logout").isNotEmpty() }
         assertTrue(fake.tokens.isEmpty())

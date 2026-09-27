@@ -19,6 +19,9 @@ class BoardDialog : public QDialog {
 public:
   explicit BoardDialog(QWidget *parent = nullptr);
 
+public slots:
+  void reject() override;
+
 private:
   void load(int preferredId = -1);
   void selectBoard(int index);
@@ -27,6 +30,8 @@ private:
   void deleteBoard();
   void beginEdit();
   void cancelEdit();
+  void closeDialog();
+  bool confirmDiscardChanges();
   void save();
   void showBoard();
   void updatePreview();

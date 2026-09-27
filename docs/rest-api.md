@@ -141,7 +141,8 @@ DELETE /api/v1/groups/{id}      → 204
 ```
 
 `GET /groups/default` returns the `Default` group, creating it if a historical
-database has none. Deleting a group deletes the items inside it.
+database has none. Deleting a group returns `400 validation` while it contains
+items or group-specific types; move or delete those records first.
 
 ```json
 { "id": 1, "name": "Default", "description": "...", "position": 0 }

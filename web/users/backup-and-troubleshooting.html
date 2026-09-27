@@ -118,7 +118,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
 
     <h2 id="safety">Deletion safety rules</h2>
     <p>Blob files are deduplicated by SHA-256: multiple Item values can refer to the same physical file. Removing a value, Item, Field, or Type leaves the file in place. Use <strong>Tools → Blob maintenance…</strong>, or run <code>LexiconServer blobs scan --database /path/lexicon.db</code> on a server, to scan for unused files. <code>blobs verify</code> also hashes every file; <code>blobs collect</code> verifies first and removes only canonical files which are still unreferenced after a final database and content check. Back up first and preferably stop writes while collecting. Missing means a referenced file is absent; Hash mismatch means its contents are corrupt. Restore these from backup rather than deleting them. Unexpected files and symlinks are reported but not collected. The commands are local and are not available through REST or the web UI.</p>
-    <p>Lexicon uses cascade deletion to keep the database consistent. Know the two rules before you delete anything:</p>
+    <p>Lexicon uses cascade deletion for dependent records, with an application-level guard around groups. Know these rules before you delete anything:</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
       <p><strong>Deleting an item</strong> also removes its aliases, tags, flags, properties, custom field values, <a href="cards.html">cards</a>, and all links/backlinks pointing to or from it.</p>
@@ -126,7 +126,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
     <p><strong>Trash</strong> keeps a snapshot so you can restore a deleted item with its cards and surviving links. Previous saved item versions are available through <strong>History</strong>. A full database backup preserves both; a portable export contains current data only.</p>
     <div class="callout callout-danger">
       <span class="callout-icon">⚠️</span>
-      <p><strong>Deleting a group</strong> removes <em>every item inside it</em> — including all of their content and metadata. This is the most destructive action in the application.</p>
+      <p><strong>Deleting a group</strong> is allowed only when it contains no items and no group-specific types. Move or delete those records first.</p>
     </div>
     <p>Deleting a type clears its assignment and custom field values on affected items after confirmation. There is no undo for deletions. Back up <code>lexicon.db</code> and <code>blobs/</code> first if unsure.</p>
 

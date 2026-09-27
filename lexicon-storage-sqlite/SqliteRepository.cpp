@@ -226,6 +226,20 @@ SqliteRepository::Result<void> SqliteRepository::upsertGroup(const GroupRecord &
 SqliteRepository::Result<void> SqliteRepository::deleteGroup(int groupId) {
   return guarded([&] {
     Transaction tx(impl_->db, "lexicon_write");
+    Statement usage(impl_->db,
+        "SELECT (SELECT COUNT(*) FROM item WHERE group_id = ?), "
+        "(SELECT COUNT(*) FROM item_type WHERE group_id = ?) "
+        "FROM item_group WHERE id = ?;");
+    usage.bind(groupId).bind(groupId).bind(groupId);
+    require(usage.step(), "Group not found.", lexicon::Error::Code::NotFound);
+    const int items = usage.integer(0);
+    const int types = usage.integer(1);
+    require(items == 0 && types == 0,
+            "Group is not empty. Move or delete its " + std::to_string(items) +
+                (items == 1 ? " item" : " items") + " and delete its " +
+                std::to_string(types) + (types == 1 ? " group-specific type" :
+                                                       " group-specific types") +
+                " first.");
     Statement(impl_->db, "DELETE FROM item_group WHERE id = ?;").bind(groupId).run();
     requireChanged(impl_->db, "Group");
     logOperation(impl_->db, "item_group", groupId, 3); tx.commit();

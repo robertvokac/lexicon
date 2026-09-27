@@ -539,7 +539,7 @@ Lexicon creates a `Default` group automatically. With `All groups` selected, new
    - `Add` to create a new group
    - `Edit` to rename a group, change its description, or set its position (lower numbers appear first)
    - `Delete` to remove a group
-3. Important: deleting a group also deletes all items in that group (cascade delete).
+3. A group can be deleted only after its items have been moved or deleted and its group-specific types have been deleted.
 
 ### 3) Explore items in the main window
 
@@ -592,6 +592,13 @@ Lexicon is optimized for larger datasets with paging controls:
 - `Page size` selector
 
 Use these controls to browse large lexicons without loading everything into one visible page.
+
+The current table can be saved as UTF-8 CSV for a spreadsheet. In the desktop
+client use **File → Save selected row as CSV...** or **Save current page as
+CSV...**; the web client offers the corresponding downloads. Only visible
+columns are included, including the shown value columns of a selected Type.
+Android offers the current loaded page from the top **Export CSV** menu and one
+specific item from that row's actions.
 
 ### 5) Create a new item
 
@@ -773,14 +780,14 @@ A dismissal is kept on the server, so dismissing an alarm on the phone stops it 
 
 ### 14) Item history and Trash
 
-Each saved item update and link change records the previous version. Deleting an item puts a snapshot in **Trash**, including its cards and links. Open **History** for an item or **Trash** from the desktop or web menus, or from the Android item screen and drawer. Restoring an earlier version replaces the current item fields and links. Restoring a deleted item creates a new item ID and restores its cards and links whose other item still exists. History snapshots also keep referenced Blob and Image files safe from cleanup. Keep independent backups as well: deleting a group or changing a type is outside item history.
+Each saved item update and link change records the previous version. Deleting an item puts a snapshot in **Trash**, including its cards and links. Open **History** for an item or **Trash** from the desktop or web menus, or from the Android item screen and drawer. Restoring an earlier version replaces the current item fields and links. Restoring a deleted item creates a new item ID and restores its cards and links whose other item still exists. History snapshots also keep referenced Blob and Image files safe from cleanup. A non-empty group cannot be deleted; keep independent backups for type changes and other permanent operations.
 
 The Qt item editor has **Undo** and **Redo** for unsaved changes across item fields, metadata and links (`Ctrl+Z` and `Ctrl+Y`/`Ctrl+Shift+Z`). Common item actions also have shortcuts: `Ctrl+N` new, `Ctrl+E` edit, `Ctrl+Delete` delete, `Ctrl+F` search, `F5` refresh and `Ctrl+Shift+H` history.
 
 ### 15) Editing and deletion safety notes
 
 - Deleting an item removes its aliases/tags/flags, related links and cards due to cascade rules.
-- Deleting a group removes all contained items.
+- A group with items or group-specific types cannot be deleted.
 - Every item has a revision that moves on with each change to it, its values or its links. If another client (the desktop, the web client or the Android app) saved an item after you opened it, your save is not written. Lexicon lists what differs and lets you **Overwrite** the newer version, **Reload** it and drop your changes, or go back to editing.
 - Keep regular backups if your lexicon is mission-critical.
 
@@ -887,6 +894,7 @@ Backup strategies:
 - item history and Trash; backup verification; password and session management; Android offline reading; recurring, item-linked alarms; Qt item shortcuts and undo/redo
 - saves refused with a choice when another client changed the item meanwhile; content search that ignores diacritics; sessions that survive a server restart; export and import; an Inbox for quick ideas; review with spaced repetition; `[[wiki links]]` between items; a relationship graph; alarms that ring in every client; Image values; automatic server backups; an offline Inbox on Android; cards on items with a Yes/No quiz over an item or its neighbourhood
 - item table supports sorting by clicking column headers
+- the selected item or current table page can be saved/downloaded as CSV in all three clients
 - `New item` now prefills `Title` from current `Search` text
 
 ## Roadmap
@@ -895,7 +903,6 @@ Lexicon now covers what it set out to do, so new features wait while it is
 used day to day; fixes come from that use. Ideas for later, not promises:
 
 - export to static HTML, to publish a dictionary as a website
-- export to CSV, for spreadsheets
 - automatic backups for the desktop client without a server
 
 See [TODO.md](TODO.md) for the smaller polish items.

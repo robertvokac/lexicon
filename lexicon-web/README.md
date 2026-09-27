@@ -206,6 +206,7 @@ it. It needs only Python and the browser, and CI runs both on every push.
 | `lexicon.web.lastItemId` | `localStorage` | Reselects the last item you looked at |
 | `lexicon.web.viewMode` | `localStorage` | Table, list, or automatic |
 | `lexicon.web.tableHeight` | `localStorage` | Where you put the splitter |
+| `lexicon.web.rowHeight` | `localStorage` | Normal item-table row height in pixels |
 | `lexicon.web.codeLanguage` | `localStorage` | Language of the last code block, offered for the next |
 | `lexicon.web.drafts` | `localStorage` | Item edits not yet saved, per user and server |
 | `lexicon.web.massInsertDrafts` | `localStorage` | Uninserted Mass Insert rows, per user and server |
@@ -244,6 +245,7 @@ Everything below behaves the same way in both:
 | `MainWindow` search, Add, Add..., Edit, Delete, Hide attributes, Hide values, Filter Properties... | the same action row |
 | `FilterHeaderView` filter row, including dynamic type field filters | a second header row with the same widgets |
 | Column sorting, pagination (10/20/50/100), page label | the same, sorted and paged by the server |
+| `File -> Save selected row/current page as CSV...` | matching UTF-8 CSV downloads of the visible columns |
 | Markdown content preview and the link/backlink line with clickable targets | the same, links reset the filters and search for the target |
 | `ItemEditDialog` General, Content, Values, Metadata, Links, Backlinks | the same six tabs, saved in one atomic request |
 | Markdown toolbar (B, I, H2-H4, lists, quote, rule, code, code block, link, table) | the same buttons with a live preview |
@@ -281,6 +283,11 @@ widgets, the same server-side query and the same selection.
 `View -> Automatic view` (the default) picks the table on a wide window and the
 list on a phone. The choice is remembered per browser, so you can have the full
 table on a phone if that is what you want.
+
+`View -> Table row height...` changes the normal row height from 20 to 160
+pixels and remembers it in that browser. Search results that show a matching
+content excerpt keep one additional text line. The desktop client provides the
+same setting and remembers it in its local application settings.
 
 On a phone the menu opens as a drawer over the page, the secondary actions move
 behind a single overflow button so search and quick add keep the row, and the

@@ -14,13 +14,14 @@ function nextId(prefix) {
 // is how validation errors are reported without losing the user's input.
 export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'Cancel',
     onAccept, extraActions = [], wide = false, showAccept = true, initialFocus, className,
-    closeOnBackdrop = true, clearErrorOn = [] }) {
+    closeOnBackdrop = true, clearErrorOn = [], onCancel }) {
     return new Promise((resolve) => {
         const classes = ['dialog', wide ? 'dialog-wide' : '', className || ''];
         const dialog = el('dialog', { class: classes.filter(Boolean).join(' ') });
         const form = el('form', { method: 'dialog', class: 'dialog-form' });
         const errorLine = el('p', { class: 'dialog-error', role: 'alert', hidden: true });
         let settled = null;
+        let cancelling = false;
 
         const actions = el('div', { class: 'dialog-actions' });
         for (const action of extraActions) {
@@ -63,9 +64,22 @@ export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'C
             event.preventDefault();
             if (showAccept) accept();
         });
+        const cancel = async () => {
+            if (accepting || cancelling) return;
+            cancelling = true;
+            try {
+                if (onCancel && await onCancel() === false) return;
+                settled = null;
+                dialog.close();
+            } catch (error) {
+                showDialogError(errorLine, error.message || String(error));
+            } finally {
+                cancelling = false;
+            }
+        };
         actions.appendChild(button(cancelLabel, {
             class: 'secondary',
-            onclick: () => { settled = null; dialog.close(); },
+            onclick: cancel,
         }));
 
         form.appendChild(el('h2', { class: 'dialog-title', text: title }));
@@ -83,9 +97,13 @@ export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'C
             dialog.remove();
             resolve(settled);
         });
+        dialog.addEventListener('cancel', (event) => {
+            event.preventDefault();
+            cancel();
+        });
         // A click on the backdrop cancels, like clicking outside a Qt dialog.
         dialog.addEventListener('mousedown', (event) => {
-            if (closeOnBackdrop && event.target === dialog) { settled = null; dialog.close(); }
+            if (closeOnBackdrop && event.target === dialog) cancel();
         });
         dialog.showModal();
         const focusTarget = initialFocus

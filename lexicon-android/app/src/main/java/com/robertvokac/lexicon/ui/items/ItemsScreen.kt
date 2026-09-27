@@ -1,5 +1,7 @@
 package com.robertvokac.lexicon.ui.items
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -82,6 +84,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -107,6 +110,7 @@ import com.robertvokac.lexicon.ui.common.SyncedTextField
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /** Where a new item's full editor should start. */
 data class NewItemRequest(val groupId: Int?, val typeId: Int?, val title: String)
@@ -127,8 +131,34 @@ fun ItemsScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showFilters by rememberSaveable { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
+    var pendingCsv by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val saveCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        val csv = pendingCsv
+        pendingCsv = ""
+        if (uri != null && csv.isNotEmpty()) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(csv.toByteArray(Charsets.UTF_8))
+                } ?: error("The selected document cannot be opened.")
+            }
+            scope.launch {
+                snackbar.showSnackbar(result.fold(
+                    onSuccess = { "The CSV file was saved." },
+                    onFailure = { "Cannot save CSV: ${it.message ?: "unknown error"}" },
+                ))
+            }
+        }
+    }
+    val export: (List<Item>, String) -> Unit = { items, name ->
+        if (items.isNotEmpty()) {
+            pendingCsv = ItemCsv.encode(items, state.typeFields)
+            saveCsv.launch(name)
+        }
+    }
 
     state.message?.let { message ->
         LaunchedEffect(message.id) {
@@ -180,6 +210,32 @@ fun ItemsScreen(
                             Icon(
                                 Icons.Filled.FilterList,
                                 contentDescription = if (active > 0) "Filters and sort, $active active" else "Filters and sort",
+                            )
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showExport = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "Export CSV")
+                        }
+                        DropdownMenu(expanded = showExport, onDismissRequest = { showExport = false }) {
+                            val selected = state.items.firstOrNull { it.id == selectedItemId }
+                            DropdownMenuItem(
+                                text = { Text("Save selected item as CSV…") },
+                                enabled = selected != null,
+                                onClick = {
+                                    showExport = false
+                                    selected?.let {
+                                        export(listOf(it), "lexicon-item-${it.id}-${LocalDate.now()}.csv")
+                                    }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Save current page as CSV…") },
+                                enabled = state.items.isNotEmpty(),
+                                onClick = {
+                                    showExport = false
+                                    export(state.items, "lexicon-page-${LocalDate.now()}.csv")
+                                },
                             )
                         }
                     }
@@ -252,6 +308,9 @@ fun ItemsScreen(
                                 onOpen = { item.id?.let(onOpenItem) },
                                 onEdit = { item.id?.let(onEditItem) },
                                 onDelete = { viewModel.requestDelete(item) },
+                                onExport = {
+                                    export(listOf(item), "lexicon-item-${item.id}-${LocalDate.now()}.csv")
+                                },
                             )
                             HorizontalDivider()
                         }
@@ -431,6 +490,7 @@ private fun ItemRow(
     onOpen: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onExport: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
@@ -520,6 +580,13 @@ private fun ItemRow(
                 onClick = {
                     menu = false
                     onEdit()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Save this item as CSV…") },
+                onClick = {
+                    menu = false
+                    onExport()
                 },
             )
             DropdownMenuItem(

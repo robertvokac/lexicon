@@ -3,8 +3,10 @@
 #include "AlarmNotifier.h"
 #include "AlarmsDialog.h"
 #include "ApplicationContext.h"
+#include "BoardDialog.h"
 #include "CardQuizDialog.h"
 #include "CardsDialog.h"
+#include "CsvExport.h"
 #include "GraphDialog.h"
 #include "GraphLayout.h"
 #include "ImageValueView.h"
@@ -56,6 +58,16 @@ void check(bool condition, const std::string &message) {
   if (condition) return;
   ++failures;
   std::cerr << "FAIL: " << message << '\n';
+}
+void checkCsvExport() {
+  const auto csv = csvexport::encode(
+      {"Title", "Tags"}, {{QString::fromUtf8("Příliš \"žluťoučký\""), "one,two"}, {"Line\nbreak", ""}});
+  check(csv.startsWith(QByteArray::fromHex("efbbbf")), "CSV starts with a UTF-8 BOM");
+  check(QString::fromUtf8(csv.mid(3)) == QString::fromUtf8(
+            "\"Title\",\"Tags\"\r\n"
+            "\"Příliš \"\"žluťoučký\"\"\",\"one,two\"\r\n"
+            "\"Line\nbreak\",\"\"\r\n"),
+        "CSV quotes commas, quotes, newlines and UTF-8 text");
 }
 // With LEXICON_SMOKE_SHOTS=<directory>, each dialog is also saved as a PNG
 // there, for a person to look at.
@@ -239,6 +251,31 @@ template <class Dialog> void whenOpened(std::function<void(Dialog &)> what) {
     if (auto *dialog = qobject_cast<Dialog *>(QApplication::activeModalWidget())) what(*dialog);
     else check(false, "the expected dialog opened");
   });
+}
+
+void checkBoardDiscardProtection() {
+  BoardDialog board;
+  board.show();
+  QApplication::processEvents();
+  auto *edit = child<QPushButton>(board, "boardEdit");
+  auto *cancel = child<QPushButton>(board, "boardCancel");
+  auto *source = child<QTextEdit>(board, "boardSource");
+  if (!edit || !cancel || !source) return;
+  edit->click();
+  source->setPlainText("Unsaved Board text");
+  QString warning;
+  whenOpened<QMessageBox>([&](QMessageBox &box) {
+    warning = box.text();
+    box.button(QMessageBox::Cancel)->click();
+  });
+  cancel->click();
+  check(warning == "Discard the unsaved changes to this Board?" && source->isVisible(),
+        "a cancelled Board discard keeps the editor open");
+  whenOpened<QMessageBox>([](QMessageBox &box) {
+    box.button(QMessageBox::Discard)->click();
+  });
+  cancel->click();
+  check(!source->isVisible(), "a confirmed Board discard returns to its viewer");
 }
 
 void checkCards(lexicon::LexiconApplication &application, int group) {
@@ -832,6 +869,8 @@ int main(int argc, char **argv) {
   installApplication(facade);
   const int group = application.groups.defaultGroupId().value_or(-1);
 
+  checkCsvExport();
+  checkBoardDiscardProtection();
   checkReview(application, group);
   checkWikiLinks(application, group);
   checkGraph(application, group);
