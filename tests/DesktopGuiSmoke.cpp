@@ -33,6 +33,7 @@
 #include <QPainter>
 #include <QDateTimeEdit>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QTimeZone>
 #include <QLabel>
 #include <QLineEdit>
@@ -41,6 +42,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTextBrowser>
@@ -53,6 +55,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <algorithm>
 
 namespace {
 namespace fs = std::filesystem;
@@ -903,7 +906,8 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
   plan.item = "Effective Modern C++";
   plan.startDate = qtbridge::toCore(QDate::currentDate().toString("yyyy-MM-dd"));
   plan.endDate = qtbridge::toCore(QDate::currentDate().addDays(5).toString("yyyy-MM-dd"));
-  plan.lastUnit = 334;
+  plan.firstUnit = 101;
+  plan.lastUnit = 300;
   auto saved = application.studyPlans.save(plan);
   check(saved.has_value(), "create Study Plan for desktop dialog");
   if (!saved) return;
@@ -916,14 +920,35 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
   if (!table || !remove) return;
   check(table->rowCount() == 1 && table->item(0, 0)->text() == "Effective Modern C++",
         "desktop Study Plan shows the saved item");
+  auto labels = dialog.findChildren<QLabel*>();
+  check(std::any_of(labels.begin(), labels.end(), [](QLabel* label) { return label->text().startsWith("Expected progress: page "); }),
+        "desktop dashboard shows absolute expected progress");
+  check(std::any_of(labels.begin(), labels.end(), [](QLabel* label) { return label->text().startsWith("Expected unit range today: pages 101–"); }),
+        "desktop dashboard shows both endpoints of expected range");
+  table->selectRow(0);
+  auto* updateProgress = [&]() -> QPushButton* {
+    for (auto* button : dialog.findChildren<QPushButton*>())
+      if (button->text() == "Update progress..." && button->parent() == &dialog) return button;
+    return nullptr;
+  }();
+  if (updateProgress) {
+    whenOpened<QDialog>([](QDialog& opened) {
+      auto* spinner = child<QSpinBox>(opened, "studyPlanQuickProgress");
+      check(spinner && spinner->minimum() == 100 && spinner->value() == 100 &&
+            spinner->specialValueText() == "Not started (0)", "quick progress offers zero then 101–300");
+      opened.reject();
+    });
+    updateProgress->click();
+  }
   const QString requiredBefore = table->item(0, 7)->text();
   QPushButton* markToday = nullptr;
   for (auto* button : dialog.findChildren<QPushButton*>())
     if (button->text() == "Mark today complete") markToday = button;
   check(markToday != nullptr, "active dashboard has quick target action");
   if (markToday) {
+    check(markToday->isEnabled(), "scheduled target can advance the plan");
     markToday->click();
-    check(application.studyPlans.load(saved->id)->currentProgress > 0, "quick action advances progress");
+    check(application.studyPlans.load(saved->id)->currentProgress >= 101, "quick action advances progress to absolute unit");
     check(table->item(0, 7)->text() != requiredBefore, "required pace refreshes after progress changes");
   }
   table->selectRow(0);
@@ -936,6 +961,48 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
   whenOpened<QMessageBox>([](QMessageBox &box) { box.button(QMessageBox::Yes)->click(); });
   remove->click();
   check(!application.studyPlans.load(saved->id), "confirmed delete removes the plan");
+  plan.currentProgress = 300;
+  auto completed = application.studyPlans.save(plan);
+  check(completed.has_value(), "create completed Study Plan for desktop dialog");
+  if (completed) {
+    StudyPlanDialog finishedDialog;
+    finishedDialog.show();
+    QApplication::processEvents();
+    auto* finishedTable = child<QTableWidget>(finishedDialog, "studyPlanTable");
+    auto* filter = child<QComboBox>(finishedDialog, "studyPlanFilter");
+    filter->setCurrentIndex(1);
+    check(finishedTable->rowCount() == 0, "completed plan is not duplicated in active filter");
+    filter->setCurrentIndex(3);
+    check(finishedTable->rowCount() == 1, "completed plan appears in finished filter");
+    auto* completeButton = [&]() -> QPushButton* {
+      for (auto* button : finishedDialog.findChildren<QPushButton*>())
+        if (button->text() == "Mark plan complete") return button;
+      return nullptr;
+    }();
+    check(completeButton && !completeButton->isVisible(), "completed plan has no completion action");
+    application.studyPlans.remove(completed->id);
+  }
+  plan.currentProgress = 0;
+  plan.endDate = qtbridge::toCore(QDate::currentDate().addDays(1).toString("yyyy-MM-dd"));
+  plan.studyDaysMask = 1 << (QDate::currentDate().addDays(1).dayOfWeek() - 1);
+  auto noStudy = application.studyPlans.save(plan);
+  check(noStudy.has_value(), "create active plan without study today");
+  if (noStudy) {
+    StudyPlanDialog noStudyDialog;
+    noStudyDialog.show();
+    QApplication::processEvents();
+    auto noStudyLabels = noStudyDialog.findChildren<QLabel*>();
+    check(std::any_of(noStudyLabels.begin(), noStudyLabels.end(), [](QLabel* label) {
+      return label->text() == "Expected unit range today: No study scheduled";
+    }), "desktop dashboard explains non-study day");
+    auto* noStudyAction = [&]() -> QPushButton* {
+      for (auto* button : noStudyDialog.findChildren<QPushButton*>())
+        if (button->text() == "Mark today complete") return button;
+      return nullptr;
+    }();
+    check(noStudyAction && !noStudyAction->isEnabled(), "desktop non-study day cannot be marked complete");
+    application.studyPlans.remove(noStudy->id);
+  }
 }
 
 int main(int argc, char **argv) {

@@ -47,7 +47,11 @@ data class StudyPlanOverview(
     val elapsedStudyDays: Int,
     val remainingStudyDays: Int,
     val plannedUnitsPerStudyDay: Double,
-    val requiredUnitsPerRemainingStudyDay: Double,
+    val requiredUnitsPerRemainingStudyDay: Double?,
+    val expectedCompletedUnits: Int,
+    val expectedProgress: Int,
+    val expectedUnitStart: Int?,
+    val expectedUnitEnd: Int?,
     val expectedUnits: Int,
     val deficitUnits: Int,
     val todayFirst: Int,
@@ -57,6 +61,22 @@ data class StudyPlanOverview(
 ) {
     fun range(first: Int, last: Int): String = if (first == 0 || last == 0) "No units scheduled today"
         else "${plan.unitLabel(last - first + 1)} $first${if (first == last) "" else "–$last"}"
+    fun expectedRangeText(): String = when {
+        !active -> "—"
+        !studyDay -> "No study scheduled"
+        else -> range(expectedUnitStart ?: 0, expectedUnitEnd ?: 0)
+    }
+    fun requiredPaceText(): String = when {
+        requiredUnitsPerRemainingStudyDay == null -> if (ended) "N/A — deadline passed" else "N/A — no study days remaining"
+        else -> "%.2f %s/day".format(requiredUnitsPerRemainingStudyDay, plan.unitLabel(2))
+    }
+    fun differenceText(): String = when {
+        deficitUnits > 0 -> "Behind by: $deficitUnits ${plan.unitLabel(deficitUnits)}"
+        deficitUnits < 0 -> "Ahead by: ${-deficitUnits} ${plan.unitLabel(-deficitUnits)}"
+        else -> "On expected progress"
+    }
+    fun canMarkToday(): Boolean = active && !complete && studyDay && expectedUnitEnd != null &&
+        maxOf(expectedUnitEnd, recommendedLast) > plan.currentProgress
 }
 
 @Serializable internal data class StudyPlansEnvelope(val studyPlans: List<StudyPlan>)

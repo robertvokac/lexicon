@@ -158,13 +158,13 @@ fun StudyPlansScreen(viewModel: StudyPlansViewModel, onBack: () -> Unit) {
             state.error != null -> ErrorBox(state.error.orEmpty(), onRetry = viewModel::load, modifier = Modifier.padding(padding))
             else -> {
                 val priority = mapOf("At risk" to 0, "Behind" to 1, "On track" to 2, "Completed" to 3)
-                val active = state.plans.filter { it.active }.sortedWith(compareBy({ priority[it.status] ?: 4 }, { it.plan.item }))
-                val upcoming = state.plans.filter { it.upcoming }
+                val active = state.plans.filter { it.active && !it.complete }.sortedWith(compareBy({ priority[it.status] ?: 4 }, { it.plan.item }))
+                val upcoming = state.plans.filter { it.upcoming && !it.complete }
                 val past = state.plans.filter { it.ended || it.complete }
                 LazyColumn(Modifier.padding(padding).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     item { Text("Today · ${state.date}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp)) }
-                    item { Text("Active today (${active.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp)) }
+                    item { Text("Active (${active.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 16.dp)) }
                     if (active.isEmpty()) item { Text("No active plans today.", modifier = Modifier.padding(horizontal = 16.dp)) }
                     items(active, key = { "active-${it.plan.id}" }) { value ->
                         StudyCard(value, state.busy, onEdit = { editing = it }, onDelete = { deleting = it },
@@ -176,7 +176,7 @@ fun StudyPlansScreen(viewModel: StudyPlansViewModel, onBack: () -> Unit) {
                         StudyCard(value, state.busy, { editing = it }, { deleting = it }, { progress = it },
                             { plan, target -> viewModel.save(plan.copy(currentProgress = target)) }, { completing = it })
                     }
-                    item { Text("Past / completed (${past.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp)) }
+                    item { Text("Finished (${past.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp)) }
                     items(past, key = { "past-${it.plan.id}" }) { value ->
                         StudyCard(value, state.busy, { editing = it }, { deleting = it }, { progress = it },
                             { plan, target -> viewModel.save(plan.copy(currentProgress = target)) }, { completing = it })
@@ -210,12 +210,14 @@ private fun StudyCard(value: StudyPlanOverview, busy: Boolean, onEdit: (StudyPla
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(plan.item, style = MaterialTheme.typography.titleMedium)
             Text("${plan.type} · ${plan.unitLabel(2)} · ${plan.startDate} – ${plan.endDate}", style = MaterialTheme.typography.bodySmall)
-            Text("Progress: ${value.completedUnits} / ${value.totalUnits} ${plan.unitLabel(value.totalUnits)} · last completed ${plan.currentProgress.takeIf { it > 0 } ?: "none"}")
-            Text(if (value.studyDay) "Original plan today: ${value.range(value.todayFirst, value.todayLast)}" else "No study scheduled today")
-            if (value.recommendedFirst > 0) Text("Recommended today: ${value.range(value.recommendedFirst, value.recommendedLast)}")
-            Text("Planned: ${pace(value.plannedUnitsPerStudyDay)} ${plan.unitLabel(2)}/day")
-            Text("Required now: ${pace(value.requiredUnitsPerRemainingStudyDay)} ${plan.unitLabel(2)}/day")
-            Text("${value.status}${if (value.deficitUnits > 0 && value.active) " · behind by ${value.deficitUnits} ${plan.unitLabel(value.deficitUnits)}" else ""}${if (value.status == "Overdue") " · ${value.remainingUnits} remaining" else ""}",
+            Text("Current progress: ${if (plan.currentProgress == 0) "0" else "${plan.unitLabel(1)} ${plan.currentProgress}"}")
+            Text("Expected progress: ${if (value.expectedProgress == 0) "0" else "${plan.unitLabel(1)} ${value.expectedProgress}"}")
+            Text(value.differenceText())
+            Text("Expected unit range today: ${value.expectedRangeText()}")
+            Text("Recommended today: ${if (value.recommendedFirst > 0) value.range(value.recommendedFirst, value.recommendedLast) else "—"}")
+            Text("Planned pace: ${pace(value.plannedUnitsPerStudyDay)} ${plan.unitLabel(2)}/day")
+            Text("Required now: ${value.requiredPaceText()}")
+            Text("Status: ${value.status}",
                 color = if (warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
             if (plan.note.isNotBlank()) Text(plan.note, style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,9 +225,9 @@ private fun StudyCard(value: StudyPlanOverview, busy: Boolean, onEdit: (StudyPla
                 OutlinedButton(onClick = { onEdit(plan) }, enabled = !busy) { Text("Edit") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { onTarget(plan, maxOf(plan.currentProgress, value.todayLast, value.recommendedLast)) },
-                    enabled = !busy && value.studyDay && (value.todayLast > 0 || value.recommendedLast > 0)) { Text("Mark today") }
-                OutlinedButton(onClick = { onComplete(plan) }, enabled = !busy && !value.complete) { Text("Complete") }
+                OutlinedButton(onClick = { if (value.canMarkToday()) onTarget(plan, maxOf(plan.currentProgress, value.expectedUnitEnd ?: 0, value.recommendedLast)) },
+                    enabled = !busy && value.canMarkToday()) { Text("Mark today") }
+                if (!value.complete) OutlinedButton(onClick = { onComplete(plan) }, enabled = !busy) { Text("Complete") }
                 TextButton(onClick = { onDelete(plan) }, enabled = !busy) { Text("Delete") }
             }
         }

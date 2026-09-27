@@ -1,5 +1,6 @@
 #pragma once
 #include "Repository.h"
+#include <optional>
 
 namespace lexicon {
 enum class StudyPlanStatus { Upcoming, OnTrack, Behind, AtRisk, Completed, Overdue };
@@ -21,9 +22,13 @@ struct StudyPlanOverview {
   int elapsedStudyDays = 0;
   int remainingStudyDays = 0;
   double plannedUnitsPerStudyDay = 0;
-  double requiredUnitsPerRemainingStudyDay = 0;
-  int expectedUnits = 0;
+  std::optional<double> requiredUnitsPerRemainingStudyDay;
+  int expectedCompletedUnits = 0;
+  int expectedProgress = 0;
   int deficitUnits = 0; // negative means ahead
+  std::optional<int> expectedUnitStart;
+  std::optional<int> expectedUnitEnd;
+  // Legacy range names retained for existing API consumers.
   int todayFirst = 0;
   int todayLast = 0;
   int recommendedFirst = 0;

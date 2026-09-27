@@ -682,3 +682,8 @@ Migration 34 adds the independent `study_plan` table. Qt uses the shared
 client's local calendar date. The server calculates targets, required pace and
 risk in the C++ application layer. Version 9 dictionary exports include plans;
 SQLite snapshots include the table automatically.
+The overview derives expected cumulative progress, the original daily unit
+range, and required pace availability. These values are not stored in
+`study_plan`. For units 101–300, 120 expected completed units means expected
+progress is absolute unit 220. A daily range such as 211–220 is distinct from
+both that cumulative value and a catch-up recommendation from actual progress.

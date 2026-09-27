@@ -701,10 +701,26 @@ Each overview entry contains `plan` plus `upcoming`, `active`, `ended`,
 `complete`, `studyDay`, `totalUnits`, `completedUnits`, `remainingUnits`,
 `totalStudyDays`, `elapsedStudyDays`, `remainingStudyDays`,
 `plannedUnitsPerStudyDay`, `requiredUnitsPerRemainingStudyDay`,
-`expectedUnits`, `deficitUnits`, `todayFirst`, `todayLast`,
-`recommendedFirst`, `recommendedLast`, and `status`. A zero range endpoint
-means no units are scheduled for that day. Clients display pace to two
-decimal places, without rounding server calculations first.
+`expectedCompletedUnits`, `expectedProgress`, `expectedUnitStart`,
+`expectedUnitEnd`, `deficitUnits`, `recommendedFirst`, `recommendedLast`, and
+`status`. `expectedUnits` aliases `expectedCompletedUnits`, and `todayFirst`
+and `todayLast` alias the expected daily range (using zero for no range) for
+older clients. The explicit range fields are `null` when no units are assigned
+to the requested date. `requiredUnitsPerRemainingStudyDay` is `null` when units
+remain but no configured study days remain, including after the deadline.
+A completed plan has zero required pace. Clients display an available pace to
+two decimal places without rounding server calculations first.
+
+Current progress is the last absolute unit actually completed, or zero when
+not started. Expected progress is the last absolute unit the schedule says
+should be complete by the requested date. Expected unit range is the original
+schedule's assignment specifically for that date. Recommended today is a
+catch-up range derived from actual progress and remaining study days. For
+pages 101–300, 120 expected completed units means expected progress is page
+220, not 120. If that day's expected range is pages 211–220, its start and
+end are separate from the cumulative expected progress. Before the start date
+expected progress is zero; after the end date it is page 300. These are
+calculated overview values and are not persisted in SQLite.
 
 The original daily range uses cumulative integer division across selected
 study days, covering each unit exactly once. The recommended range appears

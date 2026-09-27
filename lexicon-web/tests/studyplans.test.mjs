@@ -1,11 +1,35 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { localStudyDate, pace, studyRange, unitLabel } from '../js/studyplans.js';
+import { canMarkToday, differenceText, expectedRangeText, localStudyDate, pace, requiredPaceText, studyRange, unitLabel } from '../js/studyplans.js';
 
 test('local date uses local calendar components across a timezone boundary', () => {
     const late = new Date('2026-09-27T23:30:00-05:00');
     const expected = `${late.getFullYear()}-${String(late.getMonth() + 1).padStart(2, '0')}-${String(late.getDate()).padStart(2, '0')}`;
     assert.equal(localStudyDate(late), expected);
+});
+test('overview presents absolute progress, daily range and unavailable pace', () => {
+    const plan = { unitType: 'Page', firstUnit: 101, lastUnit: 300, currentProgress: 187 };
+    const value = { plan, active: true, ended: false, complete: false, studyDay: true,
+        expectedProgress: 220, expectedUnitStart: 211, expectedUnitEnd: 220,
+        recommendedLast: 230, deficitUnits: 33, requiredUnitsPerRemainingStudyDay: 14.25 };
+    assert.equal(value.expectedProgress, 220);
+    assert.equal(expectedRangeText(value), 'pages 211–220');
+    assert.equal(differenceText(value), 'Behind by: 33 pages');
+    assert.equal(requiredPaceText(value), '14.25 pages/day');
+    assert.equal(canMarkToday(value), true);
+    assert.equal(differenceText({ ...value, deficitUnits: -10 }), 'Ahead by: 10 pages');
+    assert.equal(differenceText({ ...value, deficitUnits: 0 }), 'On expected progress');
+    const noDay = { ...value, studyDay: false, expectedUnitStart: null, expectedUnitEnd: null,
+        requiredUnitsPerRemainingStudyDay: null };
+    assert.equal(expectedRangeText(noDay), 'No study scheduled');
+    assert.equal(requiredPaceText(noDay), 'N/A — no study days remaining');
+    assert.equal(canMarkToday(noDay), false);
+    assert.equal(expectedRangeText({ ...noDay, studyDay: true }), 'No units scheduled today');
+    assert.equal(canMarkToday({ ...noDay, studyDay: true }), false);
+    assert.equal(expectedRangeText({ ...noDay, active: false }), '—');
+    assert.equal(requiredPaceText({ ...noDay, active: false, ended: true }), 'N/A — deadline passed');
+    assert.equal(canMarkToday({ ...value, complete: true }), false);
+    assert.equal(canMarkToday({ ...value, recommendedLast: 187, expectedUnitEnd: 187 }), false);
 });
 test('pace is displayed to exactly two decimals', () => {
     assert.equal(pace(500 / 73), '6.85');

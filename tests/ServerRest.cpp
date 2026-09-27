@@ -67,6 +67,18 @@ void checkStudyPlans(Checks &checks) {
   checks.expectEqual(saturday.at("plans").at(0).value("totalStudyDays", 0), 5,
                      "weekend does not count on a weekday plan");
   checks.expect(!saturday.at("plans").at(0).value("studyDay", true), "Saturday has no target");
+  const auto saturdayPlan = saturday.at("plans").at(0);
+  checks.expect(saturdayPlan.at("expectedUnitStart").is_null() && saturdayPlan.at("expectedUnitEnd").is_null() &&
+                    saturdayPlan.at("requiredUnitsPerRemainingStudyDay").is_null(),
+                "non-study day after final study day has null range and pace");
+  const auto future = parse(client.get("/api/v1/study-plans/overview?date=2026-09-27")).at("plans").at(0);
+  checks.expectEqual(future.value("expectedProgress", -1), 0, "future expected progress zero");
+  const auto past = parse(client.get("/api/v1/study-plans/overview?date=2026-10-05")).at("plans").at(0);
+  checks.expectEqual(past.value("expectedProgress", -1), 300, "past expected progress absolute last unit");
+  checks.expect(past.at("requiredUnitsPerRemainingStudyDay").is_null(), "overdue required pace unavailable");
+  const auto firstDay = parse(client.get("/api/v1/study-plans/overview?date=2026-09-28")).at("plans").at(0);
+  checks.expectEqual(firstDay.value("expectedUnitStart", -1), 101, "first scheduled unit starts at firstUnit");
+  checks.expectEqual(firstDay.value("expectedUnitEnd", -1), 140, "first scheduled unit end");
   checks.expectEqual(client.get("/api/v1/study-plans/overview?date=2026-02-30").status, 400,
                      "invalid overview date");
   plan["currentProgress"] = 200;
@@ -74,8 +86,14 @@ void checkStudyPlans(Checks &checks) {
   checks.expectEqual(changed.status, 200, "update Study Plan");
   checks.expectEqual(parse(changed).at("studyPlan").value("currentProgress", 0), 200, "progress round trips");
   auto overview = parse(client.get("/api/v1/study-plans/overview?date=2026-09-30")).at("plans").at(0);
+  checks.expectEqual(overview.value("expectedCompletedUnits", -1), 120, "REST cumulative count");
+  checks.expectEqual(overview.value("expectedProgress", -1), 220, "REST absolute expected progress");
+  checks.expectEqual(overview.value("expectedUnitStart", -1), 181, "REST daily range start");
+  checks.expectEqual(overview.value("expectedUnitEnd", -1), 220, "REST daily range end");
+  checks.expectEqual(overview.value("recommendedFirst", -1), 201, "REST catch-up starts after actual progress");
+  checks.expectEqual(overview.value("recommendedLast", -1), 234, "REST catch-up range differs from original daily range");
   checks.expect(overview.contains("requiredUnitsPerRemainingStudyDay") && overview.contains("todayFirst"),
-                "overview carries calculated pace and range");
+                "overview carries calculated pace and legacy range");
   plan["type"] = "Unknown";
   checks.expectEqual(client.post("/api/v1/study-plans", plan.dump()).status, 400, "unknown enum rejected");
   plan["type"] = "Book";

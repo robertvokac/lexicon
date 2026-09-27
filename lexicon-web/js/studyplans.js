@@ -18,6 +18,26 @@ export function studyRange(plan, first, last) {
     if (!first || !last) return 'No units scheduled today';
     return `${unitLabel(plan, last - first + 1)} ${first}${first === last ? '' : `–${last}`}`;
 }
+export function expectedRangeText(value) {
+    if (!value.active) return '—';
+    if (!value.studyDay) return 'No study scheduled';
+    return studyRange(value.plan, value.expectedUnitStart, value.expectedUnitEnd);
+}
+export function requiredPaceText(value) {
+    if (value.requiredUnitsPerRemainingStudyDay == null)
+        return value.ended ? 'N/A — deadline passed' : 'N/A — no study days remaining';
+    return `${pace(value.requiredUnitsPerRemainingStudyDay)} ${unitLabel(value.plan, 2)}/day`;
+}
+export function differenceText(value) {
+    const { deficitUnits, plan } = value;
+    if (deficitUnits > 0) return `Behind by: ${deficitUnits} ${unitLabel(plan, deficitUnits)}`;
+    if (deficitUnits < 0) return `Ahead by: ${-deficitUnits} ${unitLabel(plan, -deficitUnits)}`;
+    return 'On expected progress';
+}
+export function canMarkToday(value) {
+    return value.active && !value.complete && value.studyDay && value.expectedUnitEnd != null &&
+        Math.max(value.expectedUnitEnd ?? 0, value.recommendedLast) > value.plan.currentProgress;
+}
 
 function select(options, value) {
     const control = el('select');
@@ -66,6 +86,10 @@ async function editPlan(plan = {}) {
             if (!values.item || !mask || (values.unitType === 'Other' && !values.customUnit)) {
                 fail('Enter an item, at least one study day, and a custom label for Other.'); return undefined;
             }
+            if (!Number.isInteger(values.currentProgress) ||
+                (values.currentProgress !== 0 && (values.currentProgress < values.firstUnit || values.currentProgress > values.lastUnit))) {
+                fail(`Enter 0 or a unit from ${values.firstUnit} to ${values.lastUnit}.`); return undefined;
+            }
             return plan.id ? api.updateStudyPlan(plan.id, values) : api.createStudyPlan(values);
         },
     });
@@ -112,21 +136,24 @@ export async function openStudyPlans() {
         const lines = [
             el('h3', { text: p.item }),
             el('p', { class: 'hint', text: `${p.type} · ${unitLabel(p, 2)} · ${p.startDate} – ${p.endDate}` }),
-            el('p', { text: `Progress: ${value.completedUnits} / ${value.totalUnits} ${unitLabel(p, value.totalUnits)} · last completed ${p.currentProgress || 'none'}` }),
-            el('p', { text: value.studyDay ? `Original plan today: ${studyRange(p, value.todayFirst, value.todayLast)}` : 'No study scheduled today' }),
+            el('p', { text: `Current progress: ${p.currentProgress ? `${unitLabel(p, 1)} ${p.currentProgress}` : '0'}` }),
+            el('p', { text: `Expected progress: ${value.expectedProgress ? `${unitLabel(p, 1)} ${value.expectedProgress}` : '0'}` }),
+            el('p', { text: differenceText(value) }),
+            el('p', { text: `Expected unit range today: ${expectedRangeText(value)}` }),
         ];
-        if (value.recommendedFirst)
-            lines.push(el('p', { text: `Recommended today: ${studyRange(p, value.recommendedFirst, value.recommendedLast)}` }));
-        lines.push(el('p', { text: `Planned pace: ${pace(value.plannedUnitsPerStudyDay)} ${unitLabel(p, 2)}/day · Required now: ${pace(value.requiredUnitsPerRemainingStudyDay)} ${unitLabel(p, 2)}/day` }));
+        lines.push(el('p', { text: `Recommended today: ${value.recommendedFirst ? studyRange(p, value.recommendedFirst, value.recommendedLast) : '—'}` }));
+        lines.push(el('p', { text: `Planned pace: ${pace(value.plannedUnitsPerStudyDay)} ${unitLabel(p, 2)}/day` }));
+        lines.push(el('p', { text: `Required now: ${requiredPaceText(value)}` }));
         lines.push(el('p', { class: warning ? 'study-warning' : 'study-status',
-            text: `Status: ${value.status}${value.deficitUnits > 0 && value.active ? ` · behind by ${value.deficitUnits} ${unitLabel(p, value.deficitUnits)}` : ''}${value.status === 'Overdue' ? ` · ${value.remainingUnits} remaining` : ''}` }));
+            text: `Status: ${value.status}` }));
         if (p.note) lines.push(el('p', { class: 'study-note', text: p.note }));
         lines.push(el('div', { class: 'study-actions' }, [
             button('Update progress', { class: 'secondary', onclick: () => updateProgress(p) }),
-            button('Mark today complete', { class: 'secondary', disabled: !value.studyDay || (!value.todayLast && !value.recommendedLast),
-                onclick: () => change(p, Math.max(p.currentProgress, value.todayLast, value.recommendedLast)) }),
-            button('Mark plan complete', { class: 'secondary', disabled: value.complete,
+            button('Mark today complete', { class: 'secondary', disabled: !canMarkToday(value),
+                onclick: () => { if (canMarkToday(value)) change(p, Math.max(p.currentProgress, value.expectedUnitEnd ?? 0, value.recommendedLast)); } }),
+            ...(!value.complete ? [button('Mark plan complete', { class: 'secondary',
                 onclick: async () => { if (await confirmDialog('Complete Study Plan', `Mark "${p.item}" complete?`)) await change(p, p.lastUnit); } }),
+            ] : []),
             button('Edit', { class: 'secondary', onclick: () => edit(p) }),
             button('Delete', { class: 'secondary', onclick: () => remove(p) }),
         ]));
@@ -139,13 +166,13 @@ export async function openStudyPlans() {
     function render() {
         clear(content);
         const priority = { 'At risk': 0, Behind: 1, 'On track': 2, Completed: 3 };
-        const active = overviews.filter((x) => x.active).sort((a, b) =>
+        const active = overviews.filter((x) => x.active && !x.complete).sort((a, b) =>
             (priority[a.status] ?? 4) - (priority[b.status] ?? 4) || a.plan.item.localeCompare(b.plan.item));
-        const upcoming = overviews.filter((x) => x.upcoming);
+        const upcoming = overviews.filter((x) => x.upcoming && !x.complete);
         const past = overviews.filter((x) => x.ended || x.complete);
         content.append(el('p', { class: 'hint', text: `Today: ${date} · calendar dates are local to this device` }),
             button('Add Study Plan', { class: 'primary', onclick: () => edit({}) }),
-            section('Active today', active), section('Upcoming', upcoming), section('Past / completed', past));
+            section('Active', active), section('Upcoming', upcoming), section('Finished', past));
     }
     try { await refresh(); }
     catch (error) { await errorDialog(error.message); return; }

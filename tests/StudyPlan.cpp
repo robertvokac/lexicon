@@ -1,10 +1,12 @@
 #include "Exchange.h"
 #include "SqliteRepository.h"
 #include "StudyPlan.h"
+#include "Transport.h"
 #include "Validation.h"
 #include <sqlite3.h>
 #include <algorithm>
 #include <chrono>
+#include <climits>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -36,6 +38,8 @@ void schedules() {
   auto day = overview(one, "2026-09-27");
   check(day.active && day.studyDay && day.totalStudyDays == 1 && day.todayFirst == 101 && day.todayLast == 110,
         "one-day inclusive plan and absolute range");
+  check(day.expectedCompletedUnits == 10 && day.expectedProgress == 110 &&
+        day.expectedUnitStart == 101 && day.expectedUnitEnd == 110, "one-day expected progress and range");
   check(day.completedUnits == 0 && day.requiredUnitsPerRemainingStudyDay == 10 && day.status == StudyPlanStatus::Behind,
         "one-day unstarted plan is behind");
   one.currentProgress = 105;
@@ -46,25 +50,65 @@ void schedules() {
   check(overview(one, "2026-09-28").status == StudyPlanStatus::Completed, "completed overrides overdue");
   one.currentProgress = 0;
   check(overview(one, "2026-09-28").status == StudyPlanStatus::Overdue, "incomplete after end is overdue");
-  check(overview(one, "2026-09-26").status == StudyPlanStatus::Upcoming, "before start is upcoming");
+  auto past = overview(one, "2026-09-28");
+  check(past.expectedCompletedUnits == 10 && past.expectedProgress == 110 && !past.expectedUnitStart &&
+        !past.requiredUnitsPerRemainingStudyDay, "past progress absolute and required pace unavailable");
+  auto future = overview(one, "2026-09-26");
+  check(future.status == StudyPlanStatus::Upcoming && future.expectedCompletedUnits == 0 &&
+        future.expectedProgress == 0 && !future.expectedUnitStart, "future progress zero and no range");
 
   auto weekday = plan("2026-09-28", "2026-10-04", 1, 10, 31); // Mon–Sun
   check(overview(weekday, "2026-09-28").totalStudyDays == 5, "Monday–Friday has five days");
   check(!overview(weekday, "2026-10-03").studyDay && overview(weekday, "2026-10-03").todayFirst == 0,
         "Saturday has no target");
   check(overview(weekday, "2026-10-02").todayLast == 10, "Friday finishes every unit");
+  auto absolute = plan("2026-09-28", "2026-10-04", 101, 300, 31);
+  auto middle = overview(absolute, "2026-09-30");
+  auto firstScheduled = overview(absolute, "2026-09-28");
+  auto finalScheduled = overview(absolute, "2026-10-02");
+  check(firstScheduled.expectedUnitStart == 101 && firstScheduled.expectedUnitEnd == 140 &&
+        finalScheduled.expectedUnitStart == 261 && finalScheduled.expectedUnitEnd == 300,
+        "first and final scheduled ranges use absolute endpoints");
+  check(middle.expectedCompletedUnits == 120 && middle.expectedProgress == 220 &&
+        middle.expectedUnitStart == 181 && middle.expectedUnitEnd == 220,
+        "non-one first unit separates count, absolute progress and daily range");
+  check(overview(absolute, "2026-09-27").expectedProgress == 0 &&
+        overview(absolute, "2026-10-05").expectedProgress == 300,
+        "non-one first unit future and past progress");
+  check(!overview(absolute, "2026-10-03").expectedUnitStart &&
+        !overview(absolute, "2026-10-03").requiredUnitsPerRemainingStudyDay,
+        "active weekend after final study day has no range or required pace");
+  absolute.currentProgress = 300;
+  check(overview(absolute, "2026-10-05").requiredUnitsPerRemainingStudyDay == 0.0,
+        "completed plan has zero remaining pace");
+  const auto json = lexicon::http::toJson(overview(plan("2026-09-28", "2026-10-04", 101, 300, 31), "2026-09-30"));
+  check(json.at("expectedCompletedUnits") == 120 && json.at("expectedProgress") == 220 &&
+        json.at("expectedUnitStart") == 181 && json.at("expectedUnitEnd") == 220 &&
+        json.at("expectedUnits") == 120, "REST JSON names count, progress, range and legacy alias");
+  const auto noPaceJson = lexicon::http::toJson(overview(plan("2026-09-28", "2026-10-04", 101, 300, 31), "2026-10-03"));
+  check(noPaceJson.at("requiredUnitsPerRemainingStudyDay").is_null() &&
+        noPaceJson.at("expectedUnitStart").is_null() && noPaceJson.at("expectedUnitEnd").is_null(),
+        "REST JSON uses null for unavailable pace and range");
   auto weekend = plan("2026-09-28", "2026-10-04", 1, 4, 96);
   check(overview(weekend, "2026-10-03").todayFirst == 1 && overview(weekend, "2026-10-04").todayLast == 4,
         "weekend-only schedule");
-  auto sparse = plan("2026-09-28", "2026-10-04", 1, 2);
+  auto sparse = plan("2026-09-28", "2026-10-04", 101, 102, 31);
   std::set<int> seen;
   for (const char* date : {"2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"}) {
     auto value = overview(sparse, date);
-    for (int unit = value.todayFirst; unit > 0 && unit <= value.todayLast; ++unit)
+    for (int unit = value.expectedUnitStart.value_or(0); unit > 0 && unit <= value.expectedUnitEnd.value_or(0); ++unit)
       check(seen.insert(unit).second, "no overlap between daily ranges");
   }
-  check(seen == std::set<int>({1, 2}), "daily ranges collectively cover all units");
-  check(overview(sparse, "2026-09-28").todayFirst == 0, "some study days have no unit");
+  check(seen == std::set<int>({101, 102}), "daily ranges collectively cover all units");
+  check(!overview(sparse, "2026-09-28").expectedUnitStart, "some study days have no unit");
+  seen.clear();
+  for (const char* date : {"2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"}) {
+    const auto value = overview(plan("2026-09-28", "2026-10-04", 101, 300, 31), date);
+    for (int unit = value.expectedUnitStart.value_or(0); unit > 0 && unit <= value.expectedUnitEnd.value_or(0); ++unit)
+      check(seen.insert(unit).second, "dense weekday plan has no duplicated unit");
+  }
+  check(seen.size() == 200 && *seen.begin() == 101 && *seen.rbegin() == 300,
+        "dense weekday plan covers every unit across weekend exactly once");
 
   auto risk = plan("2026-09-28", "2026-10-02", 1, 50, 31);
   risk.currentProgress = 20;
@@ -79,12 +123,15 @@ void schedules() {
   check(overview(risk, "2026-09-30").status == StudyPlanStatus::AtRisk, "required pace over 125 percent is at risk");
   check(overview(risk, "2026-10-02").remainingStudyDays == 1, "final day is included among remaining days");
   check(overview(risk, "2026-10-03").remainingStudyDays == 0, "zero days after end");
-  check(overview(risk, "2026-10-03").requiredUnitsPerRemainingStudyDay == 0, "no divide by zero");
+  check(!overview(risk, "2026-10-03").requiredUnitsPerRemainingStudyDay, "no divide by zero or fake zero pace");
   auto leap = plan("2028-02-28", "2028-03-01", 1, 3);
   check(overview(leap, "2028-02-29").elapsedStudyDays == 2, "leap day");
   auto boundary = plan("2026-12-31", "2027-01-01", 1, 2);
   check(overview(boundary, "2027-01-01").todayFirst == 2, "year boundary");
   check(!lexicon::validCalendarDate("2026-02-29") && lexicon::validCalendarDate("2028-02-29"), "real calendar dates");
+  auto highUnits = overview(plan("2026-09-27", "2026-09-27", INT_MAX - 1, INT_MAX), "2026-09-27");
+  check(highUnits.expectedProgress == INT_MAX && highUnits.expectedUnitEnd == INT_MAX &&
+        highUnits.recommendedLast == INT_MAX, "absolute endpoints near integer limit do not overflow");
 }
 void storageAndExport() {
   namespace fs = std::filesystem;

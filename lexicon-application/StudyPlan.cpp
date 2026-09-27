@@ -60,22 +60,25 @@ Result<StudyPlanOverview> calculateStudyPlan(const StudyPlanRecord &plan,
   result.elapsedStudyDays = countDays(start, std::min(today, end), plan.studyDaysMask);
   result.remainingStudyDays = countDays(std::max(today, start), end, plan.studyDaysMask);
   result.plannedUnitsPerStudyDay = static_cast<double>(result.totalUnits) / result.totalStudyDays;
-  if (result.remainingStudyDays > 0)
+  if (result.remainingUnits == 0)
+    result.requiredUnitsPerRemainingStudyDay = 0.0;
+  else if (result.remainingStudyDays > 0)
     result.requiredUnitsPerRemainingStudyDay = static_cast<double>(result.remainingUnits) / result.remainingStudyDays;
-  result.expectedUnits = static_cast<int>(static_cast<long long>(result.totalUnits) * result.elapsedStudyDays / result.totalStudyDays);
-  result.deficitUnits = result.expectedUnits - result.completedUnits;
+  result.expectedCompletedUnits = static_cast<int>(static_cast<long long>(result.totalUnits) * result.elapsedStudyDays / result.totalStudyDays);
+  result.expectedProgress = result.expectedCompletedUnits == 0 ? 0 : (plan.firstUnit - 1) + result.expectedCompletedUnits;
+  result.deficitUnits = result.expectedCompletedUnits - result.completedUnits;
   if (result.studyDay) {
     const int before = result.elapsedStudyDays - 1;
     const int firstOffset = static_cast<int>(static_cast<long long>(result.totalUnits) * before / result.totalStudyDays);
-    const int throughOffset = result.expectedUnits;
+    const int throughOffset = result.expectedCompletedUnits;
     if (throughOffset > firstOffset) {
-      result.todayFirst = plan.firstUnit + firstOffset;
-      result.todayLast = plan.firstUnit + throughOffset - 1;
+      result.expectedUnitStart = result.todayFirst = plan.firstUnit + firstOffset;
+      result.expectedUnitEnd = result.todayLast = (plan.firstUnit - 1) + throughOffset;
     }
     if (result.deficitUnits > 0 && result.remainingUnits > 0 && result.remainingStudyDays > 0) {
       result.recommendedFirst = plan.currentProgress == 0 ? plan.firstUnit : plan.currentProgress + 1;
       const int target = (result.remainingUnits + result.remainingStudyDays - 1) / result.remainingStudyDays;
-      result.recommendedLast = std::min(plan.lastUnit, result.recommendedFirst + target - 1);
+      result.recommendedLast = std::min(plan.lastUnit, (result.recommendedFirst - 1) + target);
     }
   }
   if (result.complete) result.status = StudyPlanStatus::Completed;
@@ -83,7 +86,7 @@ Result<StudyPlanOverview> calculateStudyPlan(const StudyPlanRecord &plan,
   else if (result.upcoming) result.status = StudyPlanStatus::Upcoming;
   else if (result.deficitUnits <= 0) result.status = StudyPlanStatus::OnTrack;
   else if (result.remainingStudyDays == 0 ||
-           result.requiredUnitsPerRemainingStudyDay > result.plannedUnitsPerStudyDay * kStudyPlanRiskPaceFactor)
+           *result.requiredUnitsPerRemainingStudyDay > result.plannedUnitsPerStudyDay * kStudyPlanRiskPaceFactor)
     result.status = StudyPlanStatus::AtRisk;
   else result.status = StudyPlanStatus::Behind;
   return result;

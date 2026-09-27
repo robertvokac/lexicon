@@ -50,6 +50,21 @@ QString range(const lexicon::StudyPlanRecord& plan, int first, int last) {
         .arg(first == last ? QString{} : QString("–%1").arg(last));
 }
 QString pace(double value) { return QString::number(value, 'f', 2); }
+QString requiredPace(const lexicon::StudyPlanOverview& value, const lexicon::StudyPlanRecord& plan) {
+    if (!value.requiredUnitsPerRemainingStudyDay)
+        return value.ended ? "N/A — deadline passed" : "N/A — no study days remaining";
+    return pace(*value.requiredUnitsPerRemainingStudyDay) + " " + unitName(plan) + "/day";
+}
+QString expectedRange(const lexicon::StudyPlanOverview& value) {
+    if (!value.active) return "—";
+    if (!value.studyDay) return "No study scheduled";
+    return range(value.plan, value.expectedUnitStart.value_or(0), value.expectedUnitEnd.value_or(0));
+}
+QString difference(const lexicon::StudyPlanOverview& value) {
+    if (value.deficitUnits > 0) return QString("Behind by: %1 %2").arg(value.deficitUnits).arg(unitName(value.plan, value.deficitUnits));
+    if (value.deficitUnits < 0) return QString("Ahead by: %1 %2").arg(-value.deficitUnits).arg(unitName(value.plan, -value.deficitUnits));
+    return "On expected progress";
+}
 void clearLayout(QLayout* layout) {
     while (auto* child = layout->takeAt(0)) {
         if (child->widget()) delete child->widget();
@@ -69,19 +84,19 @@ StudyPlanDialog::StudyPlanDialog(QWidget* parent) : QDialog(parent) {
     auto* dashboardWidget = new QWidget(scroll);
     m_dashboard = new QVBoxLayout(dashboardWidget);
     scroll->setWidget(dashboardWidget);
-    root->addWidget(new QLabel("Active today", this));
+    root->addWidget(new QLabel("Study Plan overview", this));
     root->addWidget(scroll);
     auto* heading = new QHBoxLayout;
     heading->addWidget(new QLabel("Study Plans", this));
     heading->addStretch();
     m_filter = new QComboBox(this);
-    m_filter->addItems({"All", "Active", "Upcoming", "Past / completed"});
+    m_filter->addItems({"All", "Active", "Upcoming", "Finished"});
     m_filter->setObjectName("studyPlanFilter");
     heading->addWidget(m_filter);
     root->addLayout(heading);
     m_table = new QTableWidget(0, 9, this);
     m_table->setObjectName("studyPlanTable");
-    m_table->setHorizontalHeaderLabels({"Item", "Type", "Progress", "Units", "Start", "End", "Planned/day", "Required/day", "Status"});
+    m_table->setHorizontalHeaderLabels({"Item", "Type", "Completed", "Units", "Start", "End", "Planned/day", "Required now", "Status"});
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -128,8 +143,12 @@ void StudyPlanDialog::reload() {
     const int previous = selectedId();
     m_values = std::move(*result);
     clearLayout(m_dashboard);
-    std::vector<lexicon::StudyPlanOverview> active;
-    for (const auto& value : m_values) if (value.active) active.push_back(value);
+    std::vector<lexicon::StudyPlanOverview> active, upcoming, finished;
+    for (const auto& value : m_values) {
+        if (value.complete || value.ended) finished.push_back(value);
+        else if (value.upcoming) upcoming.push_back(value);
+        else active.push_back(value);
+    }
     const auto priority = [](lexicon::StudyPlanStatus value) {
         switch (value) {
         case lexicon::StudyPlanStatus::AtRisk: return 0;
@@ -143,26 +162,29 @@ void StudyPlanDialog::reload() {
         if (priority(a.status) != priority(b.status)) return priority(a.status) < priority(b.status);
         return a.plan.item < b.plan.item;
     });
+    const auto addHeading = [this](const QString& title) { m_dashboard->addWidget(new QLabel(title, this)); };
+    addHeading(QString("Active (%1)").arg(active.size()));
     if (active.empty()) m_dashboard->addWidget(new QLabel("No active plans today.", this));
-    for (const auto& value : active) {
+    std::vector<lexicon::StudyPlanOverview> cards = active;
+    cards.insert(cards.end(), upcoming.begin(), upcoming.end());
+    cards.insert(cards.end(), finished.begin(), finished.end());
+    for (std::size_t index = 0; index < cards.size(); ++index) {
+        if (index == active.size()) addHeading(QString("Upcoming (%1)").arg(upcoming.size()));
+        if (index == active.size() + upcoming.size()) addHeading(QString("Finished (%1)").arg(finished.size()));
+        const auto& value = cards[index];
         const auto& p = value.plan;
         auto* box = new QGroupBox(qtbridge::toQt(p.item), this);
         auto* layout = new QVBoxLayout(box);
         layout->addWidget(new QLabel(QString("%1 · %2 · %3 – %4").arg(typeName(p.type), unitName(p),
             qtbridge::toQt(p.startDate), qtbridge::toQt(p.endDate)), box));
-        layout->addWidget(new QLabel(QString("Progress: %1 / %2 %3 · last completed %4")
-            .arg(value.completedUnits).arg(value.totalUnits).arg(unitName(p, value.totalUnits))
-            .arg(p.currentProgress ? QString::number(p.currentProgress) : "none"), box));
-        layout->addWidget(new QLabel(value.studyDay ? "Original plan today: " + range(p, value.todayFirst, value.todayLast)
-            : "No study scheduled today", box));
-        if (value.recommendedFirst) layout->addWidget(new QLabel("Recommended today: " + range(p, value.recommendedFirst, value.recommendedLast), box));
-        layout->addWidget(new QLabel(QString("Planned: %1 %2/day · Required now: %3 %2/day")
-            .arg(pace(value.plannedUnitsPerStudyDay), unitName(p), pace(value.requiredUnitsPerRemainingStudyDay)), box));
-        const QString detail = value.status == lexicon::StudyPlanStatus::Overdue
-            ? QString(" · %1 %2 remaining").arg(value.remainingUnits).arg(unitName(p, value.remainingUnits))
-            : value.active && value.deficitUnits > 0
-                ? QString(" · behind by %1 %2").arg(value.deficitUnits).arg(unitName(p, value.deficitUnits)) : QString{};
-        auto* state = new QLabel(QString("Status: %1%2").arg(status(value.status), detail), box);
+        layout->addWidget(new QLabel(QString("Current progress: %1").arg(p.currentProgress ? QString("%1 %2").arg(unitName(p, 1)).arg(p.currentProgress) : "0"), box));
+        layout->addWidget(new QLabel(QString("Expected progress: %1").arg(value.expectedProgress ? QString("%1 %2").arg(unitName(p, 1)).arg(value.expectedProgress) : "0"), box));
+        layout->addWidget(new QLabel(difference(value), box));
+        layout->addWidget(new QLabel("Expected unit range today: " + expectedRange(value), box));
+        layout->addWidget(new QLabel("Recommended today: " + (value.recommendedFirst ? range(p, value.recommendedFirst, value.recommendedLast) : QString("—")), box));
+        layout->addWidget(new QLabel(QString("Planned pace: %1 %2/day").arg(pace(value.plannedUnitsPerStudyDay), unitName(p)), box));
+        layout->addWidget(new QLabel("Required now: " + requiredPace(value, p), box));
+        auto* state = new QLabel(QString("Status: %1").arg(status(value.status)), box);
         if (value.status == lexicon::StudyPlanStatus::AtRisk || value.status == lexicon::StudyPlanStatus::Behind ||
             value.status == lexicon::StudyPlanStatus::Overdue) state->setStyleSheet("color: #b3261e; font-weight: bold;");
         layout->addWidget(state);
@@ -172,8 +194,9 @@ void StudyPlanDialog::reload() {
         auto* today = new QPushButton("Mark today complete", box);
         auto* complete = new QPushButton("Mark plan complete", box);
         auto* edit = new QPushButton("Edit...", box);
-        today->setEnabled(value.studyDay && (value.todayLast || value.recommendedLast));
-        complete->setEnabled(!value.complete);
+        today->setEnabled(value.active && !value.complete && value.studyDay && value.expectedUnitEnd &&
+            std::max(value.expectedUnitEnd.value_or(0), value.recommendedLast) > p.currentProgress);
+        complete->setVisible(!value.complete);
         actions->addWidget(update); actions->addWidget(today); actions->addWidget(complete); actions->addWidget(edit);
         layout->addLayout(actions);
         connect(update, &QPushButton::clicked, this, [this, p] { updateProgress(p); });
@@ -190,8 +213,8 @@ void StudyPlanDialog::reload() {
     m_dashboard->addStretch();
     std::vector<lexicon::StudyPlanOverview> visible;
     for (const auto& value : m_values) {
-        if (m_filter->currentIndex() == 1 && !value.active) continue;
-        if (m_filter->currentIndex() == 2 && !value.upcoming) continue;
+        if (m_filter->currentIndex() == 1 && (!value.active || value.complete)) continue;
+        if (m_filter->currentIndex() == 2 && (!value.upcoming || value.complete)) continue;
         if (m_filter->currentIndex() == 3 && !(value.ended || value.complete)) continue;
         visible.push_back(value);
     }
@@ -202,10 +225,12 @@ void StudyPlanDialog::reload() {
         const QStringList cells{qtbridge::toQt(p.item), typeName(p.type),
             QString("%1 / %2").arg(value.completedUnits).arg(value.totalUnits),
             unitName(p), qtbridge::toQt(p.startDate), qtbridge::toQt(p.endDate),
-            pace(value.plannedUnitsPerStudyDay), pace(value.requiredUnitsPerRemainingStudyDay), status(value.status)};
+            pace(value.plannedUnitsPerStudyDay), value.requiredUnitsPerRemainingStudyDay
+                ? pace(*value.requiredUnitsPerRemainingStudyDay) : "N/A", status(value.status)};
         for (int col = 0; col < cells.size(); ++col) {
             auto* cell = new QTableWidgetItem(cells[col]);
             if (col == 0) cell->setData(Qt::UserRole, p.id);
+            if (col == 7) cell->setToolTip(requiredPace(value, p));
             m_table->setItem(row, col, cell);
         }
         if (p.id == previous) m_table->selectRow(row);
@@ -218,10 +243,22 @@ void StudyPlanDialog::setProgress(lexicon::StudyPlanRecord plan, int progress) {
     reload();
 }
 void StudyPlanDialog::updateProgress(const lexicon::StudyPlanRecord& plan) {
-    bool accepted = false;
-    const int progress = QInputDialog::getInt(this, "Update progress", "Last completed unit (0 = not started):",
-        plan.currentProgress, 0, plan.lastUnit, 1, &accepted);
-    if (accepted) setProgress(plan, progress);
+    QDialog dialog(this);
+    dialog.setWindowTitle("Update progress");
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel("Last completed unit:", &dialog));
+    auto* progress = new QSpinBox(&dialog);
+    progress->setObjectName("studyPlanQuickProgress");
+    progress->setRange(plan.firstUnit - 1, plan.lastUnit);
+    progress->setSpecialValueText("Not started (0)");
+    progress->setValue(plan.currentProgress == 0 ? plan.firstUnit - 1 : plan.currentProgress);
+    layout->addWidget(progress);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() == QDialog::Accepted)
+        setProgress(plan, progress->value() == plan.firstUnit - 1 ? 0 : progress->value());
 }
 void StudyPlanDialog::removeSelected() {
     auto* plan = selectedPlan();
@@ -253,7 +290,15 @@ void StudyPlanDialog::editPlan(lexicon::StudyPlanRecord plan) {
     showCustom();
     auto* first = new QSpinBox(&dialog); first->setRange(1, INT_MAX); first->setValue(plan.firstUnit);
     auto* last = new QSpinBox(&dialog); last->setRange(1, INT_MAX); last->setValue(plan.lastUnit);
-    auto* progress = new QSpinBox(&dialog); progress->setRange(0, INT_MAX); progress->setValue(plan.currentProgress);
+    auto* progress = new QSpinBox(&dialog);
+    progress->setRange(plan.firstUnit - 1, INT_MAX);
+    progress->setSpecialValueText("Not started (0)");
+    progress->setValue(plan.currentProgress == 0 ? plan.firstUnit - 1 : plan.currentProgress);
+    connect(first, QOverload<int>::of(&QSpinBox::valueChanged), &dialog, [progress](int newFirst) {
+        const bool notStarted = progress->value() == progress->minimum();
+        progress->setMinimum(newFirst - 1);
+        if (notStarted) progress->setValue(newFirst - 1);
+    });
     auto* start = new QDateEdit(&dialog); start->setCalendarPopup(true); start->setDisplayFormat("yyyy-MM-dd");
     start->setDate(plan.startDate.empty() ? QDate::currentDate() : QDate::fromString(qtbridge::toQt(plan.startDate), "yyyy-MM-dd"));
     auto* end = new QDateEdit(&dialog); end->setCalendarPopup(true); end->setDisplayFormat("yyyy-MM-dd");
@@ -280,7 +325,8 @@ void StudyPlanDialog::editPlan(lexicon::StudyPlanRecord plan) {
         plan.type = static_cast<lexicon::StudyPlanType>(type->currentIndex());
         plan.unitType = static_cast<lexicon::StudyUnitType>(unit->currentIndex());
         plan.customUnit = qtbridge::toCore(custom->text().trimmed());
-        plan.firstUnit = first->value(); plan.lastUnit = last->value(); plan.currentProgress = progress->value();
+        plan.firstUnit = first->value(); plan.lastUnit = last->value();
+        plan.currentProgress = progress->value() == plan.firstUnit - 1 ? 0 : progress->value();
         plan.startDate = qtbridge::toCore(start->date().toString("yyyy-MM-dd"));
         plan.endDate = qtbridge::toCore(end->date().toString("yyyy-MM-dd"));
         plan.studyDaysMask = 0;

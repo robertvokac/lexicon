@@ -18,6 +18,7 @@ saved as a screenshot in --artifacts. This file is not part of lexicon-web.
 import argparse
 import base64
 import functools
+from datetime import date, timedelta
 import http.server
 import json
 import os
@@ -731,6 +732,64 @@ def run(browser, web, server):
         alarm = api["client"].call("GET", "/alarms")["alarms"][0]
         if not alarm.get("dismissedAt"):
             raise Failure("The server did not keep the dismissal.")
+
+    @step("Study Plan overview and actions")
+    def _():
+        # Format the local calendar date explicitly; locale formatting varies by browser.
+        today = b.js("(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()")
+        end = b.js("(() => { const d = new Date(); d.setDate(d.getDate()+9); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()")
+        created = api["client"].call("POST", "/study-plans", {
+            "item": "Effective Modern C++", "type": "Book", "unitType": "Page",
+            "firstUnit": 101, "lastUnit": 300, "currentProgress": 101,
+            "startDate": today, "endDate": end, "studyDaysMask": 127,
+        })["studyPlan"]
+        menu("Manage", "Study Plan...")
+        b.wait(dialog_open("Study Plan"), "the Study Plan dialog")
+        b.wait("!!document.querySelector('.study-card')", "the Study Plan card")
+        expected = api["client"].call("GET", "/study-plans/overview?date=" + today)["plans"][0]
+        card = b.js("document.querySelector('.study-card').textContent")
+        for label in (f"Current progress: page 101", f"Expected progress: page {expected['expectedProgress']}",
+                      f"Expected unit range today: pages {expected['expectedUnitStart']}–{expected['expectedUnitEnd']}",
+                      "Behind by:", "Recommended today:", "Planned pace:", "Required now:", "Status:"):
+            if label not in card:
+                raise Failure(f"Study Plan card omits {label!r}: {card}")
+        if os.environ.get("LEXICON_STUDY_SHOT"):
+            b.screenshot(os.environ["LEXICON_STUDY_SHOT"])
+        click(".study-card button", "Mark plan complete")
+        click("dialog[open] button", "Yes")
+        b.wait("document.querySelector('section:last-child .study-card') !== null", "completed plan in Finished")
+        if b.js("document.querySelectorAll('.study-card').length") != 1:
+            raise Failure("Completed plan appears in multiple dashboard sections")
+        if b.js("[...document.querySelectorAll('.study-card button')].some(e => e.textContent.trim() === 'Mark plan complete')"):
+            raise Failure("Completed plan still offers Mark plan complete")
+        click("dialog[open] button", "Close")
+        calendar_day = date.fromisoformat(today)
+        future = api["client"].call("POST", "/study-plans", {
+            "item": "Future book", "type": "Book", "unitType": "Page",
+            "firstUnit": 101, "lastUnit": 300, "currentProgress": 0,
+            "startDate": (calendar_day + timedelta(days=10)).isoformat(),
+            "endDate": (calendar_day + timedelta(days=19)).isoformat(), "studyDaysMask": 127,
+        })["studyPlan"]
+        past = api["client"].call("POST", "/study-plans", {
+            "item": "Past book", "type": "Book", "unitType": "Page",
+            "firstUnit": 101, "lastUnit": 300, "currentProgress": 0,
+            "startDate": (calendar_day - timedelta(days=19)).isoformat(),
+            "endDate": (calendar_day - timedelta(days=10)).isoformat(), "studyDaysMask": 127,
+        })["studyPlan"]
+        menu("Manage", "Study Plan...")
+        b.wait("document.querySelectorAll('.study-card').length === 3", "future and past plans")
+        future_card = b.js("[...document.querySelectorAll('.study-card')].find(c => c.querySelector('h3').textContent === 'Future book').textContent")
+        past_card = b.js("[...document.querySelectorAll('.study-card')].find(c => c.querySelector('h3').textContent === 'Past book').textContent")
+        if "Expected progress: 0" not in future_card or "Expected unit range today: —" not in future_card:
+            raise Failure("Future plan does not display zero expected progress and no daily range")
+        if "Expected progress: page 300" not in past_card or "Expected unit range today: —" not in past_card:
+            raise Failure("Past plan does not display absolute last unit and no daily range")
+        if b.js("document.querySelectorAll('.study-card').length") != 3:
+            raise Failure("A plan appears in more than one section")
+        click("dialog[open] button", "Close")
+        api["client"].call("DELETE", "/study-plans/" + str(created["id"]))
+        api["client"].call("DELETE", "/study-plans/" + str(future["id"]))
+        api["client"].call("DELETE", "/study-plans/" + str(past["id"]))
 
     @step("sign out")
     def _():

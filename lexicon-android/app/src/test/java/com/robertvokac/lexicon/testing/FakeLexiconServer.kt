@@ -85,6 +85,8 @@ class FakeLexiconServer : Dispatcher() {
             totalUnits = total, completedUnits = completed, remainingUnits = total - completed,
             totalStudyDays = 1, elapsedStudyDays = 1, remainingStudyDays = 1,
             plannedUnitsPerStudyDay = total.toDouble(), requiredUnitsPerRemainingStudyDay = (total - completed).toDouble(),
+            expectedCompletedUnits = total, expectedProgress = plan.lastUnit,
+            expectedUnitStart = plan.firstUnit, expectedUnitEnd = plan.lastUnit,
             expectedUnits = total, deficitUnits = total - completed, todayFirst = plan.firstUnit,
             todayLast = plan.lastUnit, recommendedFirst = 0, recommendedLast = 0)
     }

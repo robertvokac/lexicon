@@ -368,7 +368,11 @@ Json toJson(const StudyPlanOverview &value) {
               {"remainingStudyDays", value.remainingStudyDays},
               {"plannedUnitsPerStudyDay", value.plannedUnitsPerStudyDay},
               {"requiredUnitsPerRemainingStudyDay", value.requiredUnitsPerRemainingStudyDay},
-              {"expectedUnits", value.expectedUnits}, {"deficitUnits", value.deficitUnits},
+              {"expectedCompletedUnits", value.expectedCompletedUnits},
+              {"expectedProgress", value.expectedProgress},
+              {"expectedUnits", value.expectedCompletedUnits}, {"deficitUnits", value.deficitUnits},
+              {"expectedUnitStart", value.expectedUnitStart},
+              {"expectedUnitEnd", value.expectedUnitEnd},
               {"todayFirst", value.todayFirst}, {"todayLast", value.todayLast},
               {"recommendedFirst", value.recommendedFirst},
               {"recommendedLast", value.recommendedLast}};
