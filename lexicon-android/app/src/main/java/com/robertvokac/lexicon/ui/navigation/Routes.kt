@@ -6,6 +6,9 @@ import kotlinx.serialization.Serializable
 data object ItemsRoute
 
 @Serializable
+data object BoardRoute
+
+@Serializable
 data class ItemRoute(val itemId: Int)
 
 /** itemId -1 adds an item; groupId and typeId -1 mean "none chosen". */

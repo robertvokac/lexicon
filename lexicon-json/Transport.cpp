@@ -300,6 +300,10 @@ Json toJson(const ItemRecord &item) {
       {"matchSnippet", item.matchSnippet.empty() ? Json(nullptr) : Json(item.matchSnippet)}};
 }
 
+Json toJson(const BoardRecord &board) {
+  return Json{{"content", board.content}, {"revision", board.revision}};
+}
+
 Json toJson(const AlarmRecord &alarm) {
   return Json{{"id", alarm.id > 0 ? Json(alarm.id) : Json(nullptr)},
               {"title", alarm.title},
@@ -493,6 +497,14 @@ ItemRecord itemFromJson(const Json &json) {
     }
   }
   return item;
+}
+
+BoardRecord boardFromJson(const Json &json) {
+  requireObject(json, "Board");
+  BoardRecord board;
+  board.content = optionalString(json, "content");
+  board.revision = std::max(0, optionalInt(json, "revision", 0));
+  return board;
 }
 
 ItemQuery itemQueryFromJson(const Json &json) {

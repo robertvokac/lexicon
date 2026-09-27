@@ -141,6 +141,25 @@ int main() {
       !condition(*found == *localizedId, "UTF-8 lookup failed"))
     return 1;
 
+  auto board = application.board.load();
+  if (!check(board, "Load Board") ||
+      !condition(board->content.empty() && board->revision > 0,
+                 "A fresh Board is not empty"))
+    return 1;
+  const auto staleBoard = *board;
+  board->content = "# Plan\n\n- Ship the Board";
+  auto savedBoard = application.board.save(*board);
+  if (!check(savedBoard, "Save Board") ||
+      !condition(savedBoard->content == board->content &&
+                     savedBoard->revision == board->revision + 1,
+                 "The Board did not round-trip or advance its revision"))
+    return 1;
+  auto conflict = application.board.save(staleBoard);
+  if (!condition(!conflict &&
+                     conflict.error().code == lexicon::Error::Code::Conflict,
+                 "A stale Board save was not refused"))
+    return 1;
+
   // The Inbox: an idea goes to Default with the type Inbox, which the first
   // idea creates, available in all groups, and every later one reuses.
   const auto inboxTypes = [&] {

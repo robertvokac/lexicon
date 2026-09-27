@@ -179,6 +179,13 @@ data class SavedItem(val id: Int, val item: Item)
 @Serializable
 internal data class InboxIdea(val title: String, val content: String)
 
+/** The one shared Markdown Board. */
+@Serializable
+data class Board(val content: String = "", val revision: Int = 0)
+
+@Serializable
+internal data class BoardEnvelope(val board: Board)
+
 /** An outgoing link in a save request. fromItemId is filled in by the server. */
 @Serializable
 data class OutgoingLinkWrite(
@@ -268,12 +275,14 @@ data class ImportReport(
     val blobsImported: Int = 0,
     val alarmsCreated: Int = 0,
     val cardsCreated: Int = 0,
+    val boardImported: Boolean = false,
     val warnings: List<String> = emptyList(),
 ) {
     val summary: String
         get() = "Imported $itemsCreated item(s), $linksCreated link(s), $blobsImported file(s), $alarmsCreated alarm(s) " +
             "and $cardsCreated card(s); $itemsSkipped item(s) were already here. Created $groupsCreated group(s), " +
-            "$typesCreated type(s) and $fieldsCreated field(s)."
+            "$typesCreated type(s) and $fieldsCreated field(s)." +
+            if (boardImported) " Imported the Board." else ""
 }
 
 /** How well an item was remembered in a review (POST /items/{id}/review). */

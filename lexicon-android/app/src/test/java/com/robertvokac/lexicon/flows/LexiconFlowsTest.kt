@@ -373,6 +373,21 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun boardCanBeReadAndEdited() {
+        fake.board = com.robertvokac.lexicon.model.Board("# Team Board\n\nBefore", 3)
+        login()
+        openDrawer("Board")
+        compose.waitForText("Team Board")
+        compose.onNode(hasText("Edit") and hasClickAction()).performClick()
+        compose.onNode(hasSetTextAction()).performTextReplacement("# Team Board\n\n- Ship it")
+        compose.onNode(hasText("Save") and hasClickAction()).performClick()
+        compose.waitForText("Ship it")
+        assertEquals("# Team Board\n\n- Ship it", fake.board.content)
+        assertEquals(4, fake.board.revision)
+        assertEquals(3, lastBody("PUT", "/api/v1/board")["revision"]!!.jsonPrimitive.int)
+    }
+
+    @Test
     fun linksAreSavedWithTheItem() {
         login()
         compose.onNodeWithText("RAII").performClick()

@@ -58,6 +58,7 @@ Json toJson(const ItemFieldRecord &field);
 Json toJson(const PropertyRecord &property);
 Json toJson(const LinkRecord &link);
 Json toJson(const ItemRecord &item);
+Json toJson(const BoardRecord &board);
 Json toJson(const UsageValueRecord &usage);
 Json toJson(const AlarmRecord &alarm);
 Json toJson(const CardRecord &card);
@@ -78,6 +79,7 @@ ItemFieldRecord fieldFromJson(const Json &json);
 LinkRecord linkFromJson(const Json &json);
 AlarmRecord alarmFromJson(const Json &json);
 ItemRecord itemFromJson(const Json &json);
+BoardRecord boardFromJson(const Json &json);
 std::vector<LinkRecord> linksFromJson(const Json &json);
 // What a client sends to create or change a card: its question and answer.
 // The statistics are the system's, so a request never sets them.

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Folder
@@ -73,6 +74,8 @@ import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.share.LaunchRequest
 import com.robertvokac.lexicon.storage.ThemePreference
 import com.robertvokac.lexicon.ui.alarms.AlarmsScreen
+import com.robertvokac.lexicon.ui.board.BoardScreen
+import com.robertvokac.lexicon.ui.board.BoardViewModel
 import com.robertvokac.lexicon.ui.history.HistoryScreen
 import com.robertvokac.lexicon.ui.history.HistoryViewModel
 import com.robertvokac.lexicon.ui.alarms.AlarmsViewModel
@@ -101,6 +104,7 @@ import com.robertvokac.lexicon.ui.login.LoginViewModel
 import com.robertvokac.lexicon.ui.login.StartingScreen
 import com.robertvokac.lexicon.ui.login.UnreachableScreen
 import com.robertvokac.lexicon.ui.navigation.AlarmsRoute
+import com.robertvokac.lexicon.ui.navigation.BoardRoute
 import com.robertvokac.lexicon.ui.navigation.TrashRoute
 import com.robertvokac.lexicon.ui.navigation.ItemHistoryRoute
 import com.robertvokac.lexicon.ui.navigation.CardQuizRoute
@@ -305,6 +309,7 @@ private fun androidx.compose.ui.graphics.Color.luminanceIsDark(): Boolean =
 
 private enum class Destination(val label: String) {
     Items("Items"),
+    Board("Board"),
     Review("Review"),
     Groups("Groups"),
     Types("Types"),
@@ -355,6 +360,7 @@ private fun MainScaffold(
         scope.launch { drawerState.close() }
         val route: Any = when (destination) {
             Destination.Items -> ItemsRoute
+            Destination.Board -> BoardRoute
             Destination.Review -> ReviewRoute
             Destination.Groups -> GroupsRoute
             Destination.Types -> TypesRoute
@@ -389,6 +395,7 @@ private fun MainScaffold(
                         modifier = Modifier.padding(start = 28.dp, end = 16.dp, bottom = 12.dp),
                     )
                     DrawerEntry(Destination.Items, Icons.AutoMirrored.Filled.List, ::go)
+                    DrawerEntry(Destination.Board, Icons.Filled.Dashboard, ::go)
                     DrawerEntry(Destination.Review, Icons.Filled.School, ::go)
                     DrawerHeading("Manage")
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
@@ -529,6 +536,9 @@ private fun LexiconNavHost(
                 onShowHistory = { navController.navigate(ItemHistoryRoute(it)) },
                 onCardQuiz = { navController.navigate(CardQuizRoute(it)) },
             )
+        }
+        composable<BoardRoute> {
+            BoardScreen(lexiconViewModel { app, _ -> BoardViewModel(app) }, onBack = back)
         }
         composable<GraphRoute> { entry ->
             val route = entry.toRoute<GraphRoute>()

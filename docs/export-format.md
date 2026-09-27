@@ -1,7 +1,7 @@
 # Lexicon export format
 
 A Lexicon export is the whole dictionary - groups, types with their fields,
-items, links, alarms, cards and, optionally, the files that values refer to -
+items, links, alarms, cards, the Board and, optionally, the files that values refer to -
 as one UTF-8 JSON document. Every client writes and reads the same format:
 
 | Where | Export | Import |
@@ -34,7 +34,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 3,
+  "version": 4,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -63,6 +63,7 @@ and keep the files as files, shared between backups.
     { "id": 12, "itemId": 7, "question": "What is a monoid?", "answer": "A semigroup with a unit.",
       "successCount": 4, "failureCount": 2, "lastAttempt": "2026-09-24T14:00:00Z" }
   ],
+  "board": { "content": "# Team Board\n\n- Ship it", "revision": 5 },
   "blobs": [
     { "hash": "6c7dbba2...99d98ca", "data": "iVBORw0KGgo..." }
   ]
@@ -71,7 +72,7 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 3.
+  before anything is written. This document describes version 4.
 - **Versions.** The version goes up whenever a reader of the previous one
   would import a new document by leaving part of it out - silently losing
   data - rather than refusing it:
@@ -81,6 +82,7 @@ and keep the files as files, shared between backups.
   | 1 | Lexicon before cards | groups, types, fields, items, links, alarms, files |
   | 2 | Lexicon with cards | `cards` |
   | 3 | Lexicon with recurring alarms | `repeatDays` and linked `itemId` on alarms |
+  | 4 | Lexicon with the Board | singleton Markdown `board` |
 
   A reader takes every version up to its own and refuses a newer one: an
   older Lexicon says it does not know version 3 instead of importing it
@@ -143,6 +145,9 @@ part fails, nothing is written.
   blank question or answer, a negative count, a `lastAttempt` that is not a
   UTC time, or answers without a `lastAttempt` (or the other way round) fails
   the import.
+- **Board** content is imported when the destination Board is empty. The same
+  content is a no-op; different existing content is kept and reported as a
+  warning, so importing never destroys a Board already in use.
 
 Importing the same document twice therefore changes nothing the second time.
 The import answers with a report:

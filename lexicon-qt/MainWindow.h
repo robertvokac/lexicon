@@ -150,6 +150,7 @@ private slots:
     void addItem();
     void quickAdd();
     void openInbox();
+    void openBoard();
     void exportDictionary();
     void importDictionary();
     void editSelectedItem();

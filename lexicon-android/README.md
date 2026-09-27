@@ -218,6 +218,9 @@ accept it; install a proper certificate instead.
 - **Inbox.** The tray button above the list catches an idea: a title and plain
   text, saved to `Default` with the type `Inbox` - which the server creates the
   first time - whatever the filters show.
+- **Board.** The navigation drawer opens the shared Markdown Board in reading
+  mode. **Edit** uses the item Content editor's formatting toolbar and
+  source/preview layout; concurrent saves offer reload or overwrite.
 - **Offline Inbox.** An idea never waits for the network. When the server
   cannot be reached - no signal, the server or a proxy down, the session
   expired - the idea is kept on the phone and a banner above the list says how

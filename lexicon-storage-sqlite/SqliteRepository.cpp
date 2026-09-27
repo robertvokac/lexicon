@@ -605,6 +605,32 @@ SqliteRepository::Result<SqliteRepository::ItemRecord> SqliteRepository::loadIte
   return guarded([&] { return loadItemNative(impl_->db, itemId); });
 }
 
+SqliteRepository::Result<lexicon::BoardRecord> SqliteRepository::loadBoard() {
+  return guarded([&] {
+    Statement row(impl_->db, "SELECT content, revision FROM board WHERE id = 1;");
+    require(row.step(), "Board not found.", lexicon::Error::Code::NotFound);
+    return lexicon::BoardRecord{row.text(0), row.integer(1)};
+  });
+}
+
+SqliteRepository::Result<void>
+SqliteRepository::saveBoard(const lexicon::BoardRecord &board) {
+  return guarded([&] {
+    Transaction transaction(impl_->db, "lexicon_write");
+    Statement current(impl_->db, "SELECT revision FROM board WHERE id = 1;");
+    require(current.step(), "Board not found.", lexicon::Error::Code::NotFound);
+    if (board.revision > 0 && current.integer(0) != board.revision)
+      throw Failure("The Board was changed elsewhere after you opened it.",
+                    lexicon::Error::Code::Conflict);
+    Statement(impl_->db,
+              "UPDATE board SET content = ?, revision = revision + 1 WHERE id = 1;")
+        .bind(board.content)
+        .run();
+    requireChanged(impl_->db, "Board");
+    transaction.commit();
+  });
+}
+
 namespace {
 void verifySavedBlobs(const Connection &db, const std::string &databasePath, int itemId);
 void snapshotItem(const Connection &db, int itemId, const char *operation) {

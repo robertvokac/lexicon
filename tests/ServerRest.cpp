@@ -1168,7 +1168,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
-  checks.expectEqual(document.value("version", 0), 3, "of format version 3");
+  checks.expectEqual(document.value("version", 0), 4, "of format version 4");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");
@@ -1361,6 +1361,43 @@ void checkInbox(Checks &checks) {
                      "the Inbox needs a session");
 }
 
+void checkBoard(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const auto initial = client.get("/api/v1/board");
+  checks.expectEqual(initial.status, 200, "the Board can be loaded");
+  const auto first = parse(initial).at("board");
+  checks.expectEqual(first.value("content", std::string{}), "",
+                     "a new Board is empty");
+  const int revision = first.value("revision", 0);
+  checks.expect(revision > 0, "the Board has a revision");
+
+  const auto updated = client.put(
+      "/api/v1/board",
+      Json{{"content", "# Today\n\n- Finish the Board"},
+           {"revision", revision}}
+          .dump());
+  checks.expectEqual(updated.status, 200, "the Board can be saved");
+  const auto stored = parse(updated).at("board");
+  checks.expectEqual(stored.value("content", std::string{}),
+                     "# Today\n\n- Finish the Board",
+                     "Board Markdown round-trips");
+  checks.expectEqual(stored.value("revision", 0), revision + 1,
+                     "saving advances the Board revision");
+
+  const auto stale = client.put(
+      "/api/v1/board",
+      Json{{"content", "stale"}, {"revision", revision}}.dump());
+  checks.expectEqual(stale.status, 409, "a stale Board save is refused");
+  checks.expect(stale.body.find("changed elsewhere") != std::string::npos,
+                "the conflict explains why");
+
+  HttpTestClient anonymous("127.0.0.1", harness.port());
+  checks.expectEqual(anonymous.get("/api/v1/board").status, 401,
+                     "the Board needs a session");
+}
+
 // The static client the server can serve itself: --web-dir in the config.
 void checkWebClient(Checks &checks) {
   namespace fs = std::filesystem;
@@ -1464,6 +1501,7 @@ int main() {
   checkBlobs(checks);
   checkQuickAdd(checks);
   checkInbox(checks);
+  checkBoard(checks);
   checkConflicts(checks);
   checkExportImport(checks);
   checkReview(checks);

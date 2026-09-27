@@ -370,6 +370,10 @@ Result<DictionaryExport> ExchangeService::exportDictionary() {
   if (!alarms)
     return std::unexpected(alarms.error());
   dictionary.alarms = std::move(*alarms);
+  auto board = repository_.loadBoard();
+  if (!board)
+    return std::unexpected(board.error());
+  dictionary.board = std::move(*board);
   return dictionary;
 }
 
@@ -387,6 +391,22 @@ Result<ImportReport> ExchangeService::importDictionary(
   UnitOfWork unit(repository_);
   if (auto begun = unit.begin(); !begun)
     return std::unexpected(begun.error());
+
+  if (dictionary.board) {
+    auto current = repository_.loadBoard();
+    if (!current)
+      return std::unexpected(current.error());
+    if (current->content.empty() && !dictionary.board->content.empty()) {
+      if (auto saved = repository_.saveBoard(
+              {dictionary.board->content, current->revision});
+          !saved)
+        return std::unexpected(saved.error());
+      report.boardImported = true;
+    } else if (!dictionary.board->content.empty() &&
+               current->content != dictionary.board->content) {
+      warn("The Board already has content; the imported Board was left out.");
+    }
+  }
 
   // Groups, by name.
   std::map<int, int> groupIds;

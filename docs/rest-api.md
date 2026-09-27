@@ -273,6 +273,23 @@ optional plain text. A missing or blank title, or one already in `Default`, is
 refused with 400, and a refused idea leaves nothing behind, not even a new
 type.
 
+## Board
+
+```http
+GET /api/v1/board
+→ { "board": { "content": "# Team Board\n\n- Ship it", "revision": 4 } }
+
+PUT /api/v1/board
+{ "content": "# Team Board\n\n- Ship it", "revision": 4 }
+→ { "board": { "content": "# Team Board\n\n- Ship it", "revision": 5 } }
+```
+
+The Board is one shared Markdown document, not an item: it has no title,
+group, type or metadata. A new database starts with an empty Board. Send the
+revision returned by `GET` when saving; if another client saved meanwhile,
+`PUT` returns 409 instead of overwriting its work. A missing or zero revision
+requests an explicit unconditional overwrite.
+
 `resolve` is what a `[[Title]]` link in item content uses. The first of these
 that finds an item wins: the exact title (preferring an item without a
 disambiguation when none is given), the title ignoring ASCII case, an exact

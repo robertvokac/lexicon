@@ -219,6 +219,10 @@ export class LexiconApi {
     // An Inbox idea: to Default with the type Inbox, which the server makes
     // the first time. { id, item }.
     captureIdea(title, content) { return this.post('/inbox', { title, content }); }
+    async board() { return (await this.get('/board')).board; }
+    async saveBoard(content, revision) {
+        return (await this.put('/board', { content, revision })).board;
+    }
     updateItem(id, payload) { return this.put(`/items/${id}`, payload); }
     deleteItem(id) { return this.delete(`/items/${id}`); }
     async trash() { return (await this.get('/items/trash')).entries; }

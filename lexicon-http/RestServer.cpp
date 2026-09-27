@@ -1192,6 +1192,34 @@ void RestServer::Impl::registerRoutes() {
     respondJson(response, 201, Json{{"id", item->id}, {"item", toJson(*item)}});
   });
 
+  // The one shared Markdown Board. A revision sent back on PUT protects a
+  // person's edits when another client saved after they opened it.
+  api.Get("/api/v1/board", [this](const Request &, Response &response) {
+    auto board = guarded.with([](LexiconApplication &application) {
+      return application.board.load();
+    });
+    if (!board) {
+      respondError(response, board.error(), "loadBoard");
+      return;
+    }
+    respondJson(response, 200, Json{{"board", toJson(*board)}});
+  });
+
+  api.Put("/api/v1/board", [this](const Request &request, Response &response) {
+    auto body = jsonBody(request, response);
+    if (!body)
+      return;
+    const auto requested = boardFromJson(*body);
+    auto board = guarded.with([&](LexiconApplication &application) {
+      return application.board.save(requested);
+    });
+    if (!board) {
+      respondError(response, board.error(), "saveBoard");
+      return;
+    }
+    respondJson(response, 200, Json{{"board", toJson(*board)}});
+  });
+
   api.Put("/api/v1/items/:id", [this, saveItem](const Request &request,
                                                 Response &response) {
     auto id = pathId(request, response, "id");

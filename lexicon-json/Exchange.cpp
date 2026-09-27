@@ -111,7 +111,8 @@ Result<std::string> exportDocument(LexiconApplication &application, bool include
                 {"items", http::toJsonArray(dictionary->items)},
                 {"links", std::move(links)},
                 {"alarms", http::toJsonArray(dictionary->alarms)},
-                {"cards", http::toJsonArray(dictionary->cards)}};
+                {"cards", http::toJsonArray(dictionary->cards)},
+                {"board", http::toJson(*dictionary->board)}};
   if (includeFiles) {
     std::set<std::string> hashes;
     for (const auto &item : dictionary->items)
@@ -175,6 +176,10 @@ Result<ImportReport> importDocument(LexiconApplication &application, std::string
     if (document.contains("cards"))
       for (const auto &card : requiredArray(document, "cards"))
         dictionary.cards.push_back(http::exportedCardFromJson(card));
+    if (document.contains("board"))
+      dictionary.board = http::boardFromJson(document.at("board"));
+    else if (version->get<int>() >= 4)
+      http::badRequest("Field 'board' must be an object.");
     if (document.contains("blobs")) {
       for (const auto &blob : requiredArray(document, "blobs")) {
         const auto hash = http::requiredString(blob, "hash");
@@ -200,6 +205,7 @@ Json toJson(const ImportReport &report) {
               {"blobsImported", report.blobsImported},
               {"alarmsCreated", report.alarmsCreated},
               {"cardsCreated", report.cardsCreated},
+              {"boardImported", report.boardImported},
               {"warnings", report.warnings}};
 }
 
@@ -209,6 +215,8 @@ std::string describe(const ImportReport &report) {
       "Created {} group(s), {} type(s) and {} field(s).",
       report.itemsCreated, report.linksCreated, report.cardsCreated, report.blobsImported, report.alarmsCreated,
       report.itemsSkipped, report.groupsCreated, report.typesCreated, report.fieldsCreated);
+  if (report.boardImported)
+    text += " Imported the Board.";
   for (const auto &warning : report.warnings)
     text += "\n- " + warning;
   return text;

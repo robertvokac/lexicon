@@ -12,6 +12,7 @@
 #include "CardsDialog.h"
 #include "CardQuizDialog.h"
 #include "InboxDialog.h"
+#include "BoardDialog.h"
 #include "AlarmsDialog.h"
 #include "AlarmNotifier.h"
 #include "ImageValueView.h"
@@ -198,6 +199,8 @@ void MainWindow::setupUi() {
     auto* quickAddButton = new QPushButton("Add", centralWidget);
     auto* inboxButton = new QPushButton("Inbox", centralWidget);
     inboxButton->setToolTip("Save an idea quickly: a title and plain text, in Default with the type Inbox (Ctrl+I)");
+    auto* boardButton = new QPushButton("Board", centralWidget);
+    boardButton->setToolTip("Read or edit the shared Markdown Board");
     auto* addButton = new QPushButton("Add ...", centralWidget);
     auto* editButton = new QPushButton("Edit", centralWidget);
     auto* deleteButton = new QPushButton("Delete", centralWidget);
@@ -221,6 +224,7 @@ void MainWindow::setupUi() {
     searchRowLayout->addWidget(quickAddButton);
     searchRowLayout->addWidget(addButton);
     searchRowLayout->addWidget(inboxButton);
+    searchRowLayout->addWidget(boardButton);
     searchRowLayout->addWidget(editButton);
     searchRowLayout->addWidget(deleteButton);
     searchRowLayout->addWidget(m_attributeColumnsButton);
@@ -343,6 +347,7 @@ void MainWindow::setupUi() {
     });
     connect(quickAddButton, &QPushButton::clicked, this, &MainWindow::quickAdd);
     connect(inboxButton, &QPushButton::clicked, this, &MainWindow::openInbox);
+    connect(boardButton, &QPushButton::clicked, this, &MainWindow::openBoard);
     connect(addButton, &QPushButton::clicked, this, &MainWindow::addItem);
     connect(editButton, &QPushButton::clicked, this, &MainWindow::editSelectedItem);
     connect(deleteButton, &QPushButton::clicked, this, &MainWindow::deleteSelectedItem);
@@ -387,6 +392,8 @@ void MainWindow::setupMenus() {
     auto* inboxAction = fileMenu->addAction("Inbox...");
     inboxAction->setShortcut(QKeySequence("Ctrl+I"));
     connect(inboxAction, &QAction::triggered, this, &MainWindow::openInbox);
+    auto* boardAction = fileMenu->addAction("Board...");
+    connect(boardAction, &QAction::triggered, this, &MainWindow::openBoard);
     fileMenu->addSeparator();
     auto* exportAction = fileMenu->addAction("Export...");
     auto* importAction = fileMenu->addAction("Import...");
@@ -1044,6 +1051,10 @@ void MainWindow::openInbox() {
     InboxDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted) return;
     refreshAll();
+}
+
+void MainWindow::openBoard() {
+    BoardDialog(this).exec();
 }
 
 void MainWindow::exportDictionary() {

@@ -3,6 +3,8 @@
 #include "Review.h"
 #include "Validation.h"
 
+#include <optional>
+
 namespace lexicon {
 class ItemService {
 public:
@@ -284,6 +286,21 @@ private:
   Repository &repository_;
 };
 
+class BoardService {
+public:
+  explicit BoardService(Repository &repository) : repository_(repository) {}
+  Result<BoardRecord> load() { return repository_.loadBoard(); }
+  // Returns the saved record, including its new revision.
+  Result<BoardRecord> save(const BoardRecord &board) {
+    if (auto saved = repository_.saveBoard(board); !saved)
+      return std::unexpected(saved.error());
+    return repository_.loadBoard();
+  }
+
+private:
+  Repository &repository_;
+};
+
 // A card on its way through a quiz, with the item it asks about.
 struct QuizCard {
   CardRecord card;
@@ -346,6 +363,7 @@ struct DictionaryExport {
   std::vector<AlarmRecord> alarms;
   // With their statistics.
   std::vector<CardRecord> cards;
+  std::optional<BoardRecord> board;
 };
 struct ImportReport {
   int groupsCreated = 0;
@@ -358,6 +376,7 @@ struct ImportReport {
   int blobsImported = 0;
   int alarmsCreated = 0;
   int cardsCreated = 0;
+  bool boardImported = false;
   // What could not be imported as it was, in words.
   std::vector<std::string> warnings;
 };
@@ -389,7 +408,8 @@ public:
       : items(repository), types(repository), groups(repository),
         links(repository), search(repository), configuration(repository),
         blobs(repository), exchange(repository), review(repository),
-        alarms(repository), cards(repository, links), inbox(repository) {}
+        alarms(repository), cards(repository, links), inbox(repository),
+        board(repository) {}
   ItemService items;
   TypeService types;
   GroupService groups;
@@ -403,5 +423,6 @@ public:
   // After links, whose neighbourhood it quizzes.
   CardService cards;
   InboxService inbox;
+  BoardService board;
 };
 } // namespace lexicon

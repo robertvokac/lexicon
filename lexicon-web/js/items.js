@@ -5,6 +5,7 @@ import { confirmDialog, errorDialog, field, messageDialog, openDialog } from './
 import { clearDraft, latestDraft } from './drafts.js';
 import { openCardQuiz, openCards } from './cards.js';
 import { openGraph } from './graph.js';
+import { openBoard } from './board.js';
 import { imageSection } from './images.js';
 import { describeImage } from './imagevalue.js';
 import { askAboutDraft, openItemEditor } from './itemEdit.js';
@@ -145,6 +146,10 @@ export class MainView {
             class: 'secondary',
             title: 'Save an idea quickly: a title and plain text, in Default with the type Inbox',
         });
+        this.boardButton = button('Board', {
+            class: 'secondary',
+            title: 'Read or edit the shared Markdown Board',
+        });
         this.addButton = button('Add ...', {
             class: 'secondary',
             title: 'Open the full item editor',
@@ -184,7 +189,7 @@ export class MainView {
         this.overflowMenu = el('div', { class: 'menu overflow-menu' },
             [this.overflowTrigger, this.overflowPopup]);
         this.inlineActions = el('div', { class: 'action-buttons' }, [
-            this.quickAddButton, this.addButton, this.inboxButton, this.editButton,
+            this.quickAddButton, this.addButton, this.inboxButton, this.boardButton, this.editButton,
             this.deleteButton, this.attributeColumnsButton, this.valueColumnsButton,
             this.propertyFilterButton,
         ]);
@@ -563,7 +568,7 @@ export class MainView {
         }
         // On a phone the secondary actions live behind the overflow menu.
         const host = this.compact ? this.overflowPopup : this.inlineActions;
-        for (const action of [this.addButton, this.inboxButton, this.editButton, this.deleteButton,
+        for (const action of [this.addButton, this.inboxButton, this.boardButton, this.editButton, this.deleteButton,
             this.attributeColumnsButton, this.valueColumnsButton, this.propertyFilterButton]) {
             action.classList.toggle('menu-item', this.compact);
             if (action.parentElement !== host) host.appendChild(action);
@@ -641,6 +646,7 @@ export class MainView {
         });
         this.quickAddButton.addEventListener('click', () => this.quickAdd());
         this.inboxButton.addEventListener('click', () => this.openInbox());
+        this.boardButton.addEventListener('click', () => openBoard().catch((error) => errorDialog(error.message)));
         this.addButton.addEventListener('click', () => this.addItem());
         this.editButton.addEventListener('click', () => this.editSelectedItem());
         this.deleteButton.addEventListener('click', () => this.deleteSelectedItem());

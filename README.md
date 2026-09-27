@@ -53,6 +53,7 @@ It has three clients over one long-lived core: a Qt Widgets desktop application,
 - Theme switch: light mode and dark mode
 - Export and import of the whole dictionary as one documented JSON file, optionally with its files, from every client and from the command line
 - An Inbox for ideas: a title and plain text, saved to `Default` with the type `Inbox` in one step; on Android also without a connection, sent when the server is back
+- A shared Markdown Board: one title-free document for current notes and tasks, with rendered reading and a full Markdown editor in every client
 - Alarms: one-time or recurring reminders, optionally linked to an item, listed and edited in every client
 - Item history and Trash: restore an earlier version or a deleted item with its cards and links
 - Encrypted offline reading of previously loaded pages in Android
@@ -593,6 +594,7 @@ You have three add options in the main toolbar, in this order:
 - `Add`: quick add path; title is prefilled from current search text
 - `Add ...`: full add dialog path
 - `Inbox` (`File -> Inbox...`, `Ctrl+I`): an idea caught quickly - a title and plain text - saved to the `Default` group with the type `Inbox`, whatever the filters show. The first idea creates the `Inbox` type, available in all groups, so an idea keeps it when you move it to its proper group; a type called `Inbox` that is already there - in all groups or in `Default` - is used instead
+- `Board` (`File -> Board...`): opens the one shared Markdown document in reading mode; **Edit** switches to the same source, formatting toolbar and live preview as item content. Saves use a revision check so another client's newer edit is not silently overwritten.
 
 Both actions use the selected Type filter for the new item. With `All groups` selected, a group-scoped type also determines the new item's group.
 

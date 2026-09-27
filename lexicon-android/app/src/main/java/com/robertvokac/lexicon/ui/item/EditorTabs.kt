@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -99,6 +100,21 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun ContentTab(viewModel: ItemEditorViewModel) {
+    MarkdownEditor(
+        content = viewModel.content,
+        onFormat = viewModel::format,
+        onItemLink = viewModel::insertItemLink,
+        lastCodeLanguage = viewModel::lastCodeLanguage,
+    )
+}
+
+@Composable
+fun MarkdownEditor(
+    content: TextFieldState,
+    onFormat: (FormattingAction, String) -> Unit,
+    onItemLink: (String) -> Unit,
+    lastCodeLanguage: suspend () -> String,
+) {
     var previewing by rememberSaveable { mutableStateOf(false) }
     var askLanguage by rememberSaveable { mutableStateOf(false) }
     var pickingItem by rememberSaveable { mutableStateOf(false) }
@@ -123,7 +139,7 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
                 if (sideBySide || !previewing) {
                     FormattingToolbar(
                         onAction = { action ->
-                            if (action == FormattingAction.CodeBlock) askLanguage = true else viewModel.format(action)
+                            if (action == FormattingAction.CodeBlock) askLanguage = true else onFormat(action, "")
                         },
                         onItemLink = { pickingItem = true },
                         modifier = Modifier.weight(1f),
@@ -133,7 +149,7 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
             Row(Modifier.fillMaxSize()) {
                 if (sideBySide || !previewing) {
                     OutlinedTextField(
-                        state = viewModel.content,
+                        state = content,
                         placeholder = { Text("Markdown content…") },
                         lineLimits = TextFieldLineLimits.MultiLine(),
                         keyboardOptions = LiteralTextKeyboard,
@@ -147,7 +163,7 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
                 }
                 if (sideBySide) VerticalDivider()
                 if (sideBySide || previewing) {
-                    MarkdownPreview(viewModel, Modifier.weight(1f).fillMaxHeight())
+                    MarkdownPreview(content, Modifier.weight(1f).fillMaxHeight())
                 }
             }
         }
@@ -157,17 +173,17 @@ fun ContentTab(viewModel: ItemEditorViewModel) {
             title = "Link to an item",
             onPick = { item ->
                 pickingItem = false
-                viewModel.insertItemLink(item.displayTitle)
+                onItemLink(item.displayTitle)
             },
             onDismiss = { pickingItem = false },
         )
     }
     if (askLanguage) {
         CodeLanguageDialog(
-            viewModel = viewModel,
+            lastCodeLanguage = lastCodeLanguage,
             onConfirm = { language ->
                 askLanguage = false
-                viewModel.format(FormattingAction.CodeBlock, language)
+                onFormat(FormattingAction.CodeBlock, language)
             },
             onDismiss = { askLanguage = false },
         )
@@ -192,11 +208,11 @@ private fun FormattingToolbar(onAction: (FormattingAction) -> Unit, onItemLink: 
 
 /** Renders a moment after typing stops, off the main thread, so long notes stay responsive. */
 @Composable
-private fun MarkdownPreview(viewModel: ItemEditorViewModel, modifier: Modifier) {
+private fun MarkdownPreview(content: TextFieldState, modifier: Modifier) {
     var blocks by remember { mutableStateOf<List<MdBlock>>(emptyList()) }
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(content) {
         var first = true
-        snapshotFlow { viewModel.content.text }.collectLatest { text ->
+        snapshotFlow { content.text }.collectLatest { text ->
             if (!first) delay(PREVIEW_DEBOUNCE_MS)
             first = false
             blocks = withContext(Dispatchers.Default) { Markdown.parse(text.toString()) }
@@ -214,10 +230,14 @@ private fun MarkdownPreview(viewModel: ItemEditorViewModel, modifier: Modifier) 
 private const val PREVIEW_DEBOUNCE_MS = 300L
 
 @Composable
-private fun CodeLanguageDialog(viewModel: ItemEditorViewModel, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+private fun CodeLanguageDialog(
+    lastCodeLanguage: suspend () -> String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     // The language of the last code block is offered for the next one.
     var initial by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { initial = viewModel.lastCodeLanguage() }
+    LaunchedEffect(Unit) { initial = lastCodeLanguage() }
     initial?.let { language ->
         TextInputDialog(
             title = "Code block",

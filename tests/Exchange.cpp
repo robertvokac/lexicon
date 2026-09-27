@@ -129,7 +129,7 @@ int main() {
   const auto exported = nlohmann::json::parse(withFiles);
   // Version 3: an older reader would drop the alarm's recurrence and item
   // link without a word, so it refuses the document instead.
-  check(exported.value("version", 0) == 3, "the export is format version 3");
+  check(exported.value("version", 0) == 4, "the export is format version 4");
   check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&
             exported.at("alarms").at(0).value("itemId", 0) == monoidId,
         "recurrence and linked item are exported");

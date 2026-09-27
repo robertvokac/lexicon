@@ -384,6 +384,16 @@ void applyMigrations(const Connection &db) {
             "ALTER TABLE alarm ADD COLUMN item_id INTEGER REFERENCES item(id) ON DELETE SET NULL;",
             "ALTER TABLE alarm ADD COLUMN anchor_at TEXT;",
             "CREATE INDEX idx_alarm_item_id ON alarm(item_id);"
+        }},
+        {29, {
+            // A singleton rather than an item: the Board has no title, group,
+            // type or metadata, only one shared Markdown document.
+            "CREATE TABLE board ("
+            " id INTEGER PRIMARY KEY CHECK(id = 1),"
+            " content TEXT NOT NULL DEFAULT '',"
+            " revision INTEGER NOT NULL DEFAULT 1"
+            ");",
+            "INSERT INTO board(id, content, revision) VALUES(1, '', 1);"
         }}
     };
 

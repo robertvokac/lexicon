@@ -3,6 +3,7 @@ package com.robertvokac.lexicon.testing
 import com.robertvokac.lexicon.api.LexiconJson
 import com.robertvokac.lexicon.model.Alarm
 import com.robertvokac.lexicon.model.Card
+import com.robertvokac.lexicon.model.Board
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.Group
@@ -62,6 +63,7 @@ class FakeLexiconServer : Dispatcher() {
     val links = mutableListOf<Link>()
     val reads = CopyOnWriteArrayList<Int>()
     val blobs = mutableMapOf<String, ByteArray>()
+    var board = Board(revision = 1)
 
     /** What GET /export answers, and the bodies POST /import received. */
     var exportDocument = """{"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[],"links":[]}"""
@@ -387,6 +389,20 @@ class FakeLexiconServer : Dispatcher() {
             }
             path == "/items" && method == "POST" -> saveItem(request, null)
             path == "/inbox" && method == "POST" -> captureIdea(request)
+            path == "/board" && method == "GET" ->
+                json(buildJsonObject { put("board", encode(board)) })
+            path == "/board" && method == "PUT" -> {
+                val body = bodyObject(request)
+                val revision = body["revision"]?.jsonPrimitive?.intOrNull ?: 0
+                if (revision > 0 && revision != board.revision) {
+                    return error(409, "conflict", "The Board was changed elsewhere after you opened it.")
+                }
+                board = Board(
+                    content = body["content"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    revision = board.revision + 1,
+                )
+                json(buildJsonObject { put("board", encode(board)) })
+            }
             segments.size == 2 && segments[0] == "items" && method == "GET" -> {
                 val id = segments[1].toIntOrNull() ?: return notFound()
                 val item = items[id] ?: return error(404, "not_found", "Item not found.")

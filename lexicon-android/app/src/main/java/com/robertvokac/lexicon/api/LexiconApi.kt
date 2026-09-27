@@ -5,6 +5,8 @@ import com.robertvokac.lexicon.model.AlarmEnvelope
 import com.robertvokac.lexicon.model.AlarmWrite
 import com.robertvokac.lexicon.model.AlarmsEnvelope
 import com.robertvokac.lexicon.model.Card
+import com.robertvokac.lexicon.model.Board
+import com.robertvokac.lexicon.model.BoardEnvelope
 import com.robertvokac.lexicon.model.CardAttempt
 import com.robertvokac.lexicon.model.CardEnvelope
 import com.robertvokac.lexicon.model.CardQuizSet
@@ -192,6 +194,11 @@ class LexiconApi(private val client: ApiClient) {
      */
     suspend fun captureIdea(title: String, content: String): SavedItem =
         client.post("inbox", InboxIdea(title, content), InboxIdea.serializer(), SavedItem.serializer())
+
+    suspend fun board(): Board = client.get("board", BoardEnvelope.serializer()).board
+
+    suspend fun saveBoard(board: Board): Board =
+        client.put("board", board, Board.serializer(), BoardEnvelope.serializer()).board
 
     /** Records a read in the server's log. */
     suspend fun logItemRead(id: Int) = client.send("POST", "items/$id/read")

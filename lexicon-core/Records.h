@@ -135,6 +135,13 @@ struct ItemHistoryEntry {
   std::string happenedAt;
   ItemRecord item;
 };
+// The one shared Markdown document shown as the Board. Its single database
+// row is revised on every save so clients do not silently overwrite one
+// another.
+struct BoardRecord {
+  std::string content;
+  int revision = 0;
+};
 // A reminder at a moment: when it goes off, as UTC "YYYY-MM-DDTHH:MM:SSZ".
 struct AlarmRecord {
   int id = -1;
