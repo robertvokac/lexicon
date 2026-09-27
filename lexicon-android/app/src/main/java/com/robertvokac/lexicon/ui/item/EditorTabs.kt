@@ -75,6 +75,7 @@ import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.ItemField
+import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.LinkType
 import com.robertvokac.lexicon.ui.common.Choice
 import com.robertvokac.lexicon.ui.common.ChoiceField
@@ -273,8 +274,10 @@ fun ValuesTab(state: EditorState, viewModel: ItemEditorViewModel) {
                     typeName = typeName,
                     itemId = state.itemId,
                     value = state.fields.values[id].orEmpty(),
+                    displayValue = state.fieldDisplayValues[id],
                     blob = state.blobs[id],
                     onChange = { viewModel.setValue(id, it) },
+                    onForeignKeyPick = { viewModel.setForeignKeyValue(id, it) },
                     onUpload = { viewModel.uploadBlob(id, it) },
                     onUploadImage = { viewModel.uploadImage(id, it) },
                     onDownload = { hash, uri -> viewModel.downloadBlob(id, hash, uri) },
@@ -293,8 +296,10 @@ private fun FieldEditor(
     typeName: String,
     itemId: Int?,
     value: String,
+    displayValue: String?,
     blob: BlobStatus?,
     onChange: (String) -> Unit,
+    onForeignKeyPick: (Item) -> Unit,
     onUpload: (android.net.Uri) -> Unit,
     onUploadImage: (android.net.Uri) -> Unit,
     onDownload: (String, android.net.Uri) -> Unit,
@@ -324,6 +329,26 @@ private fun FieldEditor(
             onSelected = onChange,
             supportingText = problem,
         )
+        FieldDataType.ForeignKey -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            var picking by rememberSaveable(field.id) { mutableStateOf(false) }
+            Text(field.name, style = MaterialTheme.typography.labelLarge)
+            if (value.isNotEmpty()) {
+                Text(displayValue ?: "!missing! $value", style = MaterialTheme.typography.bodyMedium)
+                Text("Item ID: $value", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { picking = true }) { Text("Search items") }
+                if (value.isNotEmpty()) TextButton(onClick = { onChange("") }) { Text("Clear") }
+            }
+            if (picking) ItemPickerDialog(
+                title = "Choose ${field.name}",
+                targetTypeId = field.targetItemTypeId,
+                titleOnly = true,
+                onPick = { onForeignKeyPick(it); picking = false },
+                onDismiss = { picking = false },
+            )
+        }
         FieldDataType.Blob -> BlobEditor(field, value, blob, onUpload, onDownload, onClearBlob)
         FieldDataType.Image -> ImageEditor(
             field, typeName, itemId, value, blob, onUploadImage, onDownload, onClearBlob,
@@ -358,7 +383,7 @@ private fun FieldEditor(
             isError = problem != null,
             supportingText = { Text(problem ?: field.dataType.name) },
             keyboardOptions = KeyboardOptions(
-                keyboardType = if (field.dataType == FieldDataType.Integer) KeyboardType.Number else KeyboardType.Decimal,
+                keyboardType = if (field.dataType == FieldDataType.Float) KeyboardType.Decimal else KeyboardType.Number,
             ),
             modifier = Modifier.fillMaxWidth(),
         )

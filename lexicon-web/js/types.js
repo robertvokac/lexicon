@@ -36,7 +36,7 @@ async function typeDialog(title, type, groups) {
     });
 }
 
-async function fieldDialog(title, fieldRecord) {
+async function fieldDialog(title, fieldRecord, types) {
     const name = el('input', { type: 'text', value: fieldRecord.name || '', required: true });
     const description = el('textarea', { rows: '3' });
     description.value = fieldRecord.description || '';
@@ -45,8 +45,16 @@ async function fieldDialog(title, fieldRecord) {
     const position = el('input', { type: 'number', step: '1', value: String(fieldRecord.position ?? 0) });
     const options = el('textarea', { rows: '4', placeholder: 'One enum option per line' });
     options.value = (fieldRecord.enumOptions || []).join('\n');
+    const targetType = el('select', {});
+    fillSelect(targetType, [
+        { value: '', label: 'Select target type' },
+        ...types.map((type) => ({ value: String(type.id), label: `${type.name} — ${typeScopeLabel(type)}` })),
+    ], fieldRecord.targetItemTypeId ? String(fieldRecord.targetItemTypeId) : '');
 
-    const syncOptions = () => { options.disabled = dataType.value !== 'Enum'; };
+    const syncOptions = () => {
+        options.disabled = dataType.value !== 'Enum';
+        targetType.disabled = dataType.value !== 'ForeignKey';
+    };
     dataType.addEventListener('change', syncOptions);
     syncOptions();
 
@@ -58,6 +66,7 @@ async function fieldDialog(title, fieldRecord) {
             field('Description:', description),
             field('Position:', position),
             field('Enum options:', options),
+            field('Target item type:', targetType),
         ]),
         initialFocus: name,
         onAccept: ({ fail }) => {
@@ -72,12 +81,17 @@ async function fieldDialog(title, fieldRecord) {
                 fail('Enum fields need at least one option.');
                 return undefined;
             }
+            if (dataType.value === 'ForeignKey' && !targetType.value) {
+                fail('Select a target item type.');
+                return undefined;
+            }
             return {
                 name: name.value.trim(),
                 description: description.value.trim(),
                 dataType: dataType.value,
                 position: Number.parseInt(position.value, 10) || 0,
                 enumOptions,
+                targetItemTypeId: dataType.value === 'ForeignKey' ? Number(targetType.value) : null,
             };
         },
     });
@@ -163,12 +177,17 @@ export async function openTypeManager() {
 
     fieldEditor = listEditor({
         title: 'Fields of the selected type',
-        renderItem: (record) => `${record.position}  ${record.name} — ${record.dataType}`,
+        renderItem: (record) => {
+            const target = record.dataType === 'ForeignKey'
+                ? ` → ${types.find((type) => type.id === record.targetItemTypeId)?.name || `!missing! ${record.targetItemTypeId}`}`
+                : '';
+            return `${record.position}  ${record.name} — ${record.dataType}${target}`;
+        },
         itemTitle: (record) => record.description,
         onAdd: async () => {
             if (selectedTypeIndex < 0) return;
             const last = fields.length ? fields[fields.length - 1].position : -1;
-            const values = await fieldDialog('Add field', { position: last + 1, dataType: 'Text' });
+            const values = await fieldDialog('Add field', { position: last + 1, dataType: 'Text' }, types);
             if (!values) return;
             try {
                 await api.createField(types[selectedTypeIndex].id, values);
@@ -180,7 +199,7 @@ export async function openTypeManager() {
         },
         onEdit: async (index) => {
             const original = fields[index];
-            const values = await fieldDialog('Edit field', original);
+            const values = await fieldDialog('Edit field', original, types);
             if (!values) return;
             if (values.dataType !== original.dataType) {
                 let affected = 0;

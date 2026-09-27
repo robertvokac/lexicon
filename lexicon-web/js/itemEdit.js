@@ -6,6 +6,7 @@ import { confirmDialog, errorDialog, field, listEditor, messageDialog, openDialo
     from './dialogs.js';
 import { clearDraft, keepDraft, readDraft } from './drafts.js';
 import { imageEditor } from './images.js';
+import { foreignKeyControl } from './foreignKey.js';
 import { bindItemLinks, findWikiLinks, renderMarkdown } from './markdown.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
@@ -227,6 +228,10 @@ function fieldEditor(fieldRecord, storedValue, onChange, imageContext = {}) {
             onChange(hash);
         });
         return { node, read: () => current };
+    }
+    case 'ForeignKey': {
+        const node = foreignKeyControl(fieldRecord, storedValue, onChange);
+        return { node, read: () => node.value };
     }
     default: {
         const attributes = { ...common, value: storedValue || '' };

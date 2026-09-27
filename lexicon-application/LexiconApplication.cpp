@@ -2,6 +2,7 @@
 #include "ImageValue.h"
 
 #include <algorithm>
+#include <charconv>
 #include <set>
 
 namespace lexicon {
@@ -550,6 +551,11 @@ Result<ImportReport> ExchangeService::importDictionary(
     const int typeId = found->id;
     typeIds[entry.type.id] = typeId;
     typeScopes[typeId] = scope;
+  }
+  for (const auto &entry : dictionary.types) {
+    const auto mappedType = typeIds.find(entry.type.id);
+    if (mappedType == typeIds.end()) continue;
+    const int typeId = mappedType->second;
     auto fields = repository_.loadItemFields(typeId);
     if (!fields)
       return std::unexpected(fields.error());
@@ -575,6 +581,15 @@ Result<ImportReport> ExchangeService::importDictionary(
         created.itemTypeId = typeId;
         created.name = trim(field.name);
         created.position = nextPosition++;
+        if (created.dataType == FieldDataType::ForeignKey) {
+          const auto target = typeIds.find(field.targetItemTypeId);
+          if (target == typeIds.end()) {
+            warn("Field '" + field.name + "' of type '" + entry.type.name +
+                 "' points to a type missing from the file; it was not imported.");
+            continue;
+          }
+          created.targetItemTypeId = target->second;
+        }
         if (auto stored = repository_.upsertItemField(created); !stored)
           return std::unexpected(stored.error());
         fields = repository_.loadItemFields(typeId);
@@ -584,6 +599,14 @@ Result<ImportReport> ExchangeService::importDictionary(
         if (match == fields->end())
           return std::unexpected(Error{Error::Code::Storage, "An imported field was not stored."});
         ++report.fieldsCreated;
+      }
+      if (field.dataType == FieldDataType::ForeignKey) {
+        const auto target = typeIds.find(field.targetItemTypeId);
+        if (target == typeIds.end() || match->targetItemTypeId != target->second) {
+          warn("Field '" + field.name + "' of type '" + entry.type.name +
+               "' has another target type here; its values were not imported.");
+          continue;
+        }
       }
       fieldIds[field.id] = match->id;
       fieldsById[match->id] = *match;
@@ -614,6 +637,8 @@ Result<ImportReport> ExchangeService::importDictionary(
   }
   std::map<int, int> itemIds;
   std::set<int> created;
+  struct PendingForeignValue { int itemId; int fieldId; std::string value; };
+  std::vector<PendingForeignValue> pendingForeignValues;
   int fallbackGroup = -1;
   for (const auto &source : dictionary.items) {
     int groupId = -1;
@@ -649,6 +674,8 @@ Result<ImportReport> ExchangeService::importDictionary(
     item.groupId = groupId;
     item.itemTypeId = -1;
     item.fieldValues.clear();
+    item.fieldDisplayValues.clear();
+    std::vector<std::pair<int, std::string>> foreignValues;
     if (source.itemTypeId > 0) {
       const auto mapped = typeIds.find(source.itemTypeId);
       if (mapped == typeIds.end()) {
@@ -680,7 +707,10 @@ Result<ImportReport> ExchangeService::importDictionary(
             continue;
           }
         }
-        item.fieldValues[mapped->second] = value;
+        if (field.dataType == FieldDataType::ForeignKey)
+          foreignValues.emplace_back(mapped->second, value);
+        else
+          item.fieldValues[mapped->second] = value;
       }
       if (dropped > 0)
         warn("Item '" + source.title + "': " + std::to_string(dropped) +
@@ -690,9 +720,27 @@ Result<ImportReport> ExchangeService::importDictionary(
     if (!id)
       return std::unexpected(Error{id.error().code, "Item '" + source.title + "': " + id.error().message});
     itemIds[source.id] = *id;
+    for (const auto &[fieldId, value] : foreignValues)
+      pendingForeignValues.push_back({*id, fieldId, value});
     created.insert(*id);
     present.insert(key);
     ++report.itemsCreated;
+  }
+
+  // Item IDs can change on import, and a field may point to an item later in
+  // the file. Apply foreign-key values after all source IDs are mapped.
+  for (const auto &pending : pendingForeignValues) {
+    auto item = repository_.loadItem(pending.itemId);
+    if (!item) return std::unexpected(item.error());
+    int sourceTarget = -1;
+    const auto [end, error] = std::from_chars(pending.value.data(),
+        pending.value.data() + pending.value.size(), sourceTarget);
+    const auto mapped = error == std::errc{} && end == pending.value.data() + pending.value.size()
+        ? itemIds.find(sourceTarget) : itemIds.end();
+    item->fieldValues[pending.fieldId] = mapped == itemIds.end()
+        ? pending.value : std::to_string(mapped->second);
+    if (auto saved = repository_.saveItemReturningId(*item); !saved)
+      return std::unexpected(saved.error());
   }
 
   // Links that touch an imported item. Links between items that were already

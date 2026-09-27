@@ -264,7 +264,7 @@ private fun ValueFilter(field: ItemField, value: String, onChange: (String) -> U
             supportingText = if (field.dataType.filtersExactly) "Matches exactly" else "Contains",
             singleLine = true,
             keyboardOptions = when (field.dataType) {
-                FieldDataType.Integer -> KeyboardOptions(keyboardType = KeyboardType.Number)
+                FieldDataType.Integer, FieldDataType.ForeignKey -> KeyboardOptions(keyboardType = KeyboardType.Number)
                 FieldDataType.Float -> KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 else -> LiteralTextKeyboard
             },
@@ -278,6 +278,7 @@ private fun placeholderFor(type: FieldDataType): String? = when (type) {
     FieldDataType.Time -> "HH:MM:SS"
     FieldDataType.Timestamp -> "YYYY-MM-DDTHH:MM:SS"
     FieldDataType.Blob -> "SHA-256"
+    FieldDataType.ForeignKey -> "Target item ID"
     FieldDataType.Image -> "image/png:SHA-256"
     else -> null
 }

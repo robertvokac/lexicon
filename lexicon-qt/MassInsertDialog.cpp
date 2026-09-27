@@ -1,6 +1,7 @@
 #include "MassInsertDialog.h"
 
 #include "ImageValueView.h"
+#include "ForeignKeyValueEditor.h"
 
 #include <algorithm>
 #include <optional>
@@ -53,6 +54,7 @@ QString dataTypeName(FieldDataType type) {
     case FieldDataType::Blob: return "Blob";
     case FieldDataType::Other: return "Other";
     case FieldDataType::Image: return "Image";
+    case FieldDataType::ForeignKey: return "Foreign key";
     }
     return "Unknown";
 }
@@ -423,6 +425,11 @@ void MassInsertDialog::appendRow(QJsonObject row) {
             edit->setTabChangesFocus(true);
             m_table->setCellWidget(index, column, edit);
             connect(edit, &QPlainTextEdit::textChanged, this, &MassInsertDialog::scheduleDraft);
+        } else if (field.dataType == FieldDataType::ForeignKey) {
+            QLineEdit *stored = nullptr;
+            auto *editor = foreignKeyValueEditor(m_table, field.targetItemTypeId, value, &stored);
+            m_table->setCellWidget(index, column, editor);
+            connect(stored, &QLineEdit::textChanged, this, &MassInsertDialog::scheduleDraft);
         } else if (field.dataType == FieldDataType::Image) {
             auto* editor = new QWidget(m_table);
             editor->setProperty("massInsertValue", value);

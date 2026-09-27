@@ -7,6 +7,7 @@ import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.auth.SessionState
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
+import com.robertvokac.lexicon.model.FieldDataType
 import com.robertvokac.lexicon.ui.common.userMessage
 import com.robertvokac.lexicon.ui.markdown.Markdown
 import com.robertvokac.lexicon.ui.markdown.MdBlock
@@ -78,7 +79,11 @@ class ItemDetailViewModel(private val container: AppContainer, initialItemId: In
     }
 
     private fun isLinked(otherId: Int): Boolean = _state.value.bundle?.let { bundle ->
-        bundle.links.any { it.toItemId == otherId } || bundle.backlinks.any { it.fromItemId == otherId }
+        bundle.links.any { it.toItemId == otherId } || bundle.backlinks.any { it.fromItemId == otherId } ||
+            _state.value.fields.any { field ->
+                field.dataType == FieldDataType.ForeignKey &&
+                    field.id?.let(bundle.item::fieldValue) == otherId.toString()
+            }
     } ?: false
 
     /** Shows another item; each opening records one read. */

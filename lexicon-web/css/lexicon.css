@@ -600,6 +600,9 @@ body.resizing { cursor: row-resize; user-select: none; }
 .form-row > textarea { width: 100%; }
 .form-row > input[type="checkbox"] { width: 18px; }
 .form-grid { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.foreign-key-control input { width: 100%; }
+.foreign-key-results { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); background: var(--surface); }
+.foreign-key-option { display: block; width: 100%; text-align: left; padding: 6px; }
 
 /* --- Tabs ------------------------------------------------------------- */
 .tabs { display: flex; flex-direction: column; min-height: 0; }
@@ -960,6 +963,7 @@ svg.graph { flex: none; margin: auto; }
 .mass-insert-table th:first-child, .mass-insert-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
 .mass-insert-table thead th:first-child { z-index: 2; background: var(--surface-alt); }
 .mass-insert-table input[type="text"], .mass-insert-table input[type="number"],
+.mass-insert-table input[type="search"],
 .mass-insert-table input[type="date"], .mass-insert-table input[type="time"],
 .mass-insert-table input[type="datetime-local"], .mass-insert-table select,
 .mass-insert-table textarea { min-width: 150px; width: 100%; }

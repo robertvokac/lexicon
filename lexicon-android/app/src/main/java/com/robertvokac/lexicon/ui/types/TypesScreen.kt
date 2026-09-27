@@ -219,6 +219,7 @@ fun TypeDetailScreen(viewModel: TypesViewModel, typeId: Int, onBack: () -> Unit)
         FieldDialog(
             title = "Add field",
             initial = null,
+            types = state.types,
             nextPosition = viewModel.nextFieldPosition(),
             busy = state.busy,
             onConfirm = { write -> viewModel.saveField(null, write) { addingField = false } },
@@ -286,7 +287,13 @@ private fun FieldsPane(state: TypesState, viewModel: TypesViewModel, showAdd: Bo
                     Text(field.name, style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "Position ${field.position} · ${field.dataType.name}" +
-                            if (field.dataType == FieldDataType.Enum) ": ${field.enumOptions.joinToString(", ")}" else "",
+                            when (field.dataType) {
+                                FieldDataType.Enum -> ": ${field.enumOptions.joinToString(", ")}"
+                                FieldDataType.ForeignKey -> " → " +
+                                    (state.types.firstOrNull { it.id == field.targetItemTypeId }?.name
+                                        ?: "!missing! ${field.targetItemTypeId}")
+                                else -> ""
+                            },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -318,6 +325,7 @@ private fun FieldsPane(state: TypesState, viewModel: TypesViewModel, showAdd: Bo
         FieldDialog(
             title = if (current == null) "Add field" else "Edit field",
             initial = current,
+            types = state.types,
             nextPosition = viewModel.nextFieldPosition(),
             busy = state.busy,
             onConfirm = { write ->
@@ -412,6 +420,7 @@ private fun TypeDialog(
 private fun FieldDialog(
     title: String,
     initial: ItemField?,
+    types: List<ItemType>,
     nextPosition: Int,
     busy: Boolean,
     onConfirm: (FieldWrite) -> Unit,
@@ -422,6 +431,7 @@ private fun FieldDialog(
     var dataType by rememberSaveable { mutableStateOf(initial?.dataType ?: FieldDataType.Text) }
     var position by rememberSaveable { mutableStateOf((initial?.position ?: nextPosition).toString()) }
     var options by rememberSaveable { mutableStateOf(initial?.enumOptions.orEmpty().joinToString("\n")) }
+    var targetItemTypeId by rememberSaveable { mutableStateOf(initial?.targetItemTypeId ?: -1) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
@@ -447,6 +457,16 @@ private fun FieldDialog(
                         error = null
                     },
                 )
+                if (dataType == FieldDataType.ForeignKey) {
+                    ChoiceField(
+                        label = "Target item type",
+                        choices = listOf(Choice(-1, "Select target type")) + types.map {
+                            Choice(it.id ?: -1, "${it.name} — ${it.scopeLabel}")
+                        },
+                        selected = targetItemTypeId,
+                        onSelected = { targetItemTypeId = it; error = null },
+                    )
+                }
                 SyncedTextField(
                     value = description,
                     onValueChange = { description = it },
@@ -488,6 +508,7 @@ private fun FieldDialog(
                 error = when {
                     name.isBlank() -> "Field name cannot be empty."
                     dataType == FieldDataType.Enum && enumOptions.isEmpty() -> "Enum fields need at least one option."
+                    dataType == FieldDataType.ForeignKey && targetItemTypeId <= 0 -> "Select a target item type."
                     else -> null
                 }
                 if (error == null) {
@@ -498,6 +519,7 @@ private fun FieldDialog(
                             position = position.toIntOrNull() ?: 0,
                             enumOptions = enumOptions,
                             description = description.trim(),
+                            targetItemTypeId = if (dataType == FieldDataType.ForeignKey) targetItemTypeId else null,
                         ),
                     )
                 }

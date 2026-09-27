@@ -26,6 +26,8 @@ object ItemCsv {
                     field.dataType == FieldDataType.Image -> ImageValues.describe(value) ?: value
                     field.dataType == FieldDataType.Boolean && value.isNotEmpty() ->
                         if (value == "true") "Yes" else "No"
+                    field.dataType == FieldDataType.ForeignKey && value.isNotEmpty() ->
+                        field.id?.let(item::fieldDisplayValue).orEmpty()
                     else -> value
                 }
             }

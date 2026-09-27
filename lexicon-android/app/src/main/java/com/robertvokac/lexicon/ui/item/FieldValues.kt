@@ -29,6 +29,7 @@ object FieldValues {
         if (text.isEmpty()) return null
         val ok = when (field.dataType) {
             FieldDataType.Integer -> integer.matches(text)
+            FieldDataType.ForeignKey -> integer.matches(text) && (text.toLongOrNull() ?: 0) > 0
             FieldDataType.Float -> decimal.matches(text)
             FieldDataType.Date -> isDate(text)
             FieldDataType.Time -> isTime(text)
@@ -42,6 +43,7 @@ object FieldValues {
         if (ok) return null
         return when (field.dataType) {
             FieldDataType.Integer -> "Enter a whole number."
+            FieldDataType.ForeignKey -> "Enter a positive target item ID."
             FieldDataType.Float -> "Enter a number such as 3.14."
             FieldDataType.Date -> "Use YYYY-MM-DD."
             FieldDataType.Time -> "Use HH:MM or HH:MM:SS."
@@ -67,7 +69,7 @@ object FieldValues {
 
     /** Keeps what a numeric keyboard can mean; a decimal comma becomes a point. */
     fun sanitize(type: FieldDataType, input: String): String = when (type) {
-        FieldDataType.Integer -> input.filterIndexed { index, ch -> ch.isDigit() || (index == 0 && (ch == '-' || ch == '+')) }
+        FieldDataType.Integer, FieldDataType.ForeignKey -> input.filterIndexed { index, ch -> ch.isDigit() || (index == 0 && (ch == '-' || ch == '+')) }
         FieldDataType.Float -> input.replace(',', '.').filter { it.isDigit() || it in "+-.eE" }
         else -> input
     }

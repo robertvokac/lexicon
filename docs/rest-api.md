@@ -182,6 +182,10 @@ change those item values first, then update the field definition.
 
 `description` is optional when a field is created or updated and defaults to
 an empty string. All field responses include it.
+For `ForeignKey`, set `targetItemTypeId` to the ID of an existing item type.
+Its values are positive item IDs. Saving a value does not require that the
+target item exist; a missing item, or one of another type, displays as
+`!missing! {id}`. Field responses include `targetItemTypeId` (otherwise `null`).
 
 ## Items
 
@@ -365,6 +369,9 @@ strings. Values keep the representation the database stores: `YYYY-MM-DD` for
 `true`/`false` for `Boolean`, one of `enumOptions` for `Enum`, a 64
 character lowercase SHA-256 for `Blob`, and `<media type>:<SHA-256>` for
 `Image`, such as `image/png:6c7dbba2...99d98ca`.
+For `ForeignKey`, the stored value is a positive item ID. Read responses also
+include `fieldDisplayValues`, keyed by field ID, with the target item's title
+or `!missing! {id}`. Clients keep `fieldValues` for edits and filtering.
 
 An `Image` value is a stored file, like a `Blob`, that also says what kind of
 image it is: `image/png`, `image/jpeg`, `image/gif`, `image/webp` or

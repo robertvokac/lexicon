@@ -130,6 +130,7 @@
       <tr><td>30</td><td>Adds <code>item_field.description</code></td></tr>
       <tr><td>31</td><td>Rebuilds <code>board</code> for multiple uniquely named Boards and preserves the former Board as <code>Main</code></td></tr>
       <tr><td>32</td><td>Adds Boolean <code>alarm.asap</code> and optional text <code>alarm.group</code></td></tr>
+      <tr><td>33</td><td>Rebuilds <code>item_field</code> for <code>ForeignKey</code> (11) and adds <code>target_item_type_id</code></td></tr>
     </table>
 
     <h2 id="tables">Table reference</h2>
@@ -183,17 +184,18 @@ CREATE TABLE item_field (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   item_type_id INTEGER NOT NULL,
   name         TEXT NOT NULL CHECK(TRIM(name) &lt;&gt; ''),
-  data_type    INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 10),
+  data_type    INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 11),
   position     INTEGER NOT NULL DEFAULT 0,
   enum_options TEXT NOT NULL DEFAULT '[]', -- JSON array
   description  TEXT NOT NULL DEFAULT '',   -- migration 30
+  target_item_type_id INTEGER,             -- migration 33, no value-level FK constraint
   FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE
 );
 CREATE UNIQUE INDEX item_field_type_name_unique
   ON item_field(item_type_id, name COLLATE NOCASE);
 CREATE INDEX idx_item_field_type_position
   ON item_field(item_type_id, position);</code></pre>
-    <p>Fields are displayed by <code>position</code>, then name and ID. Their optional descriptions are shown by all three clients. <code>data_type</code> uses the stable <code>FieldDataType</code> integer enum. A type may be assigned only to items in its group, unless <code>group_id</code> is null; triggers enforce this.</p>
+    <p>Fields are displayed by <code>position</code>, then name and ID. Their optional descriptions are shown by all three clients. <code>data_type</code> uses the stable <code>FieldDataType</code> integer enum. A <code>ForeignKey</code> value stores an item ID and uses <code>target_item_type_id</code> for title resolution; missing or wrong-type targets display as <code>!missing! {id}</code>. The stored value has no referential constraint. A type may be assigned only to items in its group, unless <code>group_id</code> is null; triggers enforce this.</p>
 
     <h3><code>item_value</code> and <code>property</code></h3>
     <pre><code>CREATE TABLE item_value (

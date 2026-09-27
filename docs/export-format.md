@@ -34,7 +34,7 @@ and keep the files as files, shared between backups.
 ```json
 {
   "format": "lexicon-export",
-  "version": 7,
+  "version": 8,
   "exportedAt": "2026-09-22T08:00:00Z",
   "groups": [
     { "id": 1, "name": "Default", "description": "...", "position": 0 },
@@ -76,7 +76,7 @@ and keep the files as files, shared between backups.
 
 - `format` and `version` come first in meaning: an import refuses a document
   whose `format` is not `lexicon-export` or whose `version` it does not know,
-  before anything is written. This document describes version 7.
+  before anything is written. This document describes version 8.
 - **Versions.** The version goes up whenever a reader of the previous one
   would import a new document by leaving part of it out - silently losing
   data - rather than refusing it:
@@ -90,6 +90,7 @@ and keep the files as files, shared between backups.
   | 5 | Lexicon with described fields | `description` on item fields |
   | 6 | Lexicon with named Boards | all named Markdown documents in `boards` |
   | 7 | Lexicon with organized alarms | `asap` and `group` on alarms |
+  | 8 | Lexicon with foreign-key fields | `ForeignKey` and `targetItemTypeId` on fields |
 
   A reader takes every version up to its own and refuses a newer one: an
   older Lexicon says it does not know version 3 instead of importing it
@@ -101,7 +102,8 @@ and keep the files as files, shared between backups.
   on import.
 - The `id`s are those of the exporting database. They only connect the records
   of one document: `groupId`, `itemTypeId`, the keys of `fieldValues`,
-  `fromItemId` and `toItemId` refer to them.
+  `fromItemId` and `toItemId` refer to them. A `ForeignKey` field's
+  `targetItemTypeId` and its stored item IDs are mapped to imported IDs.
 - `alarms` holds every alarm, with `firesAt` and `dismissedAt` in UTC, so an
   alarm that was dismissed does not ring again after an import. `repeatDays`
   is 0 for a one-time alarm or 1–365 for a recurring interval. An optional

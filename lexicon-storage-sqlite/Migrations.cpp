@@ -417,7 +417,47 @@ void applyMigrations(const Connection &db) {
             "ALTER TABLE alarm ADD COLUMN asap INTEGER NOT NULL DEFAULT 0 "
             "CHECK(asap IN (0, 1));",
             "ALTER TABLE alarm ADD COLUMN \"group\" TEXT NOT NULL DEFAULT '';"
-        }}
+        }},
+        {33, {
+            // Extend the data type CHECK and retain field IDs, values and sequence.
+            "CREATE TEMP TABLE migration_item_field AS SELECT * FROM item_field;",
+            "CREATE TEMP TABLE migration_item_field_sequence AS "
+            "SELECT seq FROM sqlite_sequence WHERE name = 'item_field';",
+            "DROP TRIGGER item_value_scope_insert;",
+            "DROP TRIGGER item_value_scope_update;",
+            "DROP TABLE item_field;",
+            "CREATE TABLE item_field ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " item_type_id INTEGER NOT NULL,"
+            " name TEXT NOT NULL CHECK(TRIM(name) <> ''),"
+            " data_type INTEGER NOT NULL CHECK(data_type BETWEEN 0 AND 11),"
+            " position INTEGER NOT NULL DEFAULT 0,"
+            " enum_options TEXT NOT NULL DEFAULT '[]',"
+            " description TEXT NOT NULL DEFAULT '',"
+            " target_item_type_id INTEGER,"
+            " FOREIGN KEY(item_type_id) REFERENCES item_type(id) ON DELETE CASCADE"
+            ");",
+            "INSERT INTO item_field(id, item_type_id, name, data_type, position, enum_options, description) "
+            "SELECT id, item_type_id, name, data_type, position, enum_options, description "
+            "FROM temp.migration_item_field;",
+            "INSERT INTO sqlite_sequence(name, seq) SELECT 'item_field', seq FROM temp.migration_item_field_sequence "
+            "WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'item_field');",
+            "UPDATE sqlite_sequence SET seq = MAX(seq, COALESCE((SELECT seq FROM temp.migration_item_field_sequence), 0)) "
+            "WHERE name = 'item_field';",
+            "DROP TABLE temp.migration_item_field;",
+            "DROP TABLE temp.migration_item_field_sequence;",
+            "CREATE UNIQUE INDEX item_field_type_name_unique "
+            "ON item_field(item_type_id, name COLLATE NOCASE);",
+            "CREATE INDEX idx_item_field_type_position ON item_field(item_type_id, position);",
+            "CREATE TRIGGER item_value_scope_insert BEFORE INSERT ON item_value "
+            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
+            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
+            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;",
+            "CREATE TRIGGER item_value_scope_update BEFORE UPDATE ON item_value "
+            "WHEN NOT EXISTS (SELECT 1 FROM item i JOIN item_field f ON f.item_type_id = i.item_type_id "
+            "WHERE i.id = NEW.item_id AND f.id = NEW.item_field_id) "
+            "BEGIN SELECT RAISE(ABORT, 'Field does not belong to the item type'); END;"
+        }, true}
     };
 
   if (currentVersion > migrations.back().version)

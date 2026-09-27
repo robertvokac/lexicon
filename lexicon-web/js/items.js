@@ -932,6 +932,8 @@ export class MainView {
             // An image reads as its kind, not as its hash.
             if (column.field.dataType === 'Image') return describeImage(value) || value;
             if (column.field.dataType === 'Boolean' && value) return value === 'true' ? 'Yes' : 'No';
+            if (column.field.dataType === 'ForeignKey' && value)
+                return (item.fieldDisplayValues || {})[String(column.field.id)] || `!missing! ${value}`;
             return value;
         }
         return '';

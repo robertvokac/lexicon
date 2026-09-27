@@ -44,12 +44,12 @@ ItemTypeRecord toQt(const lexicon::ItemTypeRecord &v) {
 lexicon::ItemFieldRecord toCore(const ItemFieldRecord &v) {
   return {v.id,           v.itemTypeId,
           toCore(v.name), static_cast<lexicon::FieldDataType>(v.dataType),
-          v.position,     toCore(v.enumOptions), toCore(v.description)};
+          v.position,     toCore(v.enumOptions), toCore(v.description), v.targetItemTypeId};
 }
 ItemFieldRecord toQt(const lexicon::ItemFieldRecord &v) {
   return {v.id,         v.itemTypeId,
           toQt(v.name), static_cast<FieldDataType>(v.dataType),
-          v.position,   toQt(v.enumOptions), toQt(v.description)};
+          v.position,   toQt(v.enumOptions), toQt(v.description), v.targetItemTypeId};
 }
 lexicon::ItemValueFilter toCore(const ItemValueFilter &v) {
   return {v.fieldId, toCore(v.value), v.exact};
@@ -116,7 +116,8 @@ lexicon::ItemRecord toCore(const ItemRecord &v) {
           v.revision,
           toCore(v.reviewedAt),
           toCore(v.reviewDueAt),
-          toCore(v.matchSnippet)};
+          toCore(v.matchSnippet),
+          toCore(v.fieldDisplayValues)};
 }
 ItemRecord toQt(const lexicon::ItemRecord &v) {
   return {v.id,
@@ -138,7 +139,8 @@ ItemRecord toQt(const lexicon::ItemRecord &v) {
           v.revision,
           toQt(v.reviewedAt),
           toQt(v.reviewDueAt),
-          toQt(v.matchSnippet)};
+          toQt(v.matchSnippet),
+          toQt(v.fieldDisplayValues)};
 }
 lexicon::UsageValueRecord toCore(const UsageValueRecord &v) {
   return {toCore(v.value), v.usageCount};

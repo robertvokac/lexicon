@@ -2,6 +2,7 @@
 // localStorage after every edit and after each successful insert, so a closed
 // tab or a failure halfway through leaves only the rows still to be created.
 import { api } from './api.js';
+import { foreignKeyControl } from './foreignKey.js';
 import { confirmDialog, field, messageDialog, openDialog } from './dialogs.js';
 import {
     clearMassInsertDraft, readMassInsertDraft, writeMassInsertDraft,
@@ -163,6 +164,7 @@ function fieldControl(fieldRecord, value) {
     }
     const attributes = { value: value || '', ...LITERAL_TEXT };
     if (fieldRecord.dataType === 'Integer') return el('input', { ...attributes, type: 'number', step: '1' });
+    if (fieldRecord.dataType === 'ForeignKey') return foreignKeyControl(fieldRecord, value);
     if (fieldRecord.dataType === 'Float') return el('input', { ...attributes, type: 'number', step: 'any' });
     if (fieldRecord.dataType === 'Date') return el('input', { ...attributes, type: 'date' });
     if (fieldRecord.dataType === 'Time') return el('input', { ...attributes, type: 'time', step: '1' });

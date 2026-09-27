@@ -12,6 +12,7 @@
 #include "ImageValueView.h"
 #include "InboxDialog.h"
 #include "ItemEditDialog.h"
+#include "ForeignKeyValueEditor.h"
 #include "MassInsertDialog.h"
 #include "MarkdownConverter.h"
 #include "ReviewDialog.h"
@@ -20,6 +21,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCompleter>
 #include <QFile>
 #include <QFrame>
 #include <QGraphicsItem>
@@ -620,6 +622,50 @@ void checkMassInsert(lexicon::LexiconApplication &application, int group,
         "closing Mass Insert immediately backs up the latest edit");
   QSettings().remove("massInsert/draftV1");
 }
+void checkForeignKeySuggestions(lexicon::LexiconApplication &application, int group) {
+  check(application.types.upsertItemType({-1, -1, {}, "Suggestion target", ""}).has_value(),
+        "create suggestion target type");
+  check(application.types.upsertItemType({-1, -1, {}, "Suggestion other", ""}).has_value(),
+        "create other type for suggestions");
+  int targetTypeId = -1, otherTypeId = -1;
+  for (const auto &type : application.types.loadItemTypes(-1).value_or(std::vector<lexicon::ItemTypeRecord>{})) {
+    if (type.name == "Suggestion target") targetTypeId = type.id;
+    if (type.name == "Suggestion other") otherTypeId = type.id;
+  }
+  if (targetTypeId <= 0 || otherTypeId <= 0) return;
+  lexicon::ItemRecord target;
+  target.groupId = group;
+  target.itemTypeId = targetTypeId;
+  target.title = "Vector space";
+  const auto targetId = application.items.createItem(target);
+  lexicon::ItemRecord other = target;
+  other.itemTypeId = otherTypeId;
+  other.title = "Vector elsewhere";
+  check(targetId.has_value() && application.items.createItem(other).has_value(),
+        "create items to suggest");
+  if (!targetId) return;
+  QWidget parent;
+  QLineEdit *stored = nullptr;
+  auto *control = foreignKeyValueEditor(&parent, targetTypeId, QString(), &stored);
+  auto *search = control->findChild<QLineEdit *>();
+  auto *completer = control->findChild<QCompleter *>();
+  check(search && stored && completer, "foreign-key search editor has its controls");
+  if (!search || !stored || !completer) return;
+  parent.show();
+  search->setFocus();
+  QTest::keyClicks(search, "vector");
+  QTest::qWait(300);
+  auto *matches = completer->completionModel();
+  check(matches && matches->rowCount() == 1 &&
+            matches->index(0, 0).data().toString().contains("Vector space"),
+        "suggestions contain matching titles of the target type only");
+  if (matches && matches->rowCount() == 1) {
+    completer->activated(matches->index(0, 0));
+    check(stored->text() == QString::number(*targetId) &&
+              control->property("massInsertValue").toString() == QString::number(*targetId),
+          "choosing a title stores its item ID");
+  }
+}
 void checkAlarms(lexicon::LexiconApplication &application) {
   AlarmEditDialog editor(lexicon::AlarmRecord{});
   editor.show();
@@ -877,6 +923,7 @@ int main(int argc, char **argv) {
   checkCards(application, group);
   checkInbox(application);
   checkMassInsert(application, group, directory);
+  checkForeignKeySuggestions(application, group);
   checkAlarms(application);
   checkAlarmNotifier(application);
   checkAlarmDuringModalDialog(application);

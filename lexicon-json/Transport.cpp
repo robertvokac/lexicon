@@ -50,7 +50,7 @@ constexpr std::array<std::pair<LinkType, const char *>, 11> kLinkTypeNames{
      {LinkType::AlternativeTo, "AlternativeTo"},
      {LinkType::ParentOf, "ParentOf"},
      {LinkType::Custom, "Custom"}}};
-constexpr std::array<std::pair<FieldDataType, const char *>, 11>
+constexpr std::array<std::pair<FieldDataType, const char *>, 12>
     kFieldDataTypeNames{{{FieldDataType::Integer, "Integer"},
                          {FieldDataType::Float, "Float"},
                          {FieldDataType::Text, "Text"},
@@ -61,7 +61,8 @@ constexpr std::array<std::pair<FieldDataType, const char *>, 11>
                          {FieldDataType::Enum, "Enum"},
                          {FieldDataType::Blob, "Blob"},
                          {FieldDataType::Other, "Other"},
-                         {FieldDataType::Image, "Image"}}};
+                         {FieldDataType::Image, "Image"},
+                         {FieldDataType::ForeignKey, "ForeignKey"}}};
 constexpr std::array<std::pair<ReviewRating, const char *>, 4> kReviewRatingNames{
     {{ReviewRating::Again, "Again"},
      {ReviewRating::Hard, "Hard"},
@@ -252,7 +253,8 @@ Json toJson(const ItemFieldRecord &field) {
       {"description", field.description},
       {"dataType", name(field.dataType)},
       {"position", field.position},
-      {"enumOptions", field.enumOptions}};
+      {"enumOptions", field.enumOptions},
+      {"targetItemTypeId", field.targetItemTypeId > 0 ? Json(field.targetItemTypeId) : Json(nullptr)}};
 }
 
 Json toJson(const PropertyRecord &property) {
@@ -276,6 +278,9 @@ Json toJson(const ItemRecord &item) {
   Json fieldValues = Json::object();
   for (const auto &[fieldId, value] : item.fieldValues)
     fieldValues[std::to_string(fieldId)] = value;
+  Json fieldDisplayValues = Json::object();
+  for (const auto &[fieldId, value] : item.fieldDisplayValues)
+    fieldDisplayValues[std::to_string(fieldId)] = value;
   return Json{
       {"id", item.id > 0 ? Json(item.id) : Json(nullptr)},
       {"groupId", item.groupId > 0 ? Json(item.groupId) : Json(nullptr)},
@@ -284,6 +289,7 @@ Json toJson(const ItemRecord &item) {
        item.itemTypeId > 0 ? Json(item.itemTypeId) : Json(nullptr)},
       {"itemTypeName", item.itemTypeName},
       {"fieldValues", std::move(fieldValues)},
+      {"fieldDisplayValues", std::move(fieldDisplayValues)},
       {"properties", toJsonArray(item.properties)},
       {"title", item.title},
       {"disambiguation", item.disambiguation},
@@ -430,6 +436,7 @@ ItemFieldRecord fieldFromJson(const Json &json) {
                                   "field data type");
   field.position = optionalInt(json, "position", 0);
   field.enumOptions = stringArray(json, "enumOptions");
+  field.targetItemTypeId = optionalId(json, "targetItemTypeId");
   return field;
 }
 

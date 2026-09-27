@@ -58,6 +58,7 @@ enum class FieldDataType {
 
     /** A stored image: "<media type>:<SHA-256>" (see [ImageValues]). */
     Image,
+    ForeignKey,
     ;
 
     /** Value filters on these types match exactly; the others match contained text. */

@@ -33,6 +33,7 @@ import androidx.lifecycle.viewModelScope
 import com.robertvokac.lexicon.api.ApiException
 import com.robertvokac.lexicon.api.LexiconApi
 import com.robertvokac.lexicon.model.Item
+import com.robertvokac.lexicon.model.ColumnFilters
 import com.robertvokac.lexicon.model.ItemQuery
 import com.robertvokac.lexicon.model.SortColumns
 import com.robertvokac.lexicon.ui.common.LiteralTextKeyboard
@@ -56,7 +57,11 @@ data class ItemPickerState(
 )
 
 /** Finds an item by searching on the server, a page at a time. */
-class ItemPickerViewModel(private val api: LexiconApi) : ViewModel() {
+class ItemPickerViewModel(
+    private val api: LexiconApi,
+    private val targetTypeId: Int? = null,
+    private val titleOnly: Boolean = false,
+) : ViewModel() {
     private val _state = MutableStateFlow(ItemPickerState())
     val state: StateFlow<ItemPickerState> = _state.asStateFlow()
     private var job: Job? = null
@@ -72,7 +77,13 @@ class ItemPickerViewModel(private val api: LexiconApi) : ViewModel() {
             if (debounce) delay(250)
             try {
                 val page = api.queryItems(
-                    ItemQuery(searchText = text.trim(), limit = RESULTS, sortColumn = SortColumns.TITLE),
+                    ItemQuery(
+                        typeId = targetTypeId,
+                        searchText = if (titleOnly) "" else text.trim(),
+                        columnFilters = if (titleOnly) ColumnFilters(title = text.trim()) else ColumnFilters(),
+                        limit = RESULTS,
+                        sortColumn = SortColumns.TITLE,
+                    ),
                 )
                 _state.update { it.copy(results = page.items, totalCount = page.totalCount, loading = false) }
             } catch (failure: ApiException) {
@@ -87,8 +98,16 @@ class ItemPickerViewModel(private val api: LexiconApi) : ViewModel() {
 }
 
 @Composable
-fun ItemPickerDialog(title: String, onPick: (Item) -> Unit, onDismiss: () -> Unit) {
-    val viewModel = lexiconViewModel(key = "item-picker") { container, _ -> ItemPickerViewModel(container.api) }
+fun ItemPickerDialog(
+    title: String,
+    onPick: (Item) -> Unit,
+    onDismiss: () -> Unit,
+    targetTypeId: Int? = null,
+    titleOnly: Boolean = false,
+) {
+    val viewModel = lexiconViewModel(key = "item-picker-${targetTypeId ?: 0}-$titleOnly") { container, _ ->
+        ItemPickerViewModel(container.api, targetTypeId, titleOnly)
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val focus = remember { FocusRequester() }
     AlertDialog(

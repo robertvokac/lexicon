@@ -76,6 +76,7 @@ data class ItemField(
     val position: Int = 0,
     val enumOptions: List<String> = emptyList(),
     val description: String = "",
+    val targetItemTypeId: Int? = null,
 )
 
 @Serializable
@@ -102,6 +103,7 @@ data class Item(
     val itemTypeName: String = "",
     /** Keyed by field ID as a string, because JSON object keys are strings. */
     val fieldValues: Map<String, String> = emptyMap(),
+    val fieldDisplayValues: Map<String, String> = emptyMap(),
     val properties: List<Property> = emptyList(),
     val title: String,
     val disambiguation: String = "",
@@ -123,6 +125,7 @@ data class Item(
     val displayTitle: String get() = formatItemTitle(title, disambiguation)
 
     fun fieldValue(fieldId: Int): String = fieldValues[fieldId.toString()].orEmpty()
+    fun fieldDisplayValue(fieldId: Int): String = fieldDisplayValues[fieldId.toString()] ?: fieldValue(fieldId)
 }
 
 @Serializable
@@ -271,6 +274,7 @@ data class FieldWrite(
     /** Required by PUT /fields/{id}; ignored by POST /types/{id}/fields. */
     val itemTypeId: Int? = null,
     val description: String = "",
+    val targetItemTypeId: Int? = null,
 )
 
 /** What POST /import did: created, skipped and why. */

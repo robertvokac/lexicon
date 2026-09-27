@@ -110,6 +110,68 @@ int main() {
         !success(app.types.upsertItemField(fields->front()),
                  "Update Field with identical values")) return 1;
 
+    lexicon::ItemTypeRecord targetType;
+    targetType.name = "Foreign target";
+    if (!success(app.types.upsertItemType(targetType), "Create foreign target type")) return 1;
+    auto allTypes = app.types.loadItemTypes();
+    if (!success(allTypes, "Load target type")) return 1;
+    const auto target = std::find_if(allTypes->begin(), allTypes->end(),
+        [](const auto &candidate) { return candidate.name == "Foreign target"; });
+    if (!check(target != allTypes->end(), "Target type missing")) return 1;
+    lexicon::ItemFieldRecord foreignField;
+    foreignField.itemTypeId = storedType->id;
+    foreignField.name = "Reference";
+    foreignField.dataType = lexicon::FieldDataType::ForeignKey;
+    foreignField.targetItemTypeId = target->id;
+    if (!success(app.types.upsertItemField(foreignField), "Create foreign-key field")) return 1;
+    fields = app.types.loadItemFields(storedType->id);
+    if (!success(fields, "Reload foreign-key field")) return 1;
+    const auto reference = std::find_if(fields->begin(), fields->end(),
+        [](const auto &candidate) { return candidate.name == "Reference"; });
+    if (!check(reference != fields->end() && reference->targetItemTypeId == target->id,
+               "Foreign-key target type was not stored")) return 1;
+    lexicon::ItemRecord targetItem;
+    targetItem.groupId = defaultId;
+    targetItem.itemTypeId = target->id;
+    targetItem.title = "Foreign title";
+    auto targetId = app.items.createItem(targetItem);
+    if (!success(targetId, "Create foreign target item")) return 1;
+    lexicon::ItemRecord sourceItem;
+    sourceItem.groupId = defaultId;
+    sourceItem.itemTypeId = storedType->id;
+    sourceItem.title = "Foreign source";
+    sourceItem.fieldValues[reference->id] = std::to_string(*targetId);
+    auto sourceId = app.items.createItem(sourceItem);
+    if (!success(sourceId, "Create foreign source item")) return 1;
+    auto referenced = app.items.loadItem(*sourceId);
+    if (!success(referenced, "Load foreign source") ||
+        !check(referenced->fieldDisplayValues[reference->id] == "Foreign title", "Target title was not resolved")) return 1;
+    auto listed = app.items.loadItems(-1, storedType->id, {}, {}, {}, {});
+    if (!success(listed, "List foreign source") ||
+        !check(std::any_of(listed->begin(), listed->end(), [&](const auto &item) {
+          return item.id == *sourceId && item.fieldDisplayValues.at(reference->id) == "Foreign title";
+        }), "List did not resolve target title")) return 1;
+    auto renamedTarget = app.items.loadItem(*targetId);
+    if (!success(renamedTarget, "Load target for rename")) return 1;
+    renamedTarget->title = "Renamed target";
+    if (!success(app.items.saveItem(*renamedTarget), "Rename referenced item")) return 1;
+    referenced = app.items.loadItem(*sourceId);
+    if (!success(referenced, "Reload renamed reference") ||
+        !check(referenced->fieldDisplayValues[reference->id] == "Renamed target",
+               "Reference did not reflect target title change")) return 1;
+    if (!success(app.items.deleteItem(*targetId), "Delete referenced item")) return 1;
+    referenced = app.items.loadItem(*sourceId);
+    if (!success(referenced, "Reload missing reference") ||
+        !check(referenced->fieldValues[reference->id] == std::to_string(*targetId) &&
+               referenced->fieldDisplayValues[reference->id] == "!missing! " + std::to_string(*targetId),
+               "Deleting target lost the ID or failed to show missing")) return 1;
+    referenced->fieldValues[reference->id] = std::to_string(firstId);
+    if (!success(app.items.saveItem(*referenced), "Save ID of a different type")) return 1;
+    referenced = app.items.loadItem(*sourceId);
+    if (!success(referenced, "Reload type mismatch") ||
+        !check(referenced->fieldDisplayValues[reference->id] == "!missing! " + std::to_string(firstId),
+               "Reference to wrong item type resolved")) return 1;
+
     lexicon::ItemFieldRecord enumField;
     enumField.itemTypeId = storedType->id;
     enumField.name = "Difficulty";

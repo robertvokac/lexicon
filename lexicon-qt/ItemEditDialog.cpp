@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "ApplicationContext.h"
+#include "ForeignKeyValueEditor.h"
 #include "ImageValue.h"
 #include "CardsDialog.h"
 #include "ImageValueView.h"
@@ -609,7 +610,13 @@ void ItemEditDialog::refreshFields() {
             m_fieldsLayout->addRow(label, wrapper);
         } else {
             auto* line = new QLineEdit(saved, m_fieldsBox);
-            if (field.dataType == FieldDataType::Integer) {
+            if (field.dataType == FieldDataType::ForeignKey) {
+                delete line;
+                QLineEdit *stored = nullptr;
+                auto *wrapper = foreignKeyValueEditor(m_fieldsBox, field.targetItemTypeId, saved, &stored);
+                editor = stored;
+                m_fieldsLayout->addRow(label, wrapper);
+            } else if (field.dataType == FieldDataType::Integer) {
                 line->setValidator(new QRegularExpressionValidator(QRegularExpression("-?[0-9]*"), line));
             } else if (field.dataType == FieldDataType::Float) {
                 auto* validator = new QDoubleValidator(line);
@@ -622,8 +629,10 @@ void ItemEditDialog::refreshFields() {
             } else if (field.dataType == FieldDataType::Timestamp) {
                 line->setPlaceholderText("YYYY-MM-DDTHH:MM:SS");
             }
-            editor = line;
-            m_fieldsLayout->addRow(label, line);
+            if (field.dataType != FieldDataType::ForeignKey) {
+                editor = line;
+                m_fieldsLayout->addRow(label, line);
+            }
         }
         m_fieldEditors.insert(field.id, editor);
         if (auto* line = qobject_cast<QLineEdit*>(editor))

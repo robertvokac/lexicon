@@ -224,6 +224,55 @@ void checkTypesAndFields(Checks &checks) {
                      204, "a type can be deleted");
 }
 
+void checkForeignKeys(Checks &checks) {
+  ServerHarness harness;
+  Session session(harness, checks);
+  auto &client = session.client();
+  const int groupId = parse(client.get("/api/v1/groups/default")).value("groupId", 0);
+  const int targetTypeId = parse(client.post("/api/v1/types",
+      Json{{"name", "Reference target"}}.dump())).at("type").value("id", 0);
+  const int sourceTypeId = parse(client.post("/api/v1/types",
+      Json{{"name", "Reference source"}}.dump())).at("type").value("id", 0);
+  const auto fieldResponse = client.post("/api/v1/types/" + std::to_string(sourceTypeId) + "/fields",
+      Json{{"name", "Related item"}, {"dataType", "ForeignKey"},
+           {"targetItemTypeId", targetTypeId}}.dump());
+  checks.expectEqual(fieldResponse.status, 201, "foreign-key field can be created");
+  const auto storedField = parse(fieldResponse).at("field");
+  const int fieldId = storedField.value("id", 0);
+  checks.expectEqual(storedField.value("targetItemTypeId", 0), targetTypeId,
+                     "foreign-key target type survives the REST round trip");
+  checks.expectEqual(client.post("/api/v1/types/" + std::to_string(sourceTypeId) + "/fields",
+      Json{{"name", "No target"}, {"dataType", "ForeignKey"}}.dump()).status,
+      400, "foreign-key field needs a target type");
+  const int targetId = parse(client.post("/api/v1/items",
+      Json{{"item", Json{{"groupId", groupId}, {"itemTypeId", targetTypeId},
+                          {"title", "Referenced title"}}}}.dump())).value("id", 0);
+  const int sourceId = parse(client.post("/api/v1/items",
+      Json{{"item", Json{{"groupId", groupId}, {"itemTypeId", sourceTypeId},
+                          {"title", "Referrer"},
+                          {"fieldValues", Json{{std::to_string(fieldId), std::to_string(targetId)}}}}}}.dump()))
+      .value("id", 0);
+  const auto loaded = parse(client.get("/api/v1/items/" + std::to_string(sourceId))).at("item");
+  checks.expectEqual(loaded.at("fieldValues").value(std::to_string(fieldId), std::string{}),
+                     std::to_string(targetId), "foreign-key value remains an ID");
+  checks.expectEqual(loaded.at("fieldDisplayValues").value(std::to_string(fieldId), std::string{}),
+                     "Referenced title", "REST resolves the target title");
+  const auto suggestions = parse(client.post("/api/v1/items/query",
+      Json{{"typeId", targetTypeId}, {"columnFilters", Json{{"title", "refer"}}},
+           {"limit", 20}}.dump()));
+  checks.expectEqual(static_cast<long long>(suggestions.at("items").size()), 1,
+                     "title suggestions are restricted to the target type");
+  checks.expectEqual(suggestions.at("items").at(0).value("id", 0), targetId,
+                     "title suggestions return the ID to store");
+  checks.expectEqual(client.remove("/api/v1/items/" + std::to_string(targetId)).status, 204,
+                     "referenced item can be deleted");
+  const auto missing = parse(client.get("/api/v1/items/" + std::to_string(sourceId))).at("item");
+  checks.expectEqual(missing.at("fieldValues").value(std::to_string(fieldId), std::string{}),
+                     std::to_string(targetId), "deleting the target keeps the stored ID");
+  checks.expectEqual(missing.at("fieldDisplayValues").value(std::to_string(fieldId), std::string{}),
+                     "!missing! " + std::to_string(targetId), "REST displays a missing target");
+}
+
 void checkItems(Checks &checks) {
   ServerHarness harness;
   Session session(harness, checks);
@@ -1232,7 +1281,7 @@ void checkExportImport(Checks &checks) {
                 "the export downloads as a dated file");
   const auto document = parse(exported);
   checks.expectEqual(document.value("format", std::string{}), "lexicon-export", "it is a Lexicon export");
-  checks.expectEqual(document.value("version", 0), 7, "of format version 7");
+  checks.expectEqual(document.value("version", 0), 8, "of format version 8");
   checks.expectEqual(static_cast<long long>(document.at("items").size()), 2, "both items are exported");
   checks.expectEqual(client.get("/api/v1/export?blobs=perhaps").status, 400,
                      "blobs accepts true or false only");
@@ -1585,6 +1634,7 @@ int main() {
   Checks checks;
   checkGroups(checks);
   checkTypesAndFields(checks);
+  checkForeignKeys(checks);
   checkItems(checks);
   checkHistory(checks);
   checkLinks(checks);

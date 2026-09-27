@@ -39,7 +39,8 @@ enum class FieldDataType {
   Enum = 7,
   Blob = 8,
   Other = 9,
-  Image = 10
+  Image = 10,
+  ForeignKey = 11
 };
 
 struct GroupRecord {
@@ -63,6 +64,7 @@ struct ItemFieldRecord {
   int position = 0;
   QStringList enumOptions;
   QString description;
+  int targetItemTypeId = -1;
 };
 struct ItemValueFilter {
   int fieldId = -1;
@@ -115,6 +117,7 @@ struct ItemRecord {
   QString reviewDueAt;
   // Why a search found this item; empty otherwise. See lexicon::ItemRecord.
   QString matchSnippet;
+  QMap<int, QString> fieldDisplayValues;
 };
 struct UsageValueRecord {
   QString value;

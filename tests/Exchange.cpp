@@ -75,6 +75,8 @@ int main() {
                                    {"easy", "hard"}, "How difficult the concept is."}).has_value(), "Difficulty");
   check(app.types.upsertItemField({-1, conceptType, "Diagram", lexicon::FieldDataType::Blob, 1, {}}).has_value(), "Diagram");
   check(app.types.upsertItemField({-1, note, "Page", lexicon::FieldDataType::Integer, 0, {}}).has_value(), "Page");
+  check(app.types.upsertItemField({-1, note, "Concept", lexicon::FieldDataType::ForeignKey, 1,
+                                   {}, "Referenced concept", conceptType}).has_value(), "Concept reference");
   const auto conceptFields = value(app.types.loadItemFields(conceptType), "Concept fields");
   const auto noteFields = value(app.types.loadItemFields(note), "Note fields");
   const std::string diagram = std::string("PNG\0\x01\x02 binary", 14);
@@ -103,7 +105,7 @@ int main() {
   reading.groupId = defaultGroup;
   reading.itemTypeId = note;
   reading.title = "Reading list";
-  reading.fieldValues = {{noteFields[0].id, "42"}};
+  reading.fieldValues = {{noteFields[0].id, "42"}, {noteFields[1].id, std::to_string(monoidId)}};
   const int readingId = value(app.items.createItem(reading), "create Reading list");
   check(app.links.saveLink({-1, monoidId, semigroupId, lexicon::LinkType::IsA, 1, "", "", ""}).has_value(), "IsA link");
   check(app.links.saveLink({-1, readingId, monoidId, lexicon::LinkType::Custom, 0, "cites", "", ""}).has_value(), "Custom link");
@@ -135,9 +137,9 @@ int main() {
   check(withFiles.find("\"format\": \"lexicon-export\"") != std::string::npos, "the document names its format");
   check(withoutFiles.find("\"blobs\"") == std::string::npos, "files stay out unless asked for");
   const auto exported = nlohmann::json::parse(withFiles);
-  // Version 7: an older reader would drop alarm ASAP and Group without a
+  // Version 8: an older reader would drop foreign-key metadata without a
   // word, so it refuses the document instead.
-  check(exported.value("version", 0) == 7, "the export is format version 7");
+  check(exported.value("version", 0) == 8, "the export is format version 8");
   check(exported.contains("boards") && exported.at("boards").size() == 2,
         "the export holds every named Board");
   check(exported.at("alarms").at(0).value("repeatDays", 0) == 7 &&
@@ -162,7 +164,7 @@ int main() {
   const auto report = value(lexicon::exchange::importDocument(copy.app, withFiles), "import into an empty database");
   check(report.itemsCreated == 3 && report.itemsSkipped == 0, "three items are created");
   check(report.linksCreated == 2 && report.blobsImported == 1, "both links and the file arrive");
-  check(report.groupsCreated == 1 && report.typesCreated == 2 && report.fieldsCreated == 3,
+  check(report.groupsCreated == 1 && report.typesCreated == 2 && report.fieldsCreated == 4,
         "Maths, both types and their fields are created, Default is reused");
   check(report.boardsImported == 2, "both Boards are imported");
   const auto copiedBoards = value(copy.app.board.loadAll(), "copied Boards");
@@ -187,6 +189,12 @@ int main() {
   check(restored.fieldValues.size() == 2 && restored.fieldValues.at(copiedFields[0].id) == "hard" &&
             restored.fieldValues.at(copiedFields[1].id) == hash,
         "values follow their fields");
+  const auto copiedReading = value(copy.app.items.loadItem(copy.itemNamed("Reading list")), "copied reference");
+  const auto copiedNoteFields = value(copy.app.types.loadItemFields(copiedReading.itemTypeId), "copied Note fields");
+  check(copiedNoteFields[1].targetItemTypeId == restored.itemTypeId &&
+            copiedReading.fieldValues.at(copiedNoteFields[1].id) == std::to_string(copied) &&
+            copiedReading.fieldDisplayValues.at(copiedNoteFields[1].id) == "Monoid",
+        "foreign-key type and item IDs are mapped on import");
   check(value(copy.app.blobs.readData(hash), "read the imported file") == diagram, "the file's bytes survive");
   const auto links = value(copy.app.links.loadLinks(copied), "copied links");
   check(links.size() == 1 && links[0].toItemTitle == "Semigroup" && links[0].linkType == lexicon::LinkType::IsA &&
@@ -254,6 +262,11 @@ int main() {
   // Monoid has another ID here; its cards follow it, and the Semigroup that
   // was already here keeps the cards it had - none.
   check(other.itemNamed("Monoid") != monoidId, "the imported Monoid has another ID here");
+  const auto mergedReading = value(other.app.items.loadItem(other.itemNamed("Reading list")), "merged reference");
+  const auto mergedNoteFields = value(other.app.types.loadItemFields(mergedReading.itemTypeId), "merged Note fields");
+  check(mergedReading.fieldValues.at(mergedNoteFields[1].id) == std::to_string(other.itemNamed("Monoid")) &&
+            mergedReading.fieldDisplayValues.at(mergedNoteFields[1].id) == "Monoid",
+        "merged foreign-key value follows the new item ID");
   check(merged.cardsCreated == 3 &&
             value(other.app.cards.loadCards(other.itemNamed("Monoid")), "merged cards").size() == 3,
         "the cards follow their item to its new ID");
@@ -296,7 +309,7 @@ int main() {
   };
   refused("not json", "text that is not JSON");
   refused(R"({"format":"something-else","version":1})", "another format");
-  refused(R"({"format":"lexicon-export","version":8,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
+  refused(R"({"format":"lexicon-export","version":9,"groups":[],"types":[],"items":[],"links":[]})", "a newer version");
   refused(R"({"format":"lexicon-export","version":0,"groups":[],"types":[],"items":[],"links":[]})", "version 0");
   refused(R"({"format":"lexicon-export","version":1,"groups":[],"types":[],"items":[{"id":1}],"links":[]})",
           "an item without a title");

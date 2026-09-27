@@ -17,6 +17,7 @@ import com.robertvokac.lexicon.model.Group
 import com.robertvokac.lexicon.model.ImageValues
 import com.robertvokac.lexicon.model.ItemBundle
 import com.robertvokac.lexicon.model.ItemField
+import com.robertvokac.lexicon.model.Item
 import com.robertvokac.lexicon.model.ItemStatus
 import com.robertvokac.lexicon.model.ItemType
 import com.robertvokac.lexicon.model.Link
@@ -82,6 +83,7 @@ data class EditorState(
     val types: List<ItemType> = emptyList(),
     /** The fields of the displayed type. */
     val typeFields: List<ItemField> = emptyList(),
+    val fieldDisplayValues: Map<Int, String> = emptyMap(),
     val fieldsLoadFailed: Boolean = false,
     val tab: EditorTab = EditorTab.General,
     val save: SaveStatus = SaveStatus.Idle,
@@ -172,11 +174,13 @@ class ItemEditorViewModel(
                 val groups = api.groups()
                 var fields: EditorFields
                 var text: String
+                var displayValues: Map<Int, String> = emptyMap()
                 if (start.itemId != null) {
                     val bundle = api.item(start.itemId, withLinks = true)
                     val item = bundle.item
                     originalTypeId = item.itemTypeId
                     originalValues = item.fieldValues.mapNotNull { (key, value) -> key.toIntOrNull()?.let { it to value } }.toMap()
+                    displayValues = item.fieldDisplayValues.mapNotNull { (key, value) -> key.toIntOrNull()?.let { it to value } }.toMap()
                     fields = EditorFields(
                         groupId = item.groupId,
                         typeId = item.itemTypeId,
@@ -227,6 +231,7 @@ class ItemEditorViewModel(
                         groups = refreshedGroups,
                         types = types,
                         typeFields = typeFields,
+                        fieldDisplayValues = displayValues.filterKeys { fields.values[it] == originalValues[it] },
                         fieldsLoadFailed = false,
                     )
                 }
@@ -319,6 +324,7 @@ class ItemEditorViewModel(
             it.copy(
                 types = request.types,
                 typeFields = emptyList(),
+                fieldDisplayValues = it.fieldDisplayValues - oldFieldIds,
                 tab = if (request.typeId == null && it.tab == EditorTab.Values) EditorTab.General else it.tab,
             )
         }
@@ -335,7 +341,16 @@ class ItemEditorViewModel(
 
     // Values ----------------------------------------------------------------
 
-    fun setValue(fieldId: Int, value: String) = edit { it.copy(values = it.values + (fieldId to value)) }
+    fun setValue(fieldId: Int, value: String) {
+        edit { it.copy(values = it.values + (fieldId to value)) }
+        _state.update { it.copy(fieldDisplayValues = it.fieldDisplayValues - fieldId) }
+    }
+
+    fun setForeignKeyValue(fieldId: Int, item: Item) {
+        val id = item.id ?: return
+        edit { it.copy(values = it.values + (fieldId to id.toString())) }
+        _state.update { it.copy(fieldDisplayValues = it.fieldDisplayValues + (fieldId to item.title)) }
+    }
 
     /** Uploads the picked document at once, as the web client does, and stores its hash. */
     fun uploadBlob(fieldId: Int, uri: Uri) {

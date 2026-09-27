@@ -43,7 +43,8 @@ enum class FieldDataType {
   Blob = 8,
   Other = 9,
   // A stored image file: "<media type>:<SHA-256>" (see ImageValue.h).
-  Image = 10
+  Image = 10,
+  ForeignKey = 11
 };
 
 struct GroupRecord {
@@ -67,6 +68,8 @@ struct ItemFieldRecord {
   int position = 0;
   std::vector<std::string> enumOptions;
   std::string description;
+  // Target item type for ForeignKey values. The value itself is an item ID.
+  int targetItemTypeId = -1;
 };
 struct ItemValueFilter {
   int fieldId = -1;
@@ -128,6 +131,8 @@ struct ItemRecord {
   // content matched - an item found by its title or a tag alone needs no
   // explanation. Never stored; it belongs to one search, not to the item.
   std::string matchSnippet;
+  // Read-only labels for ForeignKey fields; fieldValues remain the stored IDs.
+  std::map<int, std::string> fieldDisplayValues;
 };
 struct ItemHistoryEntry {
   int id = -1;

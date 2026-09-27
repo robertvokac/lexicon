@@ -891,6 +891,10 @@ void MainWindow::refreshItems() {
                     row << cell;
                 } else if (field.dataType == FieldDataType::Boolean && !value.isEmpty()) {
                     row << new QStandardItem(value == "true" ? "Yes" : "No");
+                } else if (field.dataType == FieldDataType::ForeignKey && !value.isEmpty()) {
+                    auto* cell = new QStandardItem(item.fieldDisplayValues.value(field.id, "!missing! " + value));
+                    cell->setToolTip("Item ID: " + value);
+                    row << cell;
                 } else {
                     row << new QStandardItem(value);
                 }

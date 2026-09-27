@@ -107,7 +107,7 @@ std::string toJsonArray(const Connection &db, const std::vector<std::string> &va
   return json + ']';
 }
 std::vector<lexicon::ItemFieldRecord> fieldsFor(const Connection &db, int typeId) {
-  Statement stmt(db, "SELECT id, item_type_id, name, data_type, position, enum_options, description "
+  Statement stmt(db, "SELECT id, item_type_id, name, data_type, position, enum_options, description, target_item_type_id "
                      "FROM item_field WHERE item_type_id = ? ORDER BY position, name COLLATE NOCASE, id;");
   stmt.bind(typeId);
   std::vector<lexicon::ItemFieldRecord> fields;
@@ -117,6 +117,7 @@ std::vector<lexicon::ItemFieldRecord> fieldsFor(const Connection &db, int typeId
     field.dataType = static_cast<lexicon::FieldDataType>(stmt.integer(3));
     field.position = stmt.integer(4); field.enumOptions = jsonArray(db, stmt.text(5));
     field.description = stmt.text(6);
+    field.targetItemTypeId = stmt.isNull(7) ? -1 : stmt.integer(7);
     fields.push_back(std::move(field));
   }
   return fields;
@@ -293,6 +294,11 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemFieldRecord>> SqliteR
 SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemFieldRecord &field) {
   return guarded([&] {
     valid(lexicon::validateField(field));
+    if (field.dataType == lexicon::FieldDataType::ForeignKey) {
+      Statement target(impl_->db, "SELECT 1 FROM item_type WHERE id = ?;");
+      target.bind(field.targetItemTypeId);
+      require(target.step(), "Target item type not found.", lexicon::Error::Code::Validation);
+    }
     auto options = field.dataType == lexicon::FieldDataType::Enum
         ? lexicon::cleanedUniqueValues(field.enumOptions) : std::vector<std::string>{};
     auto json = toJsonArray(impl_->db, options);
@@ -324,14 +330,16 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemField
             "Cannot remove enum options that are in use: " + blocked
                 + ". Change those items first.");
       }
-      Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ?, description = ? WHERE id = ?;")
+      Statement(impl_->db, "UPDATE item_field SET name = ?, data_type = ?, position = ?, enum_options = ?, description = ?, target_item_type_id = ? WHERE id = ?;")
           .bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType)).bind(field.position)
-          .bind(json).bind(lexicon::trim(field.description)).bind(id).run();
+          .bind(json).bind(lexicon::trim(field.description))
+          .nullableId(field.dataType == lexicon::FieldDataType::ForeignKey ? field.targetItemTypeId : -1).bind(id).run();
       requireChanged(impl_->db, "Field");
     } else {
-      Statement(impl_->db, "INSERT INTO item_field(item_type_id, name, data_type, position, enum_options, description) VALUES(?, ?, ?, ?, ?, ?);")
+      Statement(impl_->db, "INSERT INTO item_field(item_type_id, name, data_type, position, enum_options, description, target_item_type_id) VALUES(?, ?, ?, ?, ?, ?, ?);")
           .bind(field.itemTypeId).bind(lexicon::trim(field.name)).bind(static_cast<int>(field.dataType))
-          .bind(field.position).bind(json).bind(lexicon::trim(field.description)).run();
+          .bind(field.position).bind(json).bind(lexicon::trim(field.description))
+          .nullableId(field.dataType == lexicon::FieldDataType::ForeignKey ? field.targetItemTypeId : -1).run();
       id = impl_->db.lastId();
     }
     logOperation(impl_->db, "item_field", id, field.id < 0 ? 1 : 2); tx.commit();
@@ -573,13 +581,23 @@ SqliteRepository::Result<std::vector<SqliteRepository::ItemRecord>> SqliteReposi
     std::vector<ItemRecord> items;
     while (stmt.step()) items.push_back(readItemRow(stmt));
     if (typeId > 0 && !items.empty()) {
-      std::string valuesSql = "SELECT item_id, item_field_id, value FROM item_value WHERE item_id IN (";
+      std::string valuesSql = "SELECT iv.item_id, iv.item_field_id, iv.value, f.data_type, target.title "
+          "FROM item_value iv JOIN item_field f ON f.id = iv.item_field_id "
+          "LEFT JOIN item target ON target.id = CAST(iv.value AS INTEGER) "
+          "AND target.item_type_id = f.target_item_type_id WHERE iv.item_id IN (";
       for (std::size_t i = 0; i < items.size(); ++i) valuesSql += i ? ",?" : "?";
       valuesSql += ");";
       Statement values(impl_->db, valuesSql);
       std::map<int, std::size_t> rowById;
       for (std::size_t i = 0; i < items.size(); ++i) { values.bind(items[i].id); rowById[items[i].id] = i; }
-      while (values.step()) items[rowById.at(values.integer(0))].fieldValues[values.integer(1)] = values.text(2);
+      while (values.step()) {
+        auto &item = items[rowById.at(values.integer(0))];
+        const int fieldId = values.integer(1);
+        const auto value = values.text(2);
+        item.fieldValues[fieldId] = value;
+        if (values.integer(3) == static_cast<int>(lexicon::FieldDataType::ForeignKey))
+          item.fieldDisplayValues[fieldId] = values.isNull(4) ? "!missing! " + value : values.text(4);
+      }
     }
     return items;
   });
@@ -621,9 +639,18 @@ lexicon::ItemRecord loadItemNative(const Connection &db, int itemId) {
     item.itemTypeId = stmt.isNull(9) ? -1 : stmt.integer(9); item.itemTypeName = stmt.text(10);
     item.revision = stmt.integer(11);
     item.reviewedAt = stmt.text(12); item.reviewDueAt = stmt.text(13);
-    Statement values(db, "SELECT item_field_id, value FROM item_value WHERE item_id = ?;");
+    Statement values(db, "SELECT iv.item_field_id, iv.value, f.data_type, target.title "
+        "FROM item_value iv JOIN item_field f ON f.id = iv.item_field_id "
+        "LEFT JOIN item target ON target.id = CAST(iv.value AS INTEGER) "
+        "AND target.item_type_id = f.target_item_type_id WHERE iv.item_id = ?;");
     values.bind(itemId);
-    while (values.step()) item.fieldValues[values.integer(0)] = values.text(1);
+    while (values.step()) {
+      const int fieldId = values.integer(0);
+      const auto value = values.text(1);
+      item.fieldValues[fieldId] = value;
+      if (values.integer(2) == static_cast<int>(lexicon::FieldDataType::ForeignKey))
+        item.fieldDisplayValues[fieldId] = values.isNull(3) ? "!missing! " + value : values.text(3);
+    }
     Statement properties(db, "SELECT \"key\", value FROM property WHERE item_id = ? ORDER BY \"key\" COLLATE NOCASE;");
     properties.bind(itemId);
     while (properties.step()) item.properties.push_back({properties.text(0), properties.text(1)});

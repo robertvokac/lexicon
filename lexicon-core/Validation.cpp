@@ -74,6 +74,7 @@ cleanedUniqueValues(const std::vector<std::string> &values) {
 bool validFieldValue(const ItemFieldRecord &field, std::string_view value) {
   const std::string text(value);
   switch (field.dataType) {
+  case FieldDataType::ForeignKey:
   case FieldDataType::Integer: {
     std::string number = trim(value);
     if (!number.empty() && number.front() == '+')
@@ -81,7 +82,8 @@ bool validFieldValue(const ItemFieldRecord &field, std::string_view value) {
     long long parsed = 0;
     auto [end, error] =
         std::from_chars(number.data(), number.data() + number.size(), parsed);
-    return error == std::errc{} && end == number.data() + number.size();
+    return error == std::errc{} && end == number.data() + number.size() &&
+           (field.dataType != FieldDataType::ForeignKey || parsed > 0);
   }
   case FieldDataType::Float: {
     std::string number = trim(value);
@@ -136,8 +138,10 @@ Result<void> validateType(const ItemTypeRecord &type) {
 Result<void> validateField(const ItemFieldRecord &field) {
   const int kind = static_cast<int>(field.dataType);
   if (trim(field.name).empty() || kind < 0 ||
-      kind > static_cast<int>(FieldDataType::Image))
+      kind > static_cast<int>(FieldDataType::ForeignKey))
     return invalid("Field name or data type is invalid.");
+  if (field.dataType == FieldDataType::ForeignKey && field.targetItemTypeId <= 0)
+    return invalid("Foreign key fields need a target item type.");
   if (field.dataType == FieldDataType::Enum &&
       cleanedUniqueValues(field.enumOptions).empty())
     return invalid("Enum fields need at least one option.");

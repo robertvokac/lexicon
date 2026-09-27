@@ -14,6 +14,7 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <limits>
 
 namespace {
@@ -30,6 +31,7 @@ QString dataTypeName(FieldDataType type) {
         case FieldDataType::Blob: return "Blob";
         case FieldDataType::Other: return "Other";
         case FieldDataType::Image: return "Image";
+        case FieldDataType::ForeignKey: return "Foreign key";
     }
     return "Unknown";
 }
@@ -127,8 +129,15 @@ void ItemTypeManagerDialog::loadFields() {
         return;
     }
     for (const auto& field : m_fields) {
+        QString kind = dataTypeName(field.dataType);
+        if (field.dataType == FieldDataType::ForeignKey) {
+            const auto target = std::find_if(m_types.cbegin(), m_types.cend(),
+                [&field](const auto& type) { return type.id == field.targetItemTypeId; });
+            kind += " → " + (target == m_types.cend() ? QString("!missing! %1").arg(field.targetItemTypeId)
+                                                     : target->name);
+        }
         auto* item = new QListWidgetItem(QString("%1  %2 — %3")
-            .arg(field.position).arg(field.name, dataTypeName(field.dataType)), m_fieldList);
+            .arg(field.position).arg(field.name, kind), m_fieldList);
         item->setData(Qt::UserRole, field.id);
         item->setToolTip(field.description);
     }
@@ -260,7 +269,7 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     descriptionEdit->setPlainText(field.description);
     descriptionEdit->setMaximumHeight(100);
     auto* dataTypeCombo = new QComboBox(&dialog);
-    for (int value = 0; value <= static_cast<int>(FieldDataType::Image); ++value) {
+    for (int value = 0; value <= static_cast<int>(FieldDataType::ForeignKey); ++value) {
         dataTypeCombo->addItem(dataTypeName(static_cast<FieldDataType>(value)), value);
     }
     dataTypeCombo->setCurrentIndex(dataTypeCombo->findData(static_cast<int>(field.dataType)));
@@ -272,14 +281,22 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     optionsEdit->setPlainText(field.enumOptions.join("\n"));
     optionsEdit->setMaximumHeight(100);
     optionsEdit->setEnabled(field.dataType == FieldDataType::Enum);
-    connect(dataTypeCombo, qOverload<int>(&QComboBox::currentIndexChanged), &dialog, [dataTypeCombo, optionsEdit] {
+    auto* targetTypeCombo = new QComboBox(&dialog);
+    targetTypeCombo->addItem("Select target type", -1);
+    for (const auto& type : m_types)
+        targetTypeCombo->addItem(type.name + " — " + (type.groupId < 0 ? "All groups" : type.groupName), type.id);
+    targetTypeCombo->setCurrentIndex(qMax(0, targetTypeCombo->findData(field.targetItemTypeId)));
+    targetTypeCombo->setEnabled(field.dataType == FieldDataType::ForeignKey);
+    connect(dataTypeCombo, qOverload<int>(&QComboBox::currentIndexChanged), &dialog, [dataTypeCombo, optionsEdit, targetTypeCombo] {
         optionsEdit->setEnabled(dataTypeCombo->currentData().toInt() == static_cast<int>(FieldDataType::Enum));
+        targetTypeCombo->setEnabled(dataTypeCombo->currentData().toInt() == static_cast<int>(FieldDataType::ForeignKey));
     });
     form->addRow("Name:", nameEdit);
     form->addRow("Data type:", dataTypeCombo);
     form->addRow("Description:", descriptionEdit);
     form->addRow("Position:", positionEdit);
     form->addRow("Enum options:", optionsEdit);
+    form->addRow("Target item type:", targetTypeCombo);
     layout->addLayout(form);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
     layout->addWidget(buttons);
@@ -298,6 +315,12 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     field.position = positionEdit->value();
     field.enumOptions = field.dataType == FieldDataType::Enum
         ? optionsEdit->toPlainText().split('\n', Qt::SkipEmptyParts) : QStringList();
+    field.targetItemTypeId = field.dataType == FieldDataType::ForeignKey
+        ? targetTypeCombo->currentData().toInt() : -1;
+    if (field.dataType == FieldDataType::ForeignKey && field.targetItemTypeId <= 0) {
+        QMessageBox::warning(this, "Validation", "Select a target item type.");
+        return false;
+    }
     return true;
 }
 
