@@ -844,6 +844,15 @@ class LexiconFlowsTest {
     }
 
     @Test
+    fun allAliasesAllowsAnAliasNamedHeader() {
+        fake.addItem(Item(title = "Header item", aliases = listOf("header")))
+        login()
+        openDrawer("All aliases")
+        compose.waitForText("Usage count")
+        compose.onNodeWithContentDescription("header, used 1 time").assertIsDisplayed()
+    }
+
+    @Test
     fun logoutEndsTheSessionEverywhere() {
         login()
         openDrawer("Log out")

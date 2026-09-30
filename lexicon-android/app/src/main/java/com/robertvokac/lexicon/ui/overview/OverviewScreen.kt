@@ -112,7 +112,7 @@ fun OverviewScreen(viewModel: OverviewViewModel, kind: OverviewKind, onBack: () 
                     if (state.values.isEmpty()) {
                         item(key = "empty") { Text("Nothing yet.", modifier = Modifier.padding(16.dp)) }
                     }
-                    items(state.values, key = { it.value }) { usage ->
+                    items(state.values, key = { "usage:${it.value}" }) { usage ->
                         Row(
                             Modifier
                                 .fillMaxWidth()
