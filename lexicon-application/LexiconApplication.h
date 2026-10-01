@@ -344,6 +344,8 @@ public:
   // those of its relationship neighbourhood exactly as
   // LinkService::neighborhood finds it, with at most `maxNodes` items.
   Result<CardQuizSet> quizCards(ItemId itemId, int depth, int maxNodes);
+  // A fresh sample from all cards, independent of the selected item.
+  Result<CardQuizSet> randomQuizCards(int limit);
 
 private:
   Repository &repository_;

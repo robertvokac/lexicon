@@ -60,6 +60,8 @@ CardQuizDialog::CardQuizDialog(int itemId, int depth, QWidget* parent) : QDialog
     m_thisItem->setObjectName("quizThisItem");
     m_neighborhood = new QRadioButton("Neighborhood", this);
     m_neighborhood->setObjectName("quizNeighborhood");
+    m_random = new QRadioButton("Random (20 cards)", this);
+    m_random->setObjectName("quizRandom");
     m_depthCombo = new QComboBox(this);
     m_depthCombo->setObjectName("quizDepth");
     m_depthCombo->addItem("1 link away", 1);
@@ -70,6 +72,7 @@ CardQuizDialog::CardQuizDialog(int itemId, int depth, QWidget* parent) : QDialog
     scope->addWidget(m_thisItem);
     scope->addWidget(m_neighborhood);
     scope->addWidget(m_depthCombo);
+    scope->addWidget(m_random);
     scope->addStretch();
     m_scopeSummary = new QLabel(this);
     m_scopeSummary->setObjectName("quizScopeSummary");
@@ -172,6 +175,7 @@ CardQuizDialog::CardQuizDialog(int itemId, int depth, QWidget* parent) : QDialog
     key(Qt::Key_N, [this] { answer(false); });
     connect(m_thisItem, &QRadioButton::toggled, this, [this](bool on) { if (on) load(); });
     connect(m_neighborhood, &QRadioButton::toggled, this, [this](bool on) { if (on) load(); });
+    connect(m_random, &QRadioButton::toggled, this, [this](bool on) { if (on) load(); });
     connect(m_depthCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] {
         if (m_neighborhood->isChecked()) load();
     });
@@ -179,15 +183,18 @@ CardQuizDialog::CardQuizDialog(int itemId, int depth, QWidget* parent) : QDialog
 }
 
 int CardQuizDialog::depth() const {
-    return m_thisItem->isChecked() ? 0 : m_depthCombo->currentData().toInt();
+    return m_random->isChecked() ? -1 : m_thisItem->isChecked() ? 0 : m_depthCombo->currentData().toInt();
 }
 
 void CardQuizDialog::setDepth(int depth) {
     {
         const QSignalBlocker thisItem(m_thisItem);
         const QSignalBlocker neighborhood(m_neighborhood);
+        const QSignalBlocker random(m_random);
         const QSignalBlocker combo(m_depthCombo);
-        if (depth > 0) {
+        if (depth < 0 || m_itemId < 0) {
+            m_random->setChecked(true);
+        } else if (depth > 0) {
             m_neighborhood->setChecked(true);
             const int index = m_depthCombo->findData(std::min(depth, lexicon::CardService::kMaxDepth));
             if (index >= 0) m_depthCombo->setCurrentIndex(index);
@@ -200,10 +207,13 @@ void CardQuizDialog::setDepth(int depth) {
 
 void CardQuizDialog::load() {
     m_depthCombo->setEnabled(m_neighborhood->isChecked());
+    m_thisItem->setEnabled(m_itemId >= 0);
+    m_neighborhood->setEnabled(m_itemId >= 0);
     m_index = 0;
     m_yes = 0;
     m_no = 0;
-    auto quiz = services().core.cards.quizCards(m_itemId, depth(), kMaxItems);
+    auto quiz = depth() < 0 ? services().core.cards.randomQuizCards(20)
+                            : services().core.cards.quizCards(m_itemId, depth(), kMaxItems);
     if (!quiz) {
         m_quiz = {};
         m_scopeSummary->clear();

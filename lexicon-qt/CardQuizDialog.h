@@ -40,6 +40,7 @@ private:
     int m_itemId = -1;
     QRadioButton* m_thisItem = nullptr;
     QRadioButton* m_neighborhood = nullptr;
+    QRadioButton* m_random = nullptr;
     QComboBox* m_depthCombo = nullptr;
     QLabel* m_scopeSummary = nullptr;
     QLabel* m_truncated = nullptr;

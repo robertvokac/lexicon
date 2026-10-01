@@ -83,14 +83,14 @@
       <tr><th>Client</th><th>Start a card quiz</th></tr>
       <tr><td>Desktop</td><td><code>View → Card quiz...</code> (<code>Ctrl+Shift+K</code>) for the selected item, its context menu, or <strong>Quiz cards</strong> in the relationship graph.</td></tr>
       <tr><td>Web client</td><td><code>View → Card quiz...</code>, <strong>Card quiz</strong> in the item preview, or <strong>Quiz cards</strong> in the graph.</td></tr>
-      <tr><td>Android</td><td><strong>Card quiz</strong> on the item page or <strong>Quiz cards</strong> in the graph; the Cards screen also has a quiz action.</td></tr>
+      <tr><td>Android</td><td><strong>Random card quiz</strong> in the main drawer, <strong>Card quiz</strong> on the item page, or <strong>Quiz cards</strong> in the graph; the Cards screen also has a quiz action.</td></tr>
     </table>
     <ol class="steps">
       <li><strong>Recall the answer.</strong> The quiz shows the source item, progress such as <code>3 / 17</code>, and the question.</li>
       <li><strong>Reveal it.</strong> <strong>Show answer</strong> displays the answer without recording an attempt. On desktop and web, <code>Space</code> does the same.</li>
       <li><strong>Answer honestly.</strong> <strong>Yes</strong> adds one success; <strong>No</strong> adds one failure. Both update Last attempt and move to the next card. On desktop and web you can use <code>Y</code> or <code>N</code> after revealing the answer.</li>
     </ol>
-    <p>At the end, the quiz shows the number of cards and the Yes and No totals for that sitting. <strong>Start again</strong> loads the current cards for another sitting. Closing before answering a card leaves it unchanged; an empty scope says that no cards are available.</p>
+    <p>At the end, the quiz shows the number of cards and the Yes and No totals for that sitting. <strong>Start again</strong> reloads the scope; for Random it draws a fresh sample. Closing before answering a card leaves it unchanged; an empty scope says that no cards are available.</p>
     <div class="phone-shots">
       <figure>
         <img src="../assets/img/android-cards.png" alt="The Cards screen on Android, with three questions and their attempt counts" loading="lazy">
@@ -104,7 +104,7 @@
     <p>See the <a href="../screenshots.html">screenshot gallery</a> for the desktop and browser quiz windows as well.</p>
 
     <h2 id="scope">Choose the scope</h2>
-    <p><strong>This item</strong> quizzes only its own cards. <strong>Neighborhood</strong> includes the item and the items one, two or three links away, following the same relationship walk as the graph. Starting from <strong>Quiz cards</strong> in the graph uses its centre and current depth. Each reachable card appears once, even if several paths lead to its item; an item with no cards adds none. For a very large neighborhood, the quiz includes the nearest 150 items and tells you when it has truncated the scope.</p>
+    <p><strong>This item</strong> quizzes only its own cards. <strong>Neighborhood</strong> includes the item and the items one, two or three links away, following the same relationship walk as the graph. <strong>Random</strong> draws up to 20 cards from all items, without requiring an item selection; <strong>Start again</strong> draws a new sample. Starting from <strong>Quiz cards</strong> in the graph uses its centre and current depth. Each reachable card appears once, even if several paths lead to its item; an item with no cards adds none. For a very large neighborhood, the quiz includes the nearest 150 items and tells you when it has truncated the scope.</p>
 
     <h2 id="review">Cards and Review</h2>
     <p><a href="review.html">Review</a> asks about an entire item and uses four ratings to change its understanding level and next review date. A card quiz asks a specific question and records only that card's success or failure count. Cards have no due date or spaced repetition schedule; every quiz goes through the cards in its chosen scope. Answering a card does not change the item's Review state, and reviewing an item does not change its cards.</p>

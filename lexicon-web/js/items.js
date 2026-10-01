@@ -1257,10 +1257,6 @@ export class MainView {
     }
 
     async showCardQuiz() {
-        if (this.selectedItemId === null) {
-            await messageDialog('Card quiz', 'Select an item first.');
-            return;
-        }
         await openCardQuiz({ itemId: this.selectedItemId, depth: 0 });
     }
 

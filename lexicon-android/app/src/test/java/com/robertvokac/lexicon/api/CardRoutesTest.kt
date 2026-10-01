@@ -132,6 +132,14 @@ class CardRoutesTest {
     }
 
     @Test
+    fun randomQuizNeedsNoItemAndLimitsCards() = runBlocking {
+        server.enqueue(json("""{ "cards": [], "itemCount": 0, "truncated": false }"""))
+        val quiz = api.randomQuizCards()
+        assertTrue(quiz.cards.isEmpty())
+        assertEquals("GET /api/v1/cards/random-quiz?limit=20", server.takeRequest().target())
+    }
+
+    @Test
     fun cardFailuresAreTyped() = runBlocking {
         suspend fun failureOf(response: MockResponse, call: suspend () -> Unit): ApiException {
             server.enqueue(response)

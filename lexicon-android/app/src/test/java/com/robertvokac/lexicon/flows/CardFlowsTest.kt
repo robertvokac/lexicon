@@ -112,6 +112,20 @@ class CardFlowsTest {
 
     private fun attempts(cardId: Int) = fake.requestsTo("POST", "/api/v1/cards/$cardId/attempt")
 
+    @Test
+    fun randomQuizStartsWithoutSelectingAnItem() {
+        fake.addCard(lifetime.id!!, "Lifetime question", "Lifetime answer")
+        compose.onNodeWithContentDescription("Open navigation").performClick()
+        button("Random card quiz").performClick()
+        compose.waitForText("Lifetime question")
+        assertEquals(1, fake.requestsTo("GET", "/api/v1/cards/random-quiz").size)
+        answer(yes = true)
+        compose.waitForText("Quiz finished")
+        button("Start again").performClick()
+        compose.waitForText("Lifetime question")
+        assertEquals(2, fake.requestsTo("GET", "/api/v1/cards/random-quiz").size)
+    }
+
     /** From the item list: the item page, then [entry] of its menu. */
     private fun openFromItem(title: String, entry: String) {
         compose.waitFor(hasText(title) and hasClickAction())

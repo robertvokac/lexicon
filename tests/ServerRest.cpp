@@ -1104,6 +1104,8 @@ void checkCards(Checks &checks) {
   checks.expectEqual(anonymous.post("/api/v1/cards/1/attempt", R"({"success":true})").status, 401,
                      "answering a card needs a session");
   checks.expectEqual(anonymous.get(quiz).status, 401, "a quiz needs a session");
+  checks.expectEqual(anonymous.get("/api/v1/cards/random-quiz").status, 401,
+                     "a random quiz needs a session");
 
   // UTF-8 over several lines, and statistics a client cannot set.
   const std::string question = "Co znamená řetězec?\nstd::uint64_t";
@@ -1204,6 +1206,14 @@ void checkCards(Checks &checks) {
   checks.expectEqual(around.at("cards").at(1).value("itemTitle", std::string{}), "compiler optimization",
                      "the centre's cards first, then the neighbour's");
   checks.expect(!around.value("truncated", true), "nothing was left out");
+  const auto random = client.get("/api/v1/cards/random-quiz?limit=2");
+  checks.expectEqual(random.status, 200, "random quiz works without an item ID");
+  const auto randomSet = parse(random);
+  checks.expectEqual(static_cast<long long>(randomSet.at("cards").size()), 2,
+                     "random quiz draws the requested number of cards");
+  checks.expectEqual(randomSet.value("itemCount", 0), 2, "random quiz reports distinct source items");
+  checks.expectEqual(client.get("/api/v1/cards/random-quiz?limit=101").status, 400,
+                     "random quiz caps the card limit");
   const auto capped = parse(client.get(quiz + "?depth=1&limit=1"));
   checks.expect(capped.value("truncated", false) && capped.at("cards").size() == 1,
                 "a quiz larger than the limit says it was cut");

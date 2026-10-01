@@ -267,7 +267,7 @@ Everything below behaves the same way in both:
 | `[[Title]]` links in the content, the `[[ ]]` button and **Add links from content** | the same, rendered by a `marked` extension (`js/wikilinks.js`) |
 | `View -> Relationship graph...` | the same graph as SVG, also from the link preview; Space centres, Enter opens |
 | **Cards...** of an item: question, answer, Success, Failure, Last attempt; Add, Edit, Delete | the same from `Manage -> Cards of selected item...`, the preview's **Cards** link and the item editor's **Cards...** (`js/cards.js`); on a phone each card is a block |
-| `View -> Card quiz...` over this item or its neighbourhood 1 to 3 links away; Show answer, then Yes or No; the graph's **Quiz cards** | the same, also from the preview's **Card quiz** link; Space shows the answer, Y and N answer, a held key answers once (`js/cardquiz.js`) |
+| `View -> Card quiz...` over this item, its neighbourhood 1 to 3 links away, or 20 random cards from all items; Show answer, then Yes or No; the graph's **Quiz cards** | the same, also from the preview's **Card quiz** link; Space shows the answer, Y and N answer, a held key answers once (`js/cardquiz.js`) |
 | Resizable split between the item list and the preview | a draggable splitter whose position is remembered |
 | `CodeHighlighter` for `cpp` code blocks: keywords, strings, comments | the same colours in both themes, plus preprocessor directives and `#include <header>` |
 

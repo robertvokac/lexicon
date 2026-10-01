@@ -1252,11 +1252,7 @@ void MainWindow::openCards() {
 
 void MainWindow::openCardQuiz() {
     const int itemId = selectedItemId();
-    if (itemId < 0) {
-        QMessageBox::information(this, "Card quiz", "Select an item first.");
-        return;
-    }
-    CardQuizDialog dialog(itemId, 0, this);
+    CardQuizDialog dialog(itemId, itemId < 0 ? -1 : 0, this);
     dialog.exec();
 }
 

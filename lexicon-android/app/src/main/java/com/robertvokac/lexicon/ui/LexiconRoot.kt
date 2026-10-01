@@ -316,6 +316,7 @@ private enum class Destination(val label: String) {
     Items("Items"),
     Board("Boards"),
     Review("Review"),
+    CardQuiz("Random card quiz"),
     Groups("Groups"),
     Types("Types"),
     StudyPlans("Study Plan"),
@@ -369,6 +370,7 @@ private fun MainScaffold(
             Destination.Items -> ItemsRoute
             Destination.Board -> BoardRoute
             Destination.Review -> ReviewRoute
+            Destination.CardQuiz -> CardQuizRoute(-1, -1)
             Destination.Groups -> GroupsRoute
             Destination.Types -> TypesRoute
             Destination.StudyPlans -> StudyPlansRoute
@@ -405,6 +407,7 @@ private fun MainScaffold(
                     DrawerEntry(Destination.Items, Icons.AutoMirrored.Filled.List, ::go)
                     DrawerEntry(Destination.Board, Icons.Filled.Dashboard, ::go)
                     DrawerEntry(Destination.Review, Icons.Filled.School, ::go)
+                    DrawerEntry(Destination.CardQuiz, Icons.Filled.School, ::go)
                     DrawerHeading("Manage")
                     DrawerEntry(Destination.Groups, Icons.Filled.Folder, ::go)
                     DrawerEntry(Destination.Types, Icons.Filled.Category, ::go)

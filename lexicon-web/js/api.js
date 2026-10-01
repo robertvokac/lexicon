@@ -319,6 +319,7 @@ export class LexiconApi {
     quizCards(itemId, depth = 0, limit = 150) {
         return this.get(`/items/${itemId}/quiz-cards?depth=${depth}&limit=${limit}`);
     }
+    randomQuizCards(limit = 20) { return this.get(`/cards/random-quiz?limit=${limit}`); }
 
     // Export and import ------------------------------------------------------
     exportDictionary(includeFiles) {

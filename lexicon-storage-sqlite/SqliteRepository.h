@@ -109,6 +109,7 @@ public:
   Result<void> snoozeAlarm(int alarmId, int minutes) override;
   Result<std::vector<lexicon::CardRecord>> loadCards(lexicon::ItemId itemId) override;
   Result<std::vector<lexicon::CardRecord>> loadCardsForItems(const std::vector<lexicon::ItemId> &itemIds) override;
+  Result<std::vector<std::pair<lexicon::CardRecord, std::string>>> loadRandomCards(int limit) override;
   Result<lexicon::CardRecord> loadCard(int cardId) override;
   Result<int> createCard(const lexicon::CardRecord &card) override;
   Result<void> updateCard(const lexicon::CardRecord &card) override;

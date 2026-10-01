@@ -239,6 +239,22 @@ Result<CardQuizSet> CardService::quizCards(ItemId itemId, int depth, int maxNode
   return quiz;
 }
 
+Result<CardQuizSet> CardService::randomQuizCards(int limit) {
+  if (limit < 1 || limit > 100)
+    return std::unexpected(Error{Error::Code::Validation, "A random quiz needs 1 to 100 cards."});
+  auto sampled = repository_.loadRandomCards(limit);
+  if (!sampled) return std::unexpected(sampled.error());
+  CardQuizSet quiz;
+  std::set<ItemId> items;
+  for (auto &[card, title] : *sampled) {
+    const ItemId owner = card.itemId;
+    items.insert(owner);
+    quiz.cards.push_back({std::move(card), owner, std::move(title)});
+  }
+  quiz.itemCount = static_cast<int>(items.size());
+  return quiz;
+}
+
 std::string blobHashOf(const ItemFieldRecord &field, const std::string &value) {
   return storedFileHash(field.dataType, value);
 }

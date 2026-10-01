@@ -63,7 +63,7 @@ data class CardQuizState(
     val notFound: Boolean = false,
     /** The title of the item the quiz starts from. */
     val itemTitle: String = "",
-    /** 0 quizzes the item's own cards; 1 to 3, the items that many links around it. */
+    /** -1 samples all cards; 0 quizzes the item's own; 1 to 3, its links. */
     val depth: Int = 0,
     /** The depth Neighborhood returns to after This item. */
     val neighbourhoodDepth: Int = DEFAULT_NEIGHBOURHOOD_DEPTH,
@@ -87,6 +87,7 @@ data class CardQuizState(
 /** Where Neighborhood starts, as the relationship graph does. */
 private const val DEFAULT_NEIGHBOURHOOD_DEPTH = 2
 private const val MAX_DEPTH = 3
+private const val RANDOM_DEPTH = -1
 
 /**
  * A quiz over the cards of an item, or of the items around it, a card at a
@@ -97,9 +98,10 @@ private const val MAX_DEPTH = 3
  */
 class CardQuizViewModel(private val container: AppContainer, private val itemId: Int, depth: Int) : ViewModel() {
     private val api = container.api
+    val hasItem: Boolean get() = itemId >= 0
     private val _state = MutableStateFlow(
         CardQuizState(
-            depth = depth.coerceIn(0, MAX_DEPTH),
+            depth = depth.coerceIn(RANDOM_DEPTH, MAX_DEPTH),
             neighbourhoodDepth = if (depth in 1..MAX_DEPTH) depth else DEFAULT_NEIGHBOURHOOD_DEPTH,
         ),
     )
@@ -118,8 +120,8 @@ class CardQuizViewModel(private val container: AppContainer, private val itemId:
         _state.update { it.copy(loading = true, error = null, notFound = false, message = null) }
         loadJob = viewModelScope.launch {
             try {
-                val title = _state.value.itemTitle.ifEmpty { api.item(itemId).item.displayTitle }
-                val set = api.quizCards(itemId, depth)
+                val title = if (depth == RANDOM_DEPTH) "Random" else api.item(itemId).item.displayTitle
+                val set = if (depth == RANDOM_DEPTH) api.randomQuizCards() else api.quizCards(itemId, depth)
                 _state.update {
                     it.copy(
                         loading = false,
@@ -144,7 +146,7 @@ class CardQuizViewModel(private val container: AppContainer, private val itemId:
     /** This item alone (0) or the items [depth] links around it. Another scope is another quiz. */
     fun setDepth(depth: Int) {
         val state = _state.value
-        if (state.busy || depth == state.depth) return
+        if (state.busy || depth == state.depth || (itemId < 0 && depth >= 0)) return
         _state.update { it.copy(depth = depth, neighbourhoodDepth = if (depth > 0) depth else it.neighbourhoodDepth) }
         load()
     }
@@ -197,7 +199,7 @@ fun CardQuizScreen(viewModel: CardQuizViewModel, onBack: () -> Unit) {
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            ScopeChoice(state, onDepth = viewModel::setDepth)
+            ScopeChoice(state, hasItem = viewModel.hasItem, onDepth = viewModel::setDepth)
             when {
                 state.loading -> LoadingBox()
                 state.notFound -> ErrorBox("This item no longer exists.", onRetry = null)
@@ -222,21 +224,27 @@ fun CardQuizScreen(viewModel: CardQuizViewModel, onBack: () -> Unit) {
 /** This item, or its neighborhood one to three links deep. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScopeChoice(state: CardQuizState, onDepth: (Int) -> Unit) {
+private fun ScopeChoice(state: CardQuizState, hasItem: Boolean, onDepth: (Int) -> Unit) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SingleChoiceSegmentedButtonRow {
             SegmentedButton(
                 selected = state.depth == 0,
                 onClick = { onDepth(0) },
-                enabled = !state.busy,
-                shape = SegmentedButtonDefaults.itemShape(0, 2),
+                enabled = !state.busy && hasItem,
+                shape = SegmentedButtonDefaults.itemShape(0, 3),
             ) { Text("This item") }
             SegmentedButton(
                 selected = state.depth > 0,
                 onClick = { onDepth(state.neighbourhoodDepth) },
-                enabled = !state.busy,
-                shape = SegmentedButtonDefaults.itemShape(1, 2),
+                enabled = !state.busy && hasItem,
+                shape = SegmentedButtonDefaults.itemShape(1, 3),
             ) { Text("Neighborhood") }
+            SegmentedButton(
+                selected = state.depth == RANDOM_DEPTH,
+                onClick = { onDepth(RANDOM_DEPTH) },
+                enabled = !state.busy,
+                shape = SegmentedButtonDefaults.itemShape(2, 3),
+            ) { Text("Random") }
         }
         if (state.depth > 0) {
             SingleChoiceSegmentedButtonRow {

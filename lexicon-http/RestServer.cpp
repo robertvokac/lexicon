@@ -1532,6 +1532,26 @@ void RestServer::Impl::registerRoutes() {
     respondJson(response, 200, toJson(*quiz));
   });
 
+  api.Get("/api/v1/cards/random-quiz", [this](const Request &request, Response &response) {
+    int limit = 20;
+    if (const auto raw = queryValue(request, "limit"); !raw.empty()) {
+      const auto parsed = parseId(raw);
+      if (!parsed || *parsed > 100) {
+        respondFailure(response, {400, "validation", "'limit' must be between 1 and 100."});
+        return;
+      }
+      limit = *parsed;
+    }
+    auto quiz = guarded.with([&](LexiconApplication &application) {
+      return application.cards.randomQuizCards(limit);
+    });
+    if (!quiz) {
+      respondError(response, quiz.error(), "randomQuizCards");
+      return;
+    }
+    respondJson(response, 200, toJson(*quiz));
+  });
+
   api.Get("/api/v1/cards/:id", [this](const Request &request, Response &response) {
     auto id = pathId(request, response, "id");
     if (!id)

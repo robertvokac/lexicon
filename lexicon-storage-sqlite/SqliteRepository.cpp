@@ -1334,6 +1334,20 @@ SqliteRepository::Result<std::vector<lexicon::CardRecord>> SqliteRepository::loa
     return cards;
   });
 }
+SqliteRepository::Result<std::vector<std::pair<lexicon::CardRecord, std::string>>>
+SqliteRepository::loadRandomCards(int limit) {
+  return guarded([&] {
+    require(limit >= 1 && limit <= 100, "A random quiz needs 1 to 100 cards.");
+    Statement stmt(impl_->db,
+        "SELECT c.id, c.item_id, c.question, c.answer, c.success_count, c.failure_count, "
+        "COALESCE(c.last_attempt, ''), i.title FROM card c "
+        "JOIN item i ON i.id = c.item_id ORDER BY random() LIMIT ?;");
+    stmt.bind(limit);
+    std::vector<std::pair<lexicon::CardRecord, std::string>> cards;
+    while (stmt.step()) cards.emplace_back(readCard(stmt), stmt.text(7));
+    return cards;
+  });
+}
 SqliteRepository::Result<lexicon::CardRecord> SqliteRepository::loadCard(int cardId) {
   return guarded([&] {
     Statement stmt(impl_->db, std::string(kCardColumns) + "WHERE id = ?;");

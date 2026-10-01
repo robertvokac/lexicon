@@ -170,20 +170,24 @@ export async function openCards(itemId) {
 
 // A quiz over the cards of an item (depth 0) or of its neighbourhood (1 to
 // 3 links away): the question, Show answer (Space), then Yes (Y) or No (N).
-export function openCardQuiz({ itemId, depth = 0 }) {
+export function openCardQuiz({ itemId = null, depth = 0 } = {}) {
     let session = new QuizSession([]);
     let loading = 0;
     const scopeName = `quiz-scope-${itemId}-${Date.now()}`;
     const thisItem = el('input', { type: 'radio', name: scopeName, value: 'item', id: `${scopeName}-item` });
     const neighbourhood = el('input', { type: 'radio', name: scopeName, value: 'around', id: `${scopeName}-around` });
+    const random = el('input', { type: 'radio', name: scopeName, value: 'random', id: `${scopeName}-random` });
     const depthSelect = el('select', { 'aria-label': 'Depth', class: 'quiz-depth' });
     fillSelect(depthSelect, [
         { value: 1, label: '1 link away' },
         { value: 2, label: '2 links away' },
         { value: 3, label: '3 links away' },
     ], depth > 0 ? Math.min(depth, 3) : 2); // The graph's default depth.
-    thisItem.checked = !(depth > 0);
-    neighbourhood.checked = depth > 0;
+    thisItem.checked = itemId !== null && !(depth > 0);
+    neighbourhood.checked = itemId !== null && depth > 0;
+    random.checked = itemId === null;
+    thisItem.disabled = itemId === null;
+    neighbourhood.disabled = itemId === null;
     const scopeSummary = el('span', { class: 'hint quiz-scope-summary' });
     const truncated = el('p', { class: 'hint quiz-truncated', hidden: true,
         text: `The neighborhood has more items than a quiz covers; the ${QUIZ_ITEMS} nearest are included.` });
@@ -245,11 +249,11 @@ export function openCardQuiz({ itemId, depth = 0 }) {
         const ticket = ++loading;
         fail('');
         try {
-            const quiz = await api.quizCards(itemId, depthNow(), QUIZ_ITEMS);
+            const quiz = random.checked ? await api.randomQuizCards() : await api.quizCards(itemId, depthNow(), QUIZ_ITEMS);
             if (ticket !== loading) return; // A later scope was chosen meanwhile.
             session = new QuizSession(quiz.cards);
             scopeSummary.textContent = `${quiz.cards.length} card(s) from ${quiz.itemCount} item(s)`;
-            truncated.hidden = !quiz.truncated;
+            truncated.hidden = random.checked || !quiz.truncated;
         } catch (error) {
             if (ticket !== loading) return;
             session = new QuizSession([]);
@@ -288,7 +292,7 @@ export function openCardQuiz({ itemId, depth = 0 }) {
     showButton.addEventListener('click', reveal);
     yesButton.addEventListener('click', () => respond(true));
     noButton.addEventListener('click', () => respond(false));
-    for (const control of [thisItem, neighbourhood, depthSelect]) control.addEventListener('change', load);
+    for (const control of [thisItem, neighbourhood, random, depthSelect]) control.addEventListener('change', load);
 
     const body = el('div', { class: 'quiz' }, [
         el('div', { class: 'quiz-scope' }, [
@@ -296,6 +300,7 @@ export function openCardQuiz({ itemId, depth = 0 }) {
             el('label', { for: thisItem.id }, [thisItem, 'This item']),
             el('label', { for: neighbourhood.id }, [neighbourhood, 'Neighborhood']),
             depthSelect,
+            el('label', { for: random.id }, [random, 'Random (20 cards)']),
             el('span', { class: 'spacer' }),
             scopeSummary,
         ]),

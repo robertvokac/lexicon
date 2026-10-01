@@ -346,6 +346,9 @@ class LexiconApi(private val client: ApiClient) {
             query = mapOf("depth" to depth.toString(), "limit" to limit.toString()),
         )
 
+    suspend fun randomQuizCards(limit: Int = 20): CardQuizSet =
+        client.get("cards/random-quiz", CardQuizSet.serializer(), query = mapOf("limit" to limit.toString()))
+
     // Export and import -------------------------------------------------------
 
     /** Streams the whole dictionary, as the documented export file, into [output]. */

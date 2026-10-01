@@ -569,6 +569,21 @@ class FakeLexiconServer : Dispatcher() {
                     put("truncated", truncated)
                 })
             }
+            path == "/cards/random-quiz" && method == "GET" -> {
+                val selected = cards.take(request.url.queryParameter("limit")?.toIntOrNull() ?: 20)
+                json(buildJsonObject {
+                    put("cards", buildJsonArray {
+                        selected.forEach { card ->
+                            add(buildJsonObject {
+                                encode(card).jsonObject.forEach { (key, value) -> put(key, value) }
+                                put("itemTitle", items.getValue(card.itemId).title)
+                            })
+                        }
+                    })
+                    put("itemCount", selected.map { it.itemId }.distinct().size)
+                    put("truncated", false)
+                })
+            }
             segments.size == 2 && segments[0] == "cards" && method == "GET" -> {
                 val card = cards.firstOrNull { it.id == segments[1].toIntOrNull() } ?: return error(404, "not_found", "Card not found.")
                 json(buildJsonObject { put("card", encode(card)) })

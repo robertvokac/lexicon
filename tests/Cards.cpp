@@ -308,6 +308,19 @@ int main() {
   const auto rows = value(repository.loadCardsForItems({near, centre, near, 999999}), "cards of several items");
   check(rows.size() == 3 && rows[0].itemId == near && rows[1].itemId == centre && rows[2].itemId == centre,
         "cards of several items come item by item, each item once");
+  const auto random = value(app.cards.randomQuizCards(3), "random cards from all items");
+  check(random.cards.size() == 3 && random.itemCount >= 1 && random.itemCount <= 3 && !random.truncated,
+        "random quiz limits cards and reports their item count");
+  std::set<int> randomIds;
+  for (const auto &entry : random.cards) {
+    randomIds.insert(entry.card.id);
+    check(!entry.itemTitle.empty() && entry.card.itemId == entry.itemId,
+          "random cards retain their item title and owner");
+  }
+  check(randomIds.size() == random.cards.size(), "random quiz has no repeated card");
+  check(refused(app.cards.randomQuizCards(0), Error::Code::Validation) &&
+            refused(app.cards.randomQuizCards(101), Error::Code::Validation),
+        "random quiz enforces its card limit");
 
   if (failures == 0) std::cout << "cards: all checks passed\n";
   return failures == 0 ? 0 : 1;

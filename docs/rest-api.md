@@ -513,6 +513,8 @@ POST   /api/v1/cards/{id}/attempt      → 200 { "card": { ... } }
 { "success": true }
 GET    /api/v1/items/{id}/quiz-cards?depth=0&limit=150
 → { "cards": [ { ...card..., "itemTitle": "pointer provenance" } ], "itemCount": 8, "truncated": false }
+GET    /api/v1/cards/random-quiz?limit=20
+→ { "cards": [ { ...card..., "itemTitle": "pointer provenance" } ], "itemCount": 1, "truncated": false }
 ```
 
 ```json
@@ -550,6 +552,11 @@ cards; an item without cards simply adds none. The item's own cards come
 first, then those of the other items in the graph's breadth-first order, each
 item's in the order they were added, and no card twice even where links form
 a cycle. Every card carries `itemTitle`, the title of the item it asks about.
+
+`random-quiz` draws a fresh sample from every card in the dictionary, without
+an item ID. `limit` caps cards (1 to 100, default 20); `itemCount` counts the
+distinct items represented, and `truncated` is always false. Each card appears
+at most once in a response.
 
 **Cards are not Review.** A card answer never changes the item's
 `understanding`, `reviewedAt`, `reviewDueAt` or `revision`, and the review

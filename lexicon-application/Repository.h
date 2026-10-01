@@ -92,6 +92,8 @@ public:
   // in the order they were added. An ID given twice counts once; an item
   // that does not exist has none.
   virtual Result<std::vector<CardRecord>> loadCardsForItems(const std::vector<ItemId> &itemIds) = 0;
+  // A bounded random sample across the whole dictionary, with each card's item title.
+  virtual Result<std::vector<std::pair<CardRecord, std::string>>> loadRandomCards(int limit) = 0;
   virtual Result<CardRecord> loadCard(int cardId) = 0;
   // Inserts the card as given, statistics included - an imported card keeps
   // them; returns its ID. NotFound when its item does not exist.

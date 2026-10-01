@@ -297,10 +297,12 @@ accept it; install a proper certificate instead.
   counts are the server's and read-only: only a quiz answer moves them, and
   editing a card keeps them. The server refuses a blank question or answer,
   and the dialog says so.
-- **Card quiz.** From **Card quiz** in the item page's menu or the Cards
+- **Card quiz.** From **Random card quiz** in the main drawer, **Card quiz** on the item page or the Cards
   screen, or **Quiz cards** in the relationship graph. **This item** asks the
   item's own cards; **Neighborhood** also asks those of the items one, two or
-  three links around it (two by default, as the graph starts), the item's own
+  three links around it (two by default, as the graph starts). **Random** picks
+  up to 20 cards from the whole dictionary, without selecting an item; **Start
+  again** draws a fresh sample. The neighbourhood asks the item's own cards
   first and each card naming its item. A card shows its question and
   **Show answer**; the answer then comes with **Do you know?** and **Yes** or
   **No**. Showing the answer records nothing; Yes or No goes to the server,
