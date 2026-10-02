@@ -256,7 +256,7 @@ accept it; install a proper certificate instead.
   If another client saved the item after the editor opened it, the server
   refuses the save (409) and the app names what differs, then offers
   **Overwrite**, **Reload** or **Keep editing**.
-- **Study Plan.** Manage → Study Plan opens active plans first, with today’s unit targets, planned and required pace, progress warnings and quick progress actions. Add or edit plans with type, unit, inclusive dates, weekdays and notes; deletion requires confirmation. The server calculates the schedule for the phone’s local date.
+- **Study Plan.** Manage → Study Plan shows all active plans with today’s unit targets, planned and required pace, progress warnings and quick progress actions. Upcoming and Finished start collapsed, with independent searches by title, Group or note and ten plans per page. Upcoming is sorted by start date; Finished by end date, latest first, and includes overdue plans. Search, page and expansion survive screen recreation and updates. Add or edit plans with type, unit, inclusive dates, weekdays and notes; deletion requires confirmation. The server calculates the schedule for the phone’s local date.
 - **Manage.** Groups (add, edit, delete, with the desktop's warning that the
   items go too) and types with their fields (the item and value counts come from
   the server before anything destructive happens).

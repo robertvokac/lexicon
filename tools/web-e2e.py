@@ -785,7 +785,11 @@ def run(browser, web, server):
             b.screenshot(os.environ["LEXICON_STUDY_SHOT"])
         click(".study-card button", "Mark plan complete")
         click("dialog[open] button", "Yes")
-        b.wait("document.querySelector('section:last-child .study-card') !== null", "completed plan in Finished")
+        b.wait("document.querySelector('[data-section=finished] summary')?.textContent === 'Finished (1)'", "completed plan in Finished")
+        if b.js("document.querySelectorAll('.study-card').length") != 0:
+            raise Failure("Finished plan is rendered while its section is collapsed")
+        click(".study-browse summary", "Finished (1)")
+        b.wait("document.querySelector('[data-section=finished] .study-card') !== null", "the expanded Finished section")
         if b.js("document.querySelectorAll('.study-card').length") != 1:
             raise Failure("Completed plan appears in multiple dashboard sections")
         if b.js("[...document.querySelectorAll('.study-card button')].some(e => e.textContent.trim() === 'Mark plan complete')"):
@@ -805,6 +809,9 @@ def run(browser, web, server):
             "endDate": (calendar_day - timedelta(days=10)).isoformat(), "studyDaysMask": 127,
         })["studyPlan"]
         menu("Manage", "Study Plan...")
+        b.wait("document.querySelectorAll('.study-browse').length === 2", "the collapsed plan sections")
+        click(".study-browse summary", "Upcoming (1)")
+        click(".study-browse summary", "Finished (2)")
         b.wait("document.querySelectorAll('.study-card').length === 3", "future and past plans")
         future_card = b.js("[...document.querySelectorAll('.study-card')].find(c => c.querySelector('h3').textContent === 'Future book').textContent")
         past_card = b.js("[...document.querySelectorAll('.study-card')].find(c => c.querySelector('h3').textContent === 'Past book').textContent")
@@ -818,6 +825,95 @@ def run(browser, web, server):
         api["client"].call("DELETE", "/study-plans/" + str(created["id"]))
         api["client"].call("DELETE", "/study-plans/" + str(future["id"]))
         api["client"].call("DELETE", "/study-plans/" + str(past["id"]))
+
+    @step("203 Study Plans: collapsed sections, search and pagination")
+    def _():
+        today = date.fromisoformat(b.js("(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()"))
+        ids = []
+        for index in range(203):
+            future = 3 <= index < 103
+            created = api["client"].call("POST", "/study-plans", {
+                "item": f"Book {index:03}", "group": "C++ Library" if index == 87 else "",
+                "note": "Read templates next" if index == 88 else "",
+                "type": "Book", "unitType": "Page", "firstUnit": 1, "lastUnit": 300,
+                "currentProgress": 300 if index >= 103 else 0,
+                "startDate": (today + timedelta(days=10 if future else 0)).isoformat(),
+                "endDate": (today + timedelta(days=30)).isoformat(), "studyDaysMask": 127,
+            })["studyPlan"]
+            ids.append(created["id"])
+        menu("Manage", "Study Plan...")
+        b.wait("document.querySelectorAll('.study-card').length === 3", "only the three active cards")
+        if b.js("[...document.querySelectorAll('.study-browse')].some(d => d.open)"):
+            raise Failure("Inactive sections should start collapsed")
+        click(".study-browse summary", "Upcoming (100)")
+        upcoming = '.study-browse[data-section="upcoming"]'
+        finished = '.study-browse[data-section="finished"]'
+        b.wait(f"document.querySelectorAll('{upcoming} .study-card').length === 10", "ten future plans")
+        names = []
+        for page in range(10):
+            names += b.js(f"[...document.querySelectorAll('{upcoming} .study-card h3')].map(e => e.textContent)")
+            if page < 9:
+                click(upcoming + " button", "Next")
+        if names != [f"Book {i:03}" for i in range(3, 103)]:
+            raise Failure("Pagination skips or duplicates future plans")
+        if not b.js(f"[...document.querySelectorAll('{upcoming} button')].find(e => e.textContent === 'Next').disabled"):
+            raise Failure("Next is enabled on the last page")
+        # Editing a book keeps the page and the expanded section after the server refresh.
+        click(upcoming + " .study-card button", "Edit")
+        type_into("dialog[open] .study-editor .form-row:nth-child(2) input", "Updated group")
+        click("dialog[open]:has(.study-editor) button", "Save")
+        b.wait(f"document.querySelector('{upcoming} .study-card .hint')?.textContent.includes('Updated group')", "updated future book on the same page")
+        if "Page 10 of 10" not in b.js(f"document.querySelector('{upcoming} .study-pagination').textContent"):
+            raise Failure("Editing resets the future page")
+        type_into(upcoming + ' input[type="search"]', "c++ library")
+        b.wait(f"document.querySelectorAll('{upcoming} .study-card').length === 1", "search across all pages")
+        if b.js(f"document.querySelector('{upcoming} .study-card h3').textContent") != "Book 087":
+            raise Failure("Group search missed a book on another page")
+        type_into(upcoming + ' input[type="search"]', "TEMPLATES")
+        if b.js(f"document.querySelector('{upcoming} .study-card h3').textContent") != "Book 088":
+            raise Failure("Note search is not case insensitive")
+        type_into(upcoming + ' input[type="search"]', "missing book")
+        if b.js(f"document.querySelectorAll('{upcoming} .study-card').length") != 0:
+            raise Failure("An empty search renders plans")
+        type_into(upcoming + ' input[type="search"]', "Book 0")
+        click(".study-browse summary", "Finished (100)")
+        b.wait(f"document.querySelectorAll('{finished} .study-card').length === 10", "ten completed plans")
+        click(finished + " button", "Next")
+        if b.js(f"document.querySelector('{upcoming} input').value") != "Book 0":
+            raise Failure("Paging Finished changes the Upcoming search")
+        type_into(finished + ' input[type="search"]', "Book 20")
+        if b.js(f"document.querySelectorAll('{finished} .study-card').length") != 3:
+            raise Failure("Finished search does not cover the full collection")
+        # Removing the last matching book must clamp its page and keep the query.
+        type_into(finished + ' input[type="search"]', "")
+        for _ in range(9):
+            click(finished + " button", "Next")
+        type_into(finished + ' input[type="search"]', "Book 20")
+        for remaining in (2, 1, 0):
+            click(finished + " .study-card button", "Delete")
+            click("dialog[open] button", "Yes")
+            b.wait(f"document.querySelectorAll('{finished} .study-card').length === {remaining}", "the refreshed finished search after deletion")
+        if b.js(f"document.querySelector('{finished} input').value") != "Book 20":
+            raise Failure("Deleting resets the search")
+        type_into(finished + ' input[type="search"]', "")
+        for _ in range(9):
+            click(finished + " button", "Next")
+        for remaining in range(6, -1, -1):
+            click(finished + " .study-card button", "Delete")
+            click("dialog[open] button", "Yes")
+            expected = remaining if remaining else 10
+            b.wait(f"document.querySelectorAll('{finished} .study-card').length === {expected}", "delete a last-page book and clamp the page")
+        if "Page 9 of 9" not in b.js(f"document.querySelector('{finished} .study-pagination').textContent"):
+            raise Failure("Deleting the last page does not return to the preceding page")
+        click(".study-browse summary", "Upcoming (100)")
+        b.wait(f"document.querySelectorAll('{upcoming} .study-card').length === 0", "collapsing removes inactive cards")
+        if os.environ.get("LEXICON_STUDY_PAGED_SHOT"):
+            b.screenshot(os.environ["LEXICON_STUDY_PAGED_SHOT"])
+        click("dialog[open] button", "Close")
+        for plan_id in ids:
+            # Some books were deleted through the UI already.
+            if plan_id not in ids[193:203]:
+                api["client"].call("DELETE", "/study-plans/" + str(plan_id))
 
     @step("sign out")
     def _():

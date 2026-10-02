@@ -80,8 +80,15 @@ class FakeLexiconServer : Dispatcher() {
     private fun studyOverview(plan: StudyPlan, date: String): StudyPlanOverview {
         val total = plan.lastUnit - plan.firstUnit + 1
         val completed = if (plan.currentProgress == 0) 0 else plan.currentProgress - plan.firstUnit + 1
-        return StudyPlanOverview(plan, date, if (completed == total) "Completed" else "On track",
-            upcoming = false, active = true, ended = false, complete = completed == total, studyDay = true,
+        val upcoming = date < plan.startDate
+        val ended = date > plan.endDate
+        return StudyPlanOverview(plan, date, when {
+            completed == total -> "Completed"
+            ended -> "Overdue"
+            upcoming -> "Upcoming"
+            else -> "On track"
+        }, upcoming = upcoming, active = !upcoming && !ended, ended = ended,
+            complete = completed == total, studyDay = !upcoming && !ended,
             totalUnits = total, completedUnits = completed, remainingUnits = total - completed,
             totalStudyDays = 1, elapsedStudyDays = 1, remainingStudyDays = 1,
             plannedUnitsPerStudyDay = total.toDouble(), requiredUnitsPerRemainingStudyDay = (total - completed).toDouble(),

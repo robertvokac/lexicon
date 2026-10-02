@@ -50,6 +50,29 @@ export function canMarkToday(value) {
         Math.max(value.expectedUnitEnd ?? 0, value.recommendedLast) > value.plan.currentProgress;
 }
 
+export const STUDY_PAGE_SIZE = 10;
+export function groupStudyPlans(values) {
+    const priority = { 'At risk': 0, Behind: 1, 'On track': 2 };
+    const byName = (a, b) => a.plan.item.localeCompare(b.plan.item) || a.plan.id - b.plan.id;
+    return {
+        active: values.filter((x) => x.active && !x.complete).sort((a, b) =>
+            (priority[a.status] ?? 4) - (priority[b.status] ?? 4) || byName(a, b)),
+        upcoming: values.filter((x) => x.upcoming && !x.complete).sort((a, b) =>
+            a.plan.startDate.localeCompare(b.plan.startDate) || byName(a, b)),
+        finished: values.filter((x) => x.ended || x.complete).sort((a, b) =>
+            b.plan.endDate.localeCompare(a.plan.endDate) || byName(a, b)),
+    };
+}
+export function studyPlanPage(values, query = '', page = 0) {
+    const needle = query.trim().toLocaleLowerCase();
+    const matches = values.filter(({ plan }) =>
+        [plan.item, plan.group, plan.note].some((text) => (text || '').toLocaleLowerCase().includes(needle)));
+    const pageCount = Math.max(1, Math.ceil(matches.length / STUDY_PAGE_SIZE));
+    const currentPage = Math.max(0, Math.min(page, pageCount - 1));
+    return { values: matches.slice(currentPage * STUDY_PAGE_SIZE, (currentPage + 1) * STUDY_PAGE_SIZE),
+        page: currentPage, pageCount, total: matches.length };
+}
+
 function select(options, value) {
     const control = el('select');
     for (const option of options) control.append(el('option', { value: option, text: option }));
@@ -119,6 +142,10 @@ export async function openStudyPlans() {
     const content = el('div', { class: 'study-plans' });
     let date = localStudyDate();
     let overviews = [];
+    const browse = {
+        upcoming: { expanded: false, query: '', page: 0 },
+        finished: { expanded: false, query: '', page: 0 },
+    };
     const refresh = async () => {
         date = localStudyDate();
         overviews = await api.studyPlanOverview(date);
@@ -179,20 +206,56 @@ export async function openStudyPlans() {
         ]));
         return el('article', { class: `study-card ${warning ? 'study-card-warning' : ''}` }, lines);
     }
-    function section(title, values) {
-        return el('section', {}, [el('h2', { text: `${title} (${values.length})` }),
-            ...(values.length ? values.map(card) : [el('p', { class: 'hint', text: 'No plans here.' })])]);
+    function pagedSection(key, title, values) {
+        const state = browse[key];
+        const list = el('div', { class: 'study-page' });
+        const pager = el('div', { class: 'study-pagination', 'aria-label': `${title} pages` });
+        const search = el('input', { type: 'search', value: state.query,
+            placeholder: 'Search title, group or note', 'aria-label': `Search ${title.toLowerCase()} plans`,
+            oninput: () => { state.query = search.value; state.page = 0; renderPage(); } });
+        const details = el('details', { class: 'study-browse', dataset: { section: key }, open: state.expanded }, [
+            el('summary', { text: `${title} (${values.length})` }),
+            el('div', { class: 'study-browse-body' }, [
+                ...(key === 'finished' ? [el('p', { class: 'hint', text: 'Completed plans and plans past their deadline.' })] : []),
+                search, pager, list,
+            ]),
+        ]);
+        function renderPage() {
+            const result = studyPlanPage(values, state.query, state.page);
+            state.page = result.page;
+            clear(list);
+            clear(pager);
+            if (!details.open) return;
+            const first = result.total ? result.page * STUDY_PAGE_SIZE + 1 : 0;
+            const last = Math.min((result.page + 1) * STUDY_PAGE_SIZE, result.total);
+            pager.append(
+                button('Previous', { class: 'secondary', disabled: result.page === 0,
+                    onclick: () => { state.page--; renderPage(); } }),
+                el('span', { role: 'status', text: `${first}–${last} of ${result.total} · Page ${result.page + 1} of ${result.pageCount}` }),
+                button('Next', { class: 'secondary', disabled: result.page + 1 >= result.pageCount,
+                    onclick: () => { state.page++; renderPage(); } }),
+            );
+            list.append(...(result.values.length ? result.values.map(card) :
+                [el('p', { class: 'hint', text: values.length ? 'No matching plans.' : 'No plans here.' })]));
+        }
+        details.addEventListener('toggle', () => {
+            if (!details.isConnected) return;
+            state.expanded = details.open;
+            renderPage();
+        });
+        renderPage();
+        return details;
     }
     function render() {
+        const scrollTop = content.scrollTop;
         clear(content);
-        const priority = { 'At risk': 0, Behind: 1, 'On track': 2, Completed: 3 };
-        const active = overviews.filter((x) => x.active && !x.complete).sort((a, b) =>
-            (priority[a.status] ?? 4) - (priority[b.status] ?? 4) || a.plan.item.localeCompare(b.plan.item));
-        const upcoming = overviews.filter((x) => x.upcoming && !x.complete);
-        const past = overviews.filter((x) => x.ended || x.complete);
+        const { active, upcoming, finished } = groupStudyPlans(overviews);
         content.append(el('p', { class: 'hint', text: `Today: ${date} · calendar dates are local to this device` }),
             button('Add Study Plan', { class: 'primary', onclick: () => edit({}) }),
-            section('Active', active), section('Upcoming', upcoming), section('Finished', past));
+            el('section', { dataset: { section: 'active' } }, [el('h2', { text: `Active (${active.length})` }),
+                ...(active.length ? active.map(card) : [el('p', { class: 'hint', text: 'No active plans today.' })])]),
+            pagedSection('upcoming', 'Upcoming', upcoming), pagedSection('finished', 'Finished', finished));
+        content.scrollTop = scrollTop;
     }
     try { await refresh(); }
     catch (error) { await errorDialog(error.message); return; }

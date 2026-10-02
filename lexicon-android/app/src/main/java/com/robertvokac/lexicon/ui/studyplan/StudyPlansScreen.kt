@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -37,8 +38,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -134,6 +138,57 @@ class StudyPlansViewModel(container: AppContainer) : ViewModel() {
 private fun pace(value: Double): String = String.format(Locale.getDefault(), "%.2f", value)
 private val weekdays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
+private class StudyBrowseState(expanded: Boolean = false, query: String = "", page: Int = 0) {
+    var expanded by mutableStateOf(expanded)
+    var query by mutableStateOf(query)
+    var page by mutableIntStateOf(page)
+
+    companion object {
+        val Saver = listSaver<StudyBrowseState, Any>(
+            save = { listOf(it.expanded, it.query, it.page) },
+            restore = { StudyBrowseState(it[0] as Boolean, it[1] as String, it[2] as Int) },
+        )
+    }
+}
+
+private fun LazyListScope.studyBrowseSection(key: String, title: String, values: List<StudyPlanOverview>,
+    browse: StudyBrowseState, card: @Composable (StudyPlanOverview) -> Unit) {
+    item(key = "$key-heading") {
+        TextButton(onClick = { browse.expanded = !browse.expanded }, modifier = Modifier.fillMaxWidth()) {
+            Text("${if (browse.expanded) "Hide" else "Show"} $title (${values.size})",
+                style = MaterialTheme.typography.titleLarge)
+        }
+    }
+    if (!browse.expanded) return
+    val result = studyPlanPage(values, browse.query, browse.page)
+    item(key = "$key-search") {
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            if (key == "finished") Text("Completed plans and plans past their deadline.",
+                style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(value = browse.query, onValueChange = { browse.query = it; browse.page = 0 },
+                label = { Text("Search ${title.lowercase()} plans") },
+                placeholder = { Text("Title, group or note") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        }
+    }
+    item(key = "$key-pages") {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            val first = if (result.total == 0) 0 else result.page * STUDY_PAGE_SIZE + 1
+            val last = minOf((result.page + 1) * STUDY_PAGE_SIZE, result.total)
+            Text("$first–$last of ${result.total} · Page ${result.page + 1} of ${result.pageCount}",
+                style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(enabled = result.page > 0, onClick = { browse.page = result.page - 1 }) { Text("Previous") }
+                OutlinedButton(enabled = result.page + 1 < result.pageCount,
+                    onClick = { browse.page = result.page + 1 }) { Text("Next") }
+            }
+        }
+    }
+    if (result.values.isEmpty()) item(key = "$key-empty") {
+        Text(if (values.isEmpty()) "No plans here." else "No matching plans.", modifier = Modifier.padding(16.dp))
+    }
+    items(result.values, key = { "$key-${it.plan.id}" }) { card(it) }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyPlansScreen(viewModel: StudyPlansViewModel, onBack: () -> Unit) {
@@ -144,6 +199,8 @@ fun StudyPlansScreen(viewModel: StudyPlansViewModel, onBack: () -> Unit) {
     var deleting by remember { mutableStateOf<StudyPlan?>(null) }
     var completing by remember { mutableStateOf<StudyPlan?>(null) }
     var progress by remember { mutableStateOf<StudyPlan?>(null) }
+    val upcomingBrowse = rememberSaveable(saver = StudyBrowseState.Saver) { StudyBrowseState() }
+    val finishedBrowse = rememberSaveable(saver = StudyBrowseState.Saver) { StudyBrowseState() }
 
     LifecycleResumeEffect(Unit) { viewModel.load(); onPauseOrDispose { } }
     state.message?.let { message -> LaunchedEffect(message) { viewModel.clearMessage(); snackbar.showSnackbar(message) } }
@@ -160,7 +217,15 @@ fun StudyPlansScreen(viewModel: StudyPlansViewModel, onBack: () -> Unit) {
                 val priority = mapOf("At risk" to 0, "Behind" to 1, "On track" to 2, "Completed" to 3)
                 val active = state.plans.filter { it.active && !it.complete }.sortedWith(compareBy({ priority[it.status] ?: 4 }, { it.plan.item }))
                 val upcoming = state.plans.filter { it.upcoming && !it.complete }
+                    .sortedWith(compareBy({ it.plan.startDate }, { it.plan.item }, { it.plan.id }))
                 val past = state.plans.filter { it.ended || it.complete }
+                    .sortedWith(compareByDescending<StudyPlanOverview> { it.plan.endDate }.thenBy { it.plan.item }.thenBy { it.plan.id })
+                LaunchedEffect(upcoming, upcomingBrowse.query) {
+                    upcomingBrowse.page = studyPlanPage(upcoming, upcomingBrowse.query, upcomingBrowse.page).page
+                }
+                LaunchedEffect(past, finishedBrowse.query) {
+                    finishedBrowse.page = studyPlanPage(past, finishedBrowse.query, finishedBrowse.page).page
+                }
                 LazyColumn(Modifier.padding(padding).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     item { Text("Today · ${state.date}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(16.dp)) }
@@ -171,13 +236,11 @@ fun StudyPlansScreen(viewModel: StudyPlansViewModel, onBack: () -> Unit) {
                             onProgress = { progress = it }, onTarget = { plan, target -> viewModel.save(plan.copy(currentProgress = target)) },
                             onComplete = { completing = it })
                     }
-                    item { Text("Upcoming (${upcoming.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp)) }
-                    items(upcoming, key = { "upcoming-${it.plan.id}" }) { value ->
+                    studyBrowseSection("upcoming", "Upcoming", upcoming, upcomingBrowse) { value ->
                         StudyCard(value, state.busy, { editing = it }, { deleting = it }, { progress = it },
                             { plan, target -> viewModel.save(plan.copy(currentProgress = target)) }, { completing = it })
                     }
-                    item { Text("Finished (${past.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp)) }
-                    items(past, key = { "past-${it.plan.id}" }) { value ->
+                    studyBrowseSection("finished", "Finished", past, finishedBrowse) { value ->
                         StudyCard(value, state.busy, { editing = it }, { deleting = it }, { progress = it },
                             { plan, target -> viewModel.save(plan.copy(currentProgress = target)) }, { completing = it })
                     }

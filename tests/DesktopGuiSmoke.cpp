@@ -28,6 +28,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QGroupBox>
 #include <QImage>
 #include <QJsonDocument>
 #include <QPainter>
@@ -42,6 +43,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -1000,7 +1002,7 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
         if (button->text() == "Mark plan complete") return button;
       return nullptr;
     }();
-    check(completeButton && !completeButton->isVisible(), "completed plan has no completion action");
+    check(!completeButton, "completed plan is not rendered as an active card");
     application.studyPlans.remove(completed->id);
   }
   plan.currentProgress = 0;
@@ -1024,6 +1026,74 @@ void checkStudyPlans(lexicon::LexiconApplication &application) {
     check(noStudyAction && !noStudyAction->isEnabled(), "desktop non-study day cannot be marked complete");
     application.studyPlans.remove(noStudy->id);
   }
+
+  plan.studyDaysMask = 127;
+  std::vector<int> ids;
+  for (int index = 0; index < 203; ++index) {
+    plan.id = -1;
+    plan.item = qtbridge::toCore(QString("Book %1").arg(index, 3, 10, QChar('0')));
+    plan.group = index == 87 ? "C++ Library" : "";
+    plan.note = index == 88 ? "Read templates next" : "";
+    plan.currentProgress = index >= 103 ? plan.lastUnit : 0;
+    plan.startDate = qtbridge::toCore(QDate::currentDate().addDays(index >= 3 && index < 103 ? 10 : 0).toString("yyyy-MM-dd"));
+    plan.endDate = qtbridge::toCore(QDate::currentDate().addDays(30).toString("yyyy-MM-dd"));
+    auto value = application.studyPlans.save(plan);
+    check(value.has_value(), "seed a large desktop Study Plan collection");
+    if (value) ids.push_back(value->id);
+  }
+  {
+    StudyPlanDialog large;
+    large.show();
+    QApplication::processEvents();
+    auto* list = child<QTableWidget>(large, "studyPlanTable");
+    auto* filter = child<QComboBox>(large, "studyPlanFilter");
+    auto* search = child<QLineEdit>(large, "studyPlanSearch");
+    auto* next = child<QPushButton>(large, "studyPlanNext");
+    auto* page = child<QLabel>(large, "studyPlanPageLabel");
+    check(filter->currentIndex() == 1 && list->rowCount() == 3, "desktop opens all three active plans only");
+    check(large.findChildren<QGroupBox*>().size() == 3, "inactive books create no dashboard cards");
+    auto* dashboard = large.findChild<QScrollArea*>();
+    check(dashboard && dashboard->widget()->minimumHeight() > dashboard->height(),
+          "multiple active cards scroll instead of shrinking their text and actions");
+    check(filter->itemText(2) == "Upcoming (100)" && filter->itemText(3) == "Finished (100)", "desktop shows category totals");
+    filter->setCurrentIndex(2);
+    check(list->rowCount() == 10 && page->text().contains("Page 1 of 10"), "future books use ten rows per page");
+    for (int i = 0; i < 9; ++i) next->click();
+    check(list->rowCount() == 10 && !next->isEnabled() && list->item(9, 0)->text() == "Book 102", "future last page is reachable");
+    search->setText("c++ library");
+    check(list->rowCount() == 1 && list->item(0, 0)->text() == "Book 087", "search covers group text beyond the current page");
+    search->setText("TEMPLATES");
+    check(list->rowCount() == 1 && list->item(0, 0)->text() == "Book 088", "search covers notes regardless of case");
+    search->setText("not found");
+    check(list->rowCount() == 0 && !next->isEnabled(), "an empty search has no rows or next page");
+    search->clear();
+    filter->setCurrentIndex(3);
+    check(list->rowCount() == 10 && page->text().contains("Page 1 of 10"), "completed books are paginated independently");
+    search->setText("Book 20");
+    check(list->rowCount() == 3, "search includes the full completed collection");
+    filter->setCurrentIndex(2);
+    check(search->text().isEmpty() && list->rowCount() == 10, "each category retains its own search");
+    search->setText("Book 0");
+    for (int i = 0; i < 9; ++i) next->click();
+    check(list->rowCount() == 7, "filtered future collection has a partial last page");
+    search->setText("Book 01");
+    next->click();
+    check(list->rowCount() == 10 && !next->isEnabled(), "exactly ten results fit on one page");
+    search->setText("Book 10");
+    check(list->rowCount() == 3, "search matches titles on any page");
+    filter->setCurrentIndex(0);
+    search->clear();
+    for (int i = 0; i < 20; ++i) next->click();
+    check(list->rowCount() == 3, "All is paginated too");
+    for (int i = 0; i < 3; ++i) {
+      list->selectRow(0);
+      whenOpened<QMessageBox>([](QMessageBox &box) { box.button(QMessageBox::Yes)->click(); });
+      child<QPushButton>(large, "studyPlanDelete")->click();
+    }
+    check(list->rowCount() == 10 && page->text().contains("Page 20 of 20"), "deleting the last page returns to the previous page");
+    shot(large, "study-plan-paged");
+  }
+  for (int id : ids) if (application.studyPlans.load(id)) application.studyPlans.remove(id);
 }
 
 int main(int argc, char **argv) {

@@ -16,6 +16,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -23,6 +24,7 @@
 #include <climits>
 
 namespace {
+constexpr int kStudyPageSize = 10;
 QString status(lexicon::StudyPlanStatus value) {
     switch (value) {
     case lexicon::StudyPlanStatus::Upcoming: return "Upcoming";
@@ -83,6 +85,7 @@ StudyPlanDialog::StudyPlanDialog(QWidget* parent) : QDialog(parent) {
     scroll->setMaximumHeight(370);
     auto* dashboardWidget = new QWidget(scroll);
     m_dashboard = new QVBoxLayout(dashboardWidget);
+    m_dashboard->setSizeConstraint(QLayout::SetMinimumSize);
     scroll->setWidget(dashboardWidget);
     root->addWidget(new QLabel("Study Plan overview", this));
     root->addWidget(scroll);
@@ -91,9 +94,15 @@ StudyPlanDialog::StudyPlanDialog(QWidget* parent) : QDialog(parent) {
     heading->addStretch();
     m_filter = new QComboBox(this);
     m_filter->addItems({"All", "Active", "Upcoming", "Finished"});
+    m_filter->setCurrentIndex(1);
     m_filter->setObjectName("studyPlanFilter");
     heading->addWidget(m_filter);
     root->addLayout(heading);
+    m_search = new QLineEdit(this);
+    m_search->setObjectName("studyPlanSearch");
+    m_search->setPlaceholderText("Search title, group or note");
+    m_search->setClearButtonEnabled(true);
+    root->addWidget(m_search);
     m_table = new QTableWidget(0, 10, this);
     m_table->setObjectName("studyPlanTable");
     m_table->setHorizontalHeaderLabels({"Item", "Group", "Type", "Completed", "Units", "Start", "End", "Planned/day", "Required now", "Status"});
@@ -103,6 +112,16 @@ StudyPlanDialog::StudyPlanDialog(QWidget* parent) : QDialog(parent) {
     m_table->horizontalHeader()->setStretchLastSection(true);
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     root->addWidget(m_table, 1);
+    auto* pages = new QHBoxLayout;
+    m_previous = new QPushButton("Previous", this);
+    m_previous->setObjectName("studyPlanPrevious");
+    m_pageLabel = new QLabel(this);
+    m_pageLabel->setObjectName("studyPlanPageLabel");
+    m_pageLabel->setAlignment(Qt::AlignCenter);
+    m_next = new QPushButton("Next", this);
+    m_next->setObjectName("studyPlanNext");
+    pages->addWidget(m_previous); pages->addWidget(m_pageLabel, 1); pages->addWidget(m_next);
+    root->addLayout(pages);
     auto* buttons = new QHBoxLayout;
     auto* add = new QPushButton("Add...", this);
     m_edit = new QPushButton("Edit...", this);
@@ -120,7 +139,19 @@ StudyPlanDialog::StudyPlanDialog(QWidget* parent) : QDialog(parent) {
     connect(m_delete, &QPushButton::clicked, this, [this] { removeSelected(); });
     connect(close, &QPushButton::clicked, this, &QDialog::accept);
     connect(m_table, &QTableWidget::cellDoubleClicked, this, [this] { if (auto* plan = selectedPlan()) editPlan(*plan); });
-    connect(m_filter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { reload(); });
+    connect(m_filter, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        const QSignalBlocker block(m_search);
+        m_search->setText(m_queries[index]);
+        renderTable();
+    });
+    connect(m_search, &QLineEdit::textChanged, this, [this](const QString& query) {
+        const int index = m_filter->currentIndex();
+        m_queries[index] = query;
+        m_pages[index] = 0;
+        renderTable();
+    });
+    connect(m_previous, &QPushButton::clicked, this, [this] { --m_pages[m_filter->currentIndex()]; renderTable(); });
+    connect(m_next, &QPushButton::clicked, this, [this] { ++m_pages[m_filter->currentIndex()]; renderTable(); });
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this, progress] {
         const bool chosen = selectedPlan() != nullptr;
         m_edit->setEnabled(chosen); m_delete->setEnabled(chosen); progress->setEnabled(chosen);
@@ -140,7 +171,6 @@ lexicon::StudyPlanRecord* StudyPlanDialog::selectedPlan() {
 void StudyPlanDialog::reload() {
     auto result = services().core.studyPlans.overview(qtbridge::toCore(QDate::currentDate().toString("yyyy-MM-dd")));
     if (!result) { QMessageBox::critical(this, "Study Plan", qtbridge::toQt(result.error().message)); return; }
-    const int previous = selectedId();
     m_values = std::move(*result);
     clearLayout(m_dashboard);
     std::vector<lexicon::StudyPlanOverview> active, upcoming, finished;
@@ -162,16 +192,18 @@ void StudyPlanDialog::reload() {
         if (priority(a.status) != priority(b.status)) return priority(a.status) < priority(b.status);
         return a.plan.item < b.plan.item;
     });
+    {
+        const QSignalBlocker block(m_filter);
+        m_filter->setItemText(0, QString("All (%1)").arg(m_values.size()));
+        m_filter->setItemText(1, QString("Active (%1)").arg(active.size()));
+        m_filter->setItemText(2, QString("Upcoming (%1)").arg(upcoming.size()));
+        m_filter->setItemText(3, QString("Finished (%1)").arg(finished.size()));
+        m_filter->setItemData(3, "Completed plans and plans past their deadline.", Qt::ToolTipRole);
+    }
     const auto addHeading = [this](const QString& title) { m_dashboard->addWidget(new QLabel(title, this)); };
     addHeading(QString("Active (%1)").arg(active.size()));
     if (active.empty()) m_dashboard->addWidget(new QLabel("No active plans today.", this));
-    std::vector<lexicon::StudyPlanOverview> cards = active;
-    cards.insert(cards.end(), upcoming.begin(), upcoming.end());
-    cards.insert(cards.end(), finished.begin(), finished.end());
-    for (std::size_t index = 0; index < cards.size(); ++index) {
-        if (index == active.size()) addHeading(QString("Upcoming (%1)").arg(upcoming.size()));
-        if (index == active.size() + upcoming.size()) addHeading(QString("Finished (%1)").arg(finished.size()));
-        const auto& value = cards[index];
+    for (const auto& value : active) {
         const auto& p = value.plan;
         auto* box = new QGroupBox(qtbridge::toQt(p.item), this);
         auto* layout = new QVBoxLayout(box);
@@ -214,13 +246,44 @@ void StudyPlanDialog::reload() {
         m_dashboard->addWidget(box);
     }
     m_dashboard->addStretch();
+    renderTable();
+}
+void StudyPlanDialog::renderTable() {
+    const int previous = selectedId();
+    const int filter = m_filter->currentIndex();
+    const QString query = m_queries[filter].trimmed();
     std::vector<lexicon::StudyPlanOverview> visible;
     for (const auto& value : m_values) {
-        if (m_filter->currentIndex() == 1 && (!value.active || value.complete)) continue;
-        if (m_filter->currentIndex() == 2 && (!value.upcoming || value.complete)) continue;
-        if (m_filter->currentIndex() == 3 && !(value.ended || value.complete)) continue;
+        if (filter == 1 && (!value.active || value.complete)) continue;
+        if (filter == 2 && (!value.upcoming || value.complete)) continue;
+        if (filter == 3 && !(value.ended || value.complete)) continue;
+        const auto& p = value.plan;
+        if (!query.isEmpty() && !qtbridge::toQt(p.item).contains(query, Qt::CaseInsensitive) &&
+            !qtbridge::toQt(p.group).contains(query, Qt::CaseInsensitive) &&
+            !qtbridge::toQt(p.note).contains(query, Qt::CaseInsensitive)) continue;
         visible.push_back(value);
     }
+    std::sort(visible.begin(), visible.end(), [filter](const auto& a, const auto& b) {
+        if (filter == 2 && a.plan.startDate != b.plan.startDate) return a.plan.startDate < b.plan.startDate;
+        if (filter == 3 && a.plan.endDate != b.plan.endDate) return a.plan.endDate > b.plan.endDate;
+        if (a.plan.item != b.plan.item) return a.plan.item < b.plan.item;
+        return a.plan.id < b.plan.id;
+    });
+    const int total = static_cast<int>(visible.size());
+    const bool paginated = filter != 1;
+    const int pageCount = paginated ? std::max(1, (total + kStudyPageSize - 1) / kStudyPageSize) : 1;
+    int& page = m_pages[filter];
+    page = std::clamp(page, 0, pageCount - 1);
+    const int first = paginated ? page * kStudyPageSize : 0;
+    const int last = paginated ? std::min(first + kStudyPageSize, total) : total;
+    m_pageLabel->setText(total == 0 ? "No matching plans" : paginated
+        ? QString("%1–%2 of %3 · Page %4 of %5").arg(first + 1).arg(last).arg(total).arg(page + 1).arg(pageCount)
+        : QString("All %1 active plans").arg(total));
+    m_previous->setVisible(paginated); m_next->setVisible(paginated);
+    m_previous->setEnabled(page > 0); m_next->setEnabled(page + 1 < pageCount);
+    visible = std::vector<lexicon::StudyPlanOverview>(visible.begin() + first, visible.begin() + last);
+    m_table->clearSelection();
+    m_table->setCurrentItem(nullptr);
     m_table->setRowCount(static_cast<int>(visible.size()));
     for (int row = 0; row < m_table->rowCount(); ++row) {
         const auto& value = visible[static_cast<std::size_t>(row)];
