@@ -245,6 +245,7 @@ void ItemEditDialog::setupUi() {
     rootLayout->addWidget(m_tabWidget);
 
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
+    buttonBox->setObjectName("itemButtons");
     m_undoButton = buttonBox->addButton("Undo", QDialogButtonBox::ActionRole);
     m_redoButton = buttonBox->addButton("Redo", QDialogButtonBox::ActionRole);
     m_undoButton->setObjectName("itemUndo");
@@ -705,7 +706,9 @@ void ItemEditDialog::setItem(const ItemRecord& item) {
     if (!m_applyingHistory) {
         m_historyTimer->stop();
         m_history.clear();
-        m_history.append(currentSnapshot());
+        const auto initial = currentSnapshot();
+        m_history.append(initial);
+        m_savedFingerprint = initial.fingerprint;
         m_historyIndex = 0;
         updateHistoryButtons();
     }
@@ -728,6 +731,23 @@ ItemEditDialog::EditSnapshot ItemEditDialog::currentSnapshot() const {
         json["blobPaths"][std::to_string(it.key())] = qtbridge::toCore(it.value());
     snapshot.fingerprint = QByteArray::fromStdString(json.dump());
     return snapshot;
+}
+
+bool ItemEditDialog::hasUnsavedChanges() const {
+    return !m_savedFingerprint.isEmpty()
+        && currentSnapshot().fingerprint != m_savedFingerprint;
+}
+
+void ItemEditDialog::reject() {
+    if (hasUnsavedChanges()
+        && QMessageBox::question(
+               this, "Unsaved item changes",
+               "Discard the unsaved changes to this item?",
+               QMessageBox::Discard | QMessageBox::Cancel,
+               QMessageBox::Cancel) != QMessageBox::Discard) {
+        return;
+    }
+    QDialog::reject();
 }
 
 void ItemEditDialog::scheduleHistory() {

@@ -211,8 +211,12 @@ export async function openTypeManager() {
                 }
                 if (affected > 0) {
                     const confirmed = await confirmDialog('Change field data type',
-                        `Changing the data type will clear ${affected} `
-                        + 'stored value(s). Continue?', { danger: true });
+                        `Changing the data type will permanently delete ${affected} existing `
+                        + 'stored value(s). This data cannot be restored automatically.', {
+                            acceptLabel: 'Change and delete values',
+                            cancelLabel: 'Cancel',
+                            danger: true,
+                        });
                     if (!confirmed) return;
                 }
             }

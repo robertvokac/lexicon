@@ -44,6 +44,7 @@ ItemTypeManagerDialog::ItemTypeManagerDialog(QWidget* parent)
 
     auto* layout = new QVBoxLayout(this);
     m_list = new QListWidget(this);
+    m_list->setObjectName("typeList");
     layout->addWidget(m_list);
 
     auto* buttonsLayout = new QHBoxLayout();
@@ -61,10 +62,12 @@ ItemTypeManagerDialog::ItemTypeManagerDialog(QWidget* parent)
     auto* fieldsBox = new QGroupBox("Fields of selected type", this);
     auto* fieldsLayout = new QVBoxLayout(fieldsBox);
     m_fieldList = new QListWidget(fieldsBox);
+    m_fieldList->setObjectName("fieldList");
     fieldsLayout->addWidget(m_fieldList);
     auto* fieldButtons = new QHBoxLayout();
     m_addFieldButton = new QPushButton("Add field", fieldsBox);
     m_editFieldButton = new QPushButton("Edit field", fieldsBox);
+    m_editFieldButton->setObjectName("editField");
     m_deleteFieldButton = new QPushButton("Delete field", fieldsBox);
     fieldButtons->addWidget(m_addFieldButton);
     fieldButtons->addWidget(m_editFieldButton);
@@ -269,6 +272,7 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     descriptionEdit->setPlainText(field.description);
     descriptionEdit->setMaximumHeight(100);
     auto* dataTypeCombo = new QComboBox(&dialog);
+    dataTypeCombo->setObjectName("fieldDataType");
     for (int value = 0; value <= static_cast<int>(FieldDataType::ForeignKey); ++value) {
         dataTypeCombo->addItem(dataTypeName(static_cast<FieldDataType>(value)), value);
     }
@@ -299,6 +303,7 @@ bool ItemTypeManagerDialog::promptForField(ItemFieldRecord& field, bool isEdit) 
     form->addRow("Target item type:", targetTypeCombo);
     layout->addLayout(form);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &dialog);
+    buttons->setObjectName("fieldDialogButtons");
     layout->addWidget(buttons);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -356,9 +361,18 @@ void ItemTypeManagerDialog::editField() {
             QMessageBox::critical(this, "Database error", error);
             return;
         }
-        if (affected > 0 && QMessageBox::question(this, "Change field data type",
-            QString("Changing the data type will clear %1 stored value(s). Continue?").arg(affected),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
+        if (affected > 0) {
+            QMessageBox confirmation(
+                QMessageBox::Warning, "Change field data type",
+                QString("Changing the data type will permanently delete %1 existing stored value(s). "
+                        "This data cannot be restored automatically.").arg(affected),
+                QMessageBox::NoButton, this);
+            auto* change = confirmation.addButton("Change and delete values", QMessageBox::DestructiveRole);
+            auto* cancel = confirmation.addButton(QMessageBox::Cancel);
+            confirmation.setDefaultButton(cancel);
+            confirmation.exec();
+            if (confirmation.clickedButton() != change) return;
+        }
     }
     if (!services().types.upsertItemField(field, &error)) {
         QMessageBox::critical(this, "Database error", error);

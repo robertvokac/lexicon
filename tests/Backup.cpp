@@ -7,6 +7,7 @@
 #include "Utf8Path.h"
 
 #include <nlohmann/json.hpp>
+#include <sqlite3.h>
 
 #include <chrono>
 #include <filesystem>
@@ -117,6 +118,26 @@ void checkBackups() {
   check(made->blobsCopied == 1 && made->blobsLinked == 0, "the referenced file is copied");
   auto verified = lexicon::backup::verifyBackup(made->path);
   check(verified && *verified == 1, "the completed backup verifies without changing it");
+
+  // Version 27 introduced item_history. Version 1 manifests have no database
+  // checksum, so verification itself must notice a missing required table.
+  const fs::path missingHistory = data.temp.path / "missing-history";
+  fs::copy(one, missingHistory, fs::copy_options::recursive);
+  sqlite3 *damaged = nullptr;
+  check(sqlite3_open((missingHistory / "lexicon.db").string().c_str(), &damaged) == SQLITE_OK &&
+            sqlite3_exec(damaged, "DROP TABLE item_history;", nullptr, nullptr, nullptr) == SQLITE_OK,
+        "prepare a backup whose history table is missing");
+  sqlite3_close(damaged);
+  auto oldManifest = nlohmann::json::parse(readFile(missingHistory / "backup.json"));
+  oldManifest["version"] = 1;
+  oldManifest.erase("databaseSha256");
+  oldManifest.erase("exportSha256");
+  { std::ofstream(missingHistory / "backup.json", std::ios::binary | std::ios::trunc)
+        << oldManifest.dump(2) << '\n'; }
+  const auto missingHistoryResult = lexicon::backup::verifyBackup(lexicon::pathToUtf8(missingHistory));
+  check(!missingHistoryResult && missingHistoryResult.error().message.find("Item history is missing") != std::string::npos,
+        "verification uses db_version and rejects a missing history table");
+
   const auto originalExport = readFile(one / "lexicon-export.json");
   { std::ofstream(one / "lexicon-export.json", std::ios::binary | std::ios::trunc) << "{}"; }
   check(!lexicon::backup::verifyBackup(made->path), "verification detects a changed export");

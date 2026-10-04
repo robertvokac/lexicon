@@ -434,6 +434,16 @@ Result<CommandLine> parseCommandLine(const std::vector<std::string> &arguments) 
     return invalid("import needs --input FILE.");
   if (parsed.command == Command::Backup && parsed.config.backupDirectory.empty())
     return invalid("backup needs --backup-dir DIR.");
+  if (parsed.config.databasePath.empty())
+    return invalid("--database cannot be empty.");
+  // Resolve this once, before the server opens SQLite or derives the Blob,
+  // credential and session paths. A later working-directory change can then
+  // never make one process start using a different, newly-created database.
+  std::error_code pathError;
+  const auto absoluteDatabase = fs::absolute(utf8Path(parsed.config.databasePath), pathError);
+  if (pathError)
+    return invalid("Cannot resolve --database: " + pathError.message());
+  parsed.config.databasePath = pathToUtf8(absoluteDatabase.lexically_normal());
   return parsed;
 }
 } // namespace lexicon::http

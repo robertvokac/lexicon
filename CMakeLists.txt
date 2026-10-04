@@ -187,7 +187,7 @@ if (LEXICON_BUILD_SERVER)
             AUTOMOC OFF AUTORCC OFF)
 
         add_executable(lexicon-backup-test tests/Backup.cpp)
-        target_link_libraries(lexicon-backup-test PRIVATE lexicon-backup lexicon-http)
+        target_link_libraries(lexicon-backup-test PRIVATE lexicon-backup lexicon-http SQLite::SQLite3)
         set_target_properties(lexicon-backup-test PROPERTIES AUTOMOC OFF AUTORCC OFF)
         add_test(NAME backup COMMAND lexicon-backup-test)
 
@@ -323,6 +323,8 @@ if (LEXICON_BUILD_DESKTOP)
             lexicon-qt/ReviewDialog.cpp
             lexicon-qt/ItemEditDialog.h
             lexicon-qt/ItemEditDialog.cpp
+            lexicon-qt/ItemTypeManagerDialog.h
+            lexicon-qt/ItemTypeManagerDialog.cpp
             lexicon-qt/MassInsertDialog.h
             lexicon-qt/MassInsertDialog.cpp
             lexicon-qt/GraphLayout.h

@@ -97,14 +97,14 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
     </div>
 
     <h2 id="automatic">Automatic backups on the server</h2>
-    <p>If you run <a href="server-and-clients.html">LexiconServer</a>, it can do the whole job for you. Give it a directory and it backs the dictionary up on its own:</p>
+    <p>If you run <a href="server-and-clients.html">LexiconServer</a>, it can do the whole job for you. Automatic backups are disabled by default; give it a directory to opt in:</p>
     <pre><code>LexiconServer --database ~/lexicon/lexicon.db --backup-dir ~/lexicon-backups</code></pre>
     <ul>
       <li>Every <strong>24 hours</strong> by default (<code>--backup-interval H</code>), keeping the newest <strong>14</strong> backups (<code>--backup-keep N</code>); older ones are removed.</li>
       <li>Each backup holds a <strong>consistent copy of the database</strong> taken while the server keeps running, a portable <strong>JSON export</strong>, and the <strong>blob files</strong> the dictionary refers to.</li>
       <li>Files that did not change are <strong>shared between backups through hard links</strong>, so fourteen backups cost far less than fourteen copies.</li>
       <li><code>LexiconServer backup --backup-dir DIR</code> makes one on demand — handy before an upgrade.</li>
-      <li><code>LexiconServer verify-backup --path DIR</code> checks a completed backup's database and every referenced file before restoration; new backups also carry database and export checksums.</li>
+      <li><code>LexiconServer verify-backup --path DIR</code> reads the database's Lexicon <code>db_version</code>, requires the history table for schema versions that include it, and checks integrity plus every referenced file before restoration; new backups also carry database and export checksums.</li>
     </ul>
 
     <h2 id="export">Export and import</h2>
@@ -129,7 +129,7 @@ cp -a blobs ~/backups/lexicon-$(date +%F)/</code></pre>
       <span class="callout-icon">⚠️</span>
       <p><strong>Deleting a group</strong> is allowed only when it contains no items and no group-specific types. Move or delete those records first.</p>
     </div>
-    <p>Deleting a type clears its assignment and custom field values on affected items after confirmation. There is no undo for deletions. Back up <code>lexicon.db</code> and <code>blobs/</code> first if unsure.</p>
+    <p>Changing a used field's data type explicitly warns that its values will be permanently deleted; deleting a field or type also asks first. Lexicon snapshots each affected item in History before deleting values or type assignments. The snapshot preserves the old IDs and raw values, but automatic restoration requires compatible type and field definitions. Keep complete backups of <code>lexicon.db</code> and <code>blobs/</code> as the final recovery layer.</p>
 
     <h2 id="troubleshooting">Troubleshooting</h2>
 

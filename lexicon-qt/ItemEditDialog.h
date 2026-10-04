@@ -35,6 +35,9 @@ public:
     void setItem(const ItemRecord& item);
     ItemRecord item() const;
 
+public slots:
+    void reject() override;
+
 protected:
     // A click on an image's thumbnail opens it.
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -105,6 +108,7 @@ private:
     void recordHistory();
     void applyHistory(int index);
     void updateHistoryButtons();
+    bool hasUnsavedChanges() const;
     struct EditSnapshot {
         ItemRecord item;
         QList<LinkRecord> links;
@@ -172,4 +176,5 @@ private:
     QVector<EditSnapshot> m_history;
     int m_historyIndex = -1;
     bool m_applyingHistory = false;
+    QByteArray m_savedFingerprint;
 };

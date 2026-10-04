@@ -124,6 +124,13 @@ LexiconServer --database ~/lexicon/lexicon.db \
   --allowed-origin https://lexicon.example.com
 ```
 
+Use an absolute path for `--database` in service files and production launch
+scripts. Shells expand the `~` in the example before starting the process. As
+an additional guard, LexiconServer resolves any supplied database path to an
+absolute, normalized path once at startup; Blob storage, credentials and
+sessions therefore cannot silently move if the process working directory is
+changed later.
+
 Defaults: `127.0.0.1:8628`, no TLS, no allowed origins. Without at least one
 `--allowed-origin`, browser clients on another origin are refused - that is
 intentional, not a bug. A client the server serves itself is not on another
@@ -171,7 +178,7 @@ host instead, allow the client's exact origin with `--allowed-origin`.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--database PATH` | `lexicon.db` | SQLite database, shared with the desktop client |
+| `--database PATH` | `lexicon.db` | SQLite database, resolved to an absolute path at startup and shared with the desktop client |
 | `--auth-file PATH` | `<database dir>/lexicon-auth.json` | Credentials file |
 | `--listen ADDRESS` | `127.0.0.1` | Bind address |
 | `--port PORT` | `8628` | TCP port |
@@ -361,6 +368,9 @@ two processes to write safely.
 
 ### Automatic backups
 
+Automatic backups are opt-in: without `--backup-dir` the server does not
+create or rotate backups.
+
 ```bash
 LexiconServer --database ~/lexicon/lexicon.db --backup-dir /backup/lexicon \
   --backup-interval 24 --backup-keep 14
@@ -428,7 +438,9 @@ before an upgrade.
 
 `LexiconServer verify-backup --path DIR` checks a completed backup before
 restoration. New manifests carry SHA-256 checksums for the database and export;
-the command also accepts older manifests. It validates the manifest and export, runs SQLite integrity and
+the command also accepts older manifests. It reads the schema version from
+Lexicon's `db_version` table, requires `item_history` for schema versions that
+include it, validates the manifest and export, runs SQLite integrity and
 foreign-key checks, and hashes every referenced Blob and Image file, including
 files retained by item history. It reports the verified file count and does
 not modify the backup. Use the path of one `lexicon-backup-...` directory.

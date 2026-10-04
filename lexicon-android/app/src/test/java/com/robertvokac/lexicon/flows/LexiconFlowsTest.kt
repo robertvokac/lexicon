@@ -823,6 +823,19 @@ class LexiconFlowsTest {
         }
         inDialog("Cancel").performClick()
 
+        compose.onNode(hasText("Difficulty") and hasClickAction()).performClick()
+        compose.onNode(hasText("Enum") and hasAnyAncestor(isDialog())).performClick()
+        inPopup("Text").performClick()
+        inDialog("Save").performClick()
+        compose.waitForText(
+            "Changing the data type will permanently delete 1 existing stored value(s). " +
+                "This data cannot be restored automatically.",
+        )
+        inDialog("Change and delete values").assertIsDisplayed()
+        inDialog("Cancel").performClick()
+        assertEquals(FieldDataType.Enum, fake.fields.single().dataType)
+        assertEquals("hard", fake.items.values.single { it.title == "Uses the type" }.fieldValues[field.id.toString()])
+
         compose.onNodeWithContentDescription("Delete field Difficulty").performClick()
         compose.waitForText("Delete field 'Difficulty'? This will remove its value from 1 item(s). Continue?")
         compose.onNode(hasText("Cancel") and hasClickAction()).performClick()

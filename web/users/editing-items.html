@@ -84,7 +84,7 @@
     </table>
     <p>Use <code>Manage → Types...</code> to create or edit types and their fields. Both types and fields have descriptions: a field description appears with its value editor and as a tooltip or supporting text where space is tighter.</p>
     <p>Editing an Enum field's choices does not discard existing values. You may add choices or remove unused ones. Lexicon refuses to remove or rename a choice while any item still uses it; change those items to another choice first.</p>
-    <p>When a type has custom field values, changing it asks for confirmation before discarding those values. Deleting a type also clears its assignment and custom values on every affected item, with a confirmation showing the affected item count.</p>
+    <p>Changing a field's data type permanently clears its existing values. Desktop, web and Android therefore report the exact number of stored values and require the explicit <strong>Change and delete values</strong> action; Cancel leaves both the field and its values unchanged. Deleting a field or type also asks first. Before any of these operations discards values or type assignments, Lexicon snapshots every affected item in History in the same database transaction.</p>
 
     <h3>The understanding scale</h3>
     <p>Lexicon is a learning tool, so it tracks your personal mastery of every concept:</p>
@@ -194,7 +194,7 @@ std::vector&lt;int&gt; b = std::move(a); // no copy
 
     <h2 id="saving">Saving, and what happens if someone else was faster</h2>
     <p>Every item carries a <strong>revision</strong> that moves on with each change to it, its values or its links. If another client — the desktop, the browser or the phone — saved the item after you opened it, your save is not written silently over theirs. Lexicon lists what differs and offers to <strong>Overwrite</strong> the newer version, <strong>Reload</strong> it and drop your changes, or go back to editing.</p>
-    <p>The desktop editor's <strong>Undo</strong> and <strong>Redo</strong> buttons (Ctrl+Z and Ctrl+Y/Ctrl+Shift+Z) can reverse unsaved changes across fields, metadata and links. After saving, open the selected item's <strong>History</strong> to restore an earlier version. <strong>Trash</strong> lists deleted items and can recreate one with its cards and links; the restored item receives a new ID. These actions are also available in the web and Android clients. A non-empty group cannot be deleted; keep full backups for type changes, which item history does not cover.</p>
+    <p>The desktop editor's <strong>Undo</strong> and <strong>Redo</strong> buttons (Ctrl+Z and Ctrl+Y/Ctrl+Shift+Z) can reverse unsaved changes across fields, metadata and links. Closing or cancelling a changed desktop editor asks before those edits are discarded. After saving, open the selected item's <strong>History</strong> to restore an earlier version. <strong>Trash</strong> lists deleted items and can recreate one with its cards and links; the restored item receives a new ID. These actions are also available in the web and Android clients. Type and field operations snapshot affected items before discarding their assignments or values. Such a snapshot keeps the old IDs and raw values, but automatic restoration requires compatible type and field definitions, so keep full database and Blob backups too.</p>
 
     <div class="page-nav">
       <a class="prev" href="getting-started.html"><span class="dir">← Previous</span>Getting started</a>

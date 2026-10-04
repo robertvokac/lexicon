@@ -1,6 +1,7 @@
 #include "LexiconApplication.h"
 #include "SqliteRepository.h"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -20,6 +21,73 @@ int main() {
   lexicon::LexiconApplication app(repository);
   auto group = app.groups.defaultGroupId();
   if (!group) return fail("default group missing");
+
+  // Schema changes that discard values first preserve every affected Item in
+  // history, in the same transaction as the destructive change.
+  lexicon::ItemTypeRecord historyType;
+  historyType.name = "History protection";
+  if (!app.types.upsertItemType(historyType)) return fail("history type was not created");
+  const auto types = app.types.loadItemTypes(-1);
+  const auto savedType = types ? std::find_if(types->begin(), types->end(), [](const auto &type) {
+    return type.name == "History protection";
+  }) : std::vector<lexicon::ItemTypeRecord>::const_iterator{};
+  if (!types || savedType == types->end()) return fail("history type was not found");
+  const int historyTypeId = savedType->id;
+
+  lexicon::ItemFieldRecord changingField;
+  changingField.itemTypeId = historyTypeId;
+  changingField.name = "Changing";
+  changingField.dataType = lexicon::FieldDataType::Text;
+  if (!app.types.upsertItemField(changingField)) return fail("changing field was not created");
+  auto fields = app.types.loadItemFields(historyTypeId);
+  if (!fields || fields->empty()) return fail("changing field was not found");
+  changingField = fields->front();
+
+  lexicon::ItemRecord protectedItem;
+  protectedItem.groupId = *group;
+  protectedItem.itemTypeId = historyTypeId;
+  protectedItem.title = "Schema history";
+  protectedItem.fieldValues[changingField.id] = "not-an-integer";
+  const auto protectedId = app.items.createItem(protectedItem);
+  if (!protectedId) return fail("schema-history item was not created");
+
+  changingField.dataType = lexicon::FieldDataType::Integer;
+  if (!app.types.upsertItemField(changingField)) return fail("field type did not change");
+  auto schemaHistory = app.items.loadItemHistory(*protectedId);
+  if (!schemaHistory || schemaHistory->empty() ||
+      schemaHistory->front().item.fieldValues[changingField.id] != "not-an-integer")
+    return fail("field type change did not snapshot the discarded value");
+
+  lexicon::ItemFieldRecord deletedField;
+  deletedField.itemTypeId = historyTypeId;
+  deletedField.name = "Deleted";
+  deletedField.dataType = lexicon::FieldDataType::Text;
+  if (!app.types.upsertItemField(deletedField)) return fail("deleted field was not created");
+  fields = app.types.loadItemFields(historyTypeId);
+  const auto savedDeletedField = fields ? std::find_if(fields->begin(), fields->end(), [](const auto &field) {
+    return field.name == "Deleted";
+  }) : std::vector<lexicon::ItemFieldRecord>::const_iterator{};
+  if (!fields || savedDeletedField == fields->end()) return fail("deleted field was not found");
+  deletedField = *savedDeletedField;
+  auto beforeFieldDeletion = app.items.loadItem(*protectedId);
+  if (!beforeFieldDeletion) return fail("schema-history item did not load");
+  beforeFieldDeletion->fieldValues[changingField.id] = "42";
+  beforeFieldDeletion->fieldValues[deletedField.id] = "preserve me";
+  if (!app.items.saveItem(*beforeFieldDeletion)) return fail("schema-history values did not save");
+  if (!app.types.deleteItemField(deletedField.id)) return fail("field was not deleted");
+  schemaHistory = app.items.loadItemHistory(*protectedId);
+  if (!schemaHistory || schemaHistory->empty() ||
+      schemaHistory->front().item.fieldValues[deletedField.id] != "preserve me")
+    return fail("field deletion did not snapshot the discarded value");
+
+  if (!app.types.deleteItemType(historyTypeId)) return fail("type was not deleted");
+  schemaHistory = app.items.loadItemHistory(*protectedId);
+  const auto afterTypeDeletion = app.items.loadItem(*protectedId);
+  if (!schemaHistory || schemaHistory->empty() ||
+      schemaHistory->front().item.itemTypeId != historyTypeId ||
+      schemaHistory->front().item.fieldValues[changingField.id] != "42" ||
+      !afterTypeDeletion || afterTypeDeletion->itemTypeId > 0 || !afterTypeDeletion->fieldValues.empty())
+    return fail("type deletion did not snapshot the discarded assignment and values");
 
   lexicon::ItemRecord first;
   first.groupId = *group; first.title = "First"; first.content = "Before";

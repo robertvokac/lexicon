@@ -447,12 +447,15 @@ password with scrypt, and rate limits failed logins.
 
 ### Server options
 
-All options below may follow `LexiconServer` or `LexiconServer serve`. Paths
-are relative to the current working directory unless absolute.
+All options below may follow `LexiconServer` or `LexiconServer serve`. Use an
+absolute `--database PATH` for a server installation. For safety, the server
+also resolves the supplied database path to an absolute, normalized path once
+at startup, before deriving the Blob, credential and session locations. Other
+relative paths are relative to the startup working directory.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--database PATH` | `lexicon.db` | SQLite database. |
+| `--database PATH` | `lexicon.db` | SQLite database; resolved to an absolute path at startup. |
 | `--auth-file PATH` | `<database directory>/lexicon-auth.json` | Credentials file. |
 | `--listen ADDRESS` | `127.0.0.1` | Address to bind. |
 | `--port PORT` | `8628` | TCP port, 1–65535. |
@@ -679,7 +682,7 @@ In `Metadata` tab:
 
 Each list supports `Add`, `Edit`, `Remove`.
 
-Use `Manage` → `Types...` to create types with a name, description, and availability across all groups or within one group. Each type can have ordered fields with their own descriptions and integer, float, text, date, time, timestamp, boolean, enum, blob, image, or other values. Enum fields have an editable list of choices. Existing enum values are preserved when choices are edited, and a choice cannot be removed while any item still uses it. A blob field stores a file's SHA-256 hash in SQLite and its bytes in the `blobs` directory. Deleting a type clears the Type and its custom field values on affected items; the dialog asks for confirmation.
+Use `Manage` → `Types...` to create types with a name, description, and availability across all groups or within one group. Each type can have ordered fields with their own descriptions and integer, float, text, date, time, timestamp, boolean, enum, blob, image, or other values. Enum fields have an editable list of choices. Existing enum values are preserved when choices are edited, and a choice cannot be removed while any item still uses it. A blob field stores a file's SHA-256 hash in SQLite and its bytes in the `blobs` directory. Changing a field's data type permanently clears its existing values, so every client reports the exact number of values and requires an explicit **Change and delete values** confirmation. Deleting a field or type also asks for confirmation. Before any of these operations discards values or type assignments, Lexicon snapshots every affected item in History in the same database transaction.
 
 Tips:
 
@@ -782,14 +785,16 @@ A dismissal is kept on the server, so dismissing an alarm on the phone stops it 
 
 ### 14) Item history and Trash
 
-Each saved item update and link change records the previous version. Deleting an item puts a snapshot in **Trash**, including its cards and links. Open **History** for an item or **Trash** from the desktop or web menus, or from the Android item screen and drawer. Restoring an earlier version replaces the current item fields and links. Restoring a deleted item creates a new item ID and restores its cards and links whose other item still exists. History snapshots also keep referenced Blob and Image files safe from cleanup. A non-empty group cannot be deleted; keep independent backups for type changes and other permanent operations.
+Each saved item update and link change records the previous version. Lexicon also records an item snapshot immediately before deleting its type assignment or custom values because a type or field is deleted, or because a field's data type changes. Deleting an item puts a snapshot in **Trash**, including its cards and links. Open **History** for an item or **Trash** from the desktop or web menus, or from the Android item screen and drawer. Restoring an earlier version replaces the current item fields and links. Restoring a deleted item creates a new item ID and restores its cards and links whose other item still exists. History snapshots also keep referenced Blob and Image files safe from cleanup. A schema-change snapshot retains the old IDs and raw values for inspection and recovery, but restoring it automatically requires compatible type and field definitions; keep complete database and Blob backups as the final recovery layer.
 
-The Qt item editor has **Undo** and **Redo** for unsaved changes across item fields, metadata and links (`Ctrl+Z` and `Ctrl+Y`/`Ctrl+Shift+Z`). Common item actions also have shortcuts: `Ctrl+N` new, `Ctrl+E` edit, `Ctrl+Delete` delete, `Ctrl+F` search, `F5` refresh and `Ctrl+Shift+H` history.
+The Qt item editor has **Undo** and **Redo** for unsaved changes across item fields, metadata and links (`Ctrl+Z` and `Ctrl+Y`/`Ctrl+Shift+Z`). Closing or cancelling an editor whose current state differs from the state that was opened asks before discarding those unsaved changes. Common item actions also have shortcuts: `Ctrl+N` new, `Ctrl+E` edit, `Ctrl+Delete` delete, `Ctrl+F` search, `F5` refresh and `Ctrl+Shift+H` history.
 
 ### 15) Editing and deletion safety notes
 
 - Deleting an item removes its aliases/tags/flags, related links and cards due to cascade rules.
 - A group with items or group-specific types cannot be deleted.
+- Changing a used field's data type requires an explicit permanent-data-loss confirmation; cancelling leaves both its definition and values unchanged.
+- Deleting a type or field, or changing a field's data type, snapshots affected items before the database discards assignments or values.
 - Every item has a revision that moves on with each change to it, its values or its links. If another client (the desktop, the web client or the Android app) saved an item after you opened it, your save is not written. Lexicon lists what differs and lets you **Overwrite** the newer version, **Reload** it and drop your changes, or go back to editing.
 - Keep regular backups if your lexicon is mission-critical.
 
@@ -822,14 +827,14 @@ Design notes:
 
 ## Data location and backup
 
-- Default DB file: `lexicon.db`
-- Location: next to the executable binary
+- Desktop default DB file: `lexicon.db`, next to the executable binary
+- Server DB file: pass an absolute `--database PATH`; even a relative path is resolved to an absolute path once at startup
 - Blob files: `blobs/<first two hash characters>/<remaining hash characters>` next to `lexicon.db`
 
 **The SQLite database and Blob directory together form the complete Lexicon data set.**
 Backing up only `lexicon.db` is insufficient when Blob Fields are used.
 
-`LexiconServer --backup-dir DIR` backs the dictionary up automatically, every 24 hours by default, keeping the newest 14 backups: each a consistent copy of the database, a portable export and the Blob files, with unchanged files shared between backups through hard links. `LexiconServer backup --backup-dir DIR` makes one on demand. `LexiconServer verify-backup --path DIR` checks a completed backup's database integrity, references and file hashes before restoration. See [docs/server.md](docs/server.md#backups-while-the-server-runs).
+Automatic server backups remain disabled unless `--backup-dir DIR` is supplied. When enabled, the server backs the dictionary up every 24 hours by default and keeps the newest 14 backups: each is a consistent copy of the database, a portable export and the Blob files, with unchanged files shared between backups through hard links. `LexiconServer backup --backup-dir DIR` makes one on demand. `LexiconServer verify-backup --path DIR` reads Lexicon's `db_version`, requires the history schema for databases that should have it, and checks database integrity, references and file hashes before restoration. See [docs/server.md](docs/server.md#backups-while-the-server-runs).
 
 `File -> Export...` writes the current dictionary as one JSON file, including cards, recurring alarms and their linked items, optionally with the files Blob and Image values refer to; `File -> Import...` merges such a file into the open dictionary, matching groups, types and fields by name and leaving items that are already there untouched. Exports omit prior item versions and Trash; a full database backup preserves them. The web client and the Android app offer export and import, and `LexiconServer export` and `LexiconServer import` do it from the command line. See [docs/export-format.md](docs/export-format.md).
 

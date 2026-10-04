@@ -35,7 +35,8 @@ sealed interface TypesConfirmation {
 
     data class ChangeField(val field: ItemField, val write: FieldWrite, val count: Int) : TypesConfirmation {
         override val message: String
-            get() = "Changing the data type will clear $count stored value(s). Continue?"
+            get() = "Changing the data type will permanently delete $count existing stored value(s). " +
+                "This data cannot be restored automatically."
     }
 }
 

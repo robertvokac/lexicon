@@ -13,6 +13,7 @@
 #include "ImageValueView.h"
 #include "InboxDialog.h"
 #include "ItemEditDialog.h"
+#include "ItemTypeManagerDialog.h"
 #include "ForeignKeyValueEditor.h"
 #include "MassInsertDialog.h"
 #include "MarkdownConverter.h"
@@ -284,6 +285,144 @@ void checkBoardDiscardProtection() {
   });
   cancel->click();
   check(!source->isVisible(), "a confirmed Board discard returns to its viewer");
+}
+
+void checkItemDiscardProtection(int group) {
+  ItemRecord draft;
+  draft.groupId = group;
+  draft.title = "Unchanged draft";
+
+  ItemEditDialog unchanged;
+  unchanged.setGroups(services().groups.loadGroups());
+  unchanged.setItem(draft);
+  unchanged.show();
+  QApplication::processEvents();
+  unchanged.close();
+  check(!unchanged.isVisible(), "an unchanged item editor closes without a warning");
+
+  ItemEditDialog changed;
+  changed.setGroups(services().groups.loadGroups());
+  changed.setItem(draft);
+  changed.show();
+  QApplication::processEvents();
+  child<QTextEdit>(changed, "itemContent")->setPlainText("Unsaved notes");
+  QString warning;
+  whenOpened<QMessageBox>([&](QMessageBox &box) {
+    warning = box.text();
+    box.button(QMessageBox::Cancel)->click();
+  });
+  changed.close();
+  check(warning == "Discard the unsaved changes to this item?" && changed.isVisible(),
+        "closing a changed item editor warns and Cancel keeps it open");
+  whenOpened<QMessageBox>([](QMessageBox &box) {
+    box.button(QMessageBox::Discard)->click();
+  });
+  changed.close();
+  check(!changed.isVisible() && changed.result() == QDialog::Rejected,
+        "Discard closes the changed item editor");
+
+  ItemEditDialog reverted;
+  reverted.setGroups(services().groups.loadGroups());
+  reverted.setItem(draft);
+  auto *title = child<QLineEdit>(reverted, "itemTitle");
+  title->setText("Temporary change");
+  title->setText(draft.title);
+  reverted.show();
+  QApplication::processEvents();
+  reverted.close();
+  check(!reverted.isVisible(), "reverting an item edit to its opened state needs no warning");
+}
+
+void checkFieldTypeChangeProtection(lexicon::LexiconApplication &application, int group) {
+  lexicon::ItemTypeRecord type;
+  type.name = "Protected field type";
+  check(application.types.upsertItemType(type).has_value(), "create a type for the destructive field warning");
+  const auto types = application.types.loadItemTypes(-1);
+  const auto foundType = types ? std::find_if(types->begin(), types->end(), [](const auto &candidate) {
+    return candidate.name == "Protected field type";
+  }) : std::vector<lexicon::ItemTypeRecord>::const_iterator{};
+  if (!types || foundType == types->end()) return;
+
+  lexicon::ItemFieldRecord field;
+  field.itemTypeId = foundType->id;
+  field.name = "Protected value";
+  field.dataType = lexicon::FieldDataType::Text;
+  check(application.types.upsertItemField(field).has_value(), "create a field for the destructive warning");
+  const auto fields = application.types.loadItemFields(foundType->id);
+  if (!fields || fields->empty()) return;
+  const int fieldId = fields->front().id;
+
+  lexicon::ItemRecord item;
+  item.groupId = group;
+  item.itemTypeId = foundType->id;
+  item.title = "Protected field value";
+  item.fieldValues[fieldId] = "keep me";
+  const auto itemId = application.items.createItem(item);
+  check(itemId.has_value(), "create an item whose field type must not change silently");
+  if (!itemId) return;
+
+  ItemTypeManagerDialog manager;
+  manager.show();
+  QApplication::processEvents();
+  auto *typeList = child<QListWidget>(manager, "typeList");
+  auto *fieldList = child<QListWidget>(manager, "fieldList");
+  auto *editField = child<QPushButton>(manager, "editField");
+  for (int row = 0; row < typeList->count(); ++row) {
+    if (typeList->item(row)->data(Qt::UserRole).toInt() == foundType->id) {
+      typeList->setCurrentRow(row);
+      break;
+    }
+  }
+  if (fieldList->count() != 1) return;
+  fieldList->setCurrentRow(0);
+
+  auto changeDataType = [&](bool confirm) {
+    QString warning;
+    bool destructiveButton = false;
+    whenOpened<QDialog>([&](QDialog &editor) {
+      auto *dataType = child<QComboBox>(editor, "fieldDataType");
+      dataType->setCurrentIndex(dataType->findData(static_cast<int>(FieldDataType::Integer)));
+      QTimer::singleShot(0, [&] {
+        auto *message = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+        if (!message) {
+          check(false, "the destructive field warning opened");
+          return;
+        }
+        warning = message->text();
+        QPushButton *change = nullptr;
+        for (auto *candidate : message->buttons()) {
+          auto *button = qobject_cast<QPushButton *>(candidate);
+          if (button && button->text() == "Change and delete values") change = button;
+        }
+        destructiveButton = change != nullptr;
+        if (confirm && change) change->click();
+        else message->button(QMessageBox::Cancel)->click();
+      });
+      child<QDialogButtonBox>(editor, "fieldDialogButtons")->button(QDialogButtonBox::Save)->click();
+    });
+    editField->click();
+    check(warning == "Changing the data type will permanently delete 1 existing stored value(s). "
+                     "This data cannot be restored automatically." && destructiveButton,
+          "a field type change names the permanent loss and needs an explicit destructive action");
+  };
+
+  changeDataType(false);
+  auto stored = application.items.loadItem(*itemId);
+  auto storedFields = application.types.loadItemFields(foundType->id);
+  check(stored && stored->fieldValues[fieldId] == "keep me" && storedFields &&
+            storedFields->front().dataType == lexicon::FieldDataType::Text,
+        "cancelling the field type warning preserves the field and its values");
+
+  changeDataType(true);
+  stored = application.items.loadItem(*itemId);
+  storedFields = application.types.loadItemFields(foundType->id);
+  check(stored && !stored->fieldValues.contains(fieldId) && storedFields &&
+            storedFields->front().dataType == lexicon::FieldDataType::Integer,
+        "the field type and values change only after explicit confirmation");
+
+  manager.close();
+  check(application.items.deleteItem(*itemId).has_value(), "remove the destructive-warning test item");
+  check(application.types.deleteItemType(foundType->id).has_value(), "remove the destructive-warning test type");
 }
 
 void checkCards(lexicon::LexiconApplication &application, int group) {
@@ -1116,6 +1255,8 @@ int main(int argc, char **argv) {
 
   checkCsvExport();
   checkBoardDiscardProtection();
+  checkItemDiscardProtection(group);
+  checkFieldTypeChangeProtection(application, group);
   checkReview(application, group);
   checkWikiLinks(application, group);
   checkGraph(application, group);

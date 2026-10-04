@@ -230,7 +230,8 @@ Result<std::size_t> verifyBackup(const std::string &path) {
     }
     if (row != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(db.get()));
     sqlite3_stmt *rawVersion = nullptr;
-    if (sqlite3_prepare_v2(db.get(), "PRAGMA user_version;", -1, &rawVersion, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db.get(), "SELECT version FROM db_version LIMIT 1;", -1,
+                           &rawVersion, nullptr) != SQLITE_OK)
       throw std::runtime_error(sqlite3_errmsg(db.get()));
     std::unique_ptr<sqlite3_stmt, decltype(&sqlite3_finalize)> databaseVersion(rawVersion, sqlite3_finalize);
     if (sqlite3_step(databaseVersion.get()) != SQLITE_ROW)

@@ -77,7 +77,8 @@
 LexiconServer --database ~/lexicon/lexicon.db \
   --allowed-origin http://127.0.0.1:8080 \
   --backup-dir ~/lexicon-backups</code></pre>
-    <p>It listens on <code>127.0.0.1:8628</code> by default and answers REST calls under <code>/api/v1</code>. A browser client served from another address needs that address as an <code>--allowed-origin</code>; without one it is refused on purpose — unless the server serves the client itself, see below. <code>--backup-dir</code> turns on <a href="backup-and-troubleshooting.html#automatic">automatic backups</a>.</p>
+    <p>Use an absolute <code>--database PATH</code> in a service or launch script (the shell expands <code>~</code> in the example). As a safety guard, the server resolves the path to an absolute, normalized path once at startup before deriving the Blob, credential and session locations.</p>
+    <p>It listens on <code>127.0.0.1:8628</code> by default and answers REST calls under <code>/api/v1</code>. A browser client served from another address needs that address as an <code>--allowed-origin</code>; without one it is refused on purpose — unless the server serves the client itself, see below. <code>--backup-dir</code> turns on <a href="backup-and-troubleshooting.html#automatic">automatic backups</a>; without it automatic backups are disabled.</p>
 
     <div class="callout callout-warning">
       <span class="callout-icon">🔒</span>

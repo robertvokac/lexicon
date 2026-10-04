@@ -531,9 +531,10 @@ void checkConfigurationGuards(Checks &checks) {
                 "a missing option value is refused");
   const auto sessions = lexicon::http::parseCommandLine({"--database", "data/lexicon.db"});
   checks.expect(sessions.has_value() && sessions->config.persistSessions &&
+                    lexicon::utf8Path(sessions->config.databasePath).is_absolute() &&
                     lexicon::utf8Path(sessions->config.resolvedSessionFilePath()) ==
-                        lexicon::utf8Path("data") / "lexicon-sessions.json",
-                "sessions are kept next to the database by default");
+                        std::filesystem::absolute(lexicon::utf8Path("data") / "lexicon-sessions.json"),
+                "the database becomes absolute and sessions stay beside it");
   const auto sessionFile = lexicon::http::parseCommandLine({"--session-file", "/var/lib/s.json"});
   checks.expect(sessionFile.has_value() &&
                     sessionFile->config.resolvedSessionFilePath() == "/var/lib/s.json",

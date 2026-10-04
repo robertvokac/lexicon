@@ -71,6 +71,14 @@ void bumpRevision(const Connection &db, int itemId) {
 void bumpRevisions(const Connection &db, const std::string &whereSql, int id) {
   Statement(db, "UPDATE item SET revision = revision + 1 WHERE " + whereSql + ";").bind(id).run();
 }
+void snapshotItem(const Connection &db, int itemId, const char *operation);
+void snapshotItems(const Connection &db, const std::string &sql, int id) {
+  Statement affected(db, sql);
+  affected.bind(id);
+  std::vector<int> itemIds;
+  while (affected.step()) itemIds.push_back(affected.integer(0));
+  for (const int itemId : itemIds) snapshotItem(db, itemId, "updated");
+}
 void logOperation(const Connection &db, const char *table, int id, int type) {
   Statement(db, "INSERT INTO log(table_name, record_id, log_type) VALUES(?, ?, ?);")
       .bind(table).bind(id).bind(type).run();
@@ -283,6 +291,7 @@ SqliteRepository::Result<int> SqliteRepository::countItemsForType(int itemTypeId
 }
 SqliteRepository::Result<void> SqliteRepository::deleteItemType(int itemTypeId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    snapshotItems(impl_->db, "SELECT id FROM item WHERE item_type_id = ? ORDER BY id;", itemTypeId);
     bumpRevisions(impl_->db, "item_type_id = ?", itemTypeId);
     Statement(impl_->db, "DELETE FROM item_type WHERE id = ?;").bind(itemTypeId).run();
     requireChanged(impl_->db, "Type");
@@ -310,6 +319,8 @@ SqliteRepository::Result<void> SqliteRepository::upsertItemField(const ItemField
       require(old.step(), "Field not found.", lexicon::Error::Code::NotFound);
       const auto oldType = static_cast<lexicon::FieldDataType>(old.integer(0));
       if (oldType != field.dataType) {
+        snapshotItems(impl_->db,
+            "SELECT item_id FROM item_value WHERE item_field_id = ? ORDER BY item_id;", id);
         bumpRevisions(impl_->db, "id IN (SELECT item_id FROM item_value WHERE item_field_id = ?)", id);
         Statement(impl_->db, "DELETE FROM item_value WHERE item_field_id = ?;").bind(id).run();
       } else if (field.dataType == lexicon::FieldDataType::Enum) {
@@ -351,6 +362,8 @@ SqliteRepository::Result<int> SqliteRepository::countFieldValues(int fieldId) {
 }
 SqliteRepository::Result<void> SqliteRepository::deleteItemField(int fieldId) {
   return guarded([&] { Transaction tx(impl_->db, "lexicon_write");
+    snapshotItems(impl_->db,
+        "SELECT item_id FROM item_value WHERE item_field_id = ? ORDER BY item_id;", fieldId);
     bumpRevisions(impl_->db, "id IN (SELECT item_id FROM item_value WHERE item_field_id = ?)", fieldId);
     Statement(impl_->db, "DELETE FROM item_field WHERE id = ?;").bind(fieldId).run();
     requireChanged(impl_->db, "Field");

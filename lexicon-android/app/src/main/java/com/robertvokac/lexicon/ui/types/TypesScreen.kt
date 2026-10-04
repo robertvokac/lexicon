@@ -353,7 +353,7 @@ private fun TypesConfirmationDialog(state: TypesState, viewModel: TypesViewModel
         },
         message = confirmation.message,
         confirmLabel = when (confirmation) {
-            is TypesConfirmation.ChangeField -> "Change"
+            is TypesConfirmation.ChangeField -> "Change and delete values"
             else -> "Delete"
         },
         onConfirm = viewModel::confirm,
