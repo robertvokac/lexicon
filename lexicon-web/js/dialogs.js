@@ -98,6 +98,9 @@ export function openDialog({ title, body, acceptLabel = 'Save', cancelLabel = 'C
             resolve(settled);
         });
         dialog.addEventListener('cancel', (event) => {
+            // A file chooser dismissed inside the dialog fires a cancel that
+            // bubbles up here too; only the dialog's own cancel (Escape) closes it.
+            if (event.target !== dialog) return;
             event.preventDefault();
             cancel();
         });

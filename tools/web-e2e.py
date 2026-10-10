@@ -502,6 +502,16 @@ def run(browser, web, server):
         type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(9) textarea", "# Bulk web one")
         type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(10) textarea", "source=Mass Insert")
         type_into("dialog[open] tbody tr:nth-child(1) td:nth-child(11) select", "High")
+        # Dismissing the file chooser fires a bubbling cancel at the file input;
+        # it must not close the worksheet the way Escape does.
+        b.js("""(() => {
+            const input = document.querySelector(
+                'dialog[open] tbody tr:nth-child(1) td:nth-child(12) input[type=file]');
+            input.dispatchEvent(new Event('cancel', {bubbles: true}));
+            return true;
+        })()""")
+        if not b.js("!!document.querySelector('dialog[open] .mass-insert-table')"):
+            raise Failure("Cancelling the Mass Insert image chooser closed the worksheet.")
         uploaded = b.js("""(() => {
             const input = document.querySelector(
                 'dialog[open] tbody tr:nth-child(1) td:nth-child(12) input[type=file]');
