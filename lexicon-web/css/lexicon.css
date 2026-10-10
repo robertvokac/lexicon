@@ -963,13 +963,17 @@ svg.graph { flex: none; margin: auto; }
 .mass-insert-table th:first-child, .mass-insert-table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
 .mass-insert-table thead th:first-child { z-index: 2; background: var(--surface-alt); }
 .mass-insert-table input[type="text"], .mass-insert-table input[type="number"],
-.mass-insert-table input[type="search"],
-.mass-insert-table input[type="date"], .mass-insert-table input[type="time"],
+.mass-insert-table input[type="search"], .mass-insert-table input[type="time"],
 .mass-insert-table input[type="datetime-local"], .mass-insert-table select,
 .mass-insert-table textarea { min-width: 150px; width: 100%; }
 .mass-insert-table textarea { min-height: 3.2rem; resize: both; }
 .mass-insert-table td.mass-insert-check { text-align: center; }
 .mass-insert-table td.mass-insert-check input { min-width: auto; width: auto; }
+.mass-insert-date { position: relative; display: flex; gap: 5px; align-items: center; }
+.mass-insert-date input[type="text"] { min-width: 120px; }
+.mass-insert-date button { flex: none; }
+.mass-insert-date-picker { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
+    padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .mass-insert-image { min-width: 190px; display: grid; gap: 5px; }
 .mass-insert-image-buttons { display: flex; gap: 5px; }
 .mass-insert-image-buttons button { white-space: nowrap; }

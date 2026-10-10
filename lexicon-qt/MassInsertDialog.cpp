@@ -484,6 +484,7 @@ void MassInsertDialog::appendRow(QJsonObject row) {
         } else {
             auto* edit = lineEdit(value, m_table);
             if (field.dataType == FieldDataType::Blob) edit->setPlaceholderText("SHA-256");
+            if (field.dataType == FieldDataType::Date) edit->setPlaceholderText("YYYY-MM-DD");
             m_table->setCellWidget(index, column, edit);
             connect(edit, &QLineEdit::textChanged, this, &MassInsertDialog::scheduleDraft);
         }

@@ -10,6 +10,7 @@ import {
 import {
     describeImage, formatImageValue, IMAGE_MEDIA_TYPES, parseImageValue, sniffImageType,
 } from './imagevalue.js';
+import { validStudyDate } from './studyplans.js';
 import {
     button, clear, el, fillSelect, ITEM_STATUSES, LITERAL_TEXT, typeDisplayName,
     UNDERSTANDING_LEVELS,
@@ -76,6 +77,35 @@ function textControl(value, { multiline = false, placeholder = '' } = {}) {
         return control;
     }
     return el('input', { type: 'text', value: value || '', placeholder, ...LITERAL_TEXT });
+}
+
+// A Date cell is typed as the stored YYYY-MM-DD; a visible type=date input
+// would show the browser locale's format (e.g. MM/DD/YYYY) instead. The
+// button opens the browser's calendar through an unseen type=date input.
+function dateControl(value) {
+    const control = el('div', { class: 'mass-insert-date' });
+    const text = textControl(value, { placeholder: 'YYYY-MM-DD' });
+    text.autocomplete = 'off';
+    const picker = el('input', {
+        type: 'date', class: 'mass-insert-date-picker', tabindex: '-1', 'aria-hidden': 'true',
+    });
+    const pick = button('\u{1F4C5}', {
+        class: 'secondary', title: 'Pick a date', 'aria-label': 'Pick a date',
+        onclick: () => {
+            const typed = text.value.trim();
+            picker.value = validStudyDate(typed) ? typed : '';
+            try {
+                picker.showPicker();
+            } catch {
+                picker.focus();
+            }
+        },
+    });
+    // Runs before the change bubbles to the worksheet, which then saves the draft.
+    picker.addEventListener('change', () => { text.value = picker.value; });
+    Object.defineProperty(control, 'value', { get: () => text.value });
+    control.append(text, pick, picker);
+    return control;
 }
 
 // An Image cell owns its upload. Only the resulting typed hash is kept in the
@@ -166,7 +196,7 @@ function fieldControl(fieldRecord, value) {
     if (fieldRecord.dataType === 'Integer') return el('input', { ...attributes, type: 'number', step: '1' });
     if (fieldRecord.dataType === 'ForeignKey') return foreignKeyControl(fieldRecord, value);
     if (fieldRecord.dataType === 'Float') return el('input', { ...attributes, type: 'number', step: 'any' });
-    if (fieldRecord.dataType === 'Date') return el('input', { ...attributes, type: 'date' });
+    if (fieldRecord.dataType === 'Date') return dateControl(value);
     if (fieldRecord.dataType === 'Time') return el('input', { ...attributes, type: 'time', step: '1' });
     if (fieldRecord.dataType === 'Timestamp') {
         return el('input', { ...attributes, type: 'datetime-local', step: '1' });
@@ -396,6 +426,14 @@ async function worksheet({ groupId, typeId, groupName, typeName, fields, initial
                 }
                 // Validate property syntax before inserting anything.
                 parseProperties(remaining[index].properties, index + 1);
+                for (const entry of fields) {
+                    if (entry.dataType !== 'Date') continue;
+                    const value = String(remaining[index].fieldValues[String(entry.id)] || '').trim();
+                    if (value && !validStudyDate(value)) {
+                        fail(`Row ${index + 1}: ${entry.name} must be a valid date as YYYY-MM-DD.`);
+                        return undefined;
+                    }
+                }
             }
             renderRows(remaining);
             persist();

@@ -458,8 +458,13 @@ def run(browser, web, server):
             "name": "Picture", "description": "Batch image", "dataType": "Image",
             "position": 1, "enumOptions": [],
         })["field"]
+        due = api["client"].call("POST", f"/types/{term['id']}/fields", {
+            "name": "Due", "description": "Batch date", "dataType": "Date",
+            "position": 2, "enumOptions": [],
+        })["field"]
         api["mass_field_id"] = priority["id"]
         api["mass_image_field_id"] = picture["id"]
+        api["mass_date_field_id"] = due["id"]
 
     @step("resume and finish a Mass Insert worksheet")
     def _():
@@ -513,6 +518,27 @@ def run(browser, web, server):
             raise Failure("Mass Insert offered no Image upload control.")
         b.wait("document.querySelector('dialog[open] .mass-insert-image-status')?.textContent"
                ".includes('PNG image')", "the Mass Insert image upload")
+        # A Date cell is typed as YYYY-MM-DD, not in the browser locale's
+        # MM/DD/YYYY, and its button still offers the browser's calendar.
+        date_cell = b.js("""(() => {
+            const cell = document.querySelector('dialog[open] tbody tr:nth-child(1) .mass-insert-date');
+            const text = cell?.querySelector('input[type=text]');
+            return {placeholder: text?.placeholder,
+                    button: cell?.querySelector('button')?.getAttribute('aria-label'),
+                    picker: cell?.querySelector('input[type=date]')?.className};
+        })()""")
+        if date_cell != {"placeholder": "YYYY-MM-DD", "button": "Pick a date", "picker": "mass-insert-date-picker"}:
+            raise Failure(f"The Mass Insert Date cell is not a YYYY-MM-DD field with a calendar: {date_cell!r}")
+        click("dialog[open] tbody tr:nth-child(1) .mass-insert-date button", "\U0001F4C5")
+        b.js("""(() => {
+            const picker = document.querySelector('dialog[open] tbody tr:nth-child(1) .mass-insert-date-picker');
+            picker.value = '2026-10-10';
+            picker.dispatchEvent(new Event('change', {bubbles: true}));
+            return true;
+        })()""")
+        if b.js("document.querySelector('dialog[open] tbody tr:nth-child(1) .mass-insert-date input[type=text]').value") \
+                != "2026-10-10":
+            raise Failure("Picking a day in the calendar did not fill the Date cell as YYYY-MM-DD.")
         click("dialog[open] button", "Close")
         b.wait("!document.querySelector('dialog[open]')", "the backed-up worksheet to close")
         b.wait("!!localStorage.getItem('lexicon.web.massInsertDrafts')", "the local Mass Insert backup")
@@ -539,6 +565,12 @@ def run(browser, web, server):
         b.js("[...document.querySelectorAll('dialog[open] tbody button')].at(-1).click(); true")
         b.wait("document.querySelectorAll('dialog[open] .mass-insert-table tbody tr').length === 2",
                "a Mass Insert row to be removed")
+        type_into("dialog[open] tbody tr:nth-child(2) .mass-insert-date input[type=text]", "10/10/2026")
+        click("dialog[open] button", "Insert items")
+        b.wait(dialog_open("Row 2: Due must be a valid date as YYYY-MM-DD."), "the Mass Insert date check")
+        if api["client"].item("Bulk web one"):
+            raise Failure("Mass Insert created items before rejecting an invalid date.")
+        type_into("dialog[open] tbody tr:nth-child(2) .mass-insert-date input[type=text]", "")
         click("dialog[open] button", "Insert items")
         b.wait("!document.querySelector('dialog[open]')", "Mass Insert to finish")
         first = api["client"].item("Bulk web one")
@@ -547,6 +579,7 @@ def run(browser, web, server):
             raise Failure("The server did not receive both Mass Insert rows.")
         if first["itemTypeName"] != "Term" \
                 or first["fieldValues"].get(str(api["mass_field_id"])) != "High" \
+                or first["fieldValues"].get(str(api["mass_date_field_id"])) != "2026-10-10" \
                 or not first["fieldValues"].get(str(api["mass_image_field_id"]), "").startswith("image/png:") \
                 or first["aliases"] != ["Batch alias", "Web alias"] or first["tags"] != ["batch", "web"] \
                 or first["content"] != "# Bulk web one" \
