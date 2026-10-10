@@ -565,6 +565,9 @@ def run(browser, web, server):
         b.js("[...document.querySelectorAll('dialog[open] tbody button')].at(-1).click(); true")
         b.wait("document.querySelectorAll('dialog[open] .mass-insert-table tbody tr').length === 2",
                "a Mass Insert row to be removed")
+        click("dialog[open] button", "Add 10 rows")
+        b.wait("document.querySelectorAll('dialog[open] .mass-insert-table tbody tr').length === 12",
+               "Add 10 rows to add ten Mass Insert rows")
         type_into("dialog[open] tbody tr:nth-child(2) .mass-insert-date input[type=text]", "10/10/2026")
         click("dialog[open] button", "Insert items")
         b.wait(dialog_open("Row 2: Due must be a valid date as YYYY-MM-DD."), "the Mass Insert date check")

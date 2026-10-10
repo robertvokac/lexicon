@@ -36,6 +36,7 @@ class MassInsertDialog : public QDialog {
   private:
     void setRows(const QJsonArray& rows);
     void appendRow(QJsonObject row = QJsonObject{});
+    void addRows(int count);
     QJsonObject rowData(int row) const;
     QJsonArray rowsData() const;
     bool rowMeaningful(const QJsonObject& row) const;

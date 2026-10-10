@@ -260,12 +260,15 @@ MassInsertDialog::MassInsertDialog(int groupId, int typeId, const QList<ItemFiel
     auto* tools = new QHBoxLayout();
     auto* add = new QPushButton("Add row", this);
     add->setObjectName("massInsertAddRow");
+    auto* addTen = new QPushButton("Add 10 rows", this);
+    addTen->setObjectName("massInsertAddTenRows");
     auto* discard = new QPushButton("Discard draft", this);
     discard->setObjectName("massInsertDiscard");
     m_status = new QLabel(this);
     m_status->setObjectName("massInsertStatus");
     m_status->setWordWrap(true);
     tools->addWidget(add);
+    tools->addWidget(addTen);
     tools->addWidget(discard);
     tools->addWidget(m_status, 1);
     root->addLayout(tools);
@@ -275,6 +278,7 @@ MassInsertDialog::MassInsertDialog(int groupId, int typeId, const QList<ItemFiel
     buttons->button(QDialogButtonBox::Save)->setObjectName("massInsertSave");
     root->addWidget(buttons);
     connect(add, &QPushButton::clicked, this, &MassInsertDialog::addRow);
+    connect(addTen, &QPushButton::clicked, this, [this] { addRows(10); });
     connect(discard, &QPushButton::clicked, this, &MassInsertDialog::discardDraft);
     connect(buttons->button(QDialogButtonBox::Save), &QPushButton::clicked, this,
             &MassInsertDialog::insertItems);
@@ -585,7 +589,13 @@ void MassInsertDialog::reject() {
 }
 
 void MassInsertDialog::addRow() {
-    appendRow();
+    addRows(1);
+}
+
+// The same as choosing Add row count times: the focus ends in the last row.
+void MassInsertDialog::addRows(int count) {
+    for (int added = 0; added < count; ++added)
+        appendRow();
     m_table->scrollToBottom();
     if (auto* title =
             qobject_cast<QLineEdit*>(m_table->cellWidget(m_table->rowCount() - 1, kTitle)))

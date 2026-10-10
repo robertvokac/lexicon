@@ -370,17 +370,18 @@ async function worksheet({ groupId, typeId, groupName, typeName, fields, initial
     table.append(el('thead', {}, [header]), body);
     renderRows(initialRows && initialRows.length ? initialRows : [emptyRow()]);
 
-    const add = button('Add row', {
-        class: 'secondary',
-        onclick: () => {
-            const rows = readRows();
-            rows.push(emptyRow());
-            renderRows(rows);
-            persist();
-            const lastTitle = body.lastElementChild?.querySelector('input');
-            if (lastTitle) lastTitle.focus();
-        },
-    });
+    // The same as choosing Add row count times: the focus ends in the last row.
+    function addRows(count) {
+        const rows = readRows();
+        for (let added = 0; added < count; ++added) rows.push(emptyRow());
+        renderRows(rows);
+        persist();
+        const lastTitle = body.lastElementChild?.querySelector('input');
+        if (lastTitle) lastTitle.focus();
+    }
+
+    const add = button('Add row', { class: 'secondary', onclick: () => addRows(1) });
+    const addTen = button('Add 10 rows', { class: 'secondary', onclick: () => addRows(10) });
     const scope = `${groupName}${typeName ? ` · ${typeName}` : ' · No type'}`;
     const result = await openDialog({
         title: 'Mass Insert',
@@ -388,7 +389,7 @@ async function worksheet({ groupId, typeId, groupName, typeName, fields, initial
             el('p', { class: 'hint', text: `New items: ${scope}` }),
             el('p', { class: 'hint', text: 'Lists use commas. Properties use key=value separated by semicolons or new lines.' }),
             el('div', { class: 'mass-insert-scroll' }, [table]),
-            el('div', { class: 'mass-insert-tools' }, [add, backup]),
+            el('div', { class: 'mass-insert-tools' }, [add, addTen, backup]),
         ]),
         acceptLabel: 'Insert items',
         cancelLabel: 'Close',

@@ -664,8 +664,9 @@ void checkMassInsert(lexicon::LexiconApplication &application, int group,
   dialog.show();
   auto *table = child<QTableWidget>(dialog, "massInsertTable");
   auto *add = child<QPushButton>(dialog, "massInsertAddRow");
+  auto *addTen = child<QPushButton>(dialog, "massInsertAddTenRows");
   auto *save = child<QPushButton>(dialog, "massInsertSave");
-  if (!table || !add || !save) return;
+  if (!table || !add || !addTen || !save) return;
   check(table->columnCount() == 13 && table->horizontalHeaderItem(0)->text() == "Title" &&
             table->horizontalHeaderItem(10)->text() == "Priority" &&
             table->horizontalHeaderItem(11)->text() == "Picture",
@@ -702,6 +703,8 @@ void checkMassInsert(lexicon::LexiconApplication &application, int group,
 
   add->click();
   check(table->rowCount() == 2, "a Mass Insert row can be added");
+  addTen->click();
+  check(table->rowCount() == 12, "Add 10 rows adds ten Mass Insert rows");
   qobject_cast<QLineEdit *>(table->cellWidget(1, 0))->setText("Bulk two");
   shot(dialog, "mass-insert");
   save->click();
