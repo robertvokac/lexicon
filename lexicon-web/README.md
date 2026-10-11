@@ -244,7 +244,7 @@ Everything below behaves the same way in both:
 | --- | --- |
 | `MainWindow` search, Add, Add..., Edit, Delete, Hide attributes, Hide values, Filter Properties... | the same action row |
 | `FilterHeaderView` filter row, including dynamic type field filters | a second header row with the same widgets |
-| Column sorting, pagination (10/20/50/100), page label | the same, sorted and paged by the server |
+| Column sorting, pagination (10/20/50/100/250), page label | the same, with an additional 500-row page size, sorted and paged by the server |
 | `File -> Save selected row/current page as CSV...` | matching UTF-8 CSV downloads of the visible columns |
 | Markdown content preview and the link/backlink line with clickable targets | the same, links reset the filters and search for the target |
 | `ItemEditDialog` General, Content, Values, Metadata, Links, Backlinks | the same six tabs, saved in one atomic request |

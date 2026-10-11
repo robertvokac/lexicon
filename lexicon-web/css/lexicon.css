@@ -600,6 +600,11 @@ body.resizing { cursor: row-resize; user-select: none; }
 .form-row > textarea { width: 100%; }
 .form-row > input[type="checkbox"] { width: 18px; }
 .form-grid { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.item-date { position: relative; display: flex; gap: 5px; align-items: center; }
+.item-date input[type="text"] { flex: 1 1 auto; min-width: 0; }
+.item-date button { flex: none; }
+.item-date-picker { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px;
+    padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .foreign-key-control input { width: 100%; }
 .foreign-key-results { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); background: var(--surface); }
 .foreign-key-option { display: block; width: 100%; text-align: left; padding: 6px; }

@@ -47,7 +47,7 @@ const BASE_COLUMNS = [
 // columns of the selected type.
 const ATTRIBUTE_FILTERS = BASE_COLUMNS.filter((column) => column.configurable)
     .map((column) => column.filterKey);
-const PAGE_SIZES = [10, 20, 50, 100];
+const PAGE_SIZES = [10, 20, 50, 100, 250, 500];
 const DEFAULT_ROW_HEIGHT = 28;
 const MIN_ROW_HEIGHT = 20;
 const MAX_ROW_HEIGHT = 160;

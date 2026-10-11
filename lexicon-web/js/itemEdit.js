@@ -8,6 +8,7 @@ import { clearDraft, keepDraft, readDraft } from './drafts.js';
 import { imageEditor } from './images.js';
 import { foreignKeyControl } from './foreignKey.js';
 import { bindItemLinks, findWikiLinks, renderMarkdown } from './markdown.js';
+import { validStudyDate } from './studyplans.js';
 import {
     button, clear, debounce, el, fillDatalist, fillSelect, formatItemTitle, ITEM_STATUSES,
     LINK_TYPES, linkDescription, LITERAL_TEXT, readLocal, splitItemTitle, typeDisplayName,
@@ -189,6 +190,45 @@ function blobEditor(fieldRecord, initialHash, onChange) {
     ]);
 }
 
+// Keep the stored YYYY-MM-DD representation visible. A native type=date
+// field renders in the browser's locale instead, so it is only used as the
+// calendar behind the button.
+function dateEditor(common, storedValue, onChange) {
+    const text = el('input', {
+        ...common,
+        type: 'text',
+        value: storedValue || '',
+        placeholder: 'YYYY-MM-DD',
+        maxlength: '10',
+        inputmode: 'numeric',
+        autocomplete: 'off',
+    });
+    text.addEventListener('input', () => onChange(text.value));
+    const picker = el('input', {
+        type: 'date', class: 'item-date-picker', tabindex: '-1', 'aria-hidden': 'true',
+    });
+    const pick = button('\u{1F4C5}', {
+        class: 'secondary', title: 'Pick a date', 'aria-label': 'Pick a date',
+        onclick: () => {
+            const typed = text.value.trim();
+            picker.value = validStudyDate(typed) ? typed : '';
+            try {
+                picker.showPicker();
+            } catch {
+                picker.focus();
+            }
+        },
+    });
+    picker.addEventListener('change', () => {
+        text.value = picker.value;
+        text.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    return {
+        node: el('div', { class: 'item-date' }, [text, pick, picker]),
+        read: () => text.value.trim(),
+    };
+}
+
 function fieldEditor(fieldRecord, storedValue, onChange, imageContext = {}) {
     const common = {
         class: 'field-editor', 'data-field-id': String(fieldRecord.id), ...LITERAL_TEXT,
@@ -233,6 +273,8 @@ function fieldEditor(fieldRecord, storedValue, onChange, imageContext = {}) {
         const node = foreignKeyControl(fieldRecord, storedValue, onChange);
         return { node, read: () => node.value };
     }
+    case 'Date':
+        return dateEditor(common, storedValue, onChange);
     default: {
         const attributes = { ...common, value: storedValue || '' };
         let input;
@@ -240,8 +282,6 @@ function fieldEditor(fieldRecord, storedValue, onChange, imageContext = {}) {
             input = el('input', { ...attributes, type: 'number', step: '1', inputmode: 'numeric' });
         } else if (fieldRecord.dataType === 'Float') {
             input = el('input', { ...attributes, type: 'number', step: 'any' });
-        } else if (fieldRecord.dataType === 'Date') {
-            input = el('input', { ...attributes, type: 'date', placeholder: 'YYYY-MM-DD' });
         } else if (fieldRecord.dataType === 'Time') {
             input = el('input', { ...attributes, type: 'time', step: '1', placeholder: 'HH:MM:SS' });
         } else if (fieldRecord.dataType === 'Timestamp') {
@@ -958,6 +998,15 @@ export async function openItemEditor({ itemId, draft, groups, restore }) {
                 typeChangeConfirmed = true;
             }
             captureFieldValues();
+            for (const fieldRecord of currentFields) {
+                const value = pendingValues[String(fieldRecord.id)];
+                if (fieldRecord.dataType === 'Date' && value && !validStudyDate(value.trim())) {
+                    tabStrip.select('values');
+                    valuesPanel.querySelector(`[data-field-id="${fieldRecord.id}"]`)?.focus();
+                    fail(`${fieldRecord.name} must be a valid date as YYYY-MM-DD.`);
+                    return undefined;
+                }
+            }
             const fieldValues = {};
             if (typeId) {
                 for (const fieldRecord of currentFields) {

@@ -279,6 +279,9 @@ def run(browser, web, server):
         type_into("#login-password", PASSWORD)
         b.js("document.getElementById('login-submit').click(); true")
         b.wait("document.getElementById('login-view').hidden", "the main view")
+        page_sizes = b.js("[...document.querySelector('.page-size').options].map(option => Number(option.value))")
+        if page_sizes != [10, 20, 50, 100, 250, 500]:
+            raise Failure(f"Unexpected web page sizes: {page_sizes!r}")
         api["client"] = Api(server)
 
     @step("protect unsaved Board changes")
@@ -385,6 +388,8 @@ def run(browser, web, server):
         client = api["client"]
         client.call("POST", "/links", {"fromItemId": client.item("Pointer provenance")["id"],
                                        "toItemId": client.item("Object lifetime")["id"], "linkType": "Related"})
+        b.wait("[...document.querySelectorAll('tbody tr')].some(r => r.textContent.includes('Pointer provenance'))",
+               "the reloaded item list")
         b.js("""[...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes('Pointer provenance')).click(); true""")
         b.wait("!!document.querySelector('tbody tr.selected')", "the selection")
         menu("View", "Relationship graph...")
@@ -600,6 +605,46 @@ def run(browser, web, server):
             raise Failure(f"The first Mass Insert item is incomplete: {first!r}.")
         if b.js("!!localStorage.getItem('lexicon.web.massInsertDrafts')"):
             raise Failure("The completed Mass Insert draft was not cleared.")
+
+    @step("edit a Date value as YYYY-MM-DD")
+    def _():
+        type_into(".search-input", "Bulk web one")
+        b.wait("[...document.querySelectorAll('tbody tr')].some(r => r.textContent.includes('Bulk web one'))",
+               "the bulk item in the filtered list")
+        b.js("""[...document.querySelectorAll('tbody tr')]
+            .find(r => r.textContent.includes('Bulk web one')).click(); true""")
+        b.wait("!!document.querySelector('tbody tr.selected')", "the bulk item selection")
+        click("button", "Edit")
+        b.wait(dialog_open("Edit item"), "the item editor")
+        click("dialog[open] .tab", "Values")
+        date_field = b.js("""(() => {
+            const control = document.querySelector('dialog[open] .item-date');
+            const text = control?.querySelector('input[type=text]');
+            return {value: text?.value, placeholder: text?.placeholder,
+                    button: control?.querySelector('button')?.getAttribute('aria-label'),
+                    picker: control?.querySelector('input[type=date]')?.className};
+        })()""")
+        expected = {"value": "2026-10-10", "placeholder": "YYYY-MM-DD",
+                    "button": "Pick a date", "picker": "item-date-picker"}
+        if date_field != expected:
+            raise Failure(f"The Edit item Date value is not a YYYY-MM-DD field with a calendar: {date_field!r}")
+        type_into("dialog[open] .item-date input[type=text]", "10/10/2026")
+        click("dialog[open] button", "Save")
+        b.wait(dialog_open("Due must be a valid date as YYYY-MM-DD."), "the item Date validation")
+        b.js("""(() => {
+            const picker = document.querySelector('dialog[open] .item-date-picker');
+            picker.value = '2026-10-11';
+            picker.dispatchEvent(new Event('change', {bubbles: true}));
+            return true;
+        })()""")
+        if b.js("document.querySelector('dialog[open] .item-date input[type=text]').value") != "2026-10-11":
+            raise Failure("Picking a day did not fill the Edit item Date value as YYYY-MM-DD.")
+        click("dialog[open] button", "Save")
+        b.wait("!document.querySelector('dialog[open] .dialog-item-editor')", "the item editor to close")
+        item = api["client"].item("Bulk web one")
+        if item["fieldValues"].get(str(api["mass_date_field_id"])) != "2026-10-11":
+            raise Failure("The Edit item Date value was not saved in YYYY-MM-DD format.")
+        type_into(".search-input", "")
 
     @step("review")
     def _():

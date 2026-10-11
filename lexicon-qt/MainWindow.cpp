@@ -285,7 +285,7 @@ void MainWindow::setupUi() {
     m_lastButton = new QPushButton("Last >>", centralWidget);
     m_pageLabel = new QLabel("Page 1", centralWidget);
     m_pageSizeCombo = new QComboBox(centralWidget);
-    m_pageSizeCombo->addItems({"10", "20", "50", "100"});
+    m_pageSizeCombo->addItems({"10", "20", "50", "100", "250"});
     int sizeIdx = m_pageSizeCombo->findText(QString::number(m_pageSize));
     if (sizeIdx >= 0) m_pageSizeCombo->setCurrentIndex(sizeIdx);
 
